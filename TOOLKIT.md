@@ -11,6 +11,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart.
+- **The coordinator's own name** (CORE §2 step 1): `<Project> Coordinator`. Started by the owner from
+  the CLI: `claude --name "<Project> Coordinator"`; in an already running session the owner can rename
+  it (`/rename <name>` *(unconfirmed)*), or a `UserPromptSubmit` hook can set the title from the project
+  *(unconfirmed)*. If the coordinator cannot rename itself, it asks the owner to — once, at init.
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
 - **Directory:** start the session from the worker's working copy (`cd` first); there is no documented
   `--cwd` *(unconfirmed)*.
