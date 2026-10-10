@@ -25,6 +25,18 @@ the coordinator.
 | Owner's build (latest product for the owner) | `<command>` |
 | Claude permission rules and hooks | `<path>`: deny-list, hooks |
 
+## Project map (CORE §4c)
+| What | Where |
+|---|---|
+| Repositories | `<fill>` |
+| Tracker / board | `<fill>` |
+| Docs, decision log, open questions | `<fill>` |
+| Environments and URLs (local, preview, staging, production) | `<fill>` |
+| CI, deployments, logs, dashboards | `<fill>` |
+| Design files | `<fill>` |
+| **Sensitive data — names and locations only, never values** | `<env files, secret stores, production DB, customer data>` |
+| Never touch | `<fill>` |
+
 ## Access list (CORE §4c)
 | Resource | Needed for | Right | Connected via | Status |
 |---|---|---|---|---|

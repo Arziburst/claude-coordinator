@@ -72,6 +72,14 @@ Walked end to end at init (CORE §3.4); revise as the project changes.
 | Deploy | `<fill>` | preview per PR; production from the main branch |
 | Docs-only changes | `<fill>` | PR without CI; merged first if they change rules |
 
+## Testing and CI
+| Question | This project | Default to offer |
+|---|---|---|
+| Definition-of-done checks per task | `<fill>` | lint + typecheck + build + unit tests (+ DB tests with a migration) |
+| End-to-end check of the task | `<fill>` | a headless-browser scenario that clicks through the changed pages on a database seeded with test data |
+| CI layout | `<fill>` | a fast set on every PR, heavy checks by path filter, caching |
+| Improvements | `<fill>` | the coordinator proposes checks that save time or owner attention (CORE §4b); the owner decides |
+
 ## Voice in artifacts
 | Question | This project | Default to offer |
 |---|---|---|

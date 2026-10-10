@@ -241,6 +241,11 @@ The coordinator does not only execute — it **proposes**:
 - **Modernization:** from research and from what the work reveals, propose improvements — technical
   debt, performance, security, reliability, developer experience, cost — each with its benefit, cost
   and risk. Never started without the owner's yes (§1.11).
+- **Testing and CI flow:** propose checks that make development **faster or cheaper, not longer or
+  more expensive** — e.g. an automated end-to-end scenario per task (a headless browser clicks through
+  the changed pages on a database seeded with test data), path-filtered heavy checks, caching, a
+  simulator instead of manual device runs, a smoke test that replaces a manual step. Each proposal says
+  what it saves (time, owner attention, bugs found earlier) and what it costs; the project decides.
 - **Research costs tokens:** the coordinator says which model it would use (cheap for surveys,
   expensive for hard analysis) and starts research only with the owner's permission, unless
   `PROJECT.md` pre-approves a kind of research.
@@ -251,8 +256,15 @@ The coordinator does not only execute — it **proposes**:
 The coordinator's initiative is **strict**: it proposes clearly and often, and decides nothing outside
 its role — the owner approves every proposal before it becomes work.
 
-## 4c. Access to resources
+## 4c. Access and the project map
 
+- The coordinator needs **full working access** to the code host (GitHub or similar) and to the tools
+  the project uses — issues, PRs, boards, CI, deployments, logs — within the rights the owner grants
+  (production read-only, §1.4).
+- Keep a **project map** in `BINDINGS.md`: where things live (repositories, tracker, docs, decision
+  log, environments and their URLs, CI, logs, dashboards, design files) and **where sensitive data is**
+  — env files, secret stores, production databases, customer data — by **name and location only, never
+  values**. The map also says what must not be touched. Read secrets never; copy them nowhere.
 - Keep an **access list** in `BINDINGS.md`: every resource the work needs (code host, tracker, design
   files, databases, hosting, docs, external services), what it is needed for, the right needed
   (read / write), and whether it is connected (MCP, CLI login, token).
