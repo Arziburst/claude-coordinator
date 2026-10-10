@@ -70,8 +70,8 @@ Commits, PR and issue comments in the owner's voice, first person, terse bullets
 | Question | This project |
 |---|---|
 | Environments | local (per-worktree Supabase stack) · Vercel preview · production |
-| Release path | merge → Vercel deploy; DB migrations to production only via a manual CI workflow with `confirm=apply` |
-| Database | migration files only; never edit an applied migration; no dashboard edits; no `db push` from a dev machine |
+| Release path | merge → Vercel deploy; DB migrations via a manual CI workflow with `confirm=apply` — or applied by a worker when a task needs it, dump first |
+| Database | migration files; never edit an applied migration; production data fixes when a task needs them, dump first, logged |
 | Release flags | jobs that charge customers ship off; enabled by an env flag set exactly to `true` + redeploy, in the documented order |
 | Production rights of tools / MCP | autonomous: the Supabase MCP / CLI may write to production when a task needs it — a dump or snapshot first for schema and bulk data changes, every write logged; the connector's tools are listed at init. The candidate denies in `settings.json` (this folder) are for a cautious project |
 

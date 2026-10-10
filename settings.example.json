@@ -4,14 +4,17 @@
   "worktree": { "bgIsolation": "none" },
   "permissions": {
     "deny": [
-      "Bash(git push origin main*)",
-      "Bash(git push origin master*)",
-      "Bash(git push --force origin main*)",
-      "Bash(git push -f origin main*)",
-      "Bash(gh repo delete*)",
-      "PowerShell(git push origin main*)",
-      "PowerShell(git push origin master*)",
-      "PowerShell(gh repo delete*)"
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin master)",
+      "Bash(git push origin master *)",
+      "Bash(git push --force origin main)",
+      "Bash(git push -f origin main)",
+      "Bash(gh repo delete *)",
+      "PowerShell(git push origin main)",
+      "PowerShell(git push origin main *)",
+      "PowerShell(git push origin master)",
+      "PowerShell(gh repo delete *)"
     ],
     "allow": [
       "PowerShell(Select-String *)",

@@ -31,10 +31,12 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
 - [scripts/](scripts/) — reference scripts (bash; Git Bash on Windows): `start-worker.sh` (named session
   in its own worktree), `cleanup-worker.sh` (only clean and pushed work), `hooks/safety-guard.sh`
-  (blocks force-push, pushes to main, history rewrites, destructive removals), `statusline.sh` (saves
+  (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
+  home or a worktree by hand — work branches stay free), `statusline.sh` (saves
   usage limits for the coordinator). Run with `--dry-run` first on a new machine.
-- [settings.example.json](settings.example.json) — project `.claude/settings.json` starter: deny rules,
-  the hook, read-only allow rules, messages accepted, the status line.
+- [settings.example.json](settings.example.json) — the worker safety file (passed by `start-worker.sh
+  --safety`): protected-branch denies, the hook and its self-test, messages accepted — the autonomous
+  baseline; the cautious level adds denies.
 
 ## Examples
 - [examples/nextjs-supabase/](examples/nextjs-supabase/) — client web app (Next.js + Supabase, Vercel, a

@@ -20,7 +20,8 @@ if command -v jq >/dev/null 2>&1; then
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 else
-  cmd=$(printf '%s' "$input" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p' | sed 's/\\n/\n/g; s/\\"/"/g; s/\\\\/\\/g')
+  cmd=$(printf '%s' "$input" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p' | sed 's/\\"/"/g')
+  cmd="${cmd//\\n/$'\n'}"; cmd="${cmd//\\\\/\\}"
   cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 fi
 # Drop comment lines (a "#" at the start of a line) so mentions in comments do not trigger.
@@ -36,7 +37,8 @@ has_cs() { printf '%s' "$cmd" | grep -Eq -- "$1"; }   # case-sensitive (e.g. -D 
 
 PROTECTED='(main|master)'
 # "git" as a command word: plain, quoted, with a path, .exe, any case.
-GIT='(^|[^[:alnum:]_.-])["'"'"']?([^[:space:]"'"'"']*[/\\])?git(\.exe)?["'"'"']?'
+GITCMD='["'"'"']?([^[:space:]"'"'"']*[/\\])?git(\.exe)?["'"'"']?'
+GIT="(^|[^[:alnum:]_.-])${GITCMD}"
 
 current_branch() {
   local dir="${cwd:-${CLAUDE_PROJECT_DIR:-.}}"
@@ -48,9 +50,17 @@ on_protected() { current_branch | grep -Eiq "^${PROTECTED}$"; }
 # Split on separators (incl. inside bash -c "..."), then inspect each segment that runs git ... push.
 # A command substitution leaves a "$SUBST" marker (it resolves to an unknown ref → treated as the
 # current branch) and its inner command becomes a segment of its own.
-segments=$(printf '%s' "$cmd" | sed -E 's/(\$\(|`)/$SUBST\n/g; s/(&&|\|\||;|\|)/\n/g; s/(bash|sh|zsh|pwsh|powershell)(\.exe)?[[:space:]]+(-[a-z]+[[:space:]]+)*-c[[:space:]]+/\n/gi')
+# Pure bash splitting (portable: GNU and BSD/macOS sed differ on "\n" in replacements).
+nl=$'\n'
+s="$cmd"
+s="${s//\$(/\$SUBST$nl}"; s="${s//\`/\$SUBST$nl}"
+s="${s//&&/$nl}"; s="${s//||/$nl}"; s="${s//;/$nl}"; s="${s//|/$nl}"
+# "bash -c '...'" / "pwsh -c ..." — the inner command starts its own segment
+segments=$(printf '%s\n' "$s" | sed -E 's/^[[:space:]]*(bash|sh|zsh|pwsh|powershell)(\.exe)?[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*-[cC](ommand)?[[:space:]]+//')
 while IFS= read -r seg; do
-  printf '%s' "$seg" | grep -Eiq "${GIT}([[:space:]]+(-c[[:space:]]+[^[:space:]]+|-C[[:space:]]+[^[:space:]]+|--[a-z-]+(=[^[:space:]]+)?))*[[:space:]]+push([[:space:]]|\$|[\"'])" || continue
+  # git must be the segment's command (optionally after env assignments or PowerShell's "&"),
+  # so a mention inside a commit message, a PR body or an echo does not count.
+  printf '%s' "$seg" | grep -Eiq "^[[:space:]]*(&[[:space:]]*)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*${GITCMD}([[:space:]]+(-c[[:space:]]+[^[:space:]]+|-C[[:space:]]+[^[:space:]]+|--[a-z-]+(=[^[:space:]]+)?))*[[:space:]]+push([[:space:]]|\$|[\"'])" || continue
   rest=$(printf '%s' "$seg" | sed -E 's/.*[[:space:]][Pp][Uu][Ss][Hh]([[:space:]]|$)//')
   # Work branches may be pushed, force-pushed (e.g. after a rebase) and deleted freely;
   # only the protected branches are guarded.
@@ -79,7 +89,7 @@ EOF
 has_cs "${GIT}[^;&|]*[[:space:]]branch[[:space:]]+(-D|-d|--delete)([[:space:]]+-f)?[[:space:]]+${PROTECTED}([[:space:]]|$)" && block "deleting a protected branch"
 # --- irreversible removals ---
 has 'rm[[:space:]]+-[a-z]*r[a-z]*[[:space:]]+["'"'"']?(/|~/?|\$HOME/?|\$\{HOME\}/?|/\*)["'"'"']?([[:space:]]|$)' && block "recursive removal of / or home"
-has 'rm[[:space:]]+-[a-z]*r[a-z]*[[:space:]]+[^;&|]*\.claude/worktrees' && block "removing worktrees by hand (use the cleanup script)"
+has 'rm[[:space:]]+-[a-z]*r[a-z]*[[:space:]]+[^;&|]*\.claude/worktrees(/[^/[:space:]"'"'"']+)?/?["'"'"']?([[:space:]]|$)' && block "removing a worktree by hand (use the cleanup script)"
 has 'Remove-Item[^;|]*[[:space:]]["'"'"']?(C:\\?|\$HOME|~)["'"'"']?([[:space:]][^;|]*)?-Recurse' && block "recursive removal of a drive or home"
 has 'Remove-Item[^;|]*-Recurse[^;|]*[[:space:]]["'"'"']?(C:\\?|\$HOME|~)["'"'"']?([[:space:]]|$)' && block "recursive removal of a drive or home"
 

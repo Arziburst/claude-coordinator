@@ -32,6 +32,9 @@ done
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> [--mode auto] [--base main] [--dry-run]" >&2; exit 1; }
 [ "$mode" = "bypassPermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md: containers only)" >&2; exit 1; }
+# Absolute paths: both files are used after "cd" into the worktree.
+abs() { (cd "$(dirname "$1")" && printf '%s/%s' "$(pwd)" "$(basename "$1")"); }
+safety="$(abs "$safety")"; brief="$(abs "$brief")"
 
 root="$(git -C "$repo" rev-parse --show-toplevel)"
 wt="$root/.claude/worktrees/$branch"

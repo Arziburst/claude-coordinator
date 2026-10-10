@@ -13,7 +13,8 @@
 | Move a task | `gh project item-edit --field-id <Status id> --single-select-option-id <option id>` |
 | Preview | Vercel preview URL on the PR (SSO; automation bypass secret for smoke tests) |
 | Production migrations | GitHub Actions workflow `db-migrate-prod` (manual, `confirm=apply`) |
-| Claude permission rules | `.claude/settings.json` deny-list: `git push --force*`, `git push origin main`, `supabase db push*`, `vercel --prod*`, production `execute_sql` / `apply_migration` |
+| Claude permission rules | worker safety file (autonomous): protected-branch denies + the hook; `gh pr merge` / `gh pr ready` denied for workers (humans merge, the coordinator marks ready) |
+| Production backup before an irreversible change | `supabase db dump --linked -f backups/<date>-<task>.sql` (data: `--data-only`) → a local folder outside the repository, kept 30 days |
 
 ## Traps
 - Docs can disagree about which database backs which environment — confirm before any migration.
