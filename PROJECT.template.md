@@ -11,6 +11,11 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 | **Commercial or non-commercial** | `<fill>` | — asked first |
 | **Swarm or sequential** (many parallel sessions vs logical steps with checks) | `<fill>` | commercial: sequential · non-commercial: swarm |
 | Session names | `<fill>` | workers `<KEY>-<task> <title>`, coordinator `<Project> Coordinator`, reviewers `<KEY>-<task> review`, researchers `research: <topic>` |
+| Autopilot and periodic tick | `<fill>` | **off** (default) · on only for non-commercial swarm work, by the owner's choice |
+| Worker permission mode | `<fill>` | `acceptEdits` · `auto` only by the owner's choice |
+| Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | client work: a local folder outside the repository or gitignored · own project: `coordinator/` in the repository |
+| Voice; AI co-author line in commits | `<fill>` | client work: the owner's voice, first person, no mention of AI (owner's recorded decision; co-author line removed) · own: no matter |
+| Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | own: the owner · client: the business analyst / product owner |
@@ -55,7 +60,7 @@ What "start a new cycle" runs here — an ordered recipe, agreed at init, revise
 | Reference sources | `<fill>` | similar open-source projects, libraries, official docs |
 
 ## The change flow
-Walked end to end at init (CORE §3.4); revise as the project changes.
+Walked end to end at init (CORE §3, topic d); revise as the project changes.
 
 | Step | This project | Default to offer |
 |---|---|---|

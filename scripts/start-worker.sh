@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Start a named worker session in its own git worktree.
 #   scripts/start-worker.sh --name "APP-12 Fix login" --branch 12-fix-login --model opus \
-#       --brief-file brief.md [--mode auto] [--base main] [--dry-run]
+#       --brief-file brief.md [--mode acceptEdits] [--base main] [--dry-run]
 # Creates .claude/worktrees/<branch> from origin/<base> (or reuses it), then starts a background
-# session there. Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
+# session there. --model is required: the coordinator picks it per task (CORE §7).
+# Default mode acceptEdits; auto only where PROJECT.md allows it; bypassPermissions refused.
+# The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
+# Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-name="" branch="" model="sonnet" mode="auto" brief="" base="main" dry=0
+name="" branch="" model="" mode="acceptEdits" brief="" base="main" dry=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) name="$2"; shift 2 ;;
@@ -19,8 +22,8 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-[ -n "$name" ] && [ -n "$branch" ] && [ -f "$brief" ] || {
-  echo "usage: --name <session name> --branch <branch> --brief-file <file> [--model m] [--mode auto] [--base main] [--dry-run]" >&2; exit 1; }
+[ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -f "$brief" ] || {
+  echo "usage: --name <session name> --branch <branch> --model <model> --brief-file <file> [--mode acceptEdits] [--base main] [--dry-run]" >&2; exit 1; }
 [ "$mode" = "bypassPermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md: containers only)" >&2; exit 1; }
 
 root="$(git rev-parse --show-toplevel)"

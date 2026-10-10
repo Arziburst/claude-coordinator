@@ -10,10 +10,19 @@
       "Bash(git push -f*)",
       "Bash(git push origin main*)",
       "Bash(git push origin master*)",
-      "Bash(git reset --hard*)"
+      "Bash(git reset --hard*)",
+      "Bash(gh pr merge*)",
+      "Bash(gh pr ready*)",
+      "Bash(gh repo delete*)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push origin main*)",
+      "PowerShell(gh pr merge*)",
+      "PowerShell(gh pr ready*)",
+      "Read(**/.env*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)"
     ],
     "allow": [
-      "PowerShell(Get-Content *)",
       "PowerShell(Select-String *)",
       "PowerShell(Select-Object *)",
       "PowerShell(Get-ChildItem *)",
@@ -27,6 +36,17 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/coordinator/scripts/hooks/safety-guard.sh\" --self-test",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",

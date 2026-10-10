@@ -5,17 +5,15 @@
 > 1. Read [CORE.md](CORE.md) completely
 >    (raw: `https://raw.githubusercontent.com/Arziburst/claude-coordinator/main/CORE.md`).
 >    Its rules override your default habits; §1 are hard rules.
-> 2. Initialize per CORE §2 in the project you are working in: find its `coordinator/PROJECT.md` and
->    `coordinator/BINDINGS.md`. Filled → read them and the project's state. Missing → adopt the
->    project's existing rules (CORE §2.5) or run the setup interview (CORE §3) using
->    [PROJECT.template.md](PROJECT.template.md) and [BINDINGS.template.md](BINDINGS.template.md), and
->    write them into the project's `coordinator/` folder after the owner's yes.
-> 3. Run the **init quiz** (CORE §3) — always, even if the project already has a coordinator: research
->    the project read-only, then ask multiple-choice questions with a recommended option, first
->    "commercial or non-commercial?". **Start no work until every question is answered** (CORE §1.12).
-> 4. On a new machine follow the checklist in [TOOLKIT.md](TOOLKIT.md); the first cycle is a **dry run**
->    (CORE §12a). Then wait for "start a new cycle" or the owner's instruction (CORE §1.2: a question is
->    not an order).
+> 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
+>    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
+>    (multiple choice with a recommended option; first "commercial or non-commercial?", "swarm or
+>    sequential?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
+>    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
+>    your own.
+> 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);
+>    machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md). The
+>    [examples](examples/) are illustrations, never rules.
 
 A reusable **coordinator** for Claude Code: one Claude session that runs a software project — plans the
 work, delegates it to worker sessions, controls and reviews the result, integrates it per the project's

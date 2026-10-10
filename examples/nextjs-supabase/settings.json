@@ -1,0 +1,35 @@
+{
+  "_comment": "Example only (non-normative): .claude/settings.json additions for a commercial Next.js + Supabase + Vercel project, on top of settings.example.json. MCP tool names depend on how the server is named in your setup — list the connector's tools at init (CORE §2) and adapt the names.",
+  "permissions": {
+    "deny": [
+      "Bash(supabase db *)",
+      "Bash(supabase link*)",
+      "Bash(supabase migration repair*)",
+      "Bash(npx supabase db *)",
+      "Bash(vercel --prod*)",
+      "Bash(vercel deploy --prod*)",
+      "Bash(vercel promote*)",
+      "Bash(vercel rollback*)",
+      "Bash(vercel env *)",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__merge_branch",
+      "mcp__supabase__reset_branch",
+      "mcp__supabase__deploy_edge_function",
+      "mcp__supabase__create_edge_function_secret",
+      "mcp__supabase__pause_project",
+      "mcp__supabase__restore_project",
+      "mcp__supabase__delete_branch",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__merge_branch",
+      "mcp__claude_ai_Supabase__reset_branch",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "mcp__claude_ai_Supabase__create_edge_function_secret",
+      "mcp__claude_ai_Supabase__pause_project",
+      "mcp__claude_ai_Supabase__restore_project",
+      "mcp__claude_ai_Supabase__delete_branch",
+      "mcp__github__merge_pull_request"
+    ]
+  }
+}
