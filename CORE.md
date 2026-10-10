@@ -127,7 +127,8 @@ never starts a cycle, a worker or a change on its own: after step 9 it waits.
    become a second one silently.
 3. **Find the project files:** `PROJECT.md` / `BINDINGS.md` and the journal — where `PROJECT.md` says
    (inside the repository's `coordinator/` folder, or a local folder outside it — asked in the quiz) —
-   and the project's own docs (README, CLAUDE.md, contribution guide).
+   and the project's own docs (README, CLAUDE.md, contribution guide). If `PROJECT.md` records a
+   **local core**, read `CORE.md` / `TOOLKIT.md` from that copy, not from the remote repository.
 4. **Learn the context** (read-only): the layers and the journal if they exist; for a project already in
    development — the **running sessions** (names, tasks, recent output), the **open PRs** (what, state,
    comments), recently **merged / closed PRs** and issues, the recent git history, the board / sprint,
@@ -211,6 +212,15 @@ filled one (§2 step 6):
    - *non-commercial / swarm* — the coordinator may merge on green checks and a review pass, "auto"
      cycle, autopilot if the owner turns it on, as many parallel workers as the limits and conflict
      foresight (§4a) allow.
+   - **Where the core comes from — remote or local?** *Remote:* `CORE.md`, `TOOLKIT.md` and the scripts
+     are always read from the public claude-coordinator repository — shared improvements arrive by
+     themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
+     work): the core is copied into the project's coordinator folder (in the repository or in the
+     state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
+     project**; upstream changes come in **only on the owner's command** ("update the core"): the
+     coordinator shows what changed upstream and what conflicts with local edits, merges after the
+     owner's yes, and records the new commit. A local edit useful for every project is proposed back to
+     claude-coordinator (§10), with the owner's yes.
    Also early: **where the coordinator's files live** (committed in the repository, or outside it — on
    client work the client can read anything committed). Outside the repository the folder is a clone of
    the project's private **state repository** (§12b), so the rules and the journal are never only on one
@@ -468,7 +478,8 @@ against the remaining budget**:
   project's review and merge path (§1.1), and is announced once merged.
 - **Mistake → lesson.** When the owner corrects the coordinator, or a mistake is found: acknowledge it in
   one line, fix the consequence, and **write the lesson as a rule** — project-specific into `PROJECT.md`
-  (*Lessons*), universal into this core (propose it; the owner says yes). A lesson only in a session's
+  (*Lessons*), universal into this core (propose it; the owner says yes) — with a local core, into the
+  local copy first and, if it helps every project, proposed to claude-coordinator as well. A lesson only in a session's
   memory is lost.
 - **New rules are written in layers:** the principle here or in `PROJECT.md`, the concrete command, path
   or number in `BINDINGS.md`.

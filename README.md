@@ -49,6 +49,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   it becomes the coordinator and initializes. Or copy this repository into the project as
   `coordinator/` and add to the project's `CLAUDE.md`: `The coordinator session follows
   coordinator/CLAUDE.md.`
+- **Remote or local core** — asked in the init quiz: read this repository live, or keep a local copy
+  in the project (editable for that project; "update the core" brings upstream changes in on command).
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
 - **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and saves
   its state to the project's private state repository (CORE §12b, `state-repo/README.template.md`,
