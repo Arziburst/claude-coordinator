@@ -53,6 +53,13 @@ coordinator session (or `docs/research/<topic>.md` when the team should read it)
 | Deploy | Vercel preview per PR (behind SSO); production on merge to `main` |
 | Cleanup | after merge: stop the task's DB stack, remove the worktree only if clean and pushed |
 
+## Testing and CI
+| Question | This project |
+|---|---|
+| Per task | lint + typecheck + build + unit tests; with a migration `db:reset` + pgTAP |
+| End-to-end | after a task, a headless Chrome scenario clicks through the changed pages on the worker's local stack seeded with test data; on the PR, a Playwright smoke run against the Vercel preview |
+| CI | migrations check, lint, typecheck, unit, build, DB reset + pgTAP on every PR; a production-migrations dry run |
+
 ## Voice
 Commits, PR and issue comments in the owner's voice, first person, terse bullets, **no mention of AI**.
 
