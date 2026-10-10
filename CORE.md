@@ -226,6 +226,13 @@ filled one (§2 step 6):
    the project's private **state repository** (§12b), so the rules and the journal are never only on one
    disk — and **whose voice**
    artifacts use, including whether commits carry an AI co-author line — each a recorded answer.
+   - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
+     project settings; an existing one is left as it is): *want a status line?* — show the example
+     `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%` (model (effort) · context used in this
+     chat · 5-hour limit · weekly limit). *Yes* (recommended — the coordinator also reads its limits
+     from it, §9): install the coordinator's status line script into the user settings (TOOLKIT.md).
+     *No:* nothing is installed; the coordinator then has no usage data and asks the owner about
+     limits when it matters.
 4. **Complete it:** keep a list of open questions; the quiz ends only when each has an answer (§1.12).
    Then write `PROJECT.md` / `BINDINGS.md` from the answers, show a summary, get a yes.
 

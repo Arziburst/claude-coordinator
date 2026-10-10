@@ -85,8 +85,17 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 ## Usage and limits
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
-  response). `scripts/statusline.sh` saves it to `~/.claude/coordinator/statusline.json` for the
-  coordinator to read. [statusline](https://code.claude.com/docs/en/statusline.md)
+  response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
+  save it to `~/.claude/coordinator/statusline.json` for the coordinator to read and print
+  `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`.
+  [statusline](https://code.claude.com/docs/en/statusline.md)
+- **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
+  is set yet): add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
+  approves the write) the script's absolute path on this machine:
+  Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\""}`
+  (`powershell` instead of `pwsh` where PowerShell 7 is missing); macOS / Linux
+  `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh"}`. It
+  appears after the next response.
 - API-key setups have no such data: budget by cost (`--max-budget-usd` on headless jobs) instead.
 
 ## Platform notes
@@ -102,7 +111,7 @@ Run in this order; the first cycle is a **dry run** (CORE §12a).
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
 3. **Worker safety file** from [settings.example.json](settings.example.json) with absolute paths (passed
    to every worker by `start-worker.sh --safety`). **The coordinator's own settings** (its session or the
-   user settings): the status line saving limits (`scripts/statusline.sh`) and
+   user settings): the status line if the owner wants it (CORE §3, *Installing it* above) and
    `crossSessionInbound: "accept"`.
    Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
    pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
