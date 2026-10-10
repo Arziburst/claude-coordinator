@@ -8,7 +8,8 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 |---|---|
 | Commercial or not | **commercial** (client work) — strict defaults |
 | Swarm or sequential | **sequential**: one or two tasks at a time, each reviewed and accepted before the next |
-| Autopilot, tick, worker mode | off, no tick (cycles on the owner's word); workers `acceptEdits` |
+| Autonomy level | **autonomous**: workers in auto mode merge main, resolve conflicts, rebase, write to their local stacks and to production when a task needs it (backup first), and report |
+| Autopilot, tick | off, no tick (cycles on the owner's word) |
 | Coordinator's files | local folder outside the client repository |
 | Session names | `APP-<issue> <title>`, coordinator `App Coordinator` |
 | Product; team | a web app for a client's customers; the owner (developer) + a business analyst + a supervising developer |
@@ -72,7 +73,7 @@ Commits, PR and issue comments in the owner's voice, first person, terse bullets
 | Release path | merge → Vercel deploy; DB migrations to production only via a manual CI workflow with `confirm=apply` |
 | Database | migration files only; never edit an applied migration; no dashboard edits; no `db push` from a dev machine |
 | Release flags | jobs that charge customers ship off; enabled by an env flag set exactly to `true` + redeploy, in the documented order |
-| Production rights of tools / MCP | read-only: the Supabase MCP in read-only mode **verified at init by listing its tools**; write tools denied in `settings.json` (see this folder) |
+| Production rights of tools / MCP | autonomous: the Supabase MCP / CLI may write to production when a task needs it — a dump or snapshot first for schema and bulk data changes, every write logged; the connector's tools are listed at init. The candidate denies in `settings.json` (this folder) are for a cautious project |
 
 ## Parallel work and resources
 | Question | This project |
@@ -100,7 +101,7 @@ told before merge.
 | Technology | MCP | Rights | CLI fallback |
 |---|---|---|---|
 | GitHub | GitHub MCP / `gh` | write (issues, PRs) | `gh` |
-| Supabase | Supabase MCP | **read-only** on production; local stack per worktree | `supabase` CLI |
+| Supabase | Supabase MCP | write when a task needs it (backup first); local stack per worktree | `supabase` CLI |
 | Vercel | Vercel MCP | read (deployments, logs) | `vercel` CLI |
 | Browser | Playwright | preview smoke tests | `npx playwright` |
 

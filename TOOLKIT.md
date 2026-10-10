@@ -67,14 +67,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `safety-guard.sh --self-test` at session start; a failure there means: fix before starting workers.
   Hooks see only shell tools — **MCP tools are covered by deny rules only**. Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
-- **Deny rules** in `settings.example.json` block merging / marking PRs ready (remove those two only
-  where `PROJECT.md` lets the coordinator merge) and reading env / key files; stack-specific denies
-  (database CLIs, production deploys, MCP write tools) — see `examples/nextjs-supabase/settings.json`.
+- **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only.
+  Add `gh pr merge*` / `gh pr ready*` where humans merge or mark ready; the cautious level also adds
+  `Read(**/.env*)` and the stack candidates (database CLIs, production deploys, MCP write tools) from
+  `examples/nextjs-supabase/settings.json`.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.
-- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`acceptEdits`** with deny
-  rules and the hook — `auto` (self-approving) only where `PROJECT.md` allows it. `bypassPermissions` only in disposable containers / VMs. The `auto` mode's
+- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** at the
+  autonomous level (the default — no permission prompts, the classifier and the hook as the net) or
+  `acceptEdits` at the cautious level. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 

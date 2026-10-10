@@ -12,7 +12,8 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 | **Swarm or sequential** (many parallel sessions vs logical steps with checks) | `<fill>` | commercial: sequential · non-commercial: swarm |
 | Session names | `<fill>` | workers `<KEY>-<task> <title>`, coordinator `<Project> Coordinator`, reviewers `<KEY>-<task> review`, researchers `research: <topic>` |
 | Autopilot and periodic tick | `<fill>` | **off** (default) · on only for non-commercial swarm work, by the owner's choice |
-| Worker permission mode | `<fill>` | `acceptEdits` · `auto` only by the owner's choice |
+| **Autonomy level** (CORE §3) | `<fill>` | **autonomous** — workers in auto mode, routine risky work and production writes when needed (backup first), report everything · cautious — `acceptEdits`, production read-only |
+| Production actions | `<fill>` | autonomous: whatever the task needs, backup before irreversible · cautious: only named actions |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | client work: a local folder outside the repository or gitignored · own project: `coordinator/` in the repository |
 | Voice; AI co-author line in commits | `<fill>` | client work: the owner's voice, first person, no mention of AI (owner's recorded decision; co-author line removed) · own: no matter |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
@@ -105,7 +106,7 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 | Release path to production | `<fill>` | merge to main → automatic deploy; DB migrations only via the CI workflow with explicit confirmation |
 | Database changes | `<fill>` | migration files only; never edit an applied migration; no dashboard edits; no direct pushes from a dev machine |
 | Release flags | `<fill>` | features that act on real users or money ship disabled behind an env flag; enabled after merge in a documented order |
-| Production rights of tools / MCP | `<fill>` | read-only |
+| Production rights of tools / MCP | `<fill>` | per the autonomy level (autonomous: write when the task needs it, backup first) |
 
 ## Parallel work and resources
 | Question | This project | Default to offer |
