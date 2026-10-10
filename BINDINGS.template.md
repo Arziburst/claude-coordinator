@@ -14,6 +14,7 @@ the coordinator.
 | Start a reviewer | `<command>` |
 | List / stop / remove workers | `<commands>` |
 | Worker working copies | `<create / remove commands>` |
+| Production backup before an irreversible change (CORE §1.4) | `<command>` → `<destination>`, kept `<how long>` |
 | Per-task resources | working copy `<pattern>` · DB stack `<pattern>` · ports `<base> + <task> mod <range>` |
 | Start / stop a task's environment | `<commands>` |
 | Shared resources and their guards | `<fill>` |

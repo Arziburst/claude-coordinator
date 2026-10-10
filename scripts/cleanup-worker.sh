@@ -19,7 +19,9 @@ done
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 stop_here() { echo "$1 — left as is" >&2; exit 3; }
 
-root="$(git rev-parse --show-toplevel)"
+# The main repository is found from the worktree itself, so this runs from any folder.
+root=""
+[ -d "$wt" ] && root="$(dirname "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)")"
 branch=""
 if [ -d "$wt" ]; then
   [ -n "$(git -C "$wt" status --porcelain)" ] && stop_here "NOT CLEAN: $wt has uncommitted changes"

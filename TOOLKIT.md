@@ -60,9 +60,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
   human review required for commercial work. Rules and hooks on the machine are a safety net, not a wall.
-- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`) blocks force-push (incl. `+refspec`),
-  pushes to protected branches (incl. quoted, `refs/heads/`, `HEAD:` forms and a bare `git push` while on
-  main), history rewrites, discarding uncommitted work and destructive removals; exit code 2 blocks and
+- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`) guards only the irreversible:
+  pushing, force-pushing or deleting the protected branches (main / master — incl. quoted,
+  `refs/heads/`, `HEAD:`, `+refspec` forms, and a push resolving to the current branch while on main),
+  mirror pushes, and removing `/`, home or a worktree by hand. Work-branch operations (rebase, amend,
+  reset, force-with-lease on its own branch, deleting work branches) pass. Exit code 2 blocks and
   shows the reason. **A hook that fails to run does not block** — so `settings.example.json` runs
   `safety-guard.sh --self-test` at session start; a failure there means: fix before starting workers.
   Hooks see only shell tools — **MCP tools are covered by deny rules only**. Whether hooks run in
@@ -98,8 +100,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 Run in this order; the first cycle is a **dry run** (CORE §12a).
 1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
-3. Project `.claude/settings.json` from [settings.example.json](settings.example.json): deny rules, the
-   safety hook, `crossSessionInbound: "accept"`, read-only allow rules; the status line saving limits.
+3. **Worker safety file** from [settings.example.json](settings.example.json) with absolute paths (passed
+   to every worker by `start-worker.sh --safety`). **The coordinator's own settings** (its session or the
+   user settings): the status line saving limits (`scripts/statusline.sh`) and
+   `crossSessionInbound: "accept"`.
+   Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
+   pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
 4. Make the scripts executable: `chmod +x scripts/*.sh scripts/hooks/*.sh` (macOS / Linux).
 5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` → `safety-guard: OK`.
 6. Branch protection on the code host is on (or the owner records why not).

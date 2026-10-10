@@ -103,8 +103,9 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 | Question | This project | Default to offer |
 |---|---|---|
 | Environments | `<fill>` | local · preview (per PR) · production |
-| Release path to production | `<fill>` | merge to main → automatic deploy; DB migrations only via the CI workflow with explicit confirmation |
-| Database changes | `<fill>` | migration files only; never edit an applied migration; no dashboard edits; no direct pushes from a dev machine |
+| Release path to production | `<fill>` | merge to main → automatic deploy; DB migrations via the CI workflow (autonomous: agents may also apply them when a task needs it, backup first) |
+| Database changes | `<fill>` | migration files; never edit an applied migration · cautious level: no dashboard edits, no direct pushes from a dev machine |
+| Production backup before an irreversible change | `<fill>` | the command and destination in `BINDINGS.md` (e.g. a database dump / platform snapshot), filled before the first such write |
 | Release flags | `<fill>` | features that act on real users or money ship disabled behind an env flag; enabled after merge in a documented order |
 | Production rights of tools / MCP | `<fill>` | per the autonomy level (autonomous: write when the task needs it, backup first) |
 
