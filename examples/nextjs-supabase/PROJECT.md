@@ -10,7 +10,8 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 | Swarm or sequential | **sequential**: one or two tasks at a time, each reviewed and accepted before the next |
 | Autonomy level | **autonomous**: workers in auto mode merge main, resolve conflicts, rebase, write to their local stacks and to production when a task needs it (backup first), and report |
 | Autopilot, tick | off, no tick (cycles on the owner's word) |
-| Coordinator's files | local folder outside the client repository |
+| Core | local copy in the state repository (`core/`), editable for this project; "update the core" on command |
+| Coordinator's files | outside the client repository, in a clone of the private state repository |
 | Session names | `APP-<issue> <title>`, coordinator `App Coordinator` |
 | Product; team | a web app for a client's customers; the owner (developer) + a business analyst + a supervising developer |
 | Milestone / sprint | the current sprint's issues on the board |

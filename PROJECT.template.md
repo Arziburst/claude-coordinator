@@ -14,7 +14,8 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 | Autopilot and periodic tick | `<fill>` | **off** (default) · on only for non-commercial swarm work, by the owner's choice |
 | **Autonomy level** (CORE §3) | `<fill>` | **autonomous** — workers in auto mode, routine risky work and production writes when needed (backup first), report everything · cautious — `acceptEdits`, production read-only |
 | Production actions | `<fill>` | autonomous: whatever the task needs, backup before irreversible · cautious: only named actions |
-| Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | client work: a local folder outside the repository or gitignored · own project: `coordinator/` in the repository |
+| **Core: remote or local** (CORE §3) | `<fill>` | client work: **local copy** at claude-coordinator commit `<sha>`, editable for this project, upstream updates on "update the core" · own project: remote (latest) |
+| Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | client work: outside the repository, in a clone of the private state repository · own project: `coordinator/` in the repository |
 | Voice; AI co-author line in commits | `<fill>` | client work: the owner's voice, first person, no mention of AI (owner's recorded decision; co-author line removed) · own: no matter |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |

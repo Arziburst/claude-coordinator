@@ -8,6 +8,7 @@ Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR
 | Commercial or not | **non-commercial** (own project, free app) — rush defaults |
 | Swarm or sequential | **swarm**: as many parallel workers as the limits allow (often ~10–16) |
 | Autopilot, tick, worker mode | on — tick every ~30 min (the owner's choice); workers in bypass mode on the owner's own machine (a deliberate exception, not a default) |
+| Core | local and adapted: the project's own playbook (`docs/vr/COORDINATOR.md`, Part A) |
 | Coordinator's files | in the repository (`docs/vr/COORDINATOR.md`) |
 | Session names | workers `ARXVR-<issue> <title>` (set by `start-worker.ps1`), coordinator `ARXVR Coordinator` |
 | Product, audience | a free VR port of Arx Fatalis (Arx Libertatis engine, OpenXR/SteamVR, Valve Index) as a standalone Steam app requiring the original game |
