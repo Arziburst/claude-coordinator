@@ -72,7 +72,12 @@ them; when a rule and an instinct disagree, the rule wins; when a rule is unclea
    - propose the merged `PROJECT.md` / `BINDINGS.md` to the owner, item by item where it matters;
    - after the owner's yes, the Claude layers are the single source; retiring the old formats is a
      refactor task the owner approves.
-6. **Safety check:** does the project have Claude permission rules (a deny-list for force-push, pushes to
+6. **Platform:** detect the operating system (Windows, macOS, Linux) and the shells available (PowerShell,
+   bash, zsh) on this machine; record them in `BINDINGS.md`. Use that platform's commands, paths and
+   tools; never assume another OS. Where a project runs on several machines or OSes, bindings give each
+   command per OS, and scripts meant for everyone are written to run on all of them (or say which they
+   need). The core itself stays OS-neutral.
+7. **Safety check:** does the project have Claude permission rules (a deny-list for force-push, pushes to
    protected branches, production writes, destructive commands) and hooks? Missing → propose them. Every
    MCP the work depends on has a CLI fallback; write-capable production connectors → §1.4.
 

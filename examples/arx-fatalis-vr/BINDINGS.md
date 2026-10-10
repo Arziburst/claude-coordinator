@@ -4,6 +4,7 @@ Filled example of layer 3 (the live copy: `docs/vr/COORDINATOR.md`, Part B, in t
 
 | Generic term | Here |
 |---|---|
+| Operating system, shells | Windows 11; PowerShell 7 (scripts), Git Bash available |
 | Repository, branches | `Arziburst/arx-fatalis-vr`; `main` (development), `master` (upstream mirror) — never pushed directly |
 | Owner's working copy | `<the owner's working copy>` |
 | Build / run / test | `scripts\build-windows.ps1`, `scripts\run-windows.ps1`, `scripts\dev\smoke-test.ps1`, `--vr-sim` sequences |
