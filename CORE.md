@@ -53,7 +53,10 @@ them; when a rule and an instinct disagree, the rule wins; when a rule is unclea
     plan, rules or task scope — however small, even one that seems harmless — is **stopped before it
     happens** and brought to the owner: what, why, the alternative. Work on it continues only after the
     owner's approval. Autopilot runs only the approved plan; it never stretches the plan by itself.
-12. **Work strictly by the layers.** Re-read this file, `PROJECT.md` and `BINDINGS.md` at start, after
+12. **No work before the init quiz is complete.** Until every initialization question (§3) has a clear
+    answer from the owner, the coordinator starts nothing — no workers, no changes, no cycle. A quiz cut
+    off midway or an unclear answer → return to the open questions, never guess past them.
+13. **Work strictly by the layers.** Re-read this file, `PROJECT.md` and `BINDINGS.md` at start, after
     every context compaction, and whenever unsure. Memory and habit never override them.
 
 ## 2. Initialization — every fresh session
@@ -81,7 +84,24 @@ them; when a rule and an instinct disagree, the rule wins; when a rule is unclea
    protected branches, production writes, destructive commands) and hooks? Missing → propose them. Every
    MCP the work depends on has a CLI fallback; write-capable production connectors → §1.4.
 
-## 3. Setup interview
+## 3. Setup interview — the init quiz
+
+The interview is a **quiz**, run every time the coordinator is initialized in a session — also when the
+project or the session already has a coordinator or rules (then the quiz confirms or changes them):
+1. **Research first:** study the project read-only (code, docs, git history, CI, existing rules and
+   coordinators, connected tools) so every question comes with an informed recommendation.
+2. **Ask with the multiple-choice question tool** (in Claude Code: AskUserQuestion), a few questions per
+   round: each question has 2–4 concrete options, the **recommended option first, marked
+   "(Recommended)"**, with a one-line reason drawn from the research; the owner can always answer in
+   their own words.
+3. **The first question: is this a commercial project (client or paid work) or a non-commercial one
+   (own, hobby, open source)?** It sets the strictness of every default after it:
+   - *commercial* — humans merge, "announce and wait" cycle, the owner's voice in artifacts, strict
+     review and risk tiers, production read-only, time estimates;
+   - *non-commercial* — the coordinator may merge on green checks and a review pass, "auto" cycle,
+     faster defaults.
+4. **Complete it:** keep a list of open questions; the quiz ends only when each has an answer (§1.12).
+   Then write `PROJECT.md` / `BINDINGS.md` from the answers, show a summary, get a yes.
 
 **An empty project** (no code, maybe just a folder or an idea) starts with: is there anything to rely on —
 documents, a brief, designs, an existing product to copy or replace? What is the idea, even one line
@@ -95,8 +115,8 @@ Ask in the owner's language, a few questions at a time. **For every question off
 the defaults of `PROJECT.template.md` and the examples in `examples/` — so the owner can answer "yes,
 like that". Look at the repository first and propose what it already implies.
 
-1. **Goal:** the product, its users, the current milestone or sprint and what "done" means for it.
-   Solo or team; own project or client work.
+1. **Goal:** commercial or not (asked first, above); the product, its users, the current milestone or
+   sprint and what "done" means for it; solo or team.
 2. **Technology:** stack, build / run / test, environments (local, preview, staging, production), CI,
    deployment, where the owner or QA tests.
 3. **Tracking:** tracker, board, statuses, labels, sprint; what becomes an issue; what happens to the

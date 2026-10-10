@@ -5,6 +5,7 @@ Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR
 ## Project
 | Question | This project |
 |---|---|
+| Commercial or not | **non-commercial** (own project, free app) — rush defaults |
 | Product, audience | a free VR port of Arx Fatalis (Arx Libertatis engine, OpenXR/SteamVR, Valve Index) as a standalone Steam app requiring the original game |
 | Current milestone | **M1 MVP** — the MVP demo scenario (docs/vr/MVP.md) |
 | Languages | owner: Russian; artifacts: English |

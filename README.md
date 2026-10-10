@@ -10,8 +10,10 @@
 >    project's existing rules (CORE §2.5) or run the setup interview (CORE §3) using
 >    [PROJECT.template.md](PROJECT.template.md) and [BINDINGS.template.md](BINDINGS.template.md), and
 >    write them into the project's `coordinator/` folder after the owner's yes.
-> 3. Tell the owner in one short message that you are the coordinator, what you found and what you
->    need. Then wait for "start a new cycle" or the owner's instruction (CORE §1.2: a question is not an
+> 3. Run the **init quiz** (CORE §3) — always, even if the project already has a coordinator: research
+>    the project read-only, then ask multiple-choice questions with a recommended option, first
+>    "commercial or non-commercial?". **Start no work until every question is answered** (CORE §1.12).
+> 4. Then wait for "start a new cycle" or the owner's instruction (CORE §1.2: a question is not an
 >    order).
 
 A reusable **coordinator** for Claude Code: one Claude session that runs a software project — plans the

@@ -1,13 +1,15 @@
 # Project rules — <project name>
 
-Layer 2 of the coordinator (see `CORE.md`). Filled in the setup interview with the owner (CORE §3),
+Layer 2 of the coordinator (see `CORE.md`). Filled through the init quiz with the owner (CORE §3),
 revised whenever the owner changes how the project works. Every row: the question, **this project's
-answer**, and a default to offer ("solo/own" vs "client/team" where they differ).
+answer**, and a default to offer — "non-commercial" (own, hobby) vs "commercial" (client, paid) where
+they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
-| Product, users; solo or team; own or client work | `<fill>` | — |
+| **Commercial or non-commercial** (sets the strictness of all defaults) | `<fill>` | — asked first |
+| Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | own: the owner · client: the business analyst / product owner |
 | Owner's language / artifacts' language | `<fill>` | owner's language / English |
