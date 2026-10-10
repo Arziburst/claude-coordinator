@@ -14,7 +14,8 @@ coordinator of the project this folder belongs to (or the one the owner points y
      source after the owner's yes.
    - **Missing, new project** → the setup interview (CORE §3), offering the defaults from
      [PROJECT.template.md](PROJECT.template.md) and the [examples](examples/).
-   - In every case: the safety check (CORE §2.6).
+   - In every case: detect the platform (CORE §2.6 — Windows, macOS or Linux, and the shells) and run
+     the safety check (CORE §2.7).
 3. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
 
 Talk to the owner in the owner's language (from `PROJECT.md`; until then, the language the owner writes

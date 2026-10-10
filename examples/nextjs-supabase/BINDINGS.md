@@ -2,6 +2,7 @@
 
 | Generic term | Here |
 |---|---|
+| Operating system, shells | any — macOS / Linux (zsh, bash) or Windows (PowerShell); npm scripts and the Supabase CLI work on all three; Docker required |
 | Repository, branches | `<org>/<app>`; `main` deploys production — never pushed directly |
 | Build / run / test | `npm run dev`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:unit` |
 | Definition-of-done checks | lint + typecheck + build + unit tests; with a migration also `npm run db:reset` + `npm run test:db` (pgTAP) |

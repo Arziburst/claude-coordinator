@@ -5,6 +5,7 @@ the coordinator.
 
 | Generic term | Here |
 |---|---|
+| Operating system(s) and shells | `<Windows / macOS / Linux; PowerShell / bash / zsh>` — commands below are for these; per-OS variants where machines differ |
 | Repository, main branch, protected branches | `<fill>` |
 | Owner's working copy | `<path>` |
 | Build / run / test / lint / typecheck commands | `<fill>` |
