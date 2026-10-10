@@ -36,10 +36,17 @@ What "start a new cycle" runs here — an ordered recipe, agreed at init, revise
 | Stale comments | `<fill>` | flagged with the reason (task changed / comment obsolete); never acted on without the owner |
 | Periodic tick | `<fill>` | own, autopilot: every ~30 min · client: only on the owner's "start a new cycle" |
 
+## Coding standards (CORE §4b)
+| Question | This project | Default to offer |
+|---|---|---|
+| Language / framework / library rules | `<fill>` | established best practice for the stack as short rules (e.g. React: components, hooks, server vs client; TypeScript strict) |
+| Architecture rules | `<fill>` | folder structure, data access layer, error handling, naming |
+| Where they live | `<fill>` | `docs/standards.md`, linked here; reviewers check against it |
+
 ## Research (CORE §4b)
 | Question | This project | Default to offer |
 |---|---|---|
-| Start research | `<fill>` | propose in one line; start on the owner's yes (own, rush: start at once and tell) |
+| Start research | `<fill>` | propose in one line with the model it would use; start only on the owner's yes |
 | Where results go | `<fill>` | a catalog document in the project's docs (`docs/research/<topic>.md`) or a table in the coordinator session |
 | Reference sources | `<fill>` | similar open-source projects, libraries, official docs |
 

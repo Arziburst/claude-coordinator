@@ -25,6 +25,12 @@ the coordinator.
 | Owner's build (latest product for the owner) | `<command>` |
 | Claude permission rules and hooks | `<path>`: deny-list, hooks |
 
+## Access list (CORE §4c)
+| Resource | Needed for | Right | Connected via | Status |
+|---|---|---|---|---|
+| `<code host>` | `<issues, PRs>` | `<read/write>` | `<CLI / MCP>` | `<connected / to connect>` |
+| `<design tool>` | `<design tasks>` | read | `<MCP>` | `<…>` |
+
 ## Project-only rules
 - `<rule>`
 
