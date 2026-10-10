@@ -441,6 +441,33 @@ adopting a project with an existing coordinator, is a **dry run**: read everythi
 would do (which sessions it would start, stop or clean, which PRs it would touch, which commands it would
 run). Nothing is started, stopped, merged or deleted until the owner approves; then the real cycle runs.
 
+## 12b. Moving to another machine — the state repository
+
+A coordinator moves to another machine through the project's **state repository**: a **private**
+repository of the owner's (e.g. `<project>-coordinator-state`) holding the coordinator's files —
+`PROJECT.md`, `BINDINGS.md`, `LOG.md`, `HANDOFF.md` — and an entry `README.md` from
+`state-repo/README.template.md`.
+
+- **Only on the owner's command** ("prepare a handoff", "update the state repo") — never automatically;
+  moves are rare.
+  1. Tell every running worker to commit and push its work; list anything that cannot be pushed and
+     stop until the owner decides.
+  2. Write `HANDOFF.md` (format: `HANDOFF.template.md`): the moment, every task in flight with its
+     branch, PR and next step, the merge queue, open questions, accesses and logins the new machine
+     needs, machine-specific settings to recreate.
+  3. Copy the current `PROJECT.md`, `BINDINGS.md` (machine-specific rows marked "re-detect"), `LOG.md`
+     into the state repository; check it is **private**; commit and push (through a PR where the
+     safety rules require it). The first time, create the repository only with the owner's yes.
+  4. Report the link. Running sessions do not move — they are restarted on the new machine from their
+     branches.
+- **On the new machine** the owner gives only the state repository's link. The session reads its
+  `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
+  context already known: clone the project, re-detect the platform and the "re-detect" rows, check the
+  logins and the safety setup, confirm the quiz briefly, dry run (§12a) — including which interrupted
+  tasks it would restart — then wait for the owner.
+- After the move the two machines are not kept in sync; the state repository is updated again only on
+  command. It holds internal project information: never public, never shared with the client.
+
 ## 13. "Coordinator, what is your task?"
 
 When the owner asks this in any wording ("какова твоя задача?", "what do you do?", "explain your flow"),

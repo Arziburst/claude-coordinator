@@ -48,6 +48,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   `coordinator/` and add to the project's `CLAUDE.md`: `The coordinator session follows
   coordinator/CLAUDE.md.`
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
+- **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and saves
+  its state to the project's private state repository (CORE §12b, `state-repo/README.template.md`,
+  `HANDOFF.template.md`). On the new machine give a session only that repository's link.
 - **"Coordinator, what is your task?"** — it explains its full flow and the rules in effect (CORE §13).
 
 ## Changing the core
