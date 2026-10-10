@@ -6,6 +6,7 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 ## Project
 | Question | This project |
 |---|---|
+| Commercial or not | **commercial** (client work) — strict defaults |
 | Product; team | a web app for a client's customers; the owner (developer) + a business analyst + a supervising developer |
 | Milestone / sprint | the current sprint's issues on the board |
 | Scope owner | the business analyst |

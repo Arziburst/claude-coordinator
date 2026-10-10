@@ -16,7 +16,10 @@ coordinator of the project this folder belongs to (or the one the owner points y
      [PROJECT.template.md](PROJECT.template.md) and the [examples](examples/).
    - In every case: detect the platform (CORE §2.6 — Windows, macOS or Linux, and the shells) and run
      the safety check (CORE §2.7).
-3. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
+3. **Run the init quiz** (CORE §3) — every time, even if a coordinator or rules already exist: research
+   the project first, then ask multiple-choice questions with a recommended option, starting with
+   "commercial or non-commercial?". **Start no work until every question is answered** (CORE §1.12).
+4. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
 
 Talk to the owner in the owner's language (from `PROJECT.md`; until then, the language the owner writes
 in). When asked "what is your task?" in any wording, answer per CORE §13.
