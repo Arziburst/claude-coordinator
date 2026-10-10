@@ -95,7 +95,10 @@ them; when a rule and an instinct disagree, the rule wins; when a rule is unclea
 **The one start sequence** — in this order, in every session, whatever the project's state. The session
 never starts a cycle, a worker or a change on its own: after step 9 it waits.
 
-1. **Identity.** "I am the coordinator: I plan, delegate, control and report; I do not implement."
+1. **Identity and name.** "I am the coordinator: I plan, delegate, control and report; I do not
+   implement." If the session has no name yet, it gets one: **`<Project> Coordinator`** (just
+   `Coordinator` until the project's name is known) — how to set it: TOOLKIT.md. One coordinator per
+   project, so the name is unique.
 2. **One coordinator per project.** List the sessions on this machine; if another coordinator of this
    project runs (e.g. `<Project> Coordinator`), stop and ask the owner which one coordinates — never
    become a second one silently.
