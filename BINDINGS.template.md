@@ -10,7 +10,7 @@ the coordinator.
 | Owner's working copy | `<path>` |
 | Build / run / test / lint / typecheck commands | `<fill>` |
 | Definition-of-done checks | `<fill>` |
-| Start a worker | `<command>` |
+| Start a worker (with its session name, model, effort, working copy) | `<command>` |
 | Start a reviewer | `<command>` |
 | List / stop / remove workers | `<commands>` |
 | Worker working copies | `<create / remove commands>` |

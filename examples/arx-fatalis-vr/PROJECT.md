@@ -6,6 +6,8 @@ Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR
 | Question | This project |
 |---|---|
 | Commercial or not | **non-commercial** (own project, free app) — rush defaults |
+| Swarm or sequential | **swarm**: as many parallel workers as the limits allow (often ~10–16) |
+| Session names | workers `ARXVR-<issue> <title>` (set by `start-worker.ps1`), coordinator `ARXVR Coordinator` |
 | Product, audience | a free VR port of Arx Fatalis (Arx Libertatis engine, OpenXR/SteamVR, Valve Index) as a standalone Steam app requiring the original game |
 | Current milestone | **M1 MVP** — the MVP demo scenario (docs/vr/MVP.md) |
 | Languages | owner: Russian; artifacts: English |

@@ -13,8 +13,9 @@
 > 3. Run the **init quiz** (CORE §3) — always, even if the project already has a coordinator: research
 >    the project read-only, then ask multiple-choice questions with a recommended option, first
 >    "commercial or non-commercial?". **Start no work until every question is answered** (CORE §1.12).
-> 4. Then wait for "start a new cycle" or the owner's instruction (CORE §1.2: a question is not an
->    order).
+> 4. On a new machine follow the checklist in [TOOLKIT.md](TOOLKIT.md); the first cycle is a **dry run**
+>    (CORE §12a). Then wait for "start a new cycle" or the owner's instruction (CORE §1.2: a question is
+>    not an order).
 
 A reusable **coordinator** for Claude Code: one Claude session that runs a software project — plans the
 work, delegates it to worker sessions, controls and reviews the result, integrates it per the project's
@@ -26,6 +27,16 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   project works: the cycle, tracking, the change flow, review, merging, acceptance, environments,
   resources, budget, voice, language, MCP. Filled in a setup interview with the owner.
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
+
+## Toolkit (any machine — Windows, macOS, Linux)
+- [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
+  messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
+- [scripts/](scripts/) — reference scripts (bash; Git Bash on Windows): `start-worker.sh` (named session
+  in its own worktree), `cleanup-worker.sh` (only clean and pushed work), `hooks/safety-guard.sh`
+  (blocks force-push, pushes to main, history rewrites, destructive removals), `statusline.sh` (saves
+  usage limits for the coordinator). Run with `--dry-run` first on a new machine.
+- [settings.example.json](settings.example.json) — project `.claude/settings.json` starter: deny rules,
+  the hook, read-only allow rules, messages accepted, the status line.
 
 ## Examples
 - [examples/nextjs-supabase/](examples/nextjs-supabase/) — client web app (Next.js + Supabase, Vercel, a

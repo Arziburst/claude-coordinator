@@ -8,7 +8,9 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
-| **Commercial or non-commercial** (sets the strictness of all defaults) | `<fill>` | — asked first |
+| **Commercial or non-commercial** | `<fill>` | — asked first |
+| **Swarm or sequential** (many parallel sessions vs logical steps with checks) | `<fill>` | commercial: sequential · non-commercial: swarm |
+| Session names | `<fill>` | workers `<KEY>-<task> <title>`, coordinator `<Project> Coordinator`, reviewers `<KEY>-<task> review`, researchers `research: <topic>` |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | own: the owner · client: the business analyst / product owner |

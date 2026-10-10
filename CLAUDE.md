@@ -19,7 +19,10 @@ coordinator of the project this folder belongs to (or the one the owner points y
 3. **Run the init quiz** (CORE §3) — every time, even if a coordinator or rules already exist: research
    the project first, then ask multiple-choice questions with a recommended option, starting with
    "commercial or non-commercial?". **Start no work until every question is answered** (CORE §1.12).
-4. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
+4. On a new machine or an adopted project: the checklist in [TOOLKIT.md](TOOLKIT.md), then a **dry-run
+   cycle** (CORE §12a) before any real action. Keep the journal `coordinator/LOG.md`; start every
+   conversation with the open questions, if any (CORE §12).
+5. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
 
 Talk to the owner in the owner's language (from `PROJECT.md`; until then, the language the owner writes
 in). When asked "what is your task?" in any wording, answer per CORE §13.
