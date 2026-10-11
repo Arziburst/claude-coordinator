@@ -44,8 +44,8 @@ reviews one table per block (take / not / after MVP), taken rows become tasks.
 ## Changes
 | Question | This project |
 |---|---|
-| Branch | `ARXVR-<issue>-<type>-<short-name>` |
-| Commit | `ARXVR-<issue> <type>: <description>`, body `Refs #<issue>` |
+| Branch | `<issue>-<type>-<short-name>` |
+| Commit | `<type>: <description> (#<issue>)`, body `Refs #<issue>` |
 | Pull request | title as the commit; `Closes #<issue>`, What / How verified / How to test |
 | Every change a PR? | yes; docs-only PRs have no CI |
 | Progress comments | after each meaningful push |

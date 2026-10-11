@@ -10,7 +10,7 @@ Written by the coordinator on the owner's command (CORE §12b). A snapshot: true
 ## Tasks in flight
 | Task | Session name | Branch | PR | State | Next step on the new machine |
 |---|---|---|---|---|---|
-| `<KEY-n title>` | `<name>` | `<branch>` (pushed) | `<#>` | `<working / review / waiting for owner>` | `<restart worker with … / wait>` |
+| `#<n> <title>` | `<name>` | `<branch>` (pushed) | `<#>` | `<working / review / waiting for owner>` | `<restart worker with … / wait>` |
 
 ## Merge queue
 1. `<PR>` — `<why first>`

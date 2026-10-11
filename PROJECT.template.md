@@ -66,10 +66,10 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 
 | Step | This project | Default to offer |
 |---|---|---|
-| Branch name | `<fill>` | `<issue>-<slug>` (client) · `KEY-<issue>-<type>-<slug>` (own) |
-| Commit message | `<fill>` | `[KEY-<issue>]: type(scope): subject` or `KEY-<issue> type: subject`; body with what and why; types feat / fix / docs / refactor / test / chore |
+| Branch name | `<fill>` | `<issue>-<type>-<slug>` (e.g. `37-feat-hand-reticle`); no project prefix, the repository names the project |
+| Commit message | `<fill>` | `type: subject (#<issue>)` (never start with `#`: git drops such lines as comments); body with what and why; types feat / fix / docs / refactor / test / chore |
 | How often to commit / push | `<fill>` | a commit + push per finished block |
-| PR | `<fill>` | **draft** at the first push; title as the commit; `Closes #<issue>`; Summary / Test plan (tick only what was run) |
+| PR | `<fill>` | **draft** at the first push; title as the commit (`feat: items with a reticle per hand (#37)`); `Closes #<issue>`; Summary / Test plan (tick only what was run) |
 | AI review | `<fill>` | independent reviewer agent per CORE §6; re-review until approval with no Blocker / Major |
 | Who marks ready | `<fill>` | the coordinator after approval + green CI; never the author |
 | Human review | `<fill>` | own: none · client: developer and/or business analyst; their comments go back to the same branch + re-review |
