@@ -75,6 +75,14 @@ filled one (§2 step 6):
    the coordinator shows what changed upstream and what conflicts with local edits, merges after the
    owner's yes, and records the new commit. A local edit useful for every project is proposed back to
    claude-coordinator (§10), with the owner's yes.
+   - **State repository — where does it live?** `coordinator/` is always a local git (below); the
+     question is its remote, **always private**: *the owner's account* (recommended for solo work) —
+     `gh repo create <owner>/<project>-coordinator-state --private`; *the team's organization*
+     (recommended for a team) — `<org>/<project>-coordinator-state`, private, readable by the team;
+     *local only* — warn: a lost disk or a move to another machine without a handoff loses the
+     journal, the rules and the decisions. With a remote: verify `PRIVATE`
+     (`gh repo view --json visibility`), push after every cycle, record the link in `BINDINGS.md`, and
+     offer a pointer the next machine can find (HANDOFF, *Finding it*).
    **Where the coordinator's files live is not asked — it is set up automatically:** the
    project's `coordinator/` folder is the coordinator's own local git repository (the **state
    repository**, §12b) and is ignored by the project's git through `.git/info/exclude`, so the project's
@@ -82,9 +90,9 @@ filled one (§2 step 6):
    if missing — `git -C coordinator init`, then add the line `coordinator/` to the project's
    `.git/info/exclude` and make the first commit (layout:
    [state-repo/README.template.md](../state-repo/README.template.md)); the
-   coordinator commits it locally at the end of every cycle (history and undo); it reaches a remote only
-   on a handoff (§12b). The core lives in it as `core/`. The owner may choose otherwise (commit the
-   files into the project, or push every cycle) — recorded in `PROJECT.md`. The voice is not
+   coordinator commits it at the end of every cycle (history and undo) and pushes it where it has a
+   remote (§12b). The core lives in it as `core/`. The owner may choose otherwise (commit the
+   files into the project) — recorded in `PROJECT.md`. The voice is not
    asked: artifacts are always in the owner's voice, with no AI co-author lines (§11).
    - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
      project settings; an existing one is left as it is): *want a status line?* — show the example

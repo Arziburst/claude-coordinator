@@ -122,6 +122,9 @@ its own: after step 9 the session waits.
    upstream; update?"), nothing applied. "Update the core" →
    [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command. A project
    without `coordinator/core/` (an older remote core) gets one on the owner's yes (MIGRATE-LAYOUT).
+   **No `coordinator/` here** (a new machine, a teammate's fresh clone) → find the state repository
+   before anything else (HANDOFF, *Finding it*); one that exists but this account cannot read → tell
+   the owner which repository and whom to ask for access; never start a second state silently.
 4. **Learn the context** (read-only): the layers and journal if present; for a project in development —
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other
@@ -375,9 +378,10 @@ cycle runs.
 
 ## 12b. Moving to another machine — the state repository
 
-The project's `coordinator/` folder is the coordinator's own local git repository, committed every cycle;
-a private remote is created and pushed only on a handoff. The handoff runs **only on the owner's command**
-("prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).
+The project's `coordinator/` folder is the coordinator's own local git repository, committed every cycle.
+Its remote, chosen at init, is **always private**: the owner's account or the team's organization,
+pushed after every cycle; or none (local only, lost with the disk). Finding it on a new machine and the
+handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).
 
 ## 13. "Coordinator, what is your task?"
 
