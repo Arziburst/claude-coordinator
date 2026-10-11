@@ -130,6 +130,7 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 |---|---|---|
 | Usage caps | `<fill>` | weekly 90%, short window 95%; over only with permission |
 | Models available | `<fill>` | Fable (own limit), Opus, Sonnet, Haiku |
+| Model pins (kinds automatic routing must not change, CORE §7) | `<fill>` | none — the coordinator routes every kind itself |
 | Time estimates | `<fill>` | client: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic |
 | Time tracking | `<fill>` | client: a timesheet draft shown to the owner before it is written |
 
