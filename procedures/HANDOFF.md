@@ -13,7 +13,7 @@ holding the coordinator's files —
 
 - **Day to day:** the project's `coordinator/` folder *is* the state repository — a local git
   repository, excluded from the project's git (`.git/info/exclude`), committed at the end of every cycle
-  (one line in the report). With a remote (`PROJECT.md`, chosen at init) it is pushed after every
+  (one line in the report), on its one branch `state` (CORE §12b). With a remote (`PROJECT.md`, chosen at init) it is pushed after every
   commit: `git pull --ff-only` first; the remote ahead and not fast-forwardable (another machine's or a
   teammate's coordinator wrote it) → stop and ask the owner, never force-push it. Before every push
   check it is still `PRIVATE`; public → stop and tell the owner. Local only → a lost disk loses it.
@@ -34,7 +34,8 @@ holding the coordinator's files —
   3. Mark machine-specific rows of `BINDINGS.md` "re-detect"; commit `coordinator/` and push it to its
      remote — created if missing (local only until now) where the owner chooses, the owner's account or
      the team's organization
-     (`gh repo create <owner-or-org>/<project>-coordinator-state --private`); verify it is private
+     (`gh repo create <owner-or-org>/<project>-coordinator-state --private`); push with `git push -u origin state`,
+     so `state` becomes its default branch; verify it is private
      (`gh repo view --json visibility` → `PRIVATE`); record in `HANDOFF.md` the claude-coordinator commit
      the coordinator ran on; commit and push.
   4. Report the link. Running sessions do not move — they are restarted on the new machine from their
