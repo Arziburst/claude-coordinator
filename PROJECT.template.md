@@ -10,13 +10,15 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 |---|---|---|
 | **Commercial or non-commercial** | `<fill>` | — asked first |
 | **Swarm or sequential** (many parallel sessions vs logical steps with checks) | `<fill>` | commercial: sequential · non-commercial: swarm |
-| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier / tester), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
+| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Autopilot and periodic tick | `<fill>` | **off** (default) · on only for non-commercial swarm work, by the owner's choice |
 | **Autonomy level** (CORE §3) | `<fill>` | **autonomous** — workers in auto mode, routine risky work and production writes when needed (backup first), report everything · cautious — `acceptEdits`, production read-only |
 | Production actions | `<fill>` | autonomous: whatever the task needs, backup before irreversible · cautious: only named actions |
 | **Core: remote or local** (CORE §3) | `<fill>` | client work: **local copy** at claude-coordinator commit `<sha>`, editable for this project, upstream updates on "update the core" · own project: remote (latest) |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle, pushed only on a handoff |
-| Voice; AI co-author line in commits | `<fill>` | client work: the owner's voice, first person, no mention of AI (owner's recorded decision; co-author line removed) · own: no matter |
+| AI co-author line in commits (voice: *Voice in artifacts*) | `<fill>` | client work: removed (owner's recorded decision) · own: no matter |
+| Who reviews CI, deployment, migration and release-flag changes (CORE §1.1) | `<fill>` | commercial: a human · own: the verifier |
+| Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | commercial: ask · own: allowed |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |

@@ -130,14 +130,11 @@ its own: after step 9 the session waits.
 8. **Dry run** (§12a) on a new machine or a new / adopted project.
 9. **Wait** for the owner's explicit "start a new cycle" or another instruction.
 
-Details of each step: [procedures/INIT.md](procedures/INIT.md), read when running the sequence.
-
 ## 3. Setup interview — the init quiz
 
-Full for a new or adopted project, a short per-area confirmation for a filled one. Before asking, read
-and follow [procedures/INIT.md](procedures/INIT.md): the first questions (autonomy level, commercial or
-not, swarm or sequential, remote or local core, voice, status line), the empty
-project start, topics a–l. No work before every question has an answer (§1.12).
+Full for a new or adopted project, a short per-area confirmation for a filled one: the questions and
+steps are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before every question
+has an answer (§1.12).
 
 ## 4. The cycle
 
@@ -282,7 +279,7 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
 ## 8. Resources, parallel work and cleanup
 
 - **Isolation** (where parallel workers are allowed): own working copy and, if needed, environment, named
-  from the **task number** (`<task>-<slug>`, `<project>-<task>`, ports `<base> + <task> mod <range>`);
+  from the **task number** (`<issue>-<type>-<slug>`, `<project>-<task>`, ports `<base> + <task> mod <range>`);
   scheme in `BINDINGS.md`.
 - **Shared resources** (main database stack, a device, one CI runner): never reset or reconfigured by
   workers; one user at a time where needed.
@@ -306,7 +303,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
 - **Time budgets (client work):** keep tasks near their realistic estimate; warn before the pessimistic.
 - The periodic tick (~30 min) exists **only with autopilot on**; recreate it after a restart.
 - The coordinator is a big share of the spend: short turns, filtered output, no polling, no "are you
-  done?" messages; update the status page before long waits.
+  done?" messages; update the status page (the owner's summary of `LOG.md`, linked in BINDINGS)
+  before long waits.
 
 ## 10. Rules, mistakes and lessons
 
