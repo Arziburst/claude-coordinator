@@ -19,7 +19,7 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   paths and tools; never assume another OS. Where a project runs on several machines or OSes, bindings
   give each command per OS, and scripts meant for everyone are written to run on all of them (or say
   which they need). The core itself stays OS-neutral. Then install the core's roles into
-  `~/.claude/agents/` (TOOLKIT *Roles*) — automatic, no question.
+  `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no question.
 - **Safety check:**
   - **Branch protection on the code host** — the main branch requires a PR, passing checks and (for
     commercial work) a human review. This is the real enforcement; missing → ask the owner to enable it
@@ -77,9 +77,10 @@ filled one (§2 step 6):
    - *non-commercial / swarm* — the coordinator may merge on green checks and a review pass, "auto"
      cycle, autopilot if the owner turns it on, as many parallel workers as the limits and conflict
      foresight (§4a) allow.
-   - **Where the core comes from — remote or local?** *Remote:* `CORE.md`, `TOOLKIT.md` and the scripts
-     are always read from the public claude-coordinator repository — shared improvements arrive by
-     themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
+   - **Where the core comes from — remote or local?** *Remote:* a checkout of the public
+     claude-coordinator repository on this machine (its path in `BINDINGS.md`; the hook, status line and
+     start scripts run from it), pulled to the latest at every start, the commit noted in `LOG.md` —
+     shared improvements arrive by themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
      work): the core is copied into `coordinator/core/` (the state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
      project**; upstream changes come in **only on the owner's command** ("update the core",
      [UPDATE-CORE.md](UPDATE-CORE.md)): the coordinator shows what changed upstream and what conflicts
@@ -89,7 +90,9 @@ filled one (§2 step 6):
    project's `coordinator/` folder is the coordinator's own local git repository (the **state
    repository**, §12b) and is ignored by the project's git through `.git/info/exclude`, so the project's
    history, PRs and the client see none of it and the project's files are not changed. Create it at init
-   if missing (layout: [state-repo/README.template.md](../state-repo/README.template.md)); the
+   if missing — `git -C coordinator init`, then add the line `coordinator/` to the project's
+   `.git/info/exclude` and make the first commit (layout:
+   [state-repo/README.template.md](../state-repo/README.template.md)); the
    coordinator commits it locally at the end of every cycle (history and undo); it reaches a remote only
    on a handoff (§12b). A local core lives in it as `core/`. The owner may choose otherwise (commit the
    files into the project, or push every cycle) — recorded in `PROJECT.md`. Also early: **whose voice**
