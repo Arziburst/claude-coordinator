@@ -1,8 +1,12 @@
 # Project rules — <project name>
 
-Layer 2 of the coordinator (see `CORE.md`). Filled through the init quiz with the owner (CORE §3),
+Layer 2 of the coordinator (see `CORE.md`). Filled through the init quiz (procedures/INIT.md §3),
 revised whenever the owner changes how the project works. Every row: the question, **this project's
-answer**, and a default to offer — per the strictness preset (CORE §3) where they differ. Work starts only when no `<fill>` is left (CORE §1.12).
+answer**, and a default — per the strictness preset (CORE §3) where they differ. Only a few rows are
+**asked** (INIT 3.1); the rest are **found** in the project and confirmed in one table (3.2) or filled
+**by default** (3.3), and all of them are shown in one summary for the owner's yes. A row marked *(if
+any)* stays `n/a` when the project has no such thing. Work starts only when no `<fill>` is left and the
+owner said yes to the summary (CORE §1.12).
 
 ## Project
 | Question | This project | Default to offer |
@@ -22,7 +26,6 @@ answer**, and a default to offer — per the strictness preset (CORE §3) where 
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | own: the owner · client: the business analyst / product owner |
 | Owner's language / artifacts' language | `<fill>` | owner's language / English |
-| Decision log, open questions | `<fill>` | `docs/decisions.md`, `docs/open-questions.md` |
 
 ## Sources of truth (procedures/SOURCES.md)
 | Kind | Main system | The coordinator may |
@@ -72,7 +75,8 @@ What "start a new cycle" runs here — an ordered recipe, agreed at init, revise
 |---|---|---|
 | Start research | `<fill>` | propose in one line with the model it would use; start only on the owner's yes |
 | Where results go | `<fill>` | a catalog document in the project's docs (`docs/research/<topic>.md`) or a table in the coordinator session |
-| Reference sources | `<fill>` | similar open-source projects, libraries, official docs |
+| Radar: references and competitors | `<fill>` | proposed from the init research (similar products, open-source projects, mods); one per block, a light-model researcher; rows decided by the owner in one batch at the end of the block · strict: proposed per block |
+| Expectations checklist | `<fill>` | `docs/expectations.md`; re-audited at each milestone checkpoint |
 
 ## The change flow
 Walked end to end at init (CORE §3, topic d); revise as the project changes.
@@ -120,8 +124,8 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Environments | `<fill>` | local · preview (per PR) · production |
 | Release path to production | `<fill>` | merge to main → automatic deploy; DB migrations via the CI workflow (swarm, standard: agents may also apply them when a task needs it, backup first) |
 | Database changes | `<fill>` | migration files; never edit an applied migration · strict: no dashboard edits, no direct pushes from a dev machine |
-| Production backup before an irreversible change | `<fill>` | the command and destination in `BINDINGS.md` (e.g. a database dump / platform snapshot), filled before the first such write |
-| Release flags | `<fill>` | features that act on real users or money ship disabled behind an env flag; enabled after merge in a documented order |
+| Production backup before an irreversible change *(if any)* | `<fill>` | the command and destination in `BINDINGS.md` (e.g. a database dump / platform snapshot), filled before the first such write |
+| Release flags *(if any)* | `<fill>` | features that act on real users or money ship disabled behind an env flag; enabled after merge in a documented order |
 | Production rights of tools / MCP | `<fill>` | per the strictness (swarm, standard: write when the task needs it, backup first · strict: read-only) |
 
 ## Parallel work and resources

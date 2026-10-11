@@ -64,9 +64,10 @@ rule → ask the owner.
     never stretches it. Two set-up steps are part of the core, not deviations, and run without asking
     (reported in one line; Claude Code may still show a permission prompt): installing the core's roles
     (TOOLKIT) and creating `coordinator/` as its own git hidden from the project's (INIT).
-12. **No work before the init quiz is complete.** Until every init question (§3) has a clear answer:
-    no workers, no changes (beyond the two set-up steps of §1.11), no cycle. A quiz cut off or an unclear answer → back to the open questions,
-    never guess past them.
+12. **No work before the init quiz is complete.** Until every init question that applies (§3) has a
+    clear answer and the owner said yes to the summary: no workers, no changes (beyond the two set-up
+    steps of §1.11), no cycle. A quiz cut off or an unclear answer → back to the open questions, never
+    guess past them.
 13. **Customer and production data never leave production.** No production rows, logs with personal
     data, customer records or payment details in issues, PRs, comments, the journal, briefs, test seeds
     or research; test data is synthetic. Screenshots and photos the owner gives are masked before any of
@@ -139,9 +140,11 @@ its own: after step 9 the session waits.
 
 ## 3. Setup interview — the init quiz
 
-Full for a new or adopted project, a short per-area confirmation for a filled one: the questions and
-steps are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before every question
-has an answer (§1.12).
+A few questions only the owner can decide, one table of what the project already shows, the rest by
+default from the strictness preset and the template, and one summary for the owner's yes; scenarios for
+an empty folder, an existing project, an older coordinator and a new machine. The questions and steps
+are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before the quiz is complete
+(§1.12).
 
 **Strictness** is asked first: one preset sets the defaults below; `PROJECT.md` records it and any row
 it overrides. In every preset a worker works on its own inside its task and returns a finished PR;
@@ -240,6 +243,17 @@ The coordinator **proposes**, the owner approves every proposal before it become
   ([roles/researcher.md](roles/researcher.md)): it returns a short catalog with each candidate's
   **licence** and a take / not / later advice. Delivered where `PROJECT.md` says; the owner decides row
   by row; taken rows become tasks; research itself creates none.
+- **Research radar** — finding what nobody asked about yet: a list in `PROJECT.md` of references and
+  competitors (similar products, open-source projects, mods, ports), proposed from the init research and
+  added to whenever a worker or the owner names one. **One reference per block** (§3 table, *Reports*),
+  a light-model researcher; its rows go into the research catalog with the decision empty — what they
+  do better, what we could take, the licence. The owner decides the new rows in one batch at the end of
+  the block, with a recommendation per group; taken rows become tasks. Pre-approved by the list itself
+  in the swarm and standard presets; strict: proposed per block like any research.
+- **Expectations checklist:** what users of this kind of product expect (a VR game: comfort, turning
+  options, seated play; a shop: search, cart, payment), drafted from the radar and the research, kept in
+  the project's docs; the plan is re-audited against it at each milestone checkpoint and the gaps are
+  proposed as tasks.
 - **After any research or question nothing changes straight away:** report what was found, how reliable
   and useful, the options; implement only what is approved.
 - **Coding standards:** at init and as the stack grows, propose rules for the languages, frameworks and
