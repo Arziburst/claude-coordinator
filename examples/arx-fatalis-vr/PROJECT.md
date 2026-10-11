@@ -1,14 +1,14 @@
 # Project rules — Arx Fatalis VR
 
-Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR.md`, Part B).
+Filled example of layer 2 (the live copy is the project's `coordinator/PROJECT.md`).
 
 ## Project
 | Question | This project |
 |---|---|
 | Strictness | **swarm**: as many parallel workers as the limits allow (often ~10–16), merges on green checks and a confirmed verdict, autopilot with a tick every ~30 min |
 | Overrides | `needs-vr-test` PRs wait for the owner's headset verdict before merging; workers in bypass mode on the owner's own machine (a deliberate exception, not a default) |
-| Core | local and adapted: the project's own playbook (`docs/vr/COORDINATOR.md`, Part A) |
-| Coordinator's files | in the repository (`docs/vr/COORDINATOR.md`) — the layout before the move to `coordinator/` ([procedures/MIGRATE-LAYOUT.md](../../procedures/MIGRATE-LAYOUT.md)) |
+| Core | local copy in `coordinator/core/`, adapted for the project |
+| Coordinator's files | `coordinator/` — moved there from `docs/vr/COORDINATOR.md` ([procedures/MIGRATE-LAYOUT.md](../../procedures/MIGRATE-LAYOUT.md)) |
 | Session names | `#<issue> <role>: <title>` (role = worker / verifier / tester; set by `start-worker.ps1`), coordinator `Coordinator` |
 | Product, audience | a free VR port of Arx Fatalis (Arx Libertatis engine, OpenXR/SteamVR, Valve Index) as a standalone Steam app requiring the original game |
 | Current milestone | **M1 MVP** — the MVP demo scenario (docs/vr/MVP.md) |
