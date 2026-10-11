@@ -108,6 +108,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.
+- **Owner's voice (CORE §11):** the worker settings set `"attribution": {"commit": "", "pr": "",
+  "sessionUrl": false}`, so commits and PRs carry no AI co-author trailer, PR line or session link; put
+  the same in the coordinator's own settings (`~/.claude/settings.json`) at init. `attribution: false`
+  does the same from Claude Code 2.1.281 on, but older versions skip a settings file that holds it.
+  [settings](https://code.claude.com/docs/en/settings-reference.md)
 - **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** in every
   preset (no permission prompts, the classifier and the hook as the net) or `acceptEdits` with the
   cautious override. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's

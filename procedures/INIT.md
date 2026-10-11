@@ -66,8 +66,6 @@ filled one (§2 step 6):
      task at a time, humans merge, every step reported). In every preset a worker works on its own
      inside its task and returns a finished PR. Then ask which rows, if any, this project overrides
      (e.g. strict, but production writes as in standard) and record them.
-   - **Commercial (client or paid work) or own (hobby, open source)?** Sets the voice and AI co-author
-     line, whether project code may go to other services (§1.13) and time budgets — not the freedom.
    - **Worker permission mode:** `auto` (recommended, every preset; no prompts, the classifier and the
      hook as the net) or `acceptEdits` (cautious: prompts, production read-only, the candidate denies).
    - **Where the core comes from — remote or local?** *Remote:* a checkout of the public
@@ -88,8 +86,8 @@ filled one (§2 step 6):
    [state-repo/README.template.md](../state-repo/README.template.md)); the
    coordinator commits it locally at the end of every cycle (history and undo); it reaches a remote only
    on a handoff (§12b). A local core lives in it as `core/`. The owner may choose otherwise (commit the
-   files into the project, or push every cycle) — recorded in `PROJECT.md`. Also early: **whose voice**
-   artifacts use, including whether commits carry an AI co-author line — each a recorded answer.
+   files into the project, or push every cycle) — recorded in `PROJECT.md`. The voice is not
+   asked: artifacts are always in the owner's voice, with no AI co-author lines (§11).
    - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
      project settings; an existing one is left as it is): *want a status line?* — show the example
      `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%` (model (effort) · context used in this
@@ -114,7 +112,7 @@ like that". Look at the repository first and propose what it already implies.
 
 The quiz topics (a–l):
 
-a. **Goal:** strictness and commercial or own (asked first, above); the product, its users, the current milestone or
+a. **Goal:** the strictness (asked first, above); the product, its users, the current milestone or
    sprint and what "done" means for it; solo or team.
 b. **Technology:** stack, build / run / test, environments (local, preview, staging, production), CI,
    deployment, where the owner or QA tests.
@@ -127,14 +125,14 @@ d. **The change flow** — walk it end to end and agree each step: task picked �
 e. **Who integrates:** per the strictness (CORE §3) — strict: humans merge, so the owner stays in the
    process; standard: the coordinator, the owner for risky changes; swarm: the coordinator on green
    checks and a confirmed verdict.
-f. **Identity in artifacts:** whose voice commits, PR comments and issue comments use (client work: the
-   owner's, first person, no mention of AI; own project: no matter).
+f. **Identity in artifacts:** not asked — always the owner's voice, first person, no mention of AI
+   (§11); only the comment style is asked.
 g. **Acceptance:** how the owner, QA or the client accepts work; re-acceptance after a requested change.
 h. **Parallel work and resources:** may workers run in parallel; per-worker isolation of databases,
    ports, containers; shared resources to guard; serial identifiers (migration versions, decision
    numbers) and how they are allotted (§8).
 i. **Budget:** usage caps, when to exceed them, which models are available (§7); time estimates and
-   tracking for client work.
+   tracking where the strictness or the owner asks.
 j. **Language** of the conversation and of artifacts.
 k. **MCP and integrations:** detect the technologies (code host, tracker, design, database, hosting,
     docs, browser) and propose matching MCP servers; the owner decides what is connected and with which

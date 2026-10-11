@@ -7,7 +7,6 @@ Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR
 |---|---|
 | Strictness | **swarm**: as many parallel workers as the limits allow (often ~10–16), merges on green checks and a confirmed verdict, autopilot with a tick every ~30 min |
 | Overrides | `needs-vr-test` PRs wait for the owner's headset verdict before merging; workers in bypass mode on the owner's own machine (a deliberate exception, not a default) |
-| Commercial or own | **own** (free app) |
 | Core | local and adapted: the project's own playbook (`docs/vr/COORDINATOR.md`, Part A) |
 | Coordinator's files | in the repository (`docs/vr/COORDINATOR.md`) — the layout before the move to `coordinator/` ([procedures/MIGRATE-LAYOUT.md](../../procedures/MIGRATE-LAYOUT.md)) |
 | Session names | `#<issue> <role>: <title>` (role = worker / verifier / tester; set by `start-worker.ps1`), coordinator `Coordinator` |

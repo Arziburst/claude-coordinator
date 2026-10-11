@@ -8,7 +8,6 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 |---|---|
 | Strictness | **strict**: one task at a time, reviewed and accepted before the next; humans merge |
 | Overrides | production writes as in standard (below) |
-| Commercial or own | **commercial** (client work) |
 | Worker permission mode and production | **auto**: workers in auto mode merge main, resolve conflicts, rebase, write to their local stacks and to production when a task needs it (backup first), and report |
 | Autopilot, tick | off, no tick (cycles on the owner's word) |
 | Core | local copy in the state repository (`core/`), editable for this project; "update the core" on command |

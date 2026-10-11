@@ -2,23 +2,20 @@
 
 Layer 2 of the coordinator (see `CORE.md`). Filled through the init quiz with the owner (CORE §3),
 revised whenever the owner changes how the project works. Every row: the question, **this project's
-answer**, and a default to offer — per the strictness preset (CORE §3) or "own" vs "commercial" where they
-differ. Work starts only when no `<fill>` is left (CORE §1.12).
+answer**, and a default to offer — per the strictness preset (CORE §3) where they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
 | **Strictness** (CORE §3) | `<fill>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
 | Overrides of the preset (row and value) | `<fill>` | none |
-| **Commercial or own** | `<fill>` | — asked second; sets voice, co-author line, code to other services, time budgets |
 | Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
 | **Core: remote or local** (CORE §3) | `<fill>` | client work: **local copy** at claude-coordinator commit `<sha>`, editable for this project, upstream updates on "update the core" · own project: remote (latest) |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle, pushed only on a handoff |
-| AI co-author line in commits (voice: *Voice in artifacts*) | `<fill>` | client work: removed (owner's recorded decision) · own: no matter |
 | Who reviews CI, deployment, migration and release-flag changes (CORE §1.1) | `<fill>` | per the strictness: swarm the verifier · standard the owner · strict a human |
-| Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | commercial: ask · own: allowed |
+| Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | strict: ask · swarm, standard: allowed |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
@@ -90,9 +87,10 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 | Improvements | `<fill>` | the coordinator proposes checks that save time or owner attention (CORE §4b); the owner decides |
 
 ## Voice in artifacts
+Always the owner's: first person, no mention of AI, no AI co-author lines (CORE §11).
+
 | Question | This project | Default to offer |
 |---|---|---|
-| Whose voice in commits, PR and issue comments | `<fill>` | client: the owner's, first person, no mention of AI · own: no matter |
 | Comment style | `<fill>` | terse bullets |
 
 ## Acceptance

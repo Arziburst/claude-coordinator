@@ -7,8 +7,7 @@
 >    Its rules override your default habits; §1 are hard rules.
 > 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
 >    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
->    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?", then
->    "commercial or own?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
+>    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
 >    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
 >    your own.
 > 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);

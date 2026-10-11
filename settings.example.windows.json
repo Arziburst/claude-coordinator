@@ -1,7 +1,14 @@
 {
-  "_comment": "Worker safety settings for Windows (passed to every worker by start-worker.ps1 -Safety; macOS / Linux: settings.example.json). Replace C:\\ABSOLUTE\\PATH with the absolute path of this claude-coordinator checkout (the folder that holds scripts/) on this machine (JSON needs \\\\ for each backslash). This is the AUTONOMOUS baseline (the default level): only the protected branches and irreversible removals are guarded; workers do routine risky work themselves and report it. The CAUTIOUS level adds: \"Bash(gh pr merge*)\", \"Bash(gh pr ready*)\", \"Read(**/.env*)\" and the stack candidates chosen in the init quiz (examples/nextjs-supabase/settings.json). Also add gh pr merge / ready denies wherever PROJECT.md says humans merge or mark ready. MCP tools bypass the hook (it sees only shell tools), so their writes are denied here: the names assume the GitHub MCP server is connected as \"github\" (mcp__<server>__<tool>) - rename them to the server name this machine uses, and add the write tools of any other connected server that can change a protected branch. Drop mcp__github__merge_pull_request only where workers merge their own PRs (PROJECT.md).",
+  "_comment": "Worker safety settings for Windows (passed to every worker by start-worker.ps1 -Safety; macOS / Linux: settings.example.json). Replace C:\\ABSOLUTE\\PATH with the absolute path of this claude-coordinator checkout (the folder that holds scripts/) on this machine (JSON needs \\\\ for each backslash). This is the SWARM and STANDARD baseline (CORE section 3): only the protected branches and irreversible removals are guarded; workers do routine risky work themselves and report it. The STRICT preset adds \"Bash(gh pr merge*)\", \"Bash(gh pr ready*)\" and the production MCP write tools; the CAUTIOUS override also adds \"Read(**/.env*)\" and the stack candidates chosen in the init quiz (examples/nextjs-supabase/settings.json). Also add gh pr merge / ready denies wherever PROJECT.md says humans merge or mark ready. MCP tools bypass the hook (it sees only shell tools), so their writes are denied here: the names assume the GitHub MCP server is connected as \"github\" (mcp__<server>__<tool>) - rename them to the server name this machine uses, and add the write tools of any other connected server that can change a protected branch. Drop mcp__github__merge_pull_request only where workers merge their own PRs (PROJECT.md). attribution hides the AI co-author trailer, the PR line and the session link: artifacts are in the owner's voice (CORE section 11).",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "crossSessionInbound": "accept",
-  "worktree": { "bgIsolation": "none" },
+  "worktree": {
+    "bgIsolation": "none"
+  },
   "permissions": {
     "deny": [
       "Bash(git push origin main)",
