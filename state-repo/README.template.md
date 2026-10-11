@@ -24,4 +24,5 @@ with the client.
 | `BINDINGS.md` | tools and commands (layer 3); rows marked "re-detect" depend on the machine |
 | `LOG.md` | the coordinator's journal |
 | `RUNS.tsv` | the run log: model, tokens and result per run (CORE §7) |
+| `ROUTING.md` | the model and effort per kind of task, adjusted automatically from the run log (CORE §7) |
 | `core/` | the local copy of the coordinator core (only with a local core), at the commit recorded in `PROJECT.md` |

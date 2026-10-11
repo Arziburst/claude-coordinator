@@ -267,10 +267,18 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   model · effort · tokens (counted from the session's transcript, TOOLKIT *Usage*; never the worker's own estimate) · cost (if the
   status line reports it) · result (`approved` / `rework <n>` /
   `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
-- **Routing review:** on the owner's "model report", or every 20 runs in the cycle report, summarize
-  per kind and model — first-pass approvals, reworks, escalations, median tokens — and propose changes
-  to this table (or to `PROJECT.md`'s routing) where the data shows a cheaper model passing or a
-  cheaper model failing; the owner decides (§1.11).
+- **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
+  under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
+  this table, and every run uses it. It learns from the run log, balancing quality, price and limits:
+  - **cheaper when proven:** a kind with ≥ 90% first-pass approvals over its last 10 runs tries one level
+    down on its next 5; kept if they hold ≥ 80%, otherwise reverted;
+  - **stronger when failing:** 2 or more reworks or escalations in a kind's last 5 runs → one level up;
+  - **limits:** 5-hour or weekly use above 70% (status line, TOOLKIT *Usage*) → routine kinds one level
+    down; above 90% → routine on the light model only, heavy work waits for the reset (§9);
+  - **floors:** risk-tier work (§5) never goes below its row in this table; a kind the owner pins in
+    `PROJECT.md` is never changed.
+  Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
+  the numbers behind it.
 - Keep this table current; `BINDINGS.md` may pin exact ids.
 
 ## 8. Resources, parallel work and cleanup
