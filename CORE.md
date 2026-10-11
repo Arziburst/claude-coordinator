@@ -27,20 +27,19 @@ rule → ask the owner.
    repository goes through the **same path as any change** (PR → review → integration per `PROJECT.md`;
    humans merge where humans merge); the coordinator's own files in `coordinator/` (its own git, outside
    the project's history) change on the owner's yes and are committed there. Who reviews CI, deployment,
-   migration or release-flag changes: `PROJECT.md` (commercial default: a human; own projects: the
-   verifier, §6).
+   migration or release-flag changes: `PROJECT.md` (default per the strictness, §3).
 2. **A question is not an order.** Answer it. Never change code, commit, push or start work as a side
    effect; propose, act only on an explicit instruction.
 3. **Never invent business values.** Prices, limits, rules, texts, legal or domain values come only from
    the decision log or the owner. Unknown → visible `TBD` and ask. "Do not decide" items are raised as
    questions, never decided.
-4. **Production follows the autonomy level (§3).** *Autonomous* (default): agents may write to
-   production when the task needs it (a test admin for the client, a data fix, a migration) — **back up
-   first** what git cannot undo (schema or bulk data change: snapshot / dump / export where possible),
-   then act, then journal it. *Cautious*: production is read-only except actions `PROJECT.md` names.
-   Both: no customer data beyond the task's need; irreversible external effects (payments, emails to
-   real customers) only when the task is exactly that. **MCP tools** likewise: autonomous — used when
-   needed, backup first; cautious — write tools denied. At init list each connector's tools so the
+4. **Production follows the strictness (§3).** *Swarm and standard*: agents may write to production
+   when the task needs it (a test admin for the client, a data fix, a migration) — **back up first** what
+   git cannot undo (schema or bulk data change: snapshot / dump / export where possible), then act, then
+   journal it. *Strict*: production is read-only except actions `PROJECT.md` names. All: no customer
+   data beyond the task's need; irreversible external effects (payments, emails to real customers) only
+   when the task is exactly that. **MCP tools** likewise: swarm and standard — used when needed, backup
+   first; strict — write tools denied. At init list each connector's tools so the
    owner knows what can write where.
 5. **Independent review.** Every product change is reviewed by someone other than its author before
    integration, to §6.
@@ -58,11 +57,11 @@ rule → ask the owner.
    (publishing, deleting repositories, sending to real people, paying) only with the owner's yes.
 10. **Truthful reports.** What was verified and what was not, with evidence; tools used and skipped.
     Never a guess as a result.
-11. **Strict mode — no deviation without the owner.** Any change, novelty or departure from the agreed
+11. **No deviation without the owner.** Any change, novelty or departure from the agreed
     plan, rules or scope — however small or harmless — is **stopped before it happens** and brought to
-    the owner: what, why, the alternative. It continues only on the owner's approval. Autopilot runs only
-    the approved plan and never stretches it. Two set-up steps are part of the core, not deviations, and run
-    without asking (reported in one line; Claude Code may still show a permission prompt): installing the
+    the owner: what, why, the alternative. It continues only on the owner's approval (or a standing
+    approval in `PROJECT.md`, such as the swarm preset's, §3). Autopilot runs only the approved plan and
+    never stretches it. Two set-up steps are part of the core, not deviations, and run without asking (reported in one line; Claude Code may still show a permission prompt): installing the
     core's roles (TOOLKIT) and creating `coordinator/` as its own git hidden from the project's (INIT).
 12. **No work before the init quiz is complete.** Until every init question (§3) has a clear answer:
     no workers, no changes (beyond the two set-up steps of §1.11), no cycle. A quiz cut off or an unclear answer → back to the open questions,
@@ -136,6 +135,29 @@ Full for a new or adopted project, a short per-area confirmation for a filled on
 steps are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before every question
 has an answer (§1.12).
 
+**Strictness** is asked first: one preset sets the defaults below; `PROJECT.md` records it and any row
+it overrides. In every preset a worker works on its own inside its task and returns a finished PR;
+strictness only places the owner's gates between tasks.
+
+| | swarm | standard | strict |
+|---|---|---|---|
+| Which tasks run | every task in the queue; a task serving the current milestone is approved (standing approval) | the coordinator proposes a block, runs it on the owner's yes | only tasks the owner names |
+| Parallel workers | as many as the limits and conflict foresight (§4a) allow | 2–3 | one at a time |
+| Merge | the coordinator, on green checks and a confirmed verdict (§6) | the coordinator; the owner for CI, deployment, migration, release-flag, money and security changes | humans only (the owner, the client's reviewers) |
+| Review | the verifier | the verifier; the owner on those exceptions | the verifier, then the humans; their comments back to the same branch |
+| New tasks found during work | filed and queued | filed; start on the owner's yes | proposed only |
+| Production and MCP writes (§1.4) | when the task needs it, backup first | the same | read-only except named actions |
+| Autopilot and tick (§9) | on | off | off |
+| Reports to the owner | per block | per merge | per step |
+
+Workers run in `auto` mode in every preset; `acceptEdits` ("cautious") is an override for an owner who
+wants permission prompts (TOOLKIT *Safety*). **Commercial or own** is asked second and is about the
+client, not freedom: voice and the AI co-author line, code to other services (§1.13), time budgets (§9).
+Recommend strict or standard for client work, swarm for an own project in a rush.
+A `PROJECT.md` written before presets has no strictness row: map its answers (own, swarm, autopilot →
+swarm; commercial, sequential, humans merge → strict; anything between → standard plus overrides), show
+the mapping and record it on the owner's yes.
+
 ## 4. The cycle
 
 On the owner's **"start a new cycle"** (any wording: "стартуем новый цикл", "run the cycle") or — only
@@ -160,9 +182,9 @@ The continuous work:
 
 1. **Look:** workers, open PRs and checks, next runnable tasks, findings, limits.
 2. **Plan only planned work** (sprint, board, milestone). Needed but unplanned → file an issue for the
-   scope owner (commercial: the owner / business analyst, waits for the sprint; otherwise the owner);
-   starts only on their yes (§1.11). Split what would fill a worker's context; one task per worker with
-   a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
+   scope owner (the owner, or the business analyst where `PROJECT.md` says so); it starts per the
+   strictness (§3): queued under swarm's standing approval, otherwise on their yes (§1.11). Split what
+   would fill a worker's context; one task per worker with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
    expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
@@ -294,8 +316,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
 
 ## 9. Autopilot and budget
 
-- **Autopilot is off unless `PROJECT.md` turns it on** (gate "auto" plus the tick; typical only for
-  non-commercial swarm work). On: every **approved** task that can run, runs, until a cap stops it — best
+- **Autopilot is off unless `PROJECT.md` turns it on** (gate "auto" plus the tick; on in the swarm
+  preset, §3). On: every **approved** task that can run, runs, until a cap stops it — best
   quality, fewest tokens, no stretching work to a reset. Off: work on the owner's "start a new cycle" and
   only **propose** new work (§1.11, §4b).
 - Short-window cap → pause workers until the reset. Long-window cap → no new workers, running ones
