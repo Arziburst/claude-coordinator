@@ -8,7 +8,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Generic term | Here |
 |---|---|
 | Operating system(s) and shells | `<Windows / macOS / Linux; PowerShell / bash / zsh>` — commands below are for these; per-OS variants where machines differ |
-| claude-coordinator checkout (scripts, hook, roles; remote core) | `<absolute path>` (re-detect) |
+| Core scripts (hook, start-worker, status line) | `<absolute path to coordinator/core/scripts>` (re-detect) |
 | Repository, main branch, protected branches | `<fill>` |
 | Owner's working copy | `<path>` |
 | Build / run / test / lint / typecheck commands | `<fill>` |

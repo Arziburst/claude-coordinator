@@ -12,7 +12,7 @@ answer**, and a default to offer — per the strictness preset (CORE §3) where 
 | Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
-| **Core: remote or local** (CORE §3) | `<fill>` | client work: **local copy** at claude-coordinator commit `<sha>`, editable for this project, upstream updates on "update the core" · own project: remote (latest) |
+| Core (CORE §2) | `<fill>` | always a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle, pushed only on a handoff |
 | Who reviews CI, deployment, migration and release-flag changes (CORE §1.1) | `<fill>` | per the strictness: swarm the verifier · standard the owner · strict a human |
 | Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | strict: ask · swarm, standard: allowed |
