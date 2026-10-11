@@ -28,6 +28,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
 - [roles/](roles/) — role definitions: [worker.md](roles/worker.md) implements a contract,
+  [tester.md](roles/tester.md) writes its failing tests first,
   [verifier.md](roles/verifier.md) reviews it independently, [scout.md](roles/scout.md) condenses long
   logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz

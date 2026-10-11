@@ -26,7 +26,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `verifier`, `scout`, `researcher`. They are part
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `tester`, `verifier`, `scout`, `researcher`. They are part
   of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
