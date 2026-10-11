@@ -5,12 +5,14 @@ tracks Claude Code features and changes with them — re-check the linked docs w
 differently. Items marked *(unconfirmed)* were not stated in the docs; verify them in the dry run (CORE §12a).
 
 ## Workers: start, name, manage
-- **Background session per worker:** `claude --bg --name "<KEY>-<task> <title>" --model <model> --permission-mode <mode> "<brief>"`
+- **Background session per worker:** `claude --bg --name "<KEY>-<task> worker: <title>" --model <model> --permission-mode <mode> "<brief>"`
   — prints an id; `claude agents [--json]`, `claude logs <id>`, `claude attach <id>`, `claude stop <id>`,
   `claude respawn <id>`, `claude rm <id>`. `--bg` cannot be combined with `-p`.
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
-  cannot tell sessions apart.
+  cannot tell sessions apart. The name carries the role (CORE §4): `ARXVR-37 worker: <title>`.
+  Subagents (tester, scout, a verifier run as one) have no session of their own: they appear inside
+  the session that started them under their role name.
 - **The coordinator's own name** (CORE §2 step 1): `<Project> Coordinator`. Started by the owner from
   the CLI: `claude --name "<Project> Coordinator"`; in an already running session the owner can rename
   it (`/rename <name>` *(unconfirmed)*), or a `UserPromptSubmit` hook can set the title from the project

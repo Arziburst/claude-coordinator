@@ -161,9 +161,10 @@ The continuous work:
    a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
    expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
-3. **Delegate:** model and effort per §7, rigor per §5, **every session named**: `<KEY>-<task> <title>`
-   for workers (e.g. `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator`, `<KEY>-<task>
-   review`, `research: <topic>` (command in `BINDINGS.md`). The brief: the contract, the decisions that
+3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
+   `<KEY>-<task> <role>: <title>` (e.g. `ARXVR-37 worker: Items with a reticle per hand`, `ARXVR-37
+   verifier: Items with a reticle per hand`), `researcher: <topic>`, `<Project> Coordinator` (command in
+   `BINDINGS.md`); the role is the role file's name. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
    rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief. An `oracle`
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent

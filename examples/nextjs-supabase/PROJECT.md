@@ -12,7 +12,7 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 | Autopilot, tick | off, no tick (cycles on the owner's word) |
 | Core | local copy in the state repository (`core/`), editable for this project; "update the core" on command |
 | Coordinator's files | `coordinator/` — its own local git repository, excluded from the client repository's git, pushed to the private state repository on a handoff |
-| Session names | `APP-<issue> <title>`, coordinator `App Coordinator` |
+| Session names | `APP-<issue> <role>: <title>`, coordinator `App Coordinator` |
 | Product; team | a web app for a client's customers; the owner (developer) + a business analyst + a supervising developer |
 | Milestone / sprint | the current sprint's issues on the board |
 | Scope owner | the business analyst |
