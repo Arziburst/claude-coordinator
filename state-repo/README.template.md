@@ -23,4 +23,5 @@ with the client.
 | `PROJECT.md` | the project rules (layer 2) |
 | `BINDINGS.md` | tools and commands (layer 3); rows marked "re-detect" depend on the machine |
 | `LOG.md` | the coordinator's journal |
+| `RUNS.tsv` | the run log: model, tokens and result per run (CORE §7) |
 | `core/` | the local copy of the coordinator core (only with a local core), at the commit recorded in `PROJECT.md` |

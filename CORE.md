@@ -262,6 +262,14 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   model only where truly needed. A model with its own limit spares a tight main one.
 - A worker failing on a usage limit restarts on another model; one failing review for a reason a stronger
   model would fix restarts on its contract's `escalate_to`.
+- **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's): one line
+  per finished worker, reviewer or researcher run — date · task · role · kind (a row of the table) ·
+  model · effort · tokens (from the tool's result for that run, e.g. a subagent's usage line; else `-`) · result (`approved` / `rework <n>` /
+  `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
+- **Routing review:** on the owner's "model report", or every 20 runs in the cycle report, summarize
+  per kind and model — first-pass approvals, reworks, escalations, median tokens — and propose changes
+  to this table (or to `PROJECT.md`'s routing) where the data shows a cheaper model passing or a
+  cheaper model failing; the owner decides (§1.11).
 - Keep this table current; `BINDINGS.md` may pin exact ids.
 
 ## 8. Resources, parallel work and cleanup
