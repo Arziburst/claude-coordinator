@@ -75,7 +75,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Never allow** patterns that run arbitrary code (interpreters, `npx`, `npm run *`, `gh api *`,
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
-  human review required for commercial work. Rules and hooks on the machine are a safety net, not a wall.
+  human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
   rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
   pushing, force-pushing or deleting the protected branches (main / master — in any refspec form:
@@ -99,17 +99,23 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
   any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
-- **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only
+- **Deny rules** in `settings.example.json` are the swarm and standard baseline: the protected branches only
   (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
-  Add `gh pr merge*` / `gh pr ready*` where humans merge or mark ready; the cautious level also adds
+  Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans
+  merge); the cautious override also adds
   `Read(**/.env*)` and the stack candidates (database CLIs, production deploys, MCP write tools) from
   `examples/nextjs-supabase/settings.json`.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.
-- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** at the
-  autonomous level (the default — no permission prompts, the classifier and the hook as the net) or
-  `acceptEdits` at the cautious level. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
+- **Owner's voice (CORE §11):** the worker settings set `"attribution": {"commit": "", "pr": "",
+  "sessionUrl": false}`, so commits and PRs carry no AI co-author trailer, PR line or session link; put
+  the same in the coordinator's own settings (`~/.claude/settings.json`) at init. `attribution: false`
+  does the same from Claude Code 2.1.281 on, but older versions skip a settings file that holds it.
+  [settings](https://code.claude.com/docs/en/settings-reference.md)
+- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** in every
+  preset (no permission prompts, the classifier and the hook as the net) or `acceptEdits` with the
+  cautious override. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
@@ -180,4 +186,4 @@ Run in this order; the first cycle is a **dry run** (CORE §12a).
 7. Initialize (CORE §2 — the one start sequence): context of running sessions and PRs, open questions,
    the init quiz, `PROJECT.md` / `BINDINGS.md`, the access list and project map, the platform row, the MCP
    tool check.
-8. Dry-run cycle → the owner approves → wait for "start a new cycle"; a tick only where autopilot is on.
+8. Dry-run cycle → the owner approves → wait for "start a new cycle"; a tick only where autopilot is on (swarm, CORE §3).

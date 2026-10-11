@@ -7,8 +7,7 @@
 >    Its rules override your default habits; §1 are hard rules.
 > 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
 >    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
->    (multiple choice with a recommended option; first "commercial or non-commercial?", "swarm or
->    sequential?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
+>    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
 >    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
 >    your own.
 > 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);
@@ -46,13 +45,13 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
   also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
 - [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)
-  — the worker safety file (passed by `start-worker --safety` / `-Safety`): protected-branch denies, the hook and its self-test, messages accepted — the autonomous
-  baseline; the cautious level adds denies.
+  — the worker safety file (passed by `start-worker --safety` / `-Safety`): protected-branch denies, the hook and its self-test, messages accepted — the swarm and
+  standard baseline; the strict preset and the cautious override add denies.
 
 ## Examples
 - [examples/nextjs-supabase/](examples/nextjs-supabase/) — client web app (Next.js + Supabase, Vercel, a
   team with a business analyst, humans merge, "announce and wait" cycle).
-- [examples/arx-fatalis-vr/](examples/arx-fatalis-vr/) — own game project (VR port, rush mode, autopilot
+- [examples/arx-fatalis-vr/](examples/arx-fatalis-vr/) — own game project (VR port, swarm preset, autopilot
   cycle with ~10 parallel workers).
 
 ## Use
