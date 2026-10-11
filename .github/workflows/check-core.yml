@@ -43,6 +43,7 @@ jobs:
           printf '%s\n' "$out" | grep -q '^tests/check-scripts/broken/bad\.sh:[0-9]*: '
           printf '%s\n' "$out" | grep -q "^tests/check-scripts/broken/bad\.ps1:3: Variable reference is not valid. ':' was not followed by a valid variable name character"
           printf '%s\n' "$out" | grep -qx 'check-scripts: 3 files, 2 errors'
+          bash scripts/check-scripts.sh tests/check-scripts/pwsh7 | grep -qx 'check-scripts: 1 files, 0 errors'
       - name: Every script parses, and a broken one is reported (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
@@ -55,7 +56,21 @@ jobs:
           if (-not ($out -match '^tests/check-scripts/broken/bad\.sh:\d+: ')) { 'bad.sh not reported'; exit 1 }
           if (-not ($out -match "^tests/check-scripts/broken/bad\.ps1:3: Variable reference is not valid")) { 'bad.ps1 not reported'; exit 1 }
           if (-not ($out -ceq 'check-scripts: 3 files, 2 errors')) { 'wrong summary'; exit 1 }
+          # a #Requires -Version 7 file: 5.1 cannot parse it, so check-scripts hands it to pwsh
+          $t = $null; $x = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\tests\check-scripts\pwsh7\needs7.ps1", [ref]$t, [ref]$x)
+          if ($x.Count -eq 0) { "needs7.ps1 must not parse under 5.1"; exit 1 }
+          $out = @(.\scripts\check-scripts.ps1 tests/check-scripts/pwsh7)
+          if ($LASTEXITCODE -ne 0 -or -not ($out -ceq 'check-scripts: 1 files, 0 errors')) { $out; 'needs7.ps1 not handed to pwsh'; exit 1 }
           exit 0
+      - name: check-scripts.sh and .ps1 print the same on Windows (Git Bash, Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: |
+          for d in scripts tests/check-scripts/broken tests/check-scripts/pwsh7; do
+            a="$(bash scripts/check-scripts.sh "$d")" || true
+            b="$(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-scripts.ps1 "$d" | tr -d '\r')" || true
+            [ "$a" = "$b" ] || { echo "differ on $d"; printf '%s\n--\n%s\n' "$a" "$b"; exit 1; }
+          done
       - name: The example contract in CONTRACT.md passes the contract check (bash)
         if: runner.os != 'Windows'
         run: |
@@ -147,7 +162,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
-          diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken)
+          diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
           home="$RUNNER_TEMP/home"; mkdir -p "$home"
