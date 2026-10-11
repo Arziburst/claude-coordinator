@@ -81,9 +81,9 @@ filled one (§2 step 6):
      themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
      work): the core is copied into the project's coordinator folder (in the repository or in the
      state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
-     project**; upstream changes come in **only on the owner's command** ("update the core"): the
-     coordinator shows what changed upstream and what conflicts with local edits, merges after the
-     owner's yes, and records the new commit. A local edit useful for every project is proposed back to
+     project**; upstream changes come in **only on the owner's command** ("update the core",
+     [UPDATE-CORE.md](UPDATE-CORE.md)): the coordinator shows what changed upstream and what conflicts
+     with local edits, merges after the owner's yes, and records the new commit. A local edit useful for every project is proposed back to
      claude-coordinator (§10), with the owner's yes.
    Also early: **where the coordinator's files live** (committed in the repository, or outside it — on
    client work the client can read anything committed). Outside the repository the folder is a clone of

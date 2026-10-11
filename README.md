@@ -30,7 +30,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [roles/](roles/) — role definitions: [verifier.md](roles/verifier.md), the independent reviewer.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
-  "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)).
+  "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "update the core"
+  ([UPDATE-CORE.md](procedures/UPDATE-CORE.md)).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
@@ -57,7 +58,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   `coordinator/` and add to the project's `CLAUDE.md`: `The coordinator session follows
   coordinator/CLAUDE.md.`
 - **Remote or local core** — asked in the init quiz: read this repository live, or keep a local copy
-  in the project (editable for that project; "update the core" brings upstream changes in on command).
+  in the project (editable for that project; "update the core" brings upstream changes in on command, with an impact report first).
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
 - **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and saves
   its state to the project's private state repository (CORE §12b, `state-repo/README.template.md`,
