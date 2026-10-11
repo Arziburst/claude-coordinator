@@ -16,6 +16,8 @@ mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_LOG"
+[ "${1:-}" = --bg ] && printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"
+exit 0
 EOF
 cat > "$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -45,7 +47,7 @@ git init -q -b main "$tmp/repo" && g -C "$tmp/repo" commit -q --allow-empty -m i
 git -C "$tmp/repo" remote add origin "$tmp/remote.git" && git -C "$tmp/repo" push -q origin main 2>/dev/null
 printf 'Fix the thing.\nSecond line "quoted".\n' > "$tmp/brief.md"
 if [ "$kind" = ps ]; then
-  sed 's#C:\\\\ABSOLUTE\\\\PATH\\\\scripts\\\\hooks\\\\#'"$core"'/scripts/hooks/#g' "$core/settings.example.windows.json" > "$tmp/safety.json"
+  sed 's#C:/ABSOLUTE/PATH/scripts/hooks/#'"$core"'/scripts/hooks/#g' "$core/settings.example.windows.json" > "$tmp/safety.json"
 else
   sed "s#/ABSOLUTE/PATH#$core#g" "$core/settings.example.json" > "$tmp/safety.json"
 fi
@@ -60,6 +62,7 @@ start() {
         --branch) a+=(-Branch "$2"); shift 2 ;; --model) a+=(-Model "$2"); shift 2 ;;
         --mode) a+=(-Mode "$2"); shift 2 ;; --brief-file) a+=(-BriefFile "$2"); shift 2 ;;
         --safety) a+=(-Safety "$2"); shift 2 ;; --dry-run) a+=(-DryRun); shift ;;
+        --launch-from) a+=(-LaunchFrom "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -104,6 +107,18 @@ check 0 "start: real start with the stub claude" -- start "${S[@]}"
 grep -q -- "--bg --name #12 worker: Fix --model opus --permission-mode auto --settings" "$STUB_LOG" ||
   { echo "FAIL: claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -q 'Second line "quoted".' "$STUB_LOG" || { echo "FAIL: the brief did not reach claude intact"; fail=1; }
+# launched from the repository root (trusted), the brief's first action entering the worktree
+grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not launched from the repository root:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/12-fix\." "$STUB_LOG" ||
+  { echo "FAIL: the brief does not start with entering the worktree"; fail=1; }
+: > "$STUB_LOG"
+mkdir -p "$tmp/launch"
+check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
+grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+# a hook path with backslashes: Git Bash drops them on Windows and the hook never runs
+sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
+check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json"
+expect_in "forward slashes"
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
