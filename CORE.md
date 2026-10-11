@@ -116,9 +116,12 @@ its own: after step 9 the session waits.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
    folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
    docs (README, CLAUDE.md, contribution guide). The core (every file in this repository a coordinator
-   uses) is read from `coordinator/core/` for a **local core** recorded in `PROJECT.md`, else from the
-   claude-coordinator checkout in `BINDINGS.md`, pulled first (INIT). "Update the core" →
-   [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command.
+   uses, scripts included) is always a **local copy** in `coordinator/core/` at the claude-coordinator
+   commit recorded in `PROJECT.md`, editable for the project — like a pinned package. At start compare
+   that commit with upstream (`git ls-remote`); newer → one line to the owner ("the core is behind
+   upstream; update?"), nothing applied. "Update the core" →
+   [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command. A project
+   without `coordinator/core/` (an older remote core) gets one on the owner's yes (MIGRATE-LAYOUT).
 4. **Learn the context** (read-only): the layers and journal if present; for a project in development —
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other
@@ -336,8 +339,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   queue and are announced once in force.
 - **Mistake → lesson.** Corrected or a mistake found: acknowledge in one line, fix the consequence,
   **write the lesson as a rule** — project-specific into `PROJECT.md` (*Lessons*), universal proposed for
-  this core on the owner's yes (with a local core: the local copy first, and proposed to claude-coordinator
-  if it helps every project). A lesson only in memory is lost.
+  this core on the owner's yes (the local copy first, and proposed to claude-coordinator if it helps
+  every project). A lesson only in memory is lost.
 - **Layering:** the principle here or in `PROJECT.md`; the command, path or number in `BINDINGS.md`.
 - **A core change passes `scripts/check-core`** (.sh / .ps1: links and § references) before it is proposed; CI runs
   both on every pull request to claude-coordinator. Scripts follow one style (TOOLKIT *Scripts*).

@@ -153,7 +153,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
   is set yet): add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
-  approves the write) the script's absolute path on this machine:
+  approves the write) the script's absolute path in the core copy (`/ABSOLUTE/PATH` = `<project>/coordinator/core`;
+  the user settings serve every project, so one project's copy is used for all):
   Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\""}`
   (`powershell` instead of `pwsh` where PowerShell 7 is missing); macOS / Linux
   `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh"}`. It

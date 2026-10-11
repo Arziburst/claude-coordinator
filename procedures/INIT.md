@@ -68,15 +68,13 @@ filled one (§2 step 6):
      (e.g. strict, but production writes as in standard) and record them.
    - **Worker permission mode:** `auto` (recommended, every preset; no prompts, the classifier and the
      hook as the net) or `acceptEdits` (cautious: prompts, production read-only, the candidate denies).
-   - **Where the core comes from — remote or local?** *Remote:* a checkout of the public
-     claude-coordinator repository on this machine (its path in `BINDINGS.md`; the hook, status line and
-     start scripts run from it), pulled to the latest at every start, the commit noted in `LOG.md` —
-     shared improvements arrive by themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
-     work): the core is copied into `coordinator/core/` (the state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
-     project**; upstream changes come in **only on the owner's command** ("update the core",
-     [UPDATE-CORE.md](UPDATE-CORE.md)): the coordinator shows what changed upstream and what conflicts
-     with local edits, merges after the owner's yes, and records the new commit. A local edit useful for every project is proposed back to
-     claude-coordinator (§10), with the owner's yes.
+   **The core is not asked — it is always a local copy:** clone claude-coordinator to a scratch folder,
+   copy its files into `coordinator/core/` and record the commit in `PROJECT.md`. Scripts, the hook,
+   the status line and the roles are used from there. It may be **edited for this project**; upstream
+   changes come in **only on the owner's command** ("update the core", [UPDATE-CORE.md](UPDATE-CORE.md)):
+   the coordinator shows what changed upstream and what conflicts with local edits, merges after the
+   owner's yes, and records the new commit. A local edit useful for every project is proposed back to
+   claude-coordinator (§10), with the owner's yes.
    **Where the coordinator's files live is not asked — it is set up automatically:** the
    project's `coordinator/` folder is the coordinator's own local git repository (the **state
    repository**, §12b) and is ignored by the project's git through `.git/info/exclude`, so the project's
@@ -85,7 +83,7 @@ filled one (§2 step 6):
    `.git/info/exclude` and make the first commit (layout:
    [state-repo/README.template.md](../state-repo/README.template.md)); the
    coordinator commits it locally at the end of every cycle (history and undo); it reaches a remote only
-   on a handoff (§12b). A local core lives in it as `core/`. The owner may choose otherwise (commit the
+   on a handoff (§12b). The core lives in it as `core/`. The owner may choose otherwise (commit the
    files into the project, or push every cycle) — recorded in `PROJECT.md`. The voice is not
    asked: artifacts are always in the owner's voice, with no AI co-author lines (§11).
    - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
