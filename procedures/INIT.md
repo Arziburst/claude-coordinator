@@ -79,16 +79,19 @@ filled one (§2 step 6):
    - **Where the core comes from — remote or local?** *Remote:* `CORE.md`, `TOOLKIT.md` and the scripts
      are always read from the public claude-coordinator repository — shared improvements arrive by
      themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
-     work): the core is copied into the project's coordinator folder (in the repository or in the
-     state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
+     work): the core is copied into `coordinator/core/` (the state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
      project**; upstream changes come in **only on the owner's command** ("update the core",
      [UPDATE-CORE.md](UPDATE-CORE.md)): the coordinator shows what changed upstream and what conflicts
      with local edits, merges after the owner's yes, and records the new commit. A local edit useful for every project is proposed back to
      claude-coordinator (§10), with the owner's yes.
-   Also early: **where the coordinator's files live** (committed in the repository, or outside it — on
-   client work the client can read anything committed). Outside the repository the folder is a clone of
-   the project's private **state repository** (§12b), so the rules and the journal are never only on one
-   disk — and **whose voice**
+   **Where the coordinator's files live is not asked — it is set up automatically:** the
+   project's `coordinator/` folder is the coordinator's own local git repository (the **state
+   repository**, §12b) and is ignored by the project's git through `.git/info/exclude`, so the project's
+   history, PRs and the client see none of it and the project's files are not changed. Create it at init
+   if missing (layout: [state-repo/README.template.md](../state-repo/README.template.md)); the
+   coordinator commits it locally at the end of every cycle (history and undo); it reaches a remote only
+   on a handoff (§12b). A local core lives in it as `core/`. The owner may choose otherwise (commit the
+   files into the project, or push every cycle) — recorded in `PROJECT.md`. Also early: **whose voice**
    artifacts use, including whether commits carry an AI co-author line — each a recorded answer.
    - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
      project settings; an existing one is left as it is): *want a status line?* — show the example
