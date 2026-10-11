@@ -26,9 +26,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `verifier`, `scout`. Copy them into
-  `~/.claude/agents/` (or the project's `.claude/agents/`, a project change) so a subagent starts as that
-  role; a background session (a worker, usually) gets the file's body at the top of its brief and its
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `verifier`, `scout`. They are part
+  of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
+  every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
+  (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
+  project's `.claude/agents/` is never written this way — that would be a project change (CORE §1.1). A
+  subagent then starts as that role; a background session (a worker, usually) gets the file's body at the top of its brief and its
   model from `--model`. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the

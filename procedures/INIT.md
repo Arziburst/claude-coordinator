@@ -18,7 +18,8 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   (PowerShell, bash, zsh) on this machine; record them in `BINDINGS.md`. Use that platform's commands,
   paths and tools; never assume another OS. Where a project runs on several machines or OSes, bindings
   give each command per OS, and scripts meant for everyone are written to run on all of them (or say
-  which they need). The core itself stays OS-neutral.
+  which they need). The core itself stays OS-neutral. Then install the core's roles into
+  `~/.claude/agents/` (TOOLKIT *Roles*) — automatic, no question.
 - **Safety check:**
   - **Branch protection on the code host** — the main branch requires a PR, passing checks and (for
     commercial work) a human review. This is the real enforcement; missing → ask the owner to enable it
