@@ -17,7 +17,7 @@ done
 [ -n "$wt" ] || { echo "usage: --worktree <path> [--session <id>] [--dry-run]" >&2; exit 1; }
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
-stop_here() { echo "$1 — left as is" >&2; exit 3; }
+stop_here() { echo "$1 - left as is" >&2; exit 3; }
 
 # The main repository is found from the worktree itself, so this runs from any folder.
 root=""

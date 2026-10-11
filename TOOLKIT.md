@@ -70,13 +70,14 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
   human review required for commercial work. Rules and hooks on the machine are a safety net, not a wall.
-- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`) guards only the irreversible:
+- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
+  rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
   pushing, force-pushing or deleting the protected branches (main / master — incl. quoted,
   `refs/heads/`, `HEAD:`, `+refspec` forms, and a push resolving to the current branch while on main),
   mirror pushes, and removing `/`, home or a worktree by hand. Work-branch operations (rebase, amend,
   reset, force-with-lease on its own branch, deleting work branches) pass. Exit code 2 blocks and
-  shows the reason. **A hook that fails to run does not block** — so `settings.example.json` runs
-  `safety-guard.sh --self-test` at session start; a failure there means: fix before starting workers.
+  shows the reason. **A hook that fails to run does not block** — so the settings example runs the
+  hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
   Hooks see only shell tools — **MCP tools are covered by deny rules only**. Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
 - **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only.
@@ -104,9 +105,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
-- Not yet in this style (ported by their own pull requests): `start-worker.sh`, `cleanup-worker.sh`,
-  `hooks/safety-guard.sh` have no `.ps1` (Git Bash on Windows until then); `statusline.sh` and
-  `hooks/safety-guard.sh` use `jq` when present.
+- **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
+- Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
+  `hooks/safety-guard.sh` uses `jq` when present and parses the JSON itself otherwise (both paths pass
+  the same cases).
 
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
@@ -140,14 +142,17 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 Run in this order; the first cycle is a **dry run** (CORE §12a).
 1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
-3. **Worker safety file** from [settings.example.json](settings.example.json) with absolute paths (passed
-   to every worker by `start-worker.sh --safety`). **The coordinator's own settings** (its session or the
+3. **Worker safety file** from [settings.example.json](settings.example.json) (Windows:
+   [settings.example.windows.json](settings.example.windows.json)) with absolute paths (passed to every
+   worker by `start-worker.sh --safety` / `start-worker.ps1 -Safety`). **The coordinator's own settings** (its session or the
    user settings): the status line if the owner wants it (CORE §3, *Installing it* above) and
    `crossSessionInbound: "accept"`.
    Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
    pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
 4. Make the scripts executable: `chmod +x scripts/*.sh scripts/hooks/*.sh` (macOS / Linux).
-5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` → `safety-guard: OK`.
+5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` (Windows: `powershell -NoProfile
+   -ExecutionPolicy Bypass -File scripts\hooks\safety-guard.ps1 -SelfTest`) → `safety-guard: OK`.
+   Windows: start-worker needs the native `claude.exe`; an npm `claude.cmd` cuts a multi-line brief.
 6. Branch protection on the code host is on (or the owner records why not).
 7. Initialize (CORE §2 — the one start sequence): context of running sessions and PRs, open questions,
    the init quiz, `PROJECT.md` / `BINDINGS.md`, the access list and project map, the platform row, the MCP

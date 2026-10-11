@@ -36,8 +36,8 @@ has() { printf '%s' "$cmd" | grep -Eiq -- "$1"; }
 has_cs() { printf '%s' "$cmd" | grep -Eq -- "$1"; }   # case-sensitive (e.g. -D vs -d)
 
 PROTECTED='(main|master)'
-# "git" as a command word: plain, quoted, with a path, .exe, any case.
-GITCMD='["'"'"']?([^[:space:]"'"'"']*[/\\])?git(\.exe)?["'"'"']?'
+# "git" as a command word: plain, quoted, with a path (a quoted one may contain spaces), .exe, any case.
+GITCMD='("[^"]*[/\\]git(\.exe)?"|'"'"'[^'"'"']*[/\\]git(\.exe)?'"'"'|["'"'"']?([^[:space:]"'"'"']*[/\\])?git(\.exe)?["'"'"']?)'
 GIT="(^|[^[:alnum:]_.-])${GITCMD}"
 
 current_branch() {

@@ -1,0 +1,55 @@
+{
+  "_comment": "Worker safety settings for Windows (passed to every worker by start-worker.ps1 -Safety; macOS / Linux: settings.example.json). Replace C:\\ABSOLUTE\\PATH with the real absolute path to the coordinator folder on this machine (JSON needs \\\\ for each backslash). This is the AUTONOMOUS baseline (the default level): only the protected branches and irreversible removals are guarded; workers do routine risky work themselves and report it. The CAUTIOUS level adds: \"Bash(gh pr merge*)\", \"Bash(gh pr ready*)\", \"Read(**/.env*)\" and the stack candidates chosen in the init quiz (examples/nextjs-supabase/settings.json). Also add gh pr merge / ready denies wherever PROJECT.md says humans merge or mark ready.",
+  "crossSessionInbound": "accept",
+  "worktree": { "bgIsolation": "none" },
+  "permissions": {
+    "deny": [
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin master)",
+      "Bash(git push origin master *)",
+      "Bash(git push --force origin main)",
+      "Bash(git push -f origin main)",
+      "Bash(gh repo delete *)",
+      "PowerShell(git push origin main)",
+      "PowerShell(git push origin main *)",
+      "PowerShell(git push origin master)",
+      "PowerShell(gh repo delete *)"
+    ],
+    "allow": [
+      "PowerShell(Select-String *)",
+      "PowerShell(Select-Object *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(git log *)",
+      "PowerShell(git status *)",
+      "PowerShell(git diff *)",
+      "PowerShell(gh pr view *)",
+      "PowerShell(gh pr list *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\ABSOLUTE\\PATH\\scripts\\hooks\\safety-guard.ps1 -SelfTest",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\ABSOLUTE\\PATH\\scripts\\hooks\\safety-guard.ps1",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
