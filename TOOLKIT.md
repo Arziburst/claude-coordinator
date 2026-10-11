@@ -157,7 +157,11 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
   installed. A language with no shell on the machine is listed as skipped, never as passed. Run it on
-  the project's coordination scripts too (CORE §12a, UPDATE-CORE).
+  the project's coordination scripts too (CORE §12a, UPDATE-CORE). A project script that needs
+  PowerShell 7 says so on its first line, `#Requires -Version 7`: 5.1 then refuses it with a clear
+  message instead of a parse error, and check-scripts parses it with `pwsh` (skipped where there is
+  none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
+  where it exists.
 
 ## Usage and limits
 - **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and
