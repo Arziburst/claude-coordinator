@@ -10,8 +10,23 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash   # bash --noprofile --norc -eo pipefail: a failing command anywhere in a pipeline fails the step
     steps:
       - uses: actions/checkout@v4
+      - name: macOS runs the scripts with the system bash 3.2, not Homebrew's
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sysbash"
+          ln -s /bin/bash "$RUNNER_TEMP/sysbash/bash"
+          echo "$RUNNER_TEMP/sysbash" >> "$GITHUB_PATH"
+      - name: Which bash
+        if: runner.os != 'Windows'
+        run: |
+          command -v bash
+          bash --version | head -n 1
+          if [ "$RUNNER_OS" = macOS ]; then bash -c '[ "${BASH_VERSINFO[0]}" = 3 ]' || { echo "expected bash 3.2 on macOS"; exit 1; }; fi
       - name: Links and section references (bash)
         if: runner.os != 'Windows'
         run: bash scripts/check-core.sh
@@ -33,24 +48,51 @@ jobs:
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\example.md", $m.Groups[1].Value)
           .\scripts\check-contract.ps1 "$env:RUNNER_TEMP\example.md"
           exit $LASTEXITCODE
-      - name: safety-guard blocks and allows the shared cases (bash)
+      - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: runner.os != 'Windows'
         run: |
           bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
           bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard without jq (bash, the sed / awk JSON reader)
+        if: runner.os != 'Windows'
+        run: |
+          # a PATH of symlinks to every command except jq
+          nojq="$RUNNER_TEMP/nojq"; mkdir -p "$nojq"
+          IFS=: read -r -a dirs <<< "$PATH"
+          for d in "${dirs[@]}"; do
+            for x in "$d"/*; do
+              b="${x##*/}"
+              [ "$b" = jq ] || [ ! -f "$x" ] || [ ! -x "$x" ] || [ -e "$nojq/$b" ] || ln -s "$x" "$nojq/$b"
+            done
+          done
+          if PATH="$nojq" command -v jq; then echo "jq is still on PATH"; exit 1; fi
+          PATH="$nojq" bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          PATH="$nojq" bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
       - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
-        shell: bash
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
           bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
       - name: safety-guard.ps1 under PowerShell 7 too (Linux)
         if: runner.os == 'Linux'
         run: bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+      - name: start-worker and cleanup-worker against temporary repositories (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/workers/run.sh sh
+      - name: start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/workers/run.sh ps pwsh
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
-        shell: bash
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
+          home="$RUNNER_TEMP/home"; mkdir -p "$home"
+          for j in \
+            '{"model":{"display_name":"Opus 5.5"},"effort":{"level":"high"},"context_window":{"used_percentage":84.2,"context_window_size":1000000,"current_usage":{"input_tokens":800000,"cache_read_input_tokens":37000}},"rate_limits":{"five_hour":{"used_percentage":14.9},"seven_day":{"used_percentage":92}}}' \
+            '{"context_window":{"used_percentage":50,"context_window_size":1250000,"current_usage":null},"rate_limits":{"five_hour":{"used_percentage":null}}}'; do
+            a="$(printf '%s' "$j" | HOME="$home" bash scripts/statusline.sh)"
+            b="$(printf '%s' "$j" | HOME="$home" LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/statusline.ps1)"
+            [ "$a" = "$b" ] || { echo "statusline differs: sh '$a' / ps '$b'"; exit 1; }
+          done
