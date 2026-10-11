@@ -78,15 +78,29 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   human review required for commercial work. Rules and hooks on the machine are a safety net, not a wall.
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
   rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
-  pushing, force-pushing or deleting the protected branches (main / master — incl. quoted,
-  `refs/heads/`, `HEAD:`, `+refspec` forms, and a push resolving to the current branch while on main),
-  mirror pushes, and removing `/`, home or a worktree by hand. Work-branch operations (rebase, amend,
-  reset, force-with-lease on its own branch, deleting work branches) pass. Exit code 2 blocks and
+  pushing, force-pushing or deleting the protected branches (main / master — in any refspec form:
+  quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
+  `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
+  following `git checkout` / `switch`, `cd` / `Set-Location` and `git -C` in the same command;
+  `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a
+  worktree by hand (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find … -delete`). It parses
+  the command like a shell: line continuations are joined, separators inside quotes (a commit
+  message, a PR body) do not split, `$(…)`, `bash -c` / `pwsh -Command` and a heredoc fed to a shell
+  are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
+  reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
   shows the reason. **A hook that fails to run does not block** — so the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
-  Hooks see only shell tools — **MCP tools are covered by deny rules only**. Whether hooks run in
+  **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
+  it: `eval`, `iex` / `Invoke-Expression`, `cmd /c`, `Start-Process`, `xargs` feeding a refspec,
+  quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
+  variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
+  protection on the code host is the real wall; the hook is not hardened against these on purpose.
+  Hooks see only shell tools — **MCP tools are covered by deny rules only** (the settings examples
+  deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
+  any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
-- **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only.
+- **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only
+  (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
   Add `gh pr merge*` / `gh pr ready*` where humans merge or mark ready; the cautious level also adds
   `Read(**/.env*)` and the stack candidates (database CLIs, production deploys, MCP write tools) from
   `examples/nextjs-supabase/settings.json`.
@@ -113,8 +127,11 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
 - **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
 - Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
-  `hooks/safety-guard.sh` uses `jq` when present and parses the JSON itself otherwise (both paths pass
-  the same cases).
+  `hooks/safety-guard.sh` uses `jq` when present and reads the JSON with `sed -E` and `awk` otherwise
+  (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
+- **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts) and
+  `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
+  repositories with stub `claude` and `gh`; the real `claude` is never called).
 
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks

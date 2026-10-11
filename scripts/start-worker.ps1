@@ -16,7 +16,7 @@ if (-not ($Repo -and $Name -and $Branch -and $Model -and $BriefFile -and $Safety
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> -BriefFile <file> -Safety <settings.json> [-Mode auto] [-Base main] [-DryRun]'
 }
-if ($Mode -eq 'bypassPermissions') { Fail 'refusing bypassPermissions for a worker (TOOLKIT.md: containers only)' }
+if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 # Absolute paths: both files are used from inside the worktree.
 $Safety = (Resolve-Path -LiteralPath $Safety).Path; $BriefFile = (Resolve-Path -LiteralPath $BriefFile).Path
 
@@ -48,7 +48,7 @@ if (Test-Path -LiteralPath $wt) { "reusing worktree $wt" }
 else {
   git -C $root show-ref -q --verify "refs/heads/$Branch"
   if ($LASTEXITCODE -eq 0) { Run git @('-C', $root, 'worktree', 'add', $wt, $Branch) }
-  else { Run git @('-C', $root, 'worktree', 'add', '-b', $Branch, $wt, "origin/$Base") }
+  else { Run git @('-C', $root, 'worktree', 'add', '--no-track', '-b', $Branch, $wt, "origin/$Base") }
 }
 
 $brief = [IO.File]::ReadAllText($BriefFile)

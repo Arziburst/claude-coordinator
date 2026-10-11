@@ -23,10 +23,14 @@ foreach ($l in [IO.File]::ReadAllLines((Join-Path $Root 'CORE.md'))) {
 }
 
 $errors = 0; $files = 0
-$all = Get-ChildItem -Path . -Filter '*.md' -File -Recurse | Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' } | Sort-Object FullName
-foreach ($file in $all) {
+# -Force: dot-folders (.github ...) too, as find does; ordinal order of the relative paths, as LC_ALL=C sort
+$all = @(Get-ChildItem -Path . -Filter '*.md' -File -Recurse -Force | Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' })
+$rels = [string[]]@($all | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/' })
+$byRel = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal); for ($i = 0; $i -lt $all.Count; $i++) { $byRel[$rels[$i]] = $all[$i] }
+[Array]::Sort($rels, [StringComparer]::Ordinal)
+foreach ($rel in $rels) {
+  $file = $byRel[$rel]
   $files++
-  $rel = $file.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/'
   $code = $false; $n = 0
   foreach ($line in [IO.File]::ReadAllLines($file.FullName)) {
     $n++
