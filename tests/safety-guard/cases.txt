@@ -1,0 +1,65 @@
+# Safety-guard verdicts shared by safety-guard.sh and safety-guard.ps1.
+# <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work)
+# Separated by single tabs. \n in the command is a newline.
+block	work	git push --force origin main
+block	work	git push origin main
+block	work	git push -f origin master
+block	work	git push origin +main
+block	work	git push origin feature:main
+block	work	git push origin HEAD:refs/heads/main
+block	work	git push origin refs/heads/main
+block	work	git push --mirror origin
+block	work	GIT PUSH ORIGIN MAIN
+block	work	git -C /tmp/x push origin main
+block	work	git -c core.x=1 push origin master
+block	work	GIT_TRACE=1 git push origin main
+block	work	& git push origin main
+block	work	"C:\Program Files\Git\bin\git.exe" push origin main
+block	work	git.exe push origin main
+block	work	/usr/bin/git push origin main
+block	work	cd repo && git push origin main
+block	work	git fetch; git push origin main
+block	work	bash -c "git push origin main"
+block	work	pwsh -Command git push origin main
+block	work	echo ok\ngit push origin main
+block	main	git push
+block	main	git push origin
+block	main	git push origin HEAD
+block	main	git push -u origin @
+block	main	git push origin $(git branch --show-current)
+block	work	git branch -D main
+block	work	git branch --delete master
+block	work	rm -rf /
+block	work	rm -rf ~
+block	work	rm -rf ~/
+block	work	rm -rf $HOME
+block	work	rm -fr "/"
+block	work	rm -rf .claude/worktrees/12-fix
+block	work	rm -rf /repo/.claude/worktrees
+block	work	Remove-Item C:\ -Recurse -Force
+block	work	Remove-Item -Recurse -Force $HOME
+block	work	Remove-Item -Path ~ -Recurse
+allow	work	git push
+allow	work	git push origin 12-fix-login
+allow	work	git push -u origin 12-fix-login
+allow	work	git push --force origin 12-fix-login
+allow	work	git push origin --delete 12-fix-login
+allow	work	git push origin HEAD
+allow	work	git commit -m "never git push origin main"
+allow	work	echo git push origin main
+allow	work	gh pr create --body "do not git push origin main"
+allow	work	# git push origin main\ngit status
+allow	work	git branch -D 12-fix-login
+allow	work	git branch -d maintenance
+allow	work	git push origin maintenance
+allow	work	git push origin main-fix
+allow	work	rm -rf node_modules
+allow	work	rm -rf ./build /tmp/x
+allow	work	Remove-Item -Recurse .\dist
+allow	main	git status
+allow	main	git pull origin main
+allow	main	git log origin/main..HEAD
+allow	work	git reset --hard origin/main
+allow	work	git rebase origin/main
+block	work	terraform  destroy -auto-approve
+allow	work	terraform plan

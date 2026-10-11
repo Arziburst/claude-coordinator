@@ -33,6 +33,20 @@ jobs:
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\example.md", $m.Groups[1].Value)
           .\scripts\check-contract.ps1 "$env:RUNNER_TEMP\example.md"
           exit $LASTEXITCODE
+      - name: safety-guard blocks and allows the shared cases (bash)
+        if: runner.os != 'Windows'
+        run: |
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
+          bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard.ps1 under PowerShell 7 too (Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
         shell: bash
