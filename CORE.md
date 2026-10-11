@@ -164,9 +164,10 @@ The continuous work:
    for workers (e.g. `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator`, `<KEY>-<task>
    review`, `research: <topic>` (command in `BINDINGS.md`). The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
-   rules live in the role file, not the brief.
+   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief.
 4. **Control:** answer workers point first; only owner decisions go to the owner; a worker near its
-   context limit or stuck → help or split.
+   context limit or stuck → help or split. Long CI logs, PR threads, diffs or docs go to the **scout**
+   ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved.
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
