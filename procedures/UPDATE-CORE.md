@@ -13,11 +13,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - every line of `PROJECT.md` / `BINDINGS.md` that now overlaps or disagrees with the new core — the
      project rule still wins, the owner decides whether to keep, adapt or drop it;
    - local core: each upstream change that conflicts with a local edit, and the proposed resolution;
-   - what has to be installed (e.g. a new role into `.claude/agents/`, TOOLKIT *Roles*) and where.
 4. **On the owner's yes:** local core — merge the upstream files into the local copy, keeping the agreed
-   local edits, and record the new commit in `PROJECT.md`; remote core — re-read the core now. Install
-   roles: into `~/.claude/agents/` on this machine, or into the project's `.claude/agents/` through the
-   project's change path (§1.1). Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
+   local edits, and record the new commit in `PROJECT.md`; remote core — re-read the core now. Then
+   install the roles into `~/.claude/agents/` (TOOLKIT *Roles*) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
    [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
