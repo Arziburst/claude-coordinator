@@ -25,6 +25,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   project works: the cycle, tracking, the change flow, review, merging, acceptance, environments,
   resources, budget, voice, language, MCP. Filled in a setup interview with the owner.
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
+- [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
+  returns, and the evidence classes (oracle / review / claim).
+- [roles/](roles/) — role definitions: [verifier.md](roles/verifier.md), the independent reviewer.
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
