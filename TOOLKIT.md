@@ -42,7 +42,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
   project's `.claude/agents/` is never written this way — that would be a project change (CORE §1.1). A
   subagent then starts as that role; a background session (a worker, usually) gets the file's body at the top of its brief and its
-  model from `--model`. Check the frontmatter fields (`name`,
+  model from `--model`. `~/.claude/agents/` serves every project on the machine, so it holds the
+  **upstream** roles only: a role this project edited in its local core is never installed (another
+  project would overwrite it) — the coordinator starts that subagent as a general one with the local
+  role file's body at the top of its prompt and the role's model. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; idle sessions may exit — `respawn` them when their turn comes; remove a session with
@@ -52,7 +55,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`
   (branch `<issue>-<type>-<slug>`) and starts the session there with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy. Its built-in alternative (`claude --worktree <name>`, branch
-  `worktree-<name>`) is not combined with it.
+  `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
+  protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
+  worktree root outside `.claude/` in `BINDINGS.md`.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
 
