@@ -264,7 +264,7 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   model would fix restarts on its contract's `escalate_to`.
 - **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's): one line
   per finished worker, reviewer or researcher run — date · task · role · kind (a row of the table) ·
-  model · effort · tokens (from the tool's result for that run, e.g. a subagent's usage line; else `-`) · result (`approved` / `rework <n>` /
+  model · effort · tokens (counted from the session's transcript, TOOLKIT *Usage*; never the worker's own estimate) · result (`approved` / `rework <n>` /
   `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
 - **Routing review:** on the owner's "model report", or every 20 runs in the cycle report, summarize
   per kind and model — first-pass approvals, reworks, escalations, median tokens — and propose changes

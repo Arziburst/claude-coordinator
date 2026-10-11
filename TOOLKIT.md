@@ -87,6 +87,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
 ## Usage and limits
+- **Tokens per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
+  `scripts/session-tokens.ps1`) sums the session's transcript in `~/.claude/projects/` — the worker's
+  own subagents included — and prints `<total>  in= out= cache_read= cache_write=`; run it when the
+  run ends. Cache reads dominate and cost far less than the rest, so the run log keeps the breakdown.
+  A model cannot see its own counter, so a worker's self-reported tokens are a guess.
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
