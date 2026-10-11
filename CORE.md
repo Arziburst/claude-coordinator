@@ -110,7 +110,8 @@ its own: after step 9 the session waits.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — where `PROJECT.md` says (the
    repository's `coordinator/` folder or a local folder outside it, per the quiz) — and the project's
    docs (README, CLAUDE.md, contribution guide). A **local core** recorded in `PROJECT.md` → read
-   `CORE.md` / `TOOLKIT.md` from that copy.
+   `CORE.md` / `TOOLKIT.md` from that copy. "Update the core" →
+   [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command.
 4. **Learn the context** (read-only): the layers and journal if present; for a project in development —
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other
@@ -299,8 +300,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   (§1.1), announced once merged.
 - **Mistake → lesson.** Corrected or a mistake found: acknowledge in one line, fix the consequence,
   **write the lesson as a rule** — project-specific into `PROJECT.md` (*Lessons*), universal proposed for
-  this core (the owner says yes) (with a local core: the local copy first, and proposed to claude-coordinator if it helps every
-  project). A lesson only in memory is lost.
+  this core on the owner's yes (with a local core: the local copy first, and proposed to claude-coordinator
+  if it helps every project). A lesson only in memory is lost.
 - **Layering:** the principle here or in `PROJECT.md`; the command, path or number in `BINDINGS.md`.
 
 ## 11. Bookkeeping
