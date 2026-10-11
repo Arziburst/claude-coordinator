@@ -88,13 +88,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 
 ## Usage and limits
 - **Tokens per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
-  `scripts/session-tokens.ps1`) sums the session's transcript in `~/.claude/projects/` — the worker's
-  own subagents included — and prints `<total>  in= out= cache_read= cache_write=`; run it when the
-  run ends. Cache reads dominate and cost far less than the rest, so the run log keeps the breakdown.
-  A model cannot see its own counter (the status line is drawn by the CLI, not shown to the model), so a
-  worker's self-reported tokens are a guess. Where the status line is installed, the session's file
-  `~/.claude/coordinator/sessions/<session_id>.json` also gives `cost.total_cost_usd` — an API-price
-  estimate, on a subscription useful for comparing runs; record it in the run log when present.
+  `scripts/session-tokens.ps1`) when the run ends. It prints a `status` line — the CLI's own totals and
+  `cost.total_cost_usd` from the status line's per-session file (needs the status line installed;
+  cost is an API-price estimate, on a subscription for comparing runs) — and a `transcript` line summed
+  from `~/.claude/projects/`, subagents included: input and cache counts exact, **output a lower bound**
+  (the transcript keeps the count from before a message finished). Record the `status` line when present,
+  else the `transcript` one marked as such. A model cannot see its own counter (the status line is drawn
+  by the CLI), so a worker's self-reported tokens are a guess.
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
