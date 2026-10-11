@@ -26,10 +26,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   once, at init. Every project's coordinator has this name: tell them apart by their working directory
   (`claude agents --json` *(unconfirmed field name)*).
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
-- **Directory:** start the session from the worker's working copy (`cd` first); there is no documented
-  `--cwd` *(unconfirmed)*.
-- **Trust:** the folder must already be trusted, or `--bg` fails with "Workspace not trusted". Trusting a
-  folder is the **owner's** step — never written into config by the coordinator.
+- **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
+  "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
+  trusted (confirmed on Claude Code 2.1.296, Windows). start-worker therefore starts the session in
+  the **repository root**, which the owner trusts once, and the brief's first line enters the worktree
+  with the `EnterWorktree` tool (`path` of a worktree of that repository — no prompt; a worktree of
+  another repository asks for permission and the session waits). Trusting a folder is the **owner's**
+  step — never written into config by the coordinator.
 - **Headless alternative:** `claude -p "<prompt>" --output-format stream-json --max-turns N` for short,
   non-interactive jobs (no idle notices, no messages).
 - **Subagents vs sessions:** subagents (the Agent tool) for short focused jobs — research, review, a
@@ -53,7 +56,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 
 ## Working copies
 - **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`
-  (branch `<issue>-<type>-<slug>`) and starts the session there with `worktree.bgIsolation: "none"`, so
+  (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
+  trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
@@ -97,7 +101,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   message, a PR body) do not split, `$(…)`, `bash -c` / `pwsh -Command` and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
   reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
-  shows the reason. **A hook that fails to run does not block** — so the settings example runs the
+  shows the reason. **A hook that fails to run does not block** — on Windows hook commands run through
+  Git Bash, so a path with backslashes (`C:\x\y`) or a PowerShell variable (`$env:CLAUDE_PROJECT_DIR`, read
+  as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`). So the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
   **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
   it: `eval`, `iex` / `Invoke-Expression`, `cmd /c`, `Start-Process`, `xargs` feeding a refspec,

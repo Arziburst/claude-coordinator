@@ -27,7 +27,8 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it
     (or record why it cannot be, e.g. the plan does not offer it).
   - **Worker safety settings** (`settings.example.json`, Windows `settings.example.windows.json` → a
-    file with absolute paths, passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
+    file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
+    which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
     whose self-test must pass before any worker starts. **Stack-specific denies are candidates, not impositions**: offer
     them in the quiz (e.g. `examples/nextjs-supabase/settings.json`) and keep what the owner chooses —
