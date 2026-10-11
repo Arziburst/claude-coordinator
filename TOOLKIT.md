@@ -91,11 +91,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `scripts/session-tokens.ps1`) sums the session's transcript in `~/.claude/projects/` — the worker's
   own subagents included — and prints `<total>  in= out= cache_read= cache_write=`; run it when the
   run ends. Cache reads dominate and cost far less than the rest, so the run log keeps the breakdown.
-  A model cannot see its own counter, so a worker's self-reported tokens are a guess.
+  A model cannot see its own counter (the status line is drawn by the CLI, not shown to the model), so a
+  worker's self-reported tokens are a guess. Where the status line is installed, the session's file
+  `~/.claude/coordinator/sessions/<session_id>.json` also gives `cost.total_cost_usd` — an API-price
+  estimate, on a subscription useful for comparing runs; record it in the run log when present.
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
-  save it to `~/.claude/coordinator/statusline.json` for the coordinator to read and print
+  save it to `~/.claude/coordinator/statusline.json` (the last session to draw) and to
+  `~/.claude/coordinator/sessions/<session_id>.json` (one per session) for the coordinator to read, and print
   `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`.
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`

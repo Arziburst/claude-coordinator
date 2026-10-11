@@ -6,6 +6,10 @@
 input="$(cat)"
 dir="$HOME/.claude/coordinator"
 mkdir -p "$dir" 2>/dev/null && printf '%s' "$input" > "$dir/statusline.json"
+# A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
+# session to draw its status line, whichever that was).
+sid="$(printf '%s' "$input" | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -n 1)"
+[ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && printf '%s' "$input" > "$dir/sessions/$sid.json"
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$input" | jq -r '
     def tok: if . >= 1000000 then "\((. / 100000 | floor) / 10)M"
