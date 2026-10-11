@@ -90,6 +90,27 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
+## Scripts
+One style for every script in `scripts/`, so each runs on a bare Mac and a bare Windows machine:
+- **A pair with the same behaviour and output:** `<name>.sh` for macOS / Linux and `<name>.ps1` for
+  Windows. Same arguments, same messages, same exit codes; a change to one is made to the other in the
+  same pull request.
+- **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
+  (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
+  escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
+  `[char]0x00A7`: 5.1 reads a BOM-less script as ANSI).
+  No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
+- **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
+- **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
+- Not yet in this style (ported by their own pull requests): `start-worker.sh`, `cleanup-worker.sh`,
+  `hooks/safety-guard.sh` have no `.ps1` (Git Bash on Windows until then); `statusline.sh` and
+  `hooks/safety-guard.sh` use `jq` when present.
+
+## Checks
+- `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
+  delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
+  references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
+
 ## Usage and limits
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
