@@ -12,7 +12,7 @@ non-goals, "do not decide" items), made explicit so nothing is lost in the hand-
 
 ```yaml
 ---
-id: ARXVR-37                       # the task's number in the tracker
+id: 37                             # the task's number in the tracker
 title: Items with a reticle per hand
 intent: >                          # why this matters, 1-3 sentences - the field most often lost in a hand-off
   The player must see which item each hand points at, so they do not grab the wrong one.
@@ -20,7 +20,7 @@ inputs:                            # exact pointers, not "the whole project"
   - src/vr/hands/*.cpp
   - docs/decisions.md#D-12
 outputs:
-  - a PR into main from task/ARXVR-37
+  - a PR into main from 37-feat-hand-reticle
 acceptance:                        # ordered; each criterion says how it is checked
   - criterion: each hand shows its own reticle
     check: oracle                  # oracle | review | owner
@@ -39,7 +39,7 @@ budget:
   model: sonnet                    # per CORE §7
   effort: medium
   escalate_to: opus                # model for a retry after a failed review or a stuck worker
-depends_on: [ARXVR-31]
+depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
 ---
 Free text: context, known traps, parallel work nearby, launch and test limits, the report phrase.
@@ -58,7 +58,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 
 ```yaml
 ---
-contract: ARXVR-37
+contract: 37
 status: ready                      # ready | blocked | failed
 model: sonnet
 results:
