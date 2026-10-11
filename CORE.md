@@ -385,11 +385,13 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 - **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
   will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs). No history →
   seeded at init from the project's existing transcripts (`scripts/session-tokens` over
-  `~/.claude/projects/<project>/`, per model; on Arx this changed the first guess about 10×), else the
-  coordinator's own estimate; either is marked `guess` in the plan.
+  `~/.claude/projects/<project>/`; on Arx this changed the first guess about 10×), else the
+  coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
+  a seed is a median **per model**, not per kind, until the run log has the kind's own runs.
 - **Limit percent per dollar:** the limits are shown as whole percents, so one cycle rarely moves them
-  enough to read. The ratio is the limit's rise since its reset over the run log's cost since then,
-  the coordinator's own lines included — recomputed every cycle, trusted once the window has risen
+  enough to read. The ratio is the limit's rise since its reset over the **account's** list-price cost
+  since then (`scripts/session-tokens --since <reset>`, priced per model, TOOLKIT *Usage*): the limits
+  are per account, so the run log alone, one project's share, would overstate it — recomputed every cycle, trusted once the window has risen
   10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
   it gets its own ratio. A model's own limit (above) is tracked apart.

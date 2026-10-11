@@ -74,7 +74,10 @@ for f in "$@"; do
       b = "\n" txt["budget"]
       if (b !~ /\n[ \t]+model:[ \t]*[^ \t\n]/) warn("budget.model missing (CORE §7)")
       if (b !~ /\n[ \t]+escalate_to:[ \t]*[^ \t\n]/) warn("budget.escalate_to missing (no stronger model to retry on)")
-      if (b !~ /\n[ \t]+cost:[ \t]*[0-9]/) warn("budget.cost missing (no spend forecast, CORE §7a)")
+      if (b !~ /\n[ \t]+cost:[ \t]*[0-9]/) {
+        if (b ~ /\n[ \t]+tokens:[ \t]*[0-9]/) warn("budget.tokens is now budget.cost, in USD at list price (CORE §7a)")
+        else warn("budget.cost missing (no spend forecast, CORE §7a)")
+      }
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
       print F ": " (ne ? "FAIL" : "OK") " (" ne+0 " errors, " nw+0 " warnings)"

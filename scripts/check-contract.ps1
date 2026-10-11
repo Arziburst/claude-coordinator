@@ -78,7 +78,11 @@ foreach ($f in $Files) {
   $b = "`n" + $txt['budget']
   if ($b -cnotmatch '\n[ \t]+model:[ \t]*[^ \t\n]') { $out.Add("WARN  budget.model missing (CORE ${sect}7)"); $nw++ }
   if ($b -cnotmatch '\n[ \t]+escalate_to:[ \t]*[^ \t\n]') { $out.Add('WARN  budget.escalate_to missing (no stronger model to retry on)'); $nw++ }
-  if ($b -cnotmatch '\n[ \t]+cost:[ \t]*[0-9]') { $out.Add("WARN  budget.cost missing (no spend forecast, CORE ${sect}7a)"); $nw++ }
+  if ($b -cnotmatch '\n[ \t]+cost:[ \t]*[0-9]') {
+    if ($b -cmatch '\n[ \t]+tokens:[ \t]*[0-9]') { $out.Add("WARN  budget.tokens is now budget.cost, in USD at list price (CORE ${sect}7a)") }
+    else { $out.Add("WARN  budget.cost missing (no spend forecast, CORE ${sect}7a)") }
+    $nw++
+  }
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }

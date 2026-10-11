@@ -15,7 +15,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Build / run / test / lint / typecheck commands | `<fill>` |
 | Definition-of-done checks | `<fill>` |
 | Start a worker (with its session name, model, effort, working copy) | `<command>` |
-| Models — the ladder (CORE §7) (re-detect) | light `<id>` · strong `<id>` · top `<id>` or none; own limits `<e.g. Fable>`; list prices per million tokens (input / output / cache read / cache write) `<fill>`; probed `<date>`, login method and `subscriptionType` `<from claude auth status>` |
+| Models — the ladder (CORE §7) (re-detect) | light `<id>` · strong `<id>` · top `<id>` or none; own limits `<e.g. Fable>`; list prices per million tokens (input / output / cache read / cache write at the 1-hour price, TOOLKIT *Usage*) `<fill>`; probed `<date>`, login method and `subscriptionType` `<from claude auth status>` |
 | Start a reviewer | `<command>` |
 | List / stop / remove workers | `<commands>` |
 | Worker working copies | `<create / remove commands>` |

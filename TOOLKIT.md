@@ -171,9 +171,18 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   subscription for comparing runs; needs the status line installed). The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
   session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
-  per model times the list prices. Then delete that worker's `sessions/<id>.json`; the status line
-  writes a file for every session on the machine, other projects' too, so at every cycle start run
-  `session-tokens --prune` (deletes files older than 7 days). A model cannot see its own counter (the status line is drawn
+  per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
+  cache entries, `prompt_cache.ttl: "1h"` in the status JSON; on Arx this matched the status cost to
+  the cent). Then delete that worker's `sessions/<id>.json`; the status line writes a file for every
+  session on the machine, other projects' too, so at every cycle start run `session-tokens.sh --prune`
+  / `session-tokens.ps1 -Prune` (deletes files older than 7 days; on Windows only the `-Prune` form
+  reaches the script through `-File`).
+- **Spend since a reset, account-wide** (CORE §7a): `session-tokens.sh --since <UTC time>` /
+  `session-tokens.ps1 -Since <UTC time>` — the same per-model lines over every transcript on the
+  machine, each message once, counted by its own timestamp (a session that crosses the reset is
+  split). The limits are per account, so other projects' and ad-hoc sessions' spend counts too. The
+  reset time is the status line's `resets_at`. An ambiguous prefix lists session ids only, never
+  project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
 - Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
