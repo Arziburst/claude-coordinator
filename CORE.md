@@ -165,7 +165,10 @@ The continuous work:
    for workers (e.g. `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator`, `<KEY>-<task>
    review`, `research: <topic>` (command in `BINDINGS.md`). The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
-   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief.
+   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief. An `oracle`
+   criterion with no test yet, and every §5 change, first goes to the **tester** subagent
+   ([roles/tester.md](roles/tester.md)) on the task branch: its red tests and commands go into the
+   worker's brief, to be made green unchanged.
 4. **Control:** answer workers point first; only owner decisions go to the owner; a worker near its
    context limit or stuck → help or split. Long CI logs, PR threads, diffs or docs go to the **scout**
    ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.
