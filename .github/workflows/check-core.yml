@@ -33,6 +33,17 @@ jobs:
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\example.md", $m.Groups[1].Value)
           .\scripts\check-contract.ps1 "$env:RUNNER_TEMP\example.md"
           exit $LASTEXITCODE
+      - name: session-tokens counts the fixture exactly (bash)
+        if: runner.os != 'Windows'
+        run: CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude" bash scripts/session-tokens.sh s1 | diff - tests/session-tokens/expected.txt
+      - name: session-tokens counts the fixture exactly (PowerShell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:CLAUDE_CONFIG_DIR = "$PWD\tests\session-tokens\claude"
+          $got = (.\scripts\session-tokens.ps1 s1) -join "`n"
+          $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\expected.txt") -replace "`r", '').TrimEnd("`n")
+          if ($got -ne $want) { "got:`n$got`nwant:`n$want"; exit 1 }
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
         shell: bash
@@ -40,3 +51,5 @@ jobs:
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
+          export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
+          diff <(bash scripts/session-tokens.sh s1) <(pwsh -NoProfile -File scripts/session-tokens.ps1 s1)
