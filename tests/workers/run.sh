@@ -23,9 +23,12 @@ cat > "$tmp/bin/gh" <<'EOF'
 [ -n "${STUB_HEADS:-}" ] && printf '%s\n' "$STUB_HEADS"
 exit 0
 EOF
+# PowerShell finds claude.ps1 on Windows; it hands the arguments to the bash stub as a native process,
+# as claude.exe gets them (a script called in-process would see 5.1's quote escaping, which the
+# command line consumes)
 cat > "$tmp/bin/claude.ps1" <<'EOF'
-Add-Content -LiteralPath $env:STUB_LOG -Value ($args -join ' ')
-exit 0
+& bash (Join-Path $PSScriptRoot 'claude') @args
+exit $LASTEXITCODE
 EOF
 cat > "$tmp/bin/gh.ps1" <<'EOF'
 if ($env:STUB_GH_RC -and $env:STUB_GH_RC -ne '0') { exit [int]$env:STUB_GH_RC }
