@@ -28,6 +28,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
 - [roles/](roles/) — role definitions: [verifier.md](roles/verifier.md), the independent reviewer.
+- [procedures/](procedures/) — parts of the core read only when needed: the init quiz
+  ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
+  "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,

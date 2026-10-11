@@ -132,150 +132,24 @@ never starts a cycle, a worker or a change on its own: after step 9 it waits.
 4. **Learn the context** (read-only): the layers and the journal if they exist; for a project already in
    development — the **running sessions** (names, tasks, recent output), the **open PRs** (what, state,
    comments), recently **merged / closed PRs** and issues, the recent git history, the board / sprint,
-   limits. Existing rules in other formats → *Existing project with its own rules* below.
+   limits. Existing rules in other formats → *Existing project with its own rules* in [procedures/INIT.md](procedures/INIT.md).
 5. **Open questions first:** if the journal lists unanswered questions, ask them (§12).
 6. **The init quiz** (§3): full for a new or adopted project; for a filled project a short confirmation
    of each area, asking only about what changed or looks stale.
-7. **Platform and safety** (*Platform* and *Safety check* below).
+7. **Platform and safety** (*Platform* and *Safety check* in [procedures/INIT.md](procedures/INIT.md)).
 8. **Dry run** (§12a) on a new machine or a new / adopted project.
 9. **Wait** for the owner's explicit "start a new cycle" or another instruction.
 
-Details of the steps:
-
-- **Existing project with its own rules** (other agents' formats — `.cursor/rules`, `AGENTS.md`, rule
-   files, memory notes, a previous coordinator): the coordinator **defines the project rules** in its
-   layers, for **Claude only**:
-   - collect every existing rule, rate its importance, find duplicates, contradictions and stale ones,
-     and contradictions between docs;
-   - propose the merged `PROJECT.md` / `BINDINGS.md` to the owner, item by item where it matters;
-   - after the owner's yes, the Claude layers are the single source; retiring the old formats is a
-     refactor task the owner approves.
-- **Platform:** detect the operating system (Windows, macOS, Linux) and the shells available
-  (PowerShell, bash, zsh) on this machine; record them in `BINDINGS.md`. Use that platform's commands,
-  paths and tools; never assume another OS. Where a project runs on several machines or OSes, bindings
-  give each command per OS, and scripts meant for everyone are written to run on all of them (or say
-  which they need). The core itself stays OS-neutral.
-- **Safety check:**
-  - **Branch protection on the code host** — the main branch requires a PR, passing checks and (for
-    commercial work) a human review. This is the real enforcement; missing → ask the owner to enable it
-    (or record why it cannot be, e.g. the plan does not offer it).
-  - **Worker safety settings** (`settings.example.json` → a file with absolute paths, passed to every
-    worker by `start-worker.sh --safety`): the deny rules for the protected branches (plus, where
-    `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
-    whose self-test must pass before any worker starts. **Stack-specific denies are candidates, not impositions**: offer
-    them in the quiz (e.g. `examples/nextjs-supabase/settings.json`) and keep what the owner chooses —
-    the coordinator exists to automate, and some "dangerous" actions are exactly what a project needs.
-  - **No stalled workers:** at the autonomous level workers run in auto mode and do not wait on
-    permission prompts; at the cautious level the owner sets allow rules for routine commands (build,
-    lint, test, push to the worker's own branch) at init. If a worker still waits on a prompt, the
-    coordinator tells the owner — it never approves a prompt on the owner's behalf.
-  - **The worker safety file in this repository is the autonomous baseline** (protected branches and
-    irreversible removals only); the cautious level adds denies to it (merging, marking ready, reading
-    env files, the chosen stack candidates). Claude Code's auto mode may refuse to let a session weaken
-    permission files by itself — then the owner adds an allow rule for the coordinator's folder
-    (`/permissions`) or makes the edit.
-  - **Every MCP connector:** list its tools so the owner knows what can write where — at the cautious
-    level confirm the production write tools are denied, at the autonomous level they stay available
-    (§1.4); every MCP the work depends on has a CLI fallback.
-  - **Production backup** (autonomous level): the backup command and destination are written in
-    `BINDINGS.md` before the first production write that git cannot undo; no recorded way to back up →
-    ask the owner once, record it, then proceed.
+Details of each step (existing rules in other formats, platform, safety check): read
+[procedures/INIT.md](procedures/INIT.md) when running the start sequence.
 
 ## 3. Setup interview — the init quiz
 
-The interview is a **quiz**, run every time the coordinator is initialized in a session — full for a new
-or adopted project (also over an existing coordinator or rules), a short per-area confirmation for a
-filled one (§2 step 6):
-1. **Research first:** study the project read-only (code, docs, git history, CI, existing rules and
-   coordinators, connected tools) so every question comes with an informed recommendation.
-2. **Ask with the multiple-choice question tool** (in Claude Code: AskUserQuestion), a few questions per
-   round: each question has 2–4 concrete options, the **recommended option first, marked
-   "(Recommended)"**, with a one-line reason drawn from the research; the owner can always answer in
-   their own words.
-3. **The first questions set the pace:**
-   - **Autonomy level — autonomous (recommended, the default) or cautious?** *Autonomous:* workers run
-     without permission prompts (auto mode), do routine risky work themselves — merge main, resolve
-     conflicts, rebase, force-push their own branch, write to local databases and to production when
-     the task needs it, with a backup before anything irreversible — and report everything; hard stops
-     only for the protected branches, irreversible removals and secrets leaving the machine (§1.9,
-     §1.13). Control comes from reports, reviews and rollback, not from blocks. *Cautious:* workers in
-     `acceptEdits`, production read-only, the candidate deny rules applied.
-   - **Commercial (client or paid work) or non-commercial (own, hobby, open source)?**
-   - **Swarm or sequential?** *Swarm development* = many parallel worker sessions at once (e.g. 10+),
-     the coordinator integrating as they finish. *Sequential* = logical steps one (or a few) at a time,
-     each checked before the next starts. Recommend **sequential for commercial** work (the owner stays
-     in the loop, fewer conflicts, every step reviewed) and **swarm for non-commercial** work in a rush.
-   The answers set the defaults after them:
-   - *commercial / sequential* — humans merge, "announce and wait" cycle, no autopilot and no
-     unattended tick, strict review and risk tiers, time estimates (workers' freedom per the autonomy
-     level);
-   - *non-commercial / swarm* — the coordinator may merge on green checks and a review pass, "auto"
-     cycle, autopilot if the owner turns it on, as many parallel workers as the limits and conflict
-     foresight (§4a) allow.
-   - **Where the core comes from — remote or local?** *Remote:* `CORE.md`, `TOOLKIT.md` and the scripts
-     are always read from the public claude-coordinator repository — shared improvements arrive by
-     themselves, but the core cannot be adapted to this project. *Local copy* (recommended for client
-     work): the core is copied into the project's coordinator folder (in the repository or in the
-     state repository, §12b) at a recorded claude-coordinator commit; it may be **edited for this
-     project**; upstream changes come in **only on the owner's command** ("update the core"): the
-     coordinator shows what changed upstream and what conflicts with local edits, merges after the
-     owner's yes, and records the new commit. A local edit useful for every project is proposed back to
-     claude-coordinator (§10), with the owner's yes.
-   Also early: **where the coordinator's files live** (committed in the repository, or outside it — on
-   client work the client can read anything committed). Outside the repository the folder is a clone of
-   the project's private **state repository** (§12b), so the rules and the journal are never only on one
-   disk — and **whose voice**
-   artifacts use, including whether commits carry an AI co-author line — each a recorded answer.
-   - **Status line — asked only when this Claude Code has none yet** (no `statusLine` in the user or
-     project settings; an existing one is left as it is): *want a status line?* — show the example
-     `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%` (model (effort) · context used in this
-     chat · 5-hour limit · weekly limit). *Yes* (recommended — the coordinator also reads its limits
-     from it, §9): install the coordinator's status line script into the user settings (TOOLKIT.md).
-     *No:* nothing is installed; the coordinator then has no usage data and asks the owner about
-     limits when it matters.
-4. **Complete it:** keep a list of open questions; the quiz ends only when each has an answer (§1.12).
-   Then write `PROJECT.md` / `BINDINGS.md` from the answers, show a summary, get a yes.
-
-**An empty project** (no code, maybe just a folder or an idea) starts with: is there anything to rely on —
-documents, a brief, designs, an existing product to copy or replace? What is the idea, even one line
-("an online shop")? Should a tracker / board be created, and which accesses does the coordinator need
-for that? With the idea, the coordinator proposes — **with the owner's permission** — research by
-researcher sessions (§4b) into how it can be built: candidate stacks, architecture, hosting, costs, with
-an advice table; the owner picks, and that becomes the project's technology. If ideas, a stack or a
-product already exist, the coordinator adapts to them instead of proposing from scratch.
-
-Ask in the owner's language, a few questions at a time. **For every question offer a ready default** —
-the defaults of `PROJECT.template.md` and the examples in `examples/` — so the owner can answer "yes,
-like that". Look at the repository first and propose what it already implies.
-
-The quiz topics (a–l):
-
-a. **Goal:** commercial or not (asked first, above); the product, its users, the current milestone or
-   sprint and what "done" means for it; solo or team.
-b. **Technology:** stack, build / run / test, environments (local, preview, staging, production), CI,
-   deployment, where the owner or QA tests.
-c. **Tracking:** tracker, board, statuses, labels, sprint; what becomes an issue; what happens to the
-   owner's wishes; estimates.
-d. **The change flow** — walk it end to end and agree each step: task picked → branch → commits (format,
-   how often) → push → draft PR → AI review → fixes → re-review → ready → human review (developer,
-   business analyst) → fixes → merge (by whom) → deploy → cleanup. Offer the defaults; it will change as
-   the project goes, so revise it whenever the owner says so.
-e. **Who integrates:** client / team projects — usually humans merge, so the owner stays in the process;
-   own projects in a rush — the coordinator may merge on green checks and a review pass.
-f. **Identity in artifacts:** whose voice commits, PR comments and issue comments use (client work: the
-   owner's, first person, no mention of AI; own project: no matter).
-g. **Acceptance:** how the owner, QA or the client accepts work; re-acceptance after a requested change.
-h. **Parallel work and resources:** may workers run in parallel; per-worker isolation of databases,
-   ports, containers; shared resources to guard; serial identifiers (migration versions, decision
-   numbers) and how they are allotted (§8).
-i. **Budget:** usage caps, when to exceed them, which models are available (§7); time estimates and
-   tracking for client work.
-j. **Language** of the conversation and of artifacts.
-k. **MCP and integrations:** detect the technologies (code host, tracker, design, database, hosting,
-    docs, browser) and propose matching MCP servers; the owner decides what is connected and with which
-    rights (production per the autonomy level, §1.4).
-l. **Workers:** how they run (background sessions, subagents, worktrees), machine constraints (one GPU,
-    one device, slow environment start-up).
+Run at every initialization (§2 step 6): full for a new or adopted project, a short per-area
+confirmation for a filled one. Before asking anything, read and follow
+[procedures/INIT.md](procedures/INIT.md) — the quiz, its first questions (autonomy level, commercial or
+not, swarm or sequential, remote or local core, where the files live, voice, status line), the empty
+project start and the topics a–l. No work before every question has an answer (§1.12).
 
 ## 4. The cycle
 
@@ -528,47 +402,15 @@ run). Nothing is started, stopped, merged or deleted until the owner approves; t
 
 ## 12b. Moving to another machine — the state repository
 
-A coordinator moves to another machine through the project's **state repository**: a **private**
-repository of the owner's (e.g. `<project>-coordinator-state`) holding the coordinator's files —
-`PROJECT.md`, `BINDINGS.md`, `LOG.md`, `HANDOFF.md` — and an entry `README.md` from
-`state-repo/README.template.md`.
-
-- **Keeping it safe:** when the coordinator's files live outside the project repository, their folder is
-  a clone of the state repository and the coordinator commits and pushes it at the end of every cycle
-  (automatic, one line in the report) — a lost disk loses nothing. The handoff below is separate.
-- **The handoff — only on the owner's command** ("prepare a handoff", "update the state repo"); moves
-  are rare, and the command is the owner's yes for every step below, done without further questions.
-  1. Tell every running worker to commit and push its work; list anything that cannot be pushed and
-     stop until the owner decides.
-  2. Write `HANDOFF.md` (format: `HANDOFF.template.md`): the moment, every task in flight with its
-     branch, PR and next step, the merge queue, open questions, accesses and logins the new machine
-     needs, machine-specific settings to recreate.
-  3. Copy the current `PROJECT.md`, `BINDINGS.md` (machine-specific rows marked "re-detect"), `LOG.md`
-     into the state repository — created if missing in the owner's **personal** account
-     (`gh repo create <owner>/<project>-coordinator-state --private`); verify it is private
-     (`gh repo view --json visibility` → `PRIVATE`); record in `HANDOFF.md` the claude-coordinator commit
-     the coordinator ran on; commit and push.
-  4. Report the link. Running sessions do not move — they are restarted on the new machine from their
-     branches.
-- **On the new machine** the owner gives only the state repository's link. The session reads its
-  `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
-  context already known: clone the project, re-detect the platform and the "re-detect" rows, check the
-  logins and the safety setup, confirm the quiz briefly, dry run (§12a) — including which interrupted
-  tasks it would restart — then wait for the owner.
-- After the move the two machines are not kept in sync; a new handoff is made only on command. The state
-  repository holds internal project information: never public, never shared with the client.
+The project's private state repository keeps the coordinator's files; it is pushed at the end of every
+cycle when the files live outside the project repository. The handoff runs **only on the owner's
+command** ("prepare a handoff"); the procedure, and the start on a new machine, are in
+[procedures/HANDOFF.md](procedures/HANDOFF.md).
 
 ## 13. "Coordinator, what is your task?"
 
-When the owner asks this in any wording ("какова твоя задача?", "what do you do?", "explain your flow"),
-answer with the **full flow**, in this order:
-1. **Who I am** and what I never do (§1).
-2. **The project:** goal, current milestone or sprint, what "done" means.
-3. **My cycle**: the cycle recipe of `PROJECT.md` (or §4's skeleton) step by step, the approval gate, who decides what (§14), and the initiative I take — research, coding standards and modernization proposals (§4b), and the
-   access list with what still needs connecting (§4c).
-4. **The rules in effect:** the table of `PROJECT.md` — tracking, the change flow, review, integration,
-   acceptance, environments, resources, budget, voice, language, MCP.
-5. **The state now:** running work, what waits for the owner, the budget.
+When the owner asks this in any wording, answer per
+[procedures/WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md).
 
 ## 14. Who decides
 
