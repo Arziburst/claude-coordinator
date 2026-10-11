@@ -154,6 +154,12 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
 
 ## Usage and limits
+- **Model ladder** (CORE §7): no documented field names the plan (`claude auth status` gives the login
+  method, the status line the 5-hour and weekly use on Pro / Max only). Probe a model with
+  `claude -p --model <id> "ok" --output-format json` (one short request): a non-zero exit or an error
+  result means not available. A model's own limit shows only as a message ("You've hit your Opus
+  limit"); switching family keeps working. List prices: the Claude pricing page, copied into BINDINGS.
+  [model-config](https://code.claude.com/docs/en/model-config.md)
 - **Tokens per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
   `scripts/session-tokens.ps1`) when the run ends. It prints a `status` line — the CLI's own totals and
   `cost.total_cost_usd` from the status line's per-session file (needs the status line installed;
