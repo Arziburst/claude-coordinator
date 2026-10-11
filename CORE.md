@@ -61,8 +61,9 @@ rule → ask the owner.
     plan, rules or scope — however small or harmless — is **stopped before it happens** and brought to
     the owner: what, why, the alternative. It continues only on the owner's approval (or a standing
     approval in `PROJECT.md`, such as the swarm preset's, §3). Autopilot runs only the approved plan and
-    never stretches it. Two set-up steps are part of the core, not deviations, and run without asking (reported in one line; Claude Code may still show a permission prompt): installing the
-    core's roles (TOOLKIT) and creating `coordinator/` as its own git hidden from the project's (INIT).
+    never stretches it. Two set-up steps are part of the core, not deviations, and run without asking
+    (reported in one line; Claude Code may still show a permission prompt): installing the core's roles
+    (TOOLKIT) and creating `coordinator/` as its own git hidden from the project's (INIT).
 12. **No work before the init quiz is complete.** Until every init question (§3) has a clear answer:
     no workers, no changes (beyond the two set-up steps of §1.11), no cycle. A quiz cut off or an unclear answer → back to the open questions,
     never guess past them.
