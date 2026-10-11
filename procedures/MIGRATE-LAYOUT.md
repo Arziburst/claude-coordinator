@@ -27,9 +27,11 @@ other clones and teammates, and the one yes this needs.
    remove `coordinator/.git`, and record in `PROJECT.md` a local core at that commit.
 3. **Create the repository:** `git -C coordinator init`, add the entry `README.md` from
    `state-repo/README.template.md` if missing, `git -C coordinator add -A`, commit.
-4. **Tracked only — untrack in the project, keep on disk:** on a new work branch of the project,
-   `git rm -r --cached coordinator/` (removes the files from the project's git, not from disk), commit,
-   and integrate through the project's change path (PR, review, merge per `PROJECT.md`, §1.1). If the
+4. **Tracked only — untrack in the project, keep on disk:** in a separate worktree of the project
+   (`git worktree add <scratch>/untrack -b <branch>`, so this working copy is never switched),
+   `git rm -r --cached coordinator/`, commit, and integrate through the project's change path (PR,
+   review, merge per `PROJECT.md`, §1.1). Pulling that merge deletes the files from this working copy
+   too; restore them at once from the new repository: `git -C coordinator restore .`. If the
    folder is in `.gitignore`, leave it; otherwise add `coordinator/` to `.git/info/exclude`.
    Tell the owner before the merge: **other clones of the project lose these files from their working
    copy on their next pull**, and the files remain in the project's past history (rewriting history is
