@@ -23,3 +23,5 @@ with the client.
 | `BINDINGS.md` | tools and commands (layer 3); rows marked "re-detect" depend on the machine |
 | `LOG.md` | the coordinator's journal |
 | `core/` | the local copy of the coordinator core, at the commit recorded in `PROJECT.md` |
+| `SOURCES.md`, `sources/` | the source catalog and the files the owner gave (masked summaries; raw files never leave this private repository) |
+| `TASKS.md` | only without a tracker: the tasks and their statuses |

@@ -19,12 +19,14 @@ intent: >                          # why this matters, 1-3 sentences - the field
 inputs:                            # exact pointers, not "the whole project"
   - src/vr/hands/*.cpp
   - docs/decisions.md#D-12
+  - "S-3 Figma: inventory screen"  # sources by id (procedures/SOURCES.md)
 outputs:
   - a PR into main from 37-feat-hand-reticle
 acceptance:                        # ordered; each criterion says how it is checked
   - criterion: each hand shows its own reticle
     check: oracle                  # oracle | review | owner
     how: test_vr_reticle (new) passes
+    source: S-3                    # where the criterion comes from; none = the coordinator's own reading
   - criterion: grabbing items does not regress
     check: oracle
     how: the existing tests/vr suite passes
@@ -49,6 +51,8 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   calculation — something other than an opinion), `review` (the independent reviewer reads it), `owner`
   (only the owner can accept it). A criterion with no nameable check is a planning gap: fix it before
   the work starts.
+- **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
+  result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, or the
   worker is stuck, the coordinator restarts the contract on this model with the failed report attached

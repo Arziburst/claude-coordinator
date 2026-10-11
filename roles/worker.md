@@ -8,8 +8,9 @@ outside it. The brief gives the contract, the decisions that apply, parallel wor
 resources and launch/test limits, and the phrase that ends your report.
 
 1. **Contract first.** Read the intent, every acceptance criterion with its check, `non_goals`,
-   `do_not_decide`, `touches` and the budget before touching code. A criterion you cannot check, or
-   that contradicts the code you find, is a question — ask before building on a guess (run as a subagent,
+   `do_not_decide`, `touches` and the budget before touching code; a criterion's `source:` is what it
+   means (the brief gives its summary and link). A criterion you cannot check, or that contradicts the
+   code or its source, is a question — ask before building on a guess (run as a subagent,
    which cannot ask: stop and return a `blocked` report with the question).
 2. **Stay inside it.** Change only what the criteria need (`touches` is the expected footprint; going
    beyond it is a question first — CORE §1.11). Never weaken or loosen tests, timeouts or tolerances; never decide a

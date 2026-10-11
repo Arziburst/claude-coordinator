@@ -69,7 +69,8 @@ rule → ask the owner.
     never guess past them.
 13. **Customer and production data never leave production.** No production rows, logs with personal
     data, customer records or payment details in issues, PRs, comments, the journal, briefs, test seeds
-    or research; test data is synthetic. Secrets (`.env*`, keys, tokens) may be **used** where the work
+    or research; test data is synthetic. Screenshots and photos the owner gives are masked before any of
+    that ([procedures/SOURCES.md](procedures/SOURCES.md)). Secrets (`.env*`, keys, tokens) may be **used** where the work
     needs them, never copied into artifacts, logs or messages, never sent anywhere. Customer data and
     secrets never go to an external service. Project code goes where the project's tooling already holds
     it (code host, CI, hosting); to other services (web search, third-party tools) per `PROJECT.md`
@@ -263,6 +264,12 @@ The coordinator **proposes**, the owner approves every proposal before it become
   not be touched.
 - **Access list** in `BINDINGS.md`: each resource, what for, read / write, connected or not (MCP, CLI
   login, token).
+- **Sources** ([procedures/SOURCES.md](procedures/SOURCES.md)): one main system per kind of
+  information (code, tasks, requirements, decisions, acceptance, design) in `PROJECT.md`; everything
+  else the owner gives — links, documents, screenshots, photos — in the catalog `coordinator/SOURCES.md`
+  with a weight (main / evidence / reference). Main wins over a mirror; evidence that contradicts a main
+  source is a question to the owner, and the answer becomes a decision. No tracker, code host or git →
+  the modes in SOURCES §3.
 - **A task needs an unconnected resource** (e.g. design work without the design MCP) → ask the owner to
   connect it, saying what it enables; wait rather than start half-blind.
 - Never ask the owner to paste secrets; point to the login flow or setting.
@@ -278,7 +285,8 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 
 - The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) on the contract, the
   report and the change: contract first, `oracle` checks run itself, every result keeps its evidence class
-  (oracle / review / claim, [CONTRACT.md](CONTRACT.md)).
+  (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
+  cites (`source:`, SOURCES §4).
 - Independent of the author (a separate session, or the human the project names); changes nothing.
 - The hand-off opens with: **nothing here is established fact** — verdict per criterion: confirmed /
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /

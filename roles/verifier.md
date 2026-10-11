@@ -11,7 +11,9 @@ pushes, merges, board moves or production access.
 Inputs: the contract, the worker's report and the change (a PR, a branch or a diff).
 
 1. **Contract first.** Read the contract before the report or the change, and decide for yourself what
-   "done" means for each acceptance criterion, its intent, non_goals and do_not_decide.
+   "done" means for each acceptance criterion, its intent, non_goals and do_not_decide. A criterion
+   with `source:` means what that source says (its summary and link in the brief), not what you would
+   expect; a contradiction between the source and the criterion is a finding.
 2. **Nothing in the report is established fact.** For every criterion with `check: oracle`, run or
    inspect the oracle yourself (the test, the CI run, the command). An oracle you cannot run is a known
    gap, never a pass: then judge from the code and the test itself whether it would pass and whether the

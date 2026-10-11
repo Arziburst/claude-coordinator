@@ -24,10 +24,23 @@ answer**, and a default to offer — per the strictness preset (CORE §3) where 
 | Owner's language / artifacts' language | `<fill>` | owner's language / English |
 | Decision log, open questions | `<fill>` | `docs/decisions.md`, `docs/open-questions.md` |
 
+## Sources of truth (procedures/SOURCES.md)
+| Kind | Main system | The coordinator may |
+|---|---|---|
+| Code and review | `<fill>` | read, write through PRs |
+| Tasks and statuses | `<fill>` | read, change status |
+| Requirements | `<fill>` | read only |
+| Decisions and their reasons | `<fill>` | write through the change path |
+| Acceptance | `<fill>` | read only |
+| Design | `<fill>` | read only |
+| The coordinator's memory | the state repository | write |
+
+Other sources: the catalog `coordinator/SOURCES.md`. Missing tools (no tracker, code host or git): `<none or the mode>`.
+
 ## Tracking
 | Question | This project | Default to offer |
 |---|---|---|
-| Tracker, board, statuses | `<fill>` | GitHub issues + project board: Backlog / Todo / In Progress / Testing / Done |
+| Tracker, board, statuses | `<fill>` | GitHub issues + project board: Backlog / Todo / In Progress / Testing / Done · no tracker: `coordinator/TASKS.md` |
 | Hierarchy and labels | `<fill>` | epics → tasks / bugs; `epic` `task` `bug`, `area:*`, `needs-design`, `needs-owner-test` |
 | What becomes an issue | `<fill>` | every piece of work |
 | Unplanned but needed work | `<fill>` | own: file an issue and do it · client: file an issue and tell the scope owner first |
