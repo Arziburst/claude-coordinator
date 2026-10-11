@@ -24,7 +24,7 @@ owner said yes to the summary (CORE §1.12).
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
-| Who owns the scope | `<fill>` | own: the owner · client: the business analyst / product owner |
+| Who owns the scope | `<fill>` | solo: the owner · a team or a client: the business analyst / product owner (INIT 3.1, question 3) |
 | Owner's language / artifacts' language | `<fill>` | owner's language / English |
 
 ## Sources of truth (procedures/SOURCES.md)
@@ -46,7 +46,7 @@ Other sources: the catalog `coordinator/SOURCES.md`. Missing tools (no tracker, 
 | Tracker, board, statuses | `<fill>` | GitHub issues + project board: Backlog / Todo / In Progress / Testing / Done · no tracker: `coordinator/TASKS.md` |
 | Hierarchy and labels | `<fill>` | epics → tasks / bugs; `epic` `task` `bug`, `area:*`, `needs-design`, `needs-owner-test` |
 | What becomes an issue | `<fill>` | every piece of work |
-| Unplanned but needed work | `<fill>` | own: file an issue and do it · client: file an issue and tell the scope owner first |
+| Unplanned but needed work | `<fill>` | per the strictness (CORE §3): swarm filed and queued · standard filed, starts on the scope owner's yes · strict proposed only |
 | The owner's wishes | `<fill>` | an issue at once, in the owner's words |
 | Issue fields | `<fill>` | scope, out of scope, **do not decide**, depends on, acceptance criteria, verification, estimate |
 | Status page / progress line | `<fill>` | a pinned issue; "milestone ≈ N% (closed/all)" after each merge |
@@ -148,13 +148,13 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 |---|---|---|
 | Usage caps | `<fill>` | weekly 90%, short window 95%; over only with permission |
 | Models available | `<fill>` | Fable (own limit), Opus, Sonnet, Haiku |
-| Time estimates | `<fill>` | client: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic |
-| Time tracking | `<fill>` | client: a timesheet draft shown to the owner before it is written |
+| Time estimates | `<fill>` | strict: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic · swarm, standard: none |
+| Time tracking | `<fill>` | strict: a timesheet draft shown to the owner before it is written · swarm, standard: none |
 
 ## Client dependencies
 | Question | This project | Default to offer |
 |---|---|---|
-| Access, accounts, approvals the client owes | `<fill>` | a list with owner and date (`docs/dependencies.md`) |
+| Access, accounts, approvals the client owes *(if any)* | `<fill>` | a list with owner and date (`docs/dependencies.md`) |
 
 ## MCP and integrations
 | Technology found | MCP / connector | Rights | Connected? | CLI fallback |

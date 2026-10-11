@@ -10,8 +10,9 @@
 >    `BINDINGS.md`, re-detect the platform and every row marked "re-detect", check the logins and
 >    accesses listed in `HANDOFF.md`, set up the safety rules, confirm the quiz briefly, then a **dry
 >    run** showing which interrupted tasks you would restart — and **wait** for the owner.
-> 4. Committed locally at the end of every cycle; pushed to this remote only on the owner's command
->    ("prepare a handoff" / "update the state repo").
+> 4. Committed at the end of every cycle and pushed to this remote right after (`git pull --ff-only`
+>    first, never force-pushed; not fast-forwardable → stop and ask the owner). Only one machine's
+>    coordinator writes it (`core/procedures/HANDOFF.md`).
 
 **Private.** This repository holds internal project information — never make it public, never share it
 with the client.

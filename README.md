@@ -63,8 +63,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   at start the coordinator says when upstream is newer, and "update the core" brings the changes in on
   command, with an impact report first.
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
-- **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and pushes
-  `coordinator/` to a private remote, the project's state repository (CORE §12b, `state-repo/README.template.md`,
+- **Moving to another machine** — `coordinator/` is pushed after every cycle to a private remote, the
+  project's state repository, if the owner chose one at init; say "prepare a handoff" before a move: the
+  coordinator pushes the work in flight and writes `HANDOFF.md` (CORE §12b, `state-repo/README.template.md`,
   `HANDOFF.template.md`). On the new machine give a session only that repository's link.
 - **"Coordinator, what is your task?"** — it explains its full flow and the rules in effect (CORE §13).
 
