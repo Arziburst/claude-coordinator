@@ -3,7 +3,7 @@
 #   pwsh -File scripts/check-contract.ps1 <contract.md|contract.yaml> ...      (or: powershell -File ...)
 # The contract is the YAML header between `---` lines, or a top-level `contract:` block.
 # ERROR (exit 1): a required key missing, intent empty, a criterion without a valid check, an oracle
-# without `how`, non_goals without the two default lines. WARN: budget.model, .escalate_to, .tokens or
+# without `how`, non_goals without the two default lines. WARN: budget.model, .escalate_to, .cost or
 # touches missing; no oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
 if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 7 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
@@ -78,7 +78,7 @@ foreach ($f in $Files) {
   $b = "`n" + $txt['budget']
   if ($b -cnotmatch '\n[ \t]+model:[ \t]*[^ \t\n]') { $out.Add("WARN  budget.model missing (CORE ${sect}7)"); $nw++ }
   if ($b -cnotmatch '\n[ \t]+escalate_to:[ \t]*[^ \t\n]') { $out.Add('WARN  budget.escalate_to missing (no stronger model to retry on)'); $nw++ }
-  if ($b -cnotmatch '\n[ \t]+tokens:[ \t]*[0-9]') { $out.Add("WARN  budget.tokens missing (no spend forecast, CORE ${sect}7a)"); $nw++ }
+  if ($b -cnotmatch '\n[ \t]+cost:[ \t]*[0-9]') { $out.Add("WARN  budget.cost missing (no spend forecast, CORE ${sect}7a)"); $nw++ }
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }

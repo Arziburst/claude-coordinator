@@ -50,15 +50,24 @@ jobs:
           exit $LASTEXITCODE
       - name: session-tokens counts the fixture exactly (bash)
         if: runner.os != 'Windows'
-        run: CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude" bash scripts/session-tokens.sh s1 | diff - tests/session-tokens/expected.txt
+        run: |
+          export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
+          bash scripts/session-tokens.sh s1 | diff - tests/session-tokens/expected.txt
+          bash scripts/session-tokens.sh s2 | diff - tests/session-tokens/expected-s2.txt
+          if bash scripts/session-tokens.sh s 2>/dev/null; then echo "an ambiguous prefix must fail"; exit 1; fi
       - name: session-tokens counts the fixture exactly (PowerShell)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
           $env:CLAUDE_CONFIG_DIR = "$PWD\tests\session-tokens\claude"
-          $got = (.\scripts\session-tokens.ps1 s1) -join "`n"
-          $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\expected.txt") -replace "`r", '').TrimEnd("`n")
-          if ($got -ne $want) { "got:`n$got`nwant:`n$want"; exit 1 }
+          foreach ($c in @(@('s1', 'expected.txt'), @('s2', 'expected-s2.txt'))) {
+            $got = (.\scripts\session-tokens.ps1 $c[0]) -join "`n"
+            $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\$($c[1])") -replace "`r", '').TrimEnd("`n")
+            if ($got -ne $want) { "got:`n$got`nwant:`n$want"; exit 1 }
+          }
+          $p = Start-Process powershell -ArgumentList '-NoProfile', '-File', '.\scripts\session-tokens.ps1', 's' -Wait -PassThru -NoNewWindow -RedirectStandardError "$env:RUNNER_TEMP\err.txt"
+          if ($p.ExitCode -ne 1) { "an ambiguous prefix must fail"; exit 1 }
+          exit 0
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: runner.os != 'Windows'
         run: |
@@ -108,4 +117,6 @@ jobs:
             [ "$a" = "$b" ] || { echo "statusline differs: sh '$a' / ps '$b'"; exit 1; }
           done
           export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
-          diff <(bash scripts/session-tokens.sh s1) <(pwsh -NoProfile -File scripts/session-tokens.ps1 s1)
+          for id in s1 s2; do
+            diff <(bash scripts/session-tokens.sh $id) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
+          done

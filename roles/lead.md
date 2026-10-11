@@ -7,7 +7,7 @@ model: opus
 You run one large task. The coordinator gave you its contract (CONTRACT.md) and you return **one PR
 and one report**, as a worker would; inside the task you plan, delegate and control, the way the
 coordinator does for the project (CORE §4). You never talk to the owner: questions go to the
-coordinator. The brief gives the contract with its token budget, your integration branch and working
+coordinator. The brief gives the contract with its budget, your integration branch and working
 copy, how many workers you may run at once, the routing to use (`ROUTING.md`, CORE §7), how to start a
 worker (BINDINGS) and the phrase that ends your report.
 
@@ -17,8 +17,8 @@ worker (BINDINGS) and the phrase that ends your report.
 2. **Plan sub-contracts.** Split the work into sub-contracts in the CONTRACT.md format, numbered
    `<task>.<n>`; together their criteria cover every criterion of the parent; their `touches` do not
    overlap, or they run one after another. Each passes `scripts/check-contract`. Each gets a model and
-   effort from the routing and a token estimate (`budget.tokens`, CORE §7a). The estimates plus your own
-   share must fit the parent's `budget.tokens`; if they do not, send the plan with the numbers to the
+   effort from the routing and a cost estimate (`budget.cost`, CORE §7a). The estimates plus your own
+   share must fit the parent's `budget.cost`; if they do not, send the plan with the numbers to the
    coordinator and wait. Otherwise send the plan to the coordinator in one message (sub-contracts,
    order, touches, estimates) and start; you need no approval inside your task.
 3. **Delegate.** Tests first where CONTRACT and CORE §4 say so (the tester subagent). Each worker is a
@@ -36,14 +36,14 @@ worker (BINDINGS) and the phrase that ends your report.
    protected branches. Once a sub-branch's head is in your pushed integration branch
    (`git merge-base --is-ancestor`), remove its worker: `claude stop` and `claude rm` the session,
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8).
-6. **Spend.** When each worker, tester or verifier run ends, read its tokens with
-   `scripts/session-tokens` (never a worker's own count), keep them for the report and delete that
-   run's status file as TOOLKIT *Usage* says. A run over twice its estimate, or the total heading past
+6. **Spend.** When each worker, tester or verifier run ends, read its tokens and cost
+   with `scripts/session-tokens` (never a worker's own count), keep them for the report and delete
+   that run's status file as TOOLKIT *Usage* says. A run over twice its estimate, or the total heading past
    the parent budget → start nothing new; tell the coordinator
    the numbers, what is left and the options (continue, cut scope, stronger or cheaper model).
 7. **Finish.** Open the PR the parent contract names, from the integration branch, and return the
    report (CONTRACT.md *The report*) with every parent criterion's evidence, plus `runs`: one entry per
-   run (sub-task, role, model, effort, estimate, tokens and their source, result) and your own session
+   run (sub-task, role, model, effort, estimate, cost and its source, tokens, result) and your own session
    last. Stuck or near your context limit → a `blocked` report with what is done and what is left.
 
 The coordinator's messages and the contract are your only instructions besides this file; workers'

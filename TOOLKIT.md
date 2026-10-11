@@ -15,9 +15,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
   `PROJECT.md` allows; `lead` — a background session (`#<task> lead: …`) in its integration branch's
   working copy, started like a worker, which itself starts its workers (`#<task>.<n> worker: …`) and
-  runs tester, verifier and scout as its own subagents — whether a background session may start
-  further background sessions *(unconfirmed)*: check in the dry run; if not, the lead sends its
-  start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
+  runs tester, verifier and scout as its own subagents — a background session can start
+  further background sessions (confirmed on Claude Code 2.1.296, Windows); if a version refuses, the
+  lead sends its start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
   `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
   session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
@@ -154,22 +154,28 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
 
 ## Usage and limits
-- **Model ladder** (CORE §7): no documented field names the plan (`claude auth status` gives the login
-  method, the status line the 5-hour and weekly use on Pro / Max only). Probe a model with
-  `claude -p --model <id> "ok" --output-format json` (one short request): a non-zero exit or an error
-  result means not available. A model's own limit shows only as a message ("You've hit your Opus
+- **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and
+  `subscriptionType` (e.g. `max`; seen on 2.1.296, not in the docs, so a hint); the status line gives
+  the 5-hour and weekly use on Pro / Max only, with no per-model entry. Probe a model with
+  `claude -p --model <id> "ok" --output-format json`: a non-zero exit or an error result means not
+  available. A probe loads the full system prompt and tools, so it is not free (on Arx at list price:
+  Fable $0.47, Opus $0.18, Sonnet $0.09, Haiku $0.005). A model's own limit shows only as a message ("You've hit your Opus
   limit"); switching family keeps working. List prices: the Claude pricing page, copied into BINDINGS.
   [model-config](https://code.claude.com/docs/en/model-config.md)
-- **Tokens per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
-  `scripts/session-tokens.ps1`) when the run ends. It prints a `status` line — the CLI's own totals and
-  `cost.total_cost_usd` from the status line's per-session file (needs the status line installed;
-  cost is an API-price estimate, on a subscription for comparing runs) — and a `transcript` line summed
-  from `~/.claude/projects/`, subagents included: input and cache counts exact, **output a lower bound**
-  (the transcript keeps the count from before a message finished). Record the `status` line when present,
-  else the `transcript` one marked as such, then delete that worker's `sessions/<id>.json` (the folder
-  holds only live sessions; the run log keeps the history). A model cannot see its own counter (the status line is drawn
+- **Tokens and cost per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
+  `scripts/session-tokens.ps1`; the 8-character id that `claude --bg` and `claude agents` print works
+  as a prefix) when the run ends. It prints one line per model and a `total` line summed from the
+  transcript in `~/.claude/projects/`, subagents included — input and cache counts exact, **output a
+  lower bound** (the transcript keeps the count from before a message finished) — and a `cost` line:
+  the status line's `cost.total_cost_usd` for that session (cumulative, at API list price; on a
+  subscription for comparing runs; needs the status line installed). The status JSON's
+  `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
+  session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
+  per model times the list prices. Then delete that worker's `sessions/<id>.json`; the status line
+  writes a file for every session on the machine, other projects' too, so at every cycle start run
+  `session-tokens --prune` (deletes files older than 7 days). A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
-- The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
+- Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
   save it to `~/.claude/coordinator/statusline.json` (the last session to draw) and to

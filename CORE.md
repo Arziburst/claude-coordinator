@@ -176,7 +176,7 @@ On the owner's **"start a new cycle"** (any wording: "стартуем новы�
 where `PROJECT.md` enables it — the periodic tick (§9), run the **cycle recipe in `PROJECT.md`** step by
 step. Without one, this skeleton:
 
-1. **Sync:** merged and open PRs, their checks, running workers, limits.
+1. **Sync:** merged and open PRs, their checks, running workers, limits (stale status files pruned, TOOLKIT *Usage*).
 2. **Clean up** merged, fully pushed work (§8): stop its processes (dev servers, containers, database
    stacks), remove its working copies and sessions. Unfinished work is left alone; anything unclean is
    reported, not deleted.
@@ -334,11 +334,12 @@ never assumed (below).
   light Haiku / Sonnet, strong Opus, top Fable; on a plan without Fable the top rung is Opus; where the block forecast (§7a)
   shows ordinary work on Opus would not fit the limits, strong is Sonnet and Opus moves to top. A missing rung takes the
   next one down. A model with its own limit (Fable on some plans) spares the main one.
-- **Detected, not asked:** no documented field names the plan, so the coordinator learns what it needs.
-  *Available:* one tiny probe per model (`claude -p --model <m> "ok"`, one short request) at init, at a
-  start where `claude auth status` shows another login method, once a week, and after any run that
-  fails with "model not available" or a model's own limit ("You've hit your Opus limit") — that model
-  leaves the ladder until the next probe. *Price:* from the run log and the status line (§7a) — limit
+- **Detected, not asked:** the coordinator learns what it needs. *Hint, free, at every start:*
+  `claude auth status` — the login method and `subscriptionType` (e.g. `max`; undocumented, so a hint,
+  never proof). *Available:* one probe per model (`claude -p --model <m> "ok"`; it loads the full
+  prompt, ≈ $0.75 at list price for four models) at init, when the hint changes, once a week, and after
+  any run that fails with "model not available" or a model's own limit ("You've hit your Opus limit")
+  — that model leaves the ladder until the next probe. *Price:* from the run log and the status line (§7a) — limit
   percent per run, so a plan change shows up in the numbers and the ladder follows without a rule change.
 - **Spend level** (`PROJECT.md`, set at init next to the strictness): **lean**, **balanced** (default)
   or **thorough**. It does not forbid any rung — a lean project still sends the hardest problem to the
@@ -353,8 +354,9 @@ never assumed (below).
 - **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
   coordinator writes it — a lead's runs come in its report): one line per finished worker, lead,
   tester, reviewer or researcher run — date · task (`37`, or `37.2` under a lead) · role · kind (a row
-  of the table) · model · effort · estimate (the contract's `budget.tokens`) · tokens (counted from the session's transcript, TOOLKIT *Usage*; never the worker's own estimate) · cost (the status
-  line's, or computed from tokens and list prices, §7a) · result (`approved` / `rework <n>` /
+  of the table) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
+  the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
+  per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
   `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
 - **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
   under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
@@ -364,8 +366,9 @@ never assumed (below).
     kept if they hold ≥ 80%, otherwise reverted;
   - **stronger when failing:** reworks or escalations in a kind's last 5 runs → one level up — lean: 3;
     balanced: 2; thorough: 1;
-  - **limits:** 5-hour or weekly use above 70% (status line, TOOLKIT *Usage*) → routine kinds one level
-    down; above 90% → routine on the light model only, heavy work waits for the reset (§9);
+  - **limits**, against the project's caps (§9; status line, TOOLKIT *Usage*): 5-hour or weekly use
+    within 20 points of its cap → routine kinds one level down; within 10 points → routine on the
+    light model only, heavy work waits for the reset; at the cap §9 wins — no new workers;
   - **floors:** the floors above; a kind the owner pins in `PROJECT.md` is never changed;
   - a level is a model or effort step on the ladder; routing never uses a model the ladder lacks.
   Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
@@ -375,22 +378,25 @@ never assumed (below).
 ## 7a. Spend: forecast and analysis
 
 The coordinator's job, not a lead's or a worker's: only it sees every task, the limits and the run log.
-- **Estimate per contract** (`budget.tokens`): the median tokens of the kind's last 10 runs in the run
-  log (worker plus its tester and reviewer; a lead: the sum of its sub-runs); no history → the
-  coordinator's own estimate, marked `guess` in the plan.
-- **Limit percent per run:** tokens weigh differently per model, so the common unit is cost at list
-  price: the status line's `cost` (TOOLKIT *Usage*), or, where a session never drew one, the
-  transcript's token counts times the ladder's list prices. At every cycle the coordinator reads the weekly
-  and 5-hour use and sums the run log's cost since the last cycle, its own line included; the median of
-  the last cycles' **percent per dollar** turns any run's cost into limit percent, whatever its model.
-  That limits follow list price across models is an assumption: a cycle on one model checks it, and a
-  model whose runs drift from it gets its own ratio. A model's own limit (above) is tracked apart.
-- **Estimate per run in cost too:** the kind's median cost on the model it will run on; no history on
-  that model → its tokens times the model's price ratio from the ladder, marked `guess`.
-- **Block forecast:** the plan shows the block's estimate in tokens, cost and limit percent against
+- **The unit is cost at list price**, not tokens: most of a run's tokens are cheap cache reads (98% on Arx),
+  so tokens measure context times turns, and they weigh differently per model. Cost is the
+  `scripts/session-tokens` `cost` line (the status line's, cumulative), or, where a session never drew
+  one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
+- **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
+  will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs). No history →
+  seeded at init from the project's existing transcripts (`scripts/session-tokens` over
+  `~/.claude/projects/<project>/`, per model; on Arx this changed the first guess about 10×), else the
+  coordinator's own estimate; either is marked `guess` in the plan.
+- **Limit percent per dollar:** the limits are shown as whole percents, so one cycle rarely moves them
+  enough to read. The ratio is the limit's rise since its reset over the run log's cost since then,
+  the coordinator's own lines included — recomputed every cycle, trusted once the window has risen
+  10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
+  models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
+  it gets its own ratio. A model's own limit (above) is tracked apart.
+- **Block forecast:** the plan shows the block's estimate in cost and limit percent against
   what is left before the caps (§9), the 5-hour window included. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).
-- **Analysis after the block:** one report line — forecast vs actual (tokens, percent, deviation), the
+- **Analysis after the block:** one report line — forecast vs actual (cost, percent, deviation), the
   worst overrun by task, reworks and escalations. A task over twice its estimate is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
   Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.

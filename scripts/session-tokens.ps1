@@ -1,45 +1,77 @@
-# Tokens a Claude Code session used (Windows; macOS / Linux: session-tokens.sh - same lines, see it).
-#   powershell -File scripts/session-tokens.ps1 <session-id | transcript.jsonl>     (or: pwsh -File ...)
-# "status" line: the CLI's own totals from ~/.claude/coordinator/sessions/<id>.json (preferred).
-# "transcript" line: summed from the transcript and its subagents; output is a LOWER BOUND.
-# Exit 1 when neither exists.
+# What a Claude Code session used (Windows; macOS / Linux: session-tokens.sh - same lines, see it).
+#   powershell -File scripts/session-tokens.ps1 <session-id | id prefix | transcript.jsonl>     (or: pwsh -File ...)
+#   powershell -File scripts/session-tokens.ps1 --prune    delete status files older than 7 days
+# One line per model and a "total" line, summed from the transcript and its subagents (output is a
+# LOWER BOUND); a "cost" line from ~/.claude/coordinator/sessions/<id>.json (cumulative, list price).
+# The status file's token fields are the last request's, not the session's, so they are ignored.
+# Exit 1 when neither exists or a prefix is ambiguous.
 param([string]$Session)
-if (-not $Session) { Get-Content -LiteralPath $PSCommandPath -TotalCount 5 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+if (-not $Session) { Get-Content -LiteralPath $PSCommandPath -TotalCount 7 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
+$dir = Join-Path $cfg 'coordinator/sessions'
 # numbers as RUNS.tsv expects them (1.23, not 1,23 on a Russian or German Windows)
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
-if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } else {
-  $main = Get-ChildItem -Path (Join-Path $cfg 'projects') -Filter "$Session.jsonl" -Recurse -Depth 1 -File |
+if ($Session -eq '--prune') {
+  if (Test-Path -LiteralPath $dir) {
+    Get-ChildItem -LiteralPath $dir -Filter '*.json' -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
+      ForEach-Object { $_.FullName; Remove-Item -LiteralPath $_.FullName }
+  }
+  exit 0
+}
+$projects = Join-Path $cfg 'projects'
+$main = $null
+if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } elseif (Test-Path -LiteralPath $projects) {
+  # the full id, else a unique prefix (claude --bg and claude agents print 8 characters)
+  $main = Get-ChildItem -Path $projects -Filter "$Session.jsonl" -Recurse -Depth 1 -File |
     Select-Object -First 1 -ExpandProperty FullName
+  if (-not $main) {
+    $found = @(Get-ChildItem -Path $projects -Filter "$Session*.jsonl" -Recurse -Depth 1 -File | ForEach-Object { $_.FullName })
+    if ($found.Count -gt 1) {
+      [Console]::Error.WriteLine("ambiguous id ${Session}:"); foreach ($x in $found) { [Console]::Error.WriteLine($x) }; exit 1
+    }
+    if ($found.Count -eq 1) { $main = $found[0] }
+  }
 }
-$sid = if ($main) { [IO.Path]::GetFileNameWithoutExtension($main) } else { $Session }
-$status = Join-Path $cfg "coordinator/sessions/$sid.json"
-if (Test-Path $status) {
-  $s = Get-Content -Raw $status | ConvertFrom-Json
-  $si = $s.context_window.total_input_tokens; $so = $s.context_window.total_output_tokens
-  $c = $s.cost.total_cost_usd
-  function Or-Q($v) { if ($null -eq $v) { '?' } else { $v } }   # PowerShell 5 has no ??
-  "status`t{0}`tin={1} out={2} cost=`${3}" -f ([long]$si + [long]$so), (Or-Q $si), (Or-Q $so), (Or-Q $c)
+if ($main) { $sid = [IO.Path]::GetFileNameWithoutExtension($main) } else {
+  $sid = $Session
+  if (Test-Path -LiteralPath $dir) {
+    $f = Get-ChildItem -LiteralPath $dir -Filter "$Session*.json" -File | Select-Object -First 1
+    if ($f) { $sid = $f.BaseName }
+  }
 }
+$status = Join-Path $dir "$sid.json"
+function Line($n, $v) { "{0}`t{1}`tin={2} out>={3} cache_read={4} cache_write={5}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3] }
 if ($main) {
   $files = @($main)
   $sub = Join-Path ($main -replace '\.jsonl$', '') 'subagents'
-  if (Test-Path $sub) { $files += Get-ChildItem -Path $sub -Filter '*.jsonl' -File | ForEach-Object FullName }
+  if (Test-Path $sub) { $files += Get-ChildItem -Path $sub -Filter '*.jsonl' -File | ForEach-Object { $_.FullName } }
   $best = @{}
-  foreach ($f in $files) {
-    foreach ($line in [IO.File]::ReadLines($f)) {
+  foreach ($file in $files) {
+    foreach ($line in [IO.File]::ReadLines($file)) {
       if (-not $line) { continue }
       $d = $line | ConvertFrom-Json
       if ($d.type -ne 'assistant' -or -not $d.message.usage) { continue }
       $u = $d.message.usage; $id = $d.message.id
-      if (-not $best.ContainsKey($id) -or [long]$u.output_tokens -gt [long]$best[$id].output_tokens) { $best[$id] = $u }
+      if (-not $best.ContainsKey($id) -or [long]$u.output_tokens -gt [long]$best[$id].u.output_tokens) {
+        $m = if ($d.message.model) { [string]$d.message.model } else { 'unknown' }
+        $best[$id] = @{ u = $u; m = $m }
+      }
     }
   }
-  $i = 0; $o = 0; $r = 0; $w = 0
-  foreach ($u in $best.Values) {
-    $i += [long]$u.input_tokens; $o += [long]$u.output_tokens
-    $r += [long]$u.cache_read_input_tokens; $w += [long]$u.cache_creation_input_tokens
+  $per = @{}; $t = [long[]]@(0, 0, 0, 0)
+  foreach ($b in $best.Values) {
+    $u = $b.u
+    $v = [long[]]@([long]$u.input_tokens, [long]$u.output_tokens, [long]$u.cache_read_input_tokens, [long]$u.cache_creation_input_tokens)
+    if (-not $per.ContainsKey($b.m)) { $per[$b.m] = [long[]]@(0, 0, 0, 0) }
+    $p = $per[$b.m]
+    for ($k = 0; $k -lt 4; $k++) { $p[$k] += $v[$k]; $t[$k] += $v[$k] }
   }
-  "transcript`t{0}`tin={1} out>={2} cache_read={3} cache_write={4}" -f ($i + $o + $r + $w), $i, $o, $r, $w
-} elseif (-not (Test-Path $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
+  $names = [string[]]@($per.Keys); [Array]::Sort($names, [StringComparer]::Ordinal)   # as LC_ALL=C sort
+  foreach ($n in $names) { Line $n $per[$n] }
+  Line 'total' $t
+} elseif (-not (Test-Path -LiteralPath $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
+if (Test-Path -LiteralPath $status) {
+  $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
+  if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
+}
