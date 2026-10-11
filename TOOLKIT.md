@@ -192,7 +192,11 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`.
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
-  is set yet): add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
+  is set yet; replacing a project's own one is the owner's choice, and first the coordinator lists
+  the project's scripts and BINDINGS rows that read the old one's files — they stop getting data
+  without an error — so they become a task at once). The coordinator sees the files and can run the
+  script on the same JSON, but not the window: only the owner sees the drawn line.
+  Then: add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
   approves the write) the script's absolute path in the core copy (`/ABSOLUTE/PATH` = `<project>/coordinator/core`;
   the user settings serve every project, so one project's copy is used for all):
   Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\""}`

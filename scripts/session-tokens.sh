@@ -38,6 +38,7 @@ count() {
       id = substr($0, RSTART, RLENGTH); sub(/^"id":[ \t]*/, "", id)
       m = "unknown"
       if (match($0, /"model":[ \t]*"[^"]*"/)) { m = substr($0, RSTART, RLENGTH); sub(/^"model":[ \t]*"/, "", m); sub(/"$/, "", m) }
+      if (m == "<synthetic>") next   # placeholder messages of the CLI, all zeros
       match($0, /"usage":[ \t]*[{]/); u = substr($0, RSTART)
       o = num("output_tokens")
       if (!(id in out) || o > out[id]) { out[id] = o; mod[id] = m; inp[id] = num("input_tokens")
