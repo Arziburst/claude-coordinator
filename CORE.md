@@ -309,14 +309,16 @@ The continuous work between cycle steps:
    turns out to be needed but is not planned: file an issue first and bring it to whoever owns the scope
    (commercial: the owner / the business analyst, and it waits for the sprint; non-commercial: the
    owner) — it starts only after their yes (§1.11), never as unannounced work. Split anything
-   that would fill a worker's context; one task per worker with a precise Definition of done (ordered
-   pass criteria, the evidence expected, non-goals, "do not decide" items).
+   that would fill a worker's context; one task per worker with a **contract**
+   ([CONTRACT.md](CONTRACT.md)) — its Definition of done made explicit: the intent, ordered pass
+   criteria each with how it is checked, the evidence expected, non-goals, "do not decide" items, the
+   budget and the model to escalate to.
 3. **Delegate:** start workers (model and effort per §7, rigor per §5), **each session named** so the
    owner can tell them apart in any session list — `<KEY>-<task> <task title>` for workers (e.g.
    `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator` for itself, `<KEY>-<task> review`
-   for reviewers, `research: <topic>` for researchers (naming scheme and command in `BINDINGS.md`); brief each: the decisions that
-   apply, parallel work on the same code, its resources (§8), launch/test limits, the evidence expected,
-   the report phrase.
+   for reviewers, `research: <topic>` for researchers (naming scheme and command in `BINDINGS.md`); brief each
+   with its contract plus the decisions that apply, parallel work on the same code, its resources (§8),
+   launch/test limits and the report phrase — the role's rules live in its role file, not in the brief.
 4. **Control:** answer workers with the point first; only the owner's decisions go to the owner; a worker
    near its context limit or stuck → help or split.
 5. **Review** (§6) when a worker reports ready with green checks; findings go back to the worker; repeat
@@ -414,6 +416,9 @@ when `PROJECT.md` says so (release flags).
 
 ## 6. Review standard
 
+- The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) with the contract, the
+  worker's report and the change: it reads the contract before the report, runs the `oracle` checks
+  itself, and keeps the evidence class of every result (oracle / review / claim, [CONTRACT.md](CONTRACT.md)).
 - The reviewer is independent of the author (a separate agent session, or the human the project
   names) and changes nothing: no commits, pushes, merges, board moves or production access.
 - The hand-off to the reviewer opens with: **nothing here is established fact** — verify each claim and

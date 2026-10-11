@@ -26,6 +26,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
+- **Roles:** [roles/verifier.md](roles/verifier.md) is a subagent definition. Copy it into the project's
+  `.claude/agents/` (or `~/.claude/agents/`) so a reviewer subagent starts as `verifier`; a background
+  reviewer session gets the file's body at the top of its brief. Check the frontmatter fields (`name`,
+  `description`, `tools`, `model`) against the sub-agents docs in the dry run.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; idle sessions may exit — `respawn` them when their turn comes; remove a session with
   `claude rm` as its own command (some guards block compound removals).
