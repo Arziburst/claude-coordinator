@@ -369,7 +369,9 @@ never assumed (below).
   - **limits**, against the project's caps (§9; status line, TOOLKIT *Usage*): 5-hour or weekly use
     within 20 points of its cap → routine kinds one level down; within 10 points → routine on the
     light model only, heavy work waits for the reset; at the cap §9 wins — no new workers;
-  - **floors:** the floors above; a kind the owner pins in `PROJECT.md` is never changed;
+  - **floors:** the floors above; a kind the owner pins in `PROJECT.md` is never changed. A project
+    may add its own kinds by area (e.g. rendering, input) in `ROUTING.md`, each under one table row;
+    a pin names a kind or an area;
   - a level is a model or effort step on the ladder; routing never uses a model the ladder lacks.
   Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
   the numbers behind it.
@@ -394,7 +396,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   are per account, so the run log alone, one project's share, would overstate it — recomputed every cycle, trusted once the window has risen
   10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
-  it gets its own ratio. A model's own limit (above) is tracked apart.
+  it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
+  toward the weekly limit is asked once (the owner sees it in `/usage`) and kept in BINDINGS *Models*;
+  the account's cost is summed with or without that model accordingly.
 - **Block forecast:** the plan shows the block's estimate in cost and limit percent against
   what is left before the caps (§9), the 5-hour window included. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).

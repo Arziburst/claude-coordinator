@@ -47,6 +47,7 @@ function CountUsage([string[]]$Files) {
         } else { $ts = ([string]$ts).PadRight(19).Substring(0, 19) }
         if ([string]::CompareOrdinal($ts, $cut) -lt 0) { continue }
       }
+      if ($d.message.model -eq '<synthetic>') { continue }   # the CLI's own placeholder messages, all zeros
       $u = $d.message.usage; $id = $d.message.id
       if (-not $best.ContainsKey($id) -or [long]$u.output_tokens -gt [long]$best[$id].u.output_tokens) {
         $m = if ($d.message.model) { [string]$d.message.model } else { 'unknown' }
