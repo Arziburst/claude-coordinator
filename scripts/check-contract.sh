@@ -18,7 +18,7 @@ for f in "$@"; do
     function val(s) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
     function err(m) { print F ": ERROR " m; ne++ }
     function warn(m) { print F ": WARN  " m; nw++ }
-    { L[++n] = $0 }
+    { sub(/\r$/, ""); L[++n] = $0 }   # CRLF files read like LF ones (as in check-contract.ps1)
     END {
       # the contract block: front matter, or the body of a top-level "contract:", else the whole file
       s = 1; e = n

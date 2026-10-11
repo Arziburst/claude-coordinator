@@ -30,6 +30,7 @@ while IFS= read -r f; do
       esac
     fi
   done < <(awk '
+    { sub(/\r$/, "") }
     /^[ \t]*```/ { code = !code; next }
     code { next }
     {
@@ -46,7 +47,7 @@ while IFS= read -r f; do
         print NR, "S", sec, subn
       }
     }' "$f")
-done < <(find . -name '*.md' -not -path './.git/*' | sort)
+done < <(find . -name '*.md' -not -path './.git/*' | LC_ALL=C sort)
 
 nsec=$(echo $sections | wc -w | tr -d ' ')
 echo "check-core: $files files, $nsec sections, $rules hard rules, $errors errors"
