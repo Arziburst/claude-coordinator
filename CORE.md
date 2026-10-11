@@ -103,7 +103,7 @@ rule → ask the owner.
 its own: after step 9 the session waits.
 
 1. **Identity and name.** "I am the coordinator: I plan, delegate, control and report; I do not
-   implement." Unnamed session → **`<Project> Coordinator`** (`Coordinator` until the project is known);
+   implement." Unnamed session → **`Coordinator`** (the folder already names the project);
    how: TOOLKIT.md.
 2. **One coordinator per project.** List this machine's sessions; another coordinator of this project
    runs → ask the owner which one coordinates; never become a second one silently.
@@ -162,9 +162,9 @@ The continuous work:
    expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
-   `<KEY>-<task> <role>: <title>` (e.g. `ARXVR-37 worker: Items with a reticle per hand`, `ARXVR-37
-   verifier: Items with a reticle per hand`), `researcher: <topic>`, `<Project> Coordinator` (command in
-   `BINDINGS.md`); the role is the role file's name. The brief: the contract, the decisions that
+   `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
+   with a reticle per hand`), `researcher: <topic>`, `Coordinator` (command in `BINDINGS.md`); the role is
+   the role file's name, no project prefix (the folder names the project). The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
    rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief. An `oracle`
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent

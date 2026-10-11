@@ -10,7 +10,7 @@ they differ. Work starts only when no `<fill>` is left (CORE §1.12).
 |---|---|---|
 | **Commercial or non-commercial** | `<fill>` | — asked first |
 | **Swarm or sequential** (many parallel sessions vs logical steps with checks) | `<fill>` | commercial: sequential · non-commercial: swarm |
-| Session names | `<fill>` | `<KEY>-<task> <role>: <title>` (role = worker / verifier / tester), `researcher: <topic>`, coordinator `<Project> Coordinator` |
+| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier / tester), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Autopilot and periodic tick | `<fill>` | **off** (default) · on only for non-commercial swarm work, by the owner's choice |
 | **Autonomy level** (CORE §3) | `<fill>` | **autonomous** — workers in auto mode, routine risky work and production writes when needed (backup first), report everything · cautious — `acceptEdits`, production read-only |
 | Production actions | `<fill>` | autonomous: whatever the task needs, backup before irreversible · cautious: only named actions |

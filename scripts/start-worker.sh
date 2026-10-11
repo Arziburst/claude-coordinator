@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start a named worker session in its own git worktree, with the safety settings applied.
-#   scripts/start-worker.sh --repo <project repo path> --name "APP-12 worker: Fix login" --branch 12-fix-login \
+#   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
