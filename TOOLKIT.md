@@ -93,7 +93,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   cost is an API-price estimate, on a subscription for comparing runs) — and a `transcript` line summed
   from `~/.claude/projects/`, subagents included: input and cache counts exact, **output a lower bound**
   (the transcript keeps the count from before a message finished). Record the `status` line when present,
-  else the `transcript` one marked as such. A model cannot see its own counter (the status line is drawn
+  else the `transcript` one marked as such, then delete that worker's `sessions/<id>.json` (the folder
+  holds only live sessions; the run log keeps the history). A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
