@@ -18,7 +18,9 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   (PowerShell, bash, zsh) on this machine; record them in `BINDINGS.md`. Use that platform's commands,
   paths and tools; never assume another OS. Where a project runs on several machines or OSes, bindings
   give each command per OS, and scripts meant for everyone are written to run on all of them (or say
-  which they need). The core itself stays OS-neutral. Then install the core's roles into
+  which they need). The core itself stays OS-neutral. Detect too whether the project has git, a code
+  host and a tracker; anything missing → say so in one line and use the mode in
+  [SOURCES.md](SOURCES.md) §3. Then install the core's roles into
   `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no question.
 - **Safety check:**
   - **Branch protection on the code host** — the main branch requires a PR, passing checks and (in the
@@ -122,8 +124,10 @@ a. **Goal:** the strictness (asked first, above); the product, its users, the cu
    sprint and what "done" means for it; solo or team.
 b. **Technology:** stack, build / run / test, environments (local, preview, staging, production), CI,
    deployment, where the owner or QA tests.
-c. **Tracking:** tracker, board, statuses, labels, sprint; what becomes an issue; what happens to the
-   owner's wishes; estimates.
+c. **Tracking and sources** ([SOURCES.md](SOURCES.md)): the sources-of-truth table (one main system per
+   kind, with the coordinator's rights), then "send everything useful you have" for the catalog; the
+   tracker, board, statuses, labels, sprint (no tracker → `TASKS.md`); what becomes an issue; what
+   happens to the owner's wishes; estimates.
 d. **The change flow** — walk it end to end and agree each step: task picked → branch → commits (format,
    how often) → push → draft PR → AI review → fixes → re-review → ready → human review (developer,
    business analyst) → fixes → merge (by whom) → deploy → cleanup. Offer the defaults; it will change as
