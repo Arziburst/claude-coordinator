@@ -22,6 +22,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
      yet*.
+   - **No Settings block in `PROJECT.md`** (written before it existed): offer once to move its
+     settings rows into the block at the top ([SETTINGS.md](SETTINGS.md)) — values unchanged, Source
+     `owner` or `preset` as found, Since the date of the move — on the owner's yes.
 4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
    scripts changed, re-run the hook's self-test. Always run `scripts/check-scripts` on the core copy

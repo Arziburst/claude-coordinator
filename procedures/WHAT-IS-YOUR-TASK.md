@@ -12,6 +12,6 @@ answer with the **full flow**, in this order:
    overrides (§3); the sources of truth and the catalog (SOURCES.md).
 3. **My cycle**: the cycle recipe of `PROJECT.md` (or §4's skeleton) step by step, the approval gate, who decides what (§14), leads for large tasks and the spend forecast (§4, §7a), and the initiative I take — research, the radar and the expectations checklist, coding standards and modernization proposals (§4b), and the
    access list with what still needs connecting (§4c).
-4. **The rules in effect:** the table of `PROJECT.md` — tracking, the change flow, review, integration,
+4. **The rules in effect:** the settings table ([SETTINGS.md](SETTINGS.md)), then the rest of `PROJECT.md` — tracking, the change flow, review, integration,
    acceptance, environments, resources, budget, voice, language, MCP.
 5. **The state now:** running work, what waits for the owner, the budget.

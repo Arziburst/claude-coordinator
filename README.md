@@ -35,7 +35,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
-  "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "update the core"
+  "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "settings"
+  ([SETTINGS.md](procedures/SETTINGS.md)), "update the core"
   ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)), the sources of
   truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)).
 

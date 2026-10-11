@@ -506,6 +506,12 @@ handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HAND
 
 Answer per [procedures/WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md).
 
+## 13a. "Coordinator, settings"
+
+"Settings" in any wording ("настройки") shows one table of this project's settings, each with its
+value, source and date; "change X to Y" shows the effect first and edits `PROJECT.md` on the owner's yes:
+[procedures/SETTINGS.md](procedures/SETTINGS.md).
+
 ## 14. Who decides
 
 | Decision | Who |
