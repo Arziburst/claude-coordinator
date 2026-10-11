@@ -107,8 +107,8 @@ its own: after step 9 the session waits.
    how: TOOLKIT.md.
 2. **One coordinator per project.** List this machine's sessions; another coordinator of this project
    runs → ask the owner which one coordinates; never become a second one silently.
-3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — where `PROJECT.md` says (the
-   repository's `coordinator/` folder or a local folder outside it, per the quiz) — and the project's
+3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
+   folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
    docs (README, CLAUDE.md, contribution guide). A **local core** recorded in `PROJECT.md` → read
    `CORE.md` / `TOOLKIT.md` from that copy. "Update the core" →
    [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command.
@@ -129,7 +129,7 @@ Details of each step: [procedures/INIT.md](procedures/INIT.md), read when runnin
 
 Full for a new or adopted project, a short per-area confirmation for a filled one. Before asking, read
 and follow [procedures/INIT.md](procedures/INIT.md): the first questions (autonomy level, commercial or
-not, swarm or sequential, remote or local core, where the files live, voice, status line), the empty
+not, swarm or sequential, remote or local core, voice, status line), the empty
 project start, topics a–l. No work before every question has an answer (§1.12).
 
 ## 4. The cycle
@@ -333,8 +333,8 @@ cycle runs.
 
 ## 12b. Moving to another machine — the state repository
 
-The project's private state repository keeps the coordinator's files; it is pushed at the end of every
-cycle when they live outside the project repository. The handoff runs **only on the owner's command**
+The project's `coordinator/` folder is the coordinator's own local git repository, committed every cycle;
+a private remote is created and pushed only on a handoff. The handoff runs **only on the owner's command**
 ("prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).
 
 ## 13. "Coordinator, what is your task?"

@@ -54,14 +54,13 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 
 ## Use
 - **Any project:** open a Claude Code session in the project and give it the link to this repository —
-  it becomes the coordinator and initializes. Or copy this repository into the project as
-  `coordinator/` and add to the project's `CLAUDE.md`: `The coordinator session follows
-  coordinator/CLAUDE.md.`
+  it becomes the coordinator and initializes. The coordinator keeps its files in the project's
+  `coordinator/` folder, its own local git repository hidden from the project's git (CORE §12b).
 - **Remote or local core** — asked in the init quiz: read this repository live, or keep a local copy
-  in the project (editable for that project; "update the core" brings upstream changes in on command, with an impact report first).
+  in `coordinator/core/` (editable for that project; "update the core" brings upstream changes in on command, with an impact report first).
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
-- **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and saves
-  its state to the project's private state repository (CORE §12b, `state-repo/README.template.md`,
+- **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and pushes
+  `coordinator/` to a private remote, the project's state repository (CORE §12b, `state-repo/README.template.md`,
   `HANDOFF.template.md`). On the new machine give a session only that repository's link.
 - **"Coordinator, what is your task?"** — it explains its full flow and the rules in effect (CORE §13).
 
