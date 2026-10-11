@@ -5,7 +5,7 @@ another. Same authority as `CORE.md`; the hard rules of CORE §1 apply (§1.13 a
 
 ## 1. Sources of truth — one main system per kind
 
-Asked at init (INIT, topic c), recorded in `PROJECT.md` (*Sources of truth*). First detect what exists:
+Asked at init (INIT 3.1, question 4), recorded in `PROJECT.md` (*Sources of truth*). First detect what exists:
 the repository, its remote, the connected MCP servers (tracker, design, docs), links in README /
 CLAUDE.md / the docs. Then show the table with a proposal per row and ask "confirm, or fix rows":
 
@@ -65,7 +65,7 @@ whole drive, mailbox or chat history.
 
 ## 3. Missing tools — no tracker, no code host, no git
 
-Detected at init (INIT, *Platform*), said to the owner in one line, recorded in `PROJECT.md`:
+Detected at init (INIT, *Platform* and 3.2), said to the owner in one line, recorded in `PROJECT.md`:
 
 - **No tracker** → the tasks live in `coordinator/TASKS.md`: one row per task — `T-<n>`, title,
   status (Backlog / Todo / In Progress / Testing / Done), branch, PR or commit, sources (`S-<n>`). It is
