@@ -42,6 +42,8 @@ block	work	Remove-Item -Path ~ -Recurse
 allow	work	git push
 allow	work	git push origin 12-fix-login
 allow	work	git push -u origin 12-fix-login
+# the state repository's branch (CORE §12b) is not protected
+allow	work	git push -u origin state
 allow	work	git push --force origin 12-fix-login
 allow	work	git push origin --delete 12-fix-login
 allow	work	git push origin HEAD

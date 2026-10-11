@@ -81,7 +81,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    confirm or fix rows; then "send everything useful you have" for the catalog.
 5. **State repository — where does it live?** `coordinator/` is always a local git (3.4); the question
    is its remote, **always private**: *the owner's account* (recommended solo) —
-   `gh repo create <owner>/<project>-coordinator-state --private`; *the team's organization*
+   `gh repo create <owner>/<project>-coordinator-state --private`, first push `git push -u origin state`; *the team's organization*
    (recommended for a team); *local only* — warn: a lost disk or a move without a handoff loses the
    journal, the rules and the decisions. With a remote: verify `PRIVATE` (`gh repo view --json
    visibility`), push after every cycle, record the link in `BINDINGS.md`, offer a pointer the next
@@ -135,7 +135,8 @@ with one line at the summary or later.
   to claude-coordinator (§10), with the owner's yes.
 - **`coordinator/`** is the coordinator's own local git repository (the **state repository**, §12b),
   ignored by the project's git through `.git/info/exclude`, so the project's history, PRs and the client
-  see none of it. Create it if missing — `git -C coordinator init`, add `coordinator/` to the project's
+  see none of it. Create it if missing — `git -C coordinator init`, then `git -C coordinator symbolic-ref HEAD
+  refs/heads/state` before the first commit (its branch is always `state`, §12b), add `coordinator/` to the project's
   `.git/info/exclude`, first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
   commit at the end of every cycle and push where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
