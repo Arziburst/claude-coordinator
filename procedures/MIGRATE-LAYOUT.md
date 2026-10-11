@@ -29,7 +29,8 @@ other clones and teammates, and the one yes this needs.
 2a. **No local core:** clone claude-coordinator to a scratch folder, copy its files into
    `coordinator/core/`, record that commit in `PROJECT.md`, and point the worker safety file, the
    status line and `BINDINGS.md` at `coordinator/core/scripts/`.
-3. **Create the repository:** `git -C coordinator init`, add the entry `README.md` from
+3. **Create the repository:** `git -C coordinator init`, `git -C coordinator symbolic-ref HEAD
+   refs/heads/state` (its one branch, CORE §12b), add the entry `README.md` from
    `state-repo/README.template.md` if missing, `git -C coordinator add -A`, commit.
 4. **Tracked only — untrack in the project, keep on disk:** in a separate worktree of the project
    (`git worktree add <scratch>/untrack -b <branch>`, so this working copy is never switched),

@@ -488,6 +488,11 @@ the first worker is due. Nothing changes until the owner approves; then the real
 ## 12b. Moving to another machine — the state repository
 
 The project's `coordinator/` folder is the coordinator's own local git repository, committed every cycle.
+Its one branch is always **`state`**, also the remote's default branch: `main` and `master` are
+protected (the safety hook blocks direct pushes to them), `state` is not.
+A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
+-m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the
+old remote branch is deleted by the owner (the hook blocks it).
 Its remote, chosen at init, is **always private**: the owner's account or the team's organization,
 pushed after every cycle; or none (local only, lost with the disk). Finding it on a new machine and the
 handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).
