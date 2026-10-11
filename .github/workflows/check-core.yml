@@ -1,0 +1,19 @@
+name: check-core
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Links and section references
+        run: python3 scripts/check-core.py
+      - name: The example contract in CONTRACT.md passes the contract check
+        run: |
+          python3 - > /tmp/example.md <<'PY'
+          s = open('CONTRACT.md', encoding='utf-8').read()
+          print(s.split('```yaml\n', 1)[1].split('```', 1)[0])
+          PY
+          python3 scripts/check-contract.py /tmp/example.md

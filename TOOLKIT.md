@@ -90,6 +90,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
+## Checks
+- `scripts/check-contract.py <contract>` — a contract against CONTRACT.md (CORE §4); `scripts/check-core.py`
+  — the core's links and § references (CORE §10). Python 3, standard library only: `python3` on macOS /
+  Linux, `py -3` on Windows (install Python if missing — the init's platform step notes it).
+
 ## Usage and limits
 - The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
