@@ -27,7 +27,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
-- [roles/](roles/) — role definitions: [verifier.md](roles/verifier.md), the independent reviewer.
+- [roles/](roles/) — role definitions: [worker.md](roles/worker.md) implements a contract,
+  [verifier.md](roles/verifier.md) reviews it independently, [scout.md](roles/scout.md) condenses long
+  logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "update the core"
