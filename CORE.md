@@ -159,7 +159,7 @@ The continuous work:
    scope owner (commercial: the owner / business analyst, waits for the sprint; otherwise the owner);
    starts only on their yes (§1.11). Split what would fill a worker's context; one task per worker with
    a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
-   expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract.py` must
+   expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named**: `<KEY>-<task> <title>`
    for workers (e.g. `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator`, `<KEY>-<task>
@@ -304,8 +304,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   this core on the owner's yes (with a local core: the local copy first, and proposed to claude-coordinator
   if it helps every project). A lesson only in memory is lost.
 - **Layering:** the principle here or in `PROJECT.md`; the command, path or number in `BINDINGS.md`.
-- **A core change passes `scripts/check-core.py`** (links and § references) before it is proposed; CI runs
-  it on every pull request to claude-coordinator.
+- **A core change passes `scripts/check-core`** (.sh / .ps1: links and § references) before it is proposed; CI runs
+  both on every pull request to claude-coordinator. Scripts follow one style (TOOLKIT *Scripts*).
 
 ## 11. Bookkeeping
 

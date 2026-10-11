@@ -15,8 +15,7 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
    - after the owner's yes, the Claude layers are the single source; retiring the old formats is a
      refactor task the owner approves.
 - **Platform:** detect the operating system (Windows, macOS, Linux) and the shells available
-  (PowerShell, bash, zsh) on this machine, and Python 3 for the checks (`python3` / `py -3`; missing →
-  tell the owner); record them in `BINDINGS.md`. Use that platform's commands,
+  (PowerShell, bash, zsh) on this machine; record them in `BINDINGS.md`. Use that platform's commands,
   paths and tools; never assume another OS. Where a project runs on several machines or OSes, bindings
   give each command per OS, and scripts meant for everyone are written to run on all of them (or say
   which they need). The core itself stays OS-neutral. Then install the core's roles into
