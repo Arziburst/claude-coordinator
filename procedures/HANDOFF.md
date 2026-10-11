@@ -45,7 +45,8 @@ holding the coordinator's files —
   `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
   context already known: clone the project, clone the state repository into its `coordinator/` and add
   `coordinator/` to the project's `.git/info/exclude`, re-detect the platform and the "re-detect" rows, check the
-  logins and the safety setup, confirm the quiz briefly, dry run (§12a) — including which interrupted
+  logins and the safety setup, confirm the quiz briefly, offer the machine rows of
+  [ONE-TIME.md](../ONE-TIME.md) missing for this `hostname` in `CHECKLIST.md`, dry run (§12a) — including which interrupted
   tasks it would restart — then wait for the owner.
 - After the move only the new machine's coordinator writes the state repository; the old one stops (a
   push it still tries fails the fast-forward check above). The state repository holds internal project

@@ -25,6 +25,7 @@ with the client.
 | `LOG.md` | the coordinator's journal |
 | `RUNS.tsv` | the run log: model, cost, tokens and result per run (CORE §7) |
 | `ROUTING.md` | the model and effort per kind of task, adjusted automatically from the run log (CORE §7) |
+| `CHECKLIST.md` | the one-time settings and checks that ran here, per project and per machine (`core/ONE-TIME.md`) |
 | `core/` | the local copy of the coordinator core, at the commit recorded in `PROJECT.md` |
 | `SOURCES.md`, `sources/` | the source catalog and the files the owner gave (masked summaries; raw files never leave this private repository) |
 | `TASKS.md` | only without a tracker: the tasks and their statuses |

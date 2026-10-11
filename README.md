@@ -26,6 +26,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
+- [ONE-TIME.md](ONE-TIME.md) — one-time settings and checks, like migrations: each project's
+  `coordinator/CHECKLIST.md` records which ran, so "update the core" asks only the new ones.
 - [roles/](roles/) — role definitions: [worker.md](roles/worker.md) implements a contract,
   [lead.md](roles/lead.md) runs a large task through its own workers and returns one PR,
   [tester.md](roles/tester.md) writes its failing tests first,

@@ -147,7 +147,9 @@ with one line at the summary or later.
 
 Write `PROJECT.md` / `BINDINGS.md` from the answers, the findings and the defaults; show one summary
 grouped by section — asked, found, by default, and the differences with existing rules — and ask "yes,
-or fix these rows". Then the dry run (CORE §12a).
+or fix these rows". On the yes, write `coordinator/CHECKLIST.md` ([ONE-TIME.md](../ONE-TIME.md)): a line for
+every catalog row — the settings as answered, the checks as run in the setup (`done`, `failed`, `n/a`)
+or offered and `declined`. Then the dry run (CORE §12a).
 
 ### 3.6 Scenarios
 

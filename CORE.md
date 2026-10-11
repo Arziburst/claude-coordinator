@@ -172,6 +172,11 @@ A `PROJECT.md` written before presets has no strictness row: map its answers (ow
 swarm; commercial, sequential, humans merge → strict; anything between → standard plus overrides), show
 the mapping and record it on the owner's yes.
 
+**One-time steps** (settings and checks such as the strictness, the spend level, the hook's self-test)
+are listed in [ONE-TIME.md](ONE-TIME.md); `coordinator/CHECKLIST.md` records which ran in this project.
+The init quiz fills it; every "update the core" offers the steps added since, so a project initialized
+under an older core is asked the new ones instead of getting their defaults silently.
+
 ## 4. The cycle
 
 On the owner's **"start a new cycle"** (any wording: "стартуем новый цикл", "run the cycle") or — only

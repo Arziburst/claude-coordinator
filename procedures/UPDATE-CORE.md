@@ -8,12 +8,20 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    (MIGRATE-LAYOUT), shown in the report.
 2. **What changed upstream:** clone claude-coordinator to a scratch folder; the commits and files since
    the recorded commit. The core is every file a coordinator reads: `CORE.md`, `TOOLKIT.md`,
-   `CONTRACT.md`, `roles/`, `procedures/`, the scripts.
+   `CONTRACT.md`, `ONE-TIME.md`, `roles/`, `procedures/`, the scripts.
 3. **Impact report to the owner, before changing anything:**
    - per change: what it does and what it changes in this project's work (briefs, review, models, init);
    - every line of `PROJECT.md` / `BINDINGS.md` that now overlaps or disagrees with the new core — the
      project rule still wins, the owner decides whether to keep, adapt or drop it;
    - each upstream change that conflicts with a local edit, and the proposed resolution;
+   - **Not done yet:** every row of the new core's [ONE-TIME.md](../ONE-TIME.md) with no line in
+     `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
+     by `hostname`), and every row whose newest line is `failed`. A setting is asked with its default
+     first; a check is offered as "run now? yes/no".
+   - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
+     value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
+     it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
+     yet*.
 4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
    scripts changed, re-run the hook's self-test. Always run `scripts/check-scripts` on the core copy
@@ -21,6 +29,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
    runs until the next worker is due. Then
    install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
+   Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*
+   and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
+   unless the owner asks.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
    [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
