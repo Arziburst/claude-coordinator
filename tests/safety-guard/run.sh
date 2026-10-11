@@ -17,7 +17,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd; do
   n=$((n + 1))
   dir="$tmp/$branch"; command -v cygpath >/dev/null 2>&1 && dir="$(cygpath -m "$dir")"   # Git Bash -> C:/...
   json="$(printf '%s' "$cmd" | awk -v cwd="$dir" '
-    { gsub(/\\n/, "\001"); gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n")
+    { gsub(/\\n/, "\001"); gsub(/\\t/, "\002"); gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n"); gsub(/\002/, "\\t")
       printf "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"%s\"},\"cwd\":\"%s\"}", $0, cwd }')"
   printf '%s' "$json" | CLAUDE_PROJECT_DIR="$dir" "$@" >/dev/null 2>&1
   rc=$?
