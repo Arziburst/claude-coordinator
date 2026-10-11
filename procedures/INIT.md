@@ -70,6 +70,9 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    research: *swarm* for an own project in a rush; *standard* when the owner wants to approve each block
    and the risky merges; *strict* for client work reviewed by people. In every preset a worker works on
    its own inside its task and returns a finished PR. Then: which rows, if any, this project overrides.
+   With it, the **spend level** (CORE §7): *balanced* (recommended) · *lean* when limits are tight or the
+   plan is small · *thorough* when mistakes cost more than tokens. It leans model and effort choices,
+   never removes a check or a rung.
 2. **What we build:** the product, for whom, the current milestone and what "done" means for it —
    proposed from the README, the board, a plan document.
 3. **Who is who:** solo or team; who owns the scope; who accepts work, how and where (the owner, QA, a
@@ -87,8 +90,8 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    filled in; confirm (CORE §5).
 7. **Production** — only if the project has one: real users or money; the backup before an
    irreversible change (command, destination); release flags for what acts on real users.
-8. **Budget:** usage caps (default: weekly 90%, short window 95%, over only with permission) and the
-   models available (CORE §7).
+8. **Budget:** usage caps (default: weekly 90%, short window 95%, over only with permission). The
+   models are not asked: the ladder is detected (CORE §7) and shown in 3.2.
 9. **Status line** — only when this Claude Code has none (no `statusLine` in the user or project
    settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
    coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
@@ -108,7 +111,7 @@ Stack; build / run / test / lint commands; environments and deploy; CI layout; M
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
 per-worker isolation (working copies, ports, databases, containers); shared resources; serial
-identifiers (migration versions); the machine's platform; technologies without a connected MCP server
+identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one probe per model, list prices); first cost estimates per model from the project's existing transcripts (CORE §7a); technologies without a connected MCP server
 (code host, tracker, design, database, hosting, docs, browser) — propose the matching servers, the owner
 decides what is connected and with which rights; whether git, a code host and a tracker exist
 (missing → [SOURCES.md](SOURCES.md) §3). Existing rules in other formats are merged as *Details of the

@@ -13,6 +13,7 @@ owner said yes to the summary (CORE §1.12).
 |---|---|---|
 | **Strictness** (CORE §3) | `<fill>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
 | Overrides of the preset (row and value) | `<fill>` | none |
+| **Spend level** (CORE §7) | `<fill>` | lean · **balanced** · thorough — which way model and effort choices lean; never removes a check or a rung |
 | Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
@@ -147,7 +148,9 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Question | This project | Default to offer |
 |---|---|---|
 | Usage caps | `<fill>` | weekly 90%, short window 95%; over only with permission |
-| Models available | `<fill>` | Fable (own limit), Opus, Sonnet, Haiku |
+| Model pins (kinds automatic routing must not change, CORE §7) | `<fill>` | none — the coordinator routes every kind itself |
+| Leads (CORE §4, roles/lead.md) | `<fill>` | for tasks whose pieces must land together (3+ sub-contracts, more than one worker's context); up to 3 workers per lead, within the preset's parallel workers |
+| Spend forecast and report (CORE §7a) | `<fill>` | the block's estimate in cost and limit percent in the plan; forecast vs actual in the block report |
 | Time estimates | `<fill>` | strict: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic · swarm, standard: none |
 | Time tracking | `<fill>` | strict: a timesheet draft shown to the owner before it is written · swarm, standard: none |
 

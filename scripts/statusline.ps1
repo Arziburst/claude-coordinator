@@ -5,11 +5,17 @@
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $raw = [Console]::In.ReadToEnd()
-$dir = Join-Path $HOME '.claude/coordinator'
+$dir = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'coordinator'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)
 Set-Content -Path $tmp -Value $raw -Encoding utf8 -NoNewline
 Move-Item -Force $tmp (Join-Path $dir 'statusline.json')
+# A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
+# session to draw its status line, whichever that was).
+if ($raw -match '"session_id"\s*:\s*"([^"]+)"') {
+  $sdir = Join-Path $dir 'sessions'; New-Item -ItemType Directory -Force $sdir | Out-Null
+  Set-Content -Path (Join-Path $sdir ($Matches[1] + '.json')) -Value $raw -Encoding utf8 -NoNewline
+}
 
 try { $j = $raw | ConvertFrom-Json } catch { 'Claude'; exit 0 }
 

@@ -147,8 +147,9 @@ an empty folder, an existing project, an older coordinator and a new machine. Th
 are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before the quiz is complete
 (§1.12).
 
-**Strictness** is asked first: one preset sets the defaults below; `PROJECT.md` records it and any row
-it overrides. In every preset a worker works on its own inside its task and returns a finished PR;
+**Strictness** is asked first, with the **spend level** next to it (lean / balanced / thorough, §7):
+the preset sets the owner's gates below, the level which way model and effort choices lean; any of the
+nine pairs is valid. `PROJECT.md` records both and any row the project overrides. In every preset a worker works on its own inside its task and returns a finished PR;
 strictness only places the owner's gates between tasks.
 
 | | swarm | standard | strict |
@@ -175,7 +176,7 @@ On the owner's **"start a new cycle"** (any wording: "стартуем новы�
 where `PROJECT.md` enables it — the periodic tick (§9), run the **cycle recipe in `PROJECT.md`** step by
 step. Without one, this skeleton:
 
-1. **Sync:** merged and open PRs, their checks, running workers, limits.
+1. **Sync:** merged and open PRs, their checks, running workers, limits (stale status files pruned, TOOLKIT *Usage*).
 2. **Clean up** merged, fully pushed work (§8): stop its processes (dev servers, containers, database
    stacks), remove its working copies and sessions. Unfinished work is left alone; anything unclean is
    reported, not deleted.
@@ -195,12 +196,18 @@ The continuous work:
 2. **Plan only planned work** (sprint, board, milestone). Needed but unplanned → file an issue for the
    scope owner (the owner, or the business analyst where `PROJECT.md` says so); it starts per the
    strictness (§3): queued under swarm's standing approval, otherwise on their yes (§1.11). Split what
-   would fill a worker's context; one task per worker with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
+   would fill a worker's context into tasks of the board when the pieces can land one by one; when they
+   must land together (one feature across several areas, three or more sub-contracts, more than one
+   worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
+   session on an integration branch that splits it into sub-contracts, runs and verifies their
+   workers and returns one PR and one report. A lead is one more strong-model context, so ordinary
+   tasks go to a worker directly; leads and their workers count toward the preset's parallel workers.
+   One task per worker or lead with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
    expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
-   with a reticle per hand`), `researcher: <topic>`, `Coordinator` (how: TOOLKIT); the role is the role file's
+   with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, `Coordinator` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
@@ -312,20 +319,89 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 
 ## 7. Models and effort
 
-Claude only. Per task, weigh **difficulty and risk (§5) against the remaining budget**:
+Claude only. Per task, weigh **difficulty and risk (§5) against the remaining budget**. The table names
+**rungs**, not models: which model stands on which rung depends on the subscription and is detected,
+never assumed (below).
 
-| Task | Model | Effort |
+| Task | Rung | Effort |
 |---|---|---|
-| trivial: docs, small tooling, mechanical edits, research summaries, small reviews | light (Sonnet; Haiku for the most mechanical) | low–medium |
-| ordinary product work | strong (Opus) | medium |
-| hard or risky (architecture, money, security, concurrency, rendering, input) | Opus | high |
-| the hardest problems, unexplained failures | top (Fable or newer) | xhigh–max |
+| trivial: docs, small tooling, mechanical edits, research summaries, small reviews | light | low–medium |
+| ordinary product work | strong | medium |
+| hard or risky (architecture, money, security, concurrency, rendering, input) | strong | high |
+| the hardest problems, unexplained failures | top | xhigh–max |
 
-- **Plenty of budget →** a level up where quality matters. **Tight →** a level down for routine; the top
-  model only where truly needed. A model with its own limit spares a tight main one.
+- **The ladder** (`BINDINGS.md`, *Models*): the available models, cheapest first, each on a rung — e.g.
+  light Haiku / Sonnet, strong Opus, top Fable; on a plan without Fable the top rung is Opus; where the block forecast (§7a)
+  shows ordinary work on Opus would not fit the limits, strong is Sonnet and Opus moves to top. A missing rung takes the
+  next one down. A model with its own limit (Fable on some plans) spares the main one.
+- **Detected, not asked:** the coordinator learns what it needs. *Hint, free, at every start:*
+  `claude auth status` — the login method and `subscriptionType` (e.g. `max`; undocumented, so a hint,
+  never proof). *Available:* one probe per model (`claude -p --model <m> "ok"`; it loads the full
+  prompt, ≈ $0.75 at list price for four models) at init, when the hint changes, once a week, and after
+  any run that fails with "model not available" or a model's own limit ("You've hit your Opus limit")
+  — that model leaves the ladder until the next probe. *Price:* from the run log and the status line (§7a) — limit
+  percent per run, so a plan change shows up in the numbers and the ladder follows without a rule change.
+- **Spend level** (`PROJECT.md`, set at init next to the strictness): **lean**, **balanced** (default)
+  or **thorough**. It does not forbid any rung — a lean project still sends the hardest problem to the
+  top rung, a thorough one still sends a typo to the light one. It sets **which way to lean** when two
+  neighbouring rungs or efforts both fit (lean: the lower; balanced: the table; thorough: the higher)
+  and how routing moves (below).
+- **Floors, at every level:** risk-tier work (§5) runs on Opus with high effort, or on the top rung with
+  high where Opus is missing; the quality checks (contract, oracles, independent review, green CI) never
+  depend on the level.
 - A worker failing on a usage limit restarts on another model; one failing review for a reason a stronger
   model would fix restarts on its contract's `escalate_to`.
-- Keep this table current; `BINDINGS.md` may pin exact ids.
+- **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
+  coordinator writes it — a lead's runs come in its report): one line per finished worker, lead,
+  tester, reviewer or researcher run — date · task (`37`, or `37.2` under a lead) · role · kind (a row
+  of the table) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
+  the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
+  per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
+  `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
+- **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
+  under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
+  this table, and every run uses it. It learns from the run log, balancing quality, price and limits:
+  - **cheaper when proven:** a kind with enough first-pass approvals tries one level down on its next 5
+    runs — lean: 5 of its last 5; balanced: ≥ 90% of its last 10; thorough: every one of its last 15;
+    kept if they hold ≥ 80%, otherwise reverted;
+  - **stronger when failing:** reworks or escalations in a kind's last 5 runs → one level up — lean: 3;
+    balanced: 2; thorough: 1;
+  - **limits**, against the project's caps (§9; status line, TOOLKIT *Usage*): 5-hour or weekly use
+    within 20 points of its cap → routine kinds one level down; within 10 points → routine on the
+    light model only, heavy work waits for the reset; at the cap §9 wins — no new workers;
+  - **floors:** the floors above; a kind the owner pins in `PROJECT.md` is never changed;
+  - a level is a model or effort step on the ladder; routing never uses a model the ladder lacks.
+  Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
+  the numbers behind it.
+- Keep this table current; the ladder in `BINDINGS.md` holds the exact ids.
+
+## 7a. Spend: forecast and analysis
+
+The coordinator's job, not a lead's or a worker's: only it sees every task, the limits and the run log.
+- **The unit is cost at list price**, not tokens: most of a run's tokens are cheap cache reads (98% on Arx),
+  so tokens measure context times turns, and they weigh differently per model. Cost is the
+  `scripts/session-tokens` `cost` line (the status line's, cumulative), or, where a session never drew
+  one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
+- **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
+  will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs). No history →
+  seeded at init from the project's existing transcripts (`scripts/session-tokens` over
+  `~/.claude/projects/<project>/`, per model; on Arx this changed the first guess about 10×), else the
+  coordinator's own estimate; either is marked `guess` in the plan.
+- **Limit percent per dollar:** the limits are shown as whole percents, so one cycle rarely moves them
+  enough to read. The ratio is the limit's rise since its reset over the run log's cost since then,
+  the coordinator's own lines included — recomputed every cycle, trusted once the window has risen
+  10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
+  models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
+  it gets its own ratio. A model's own limit (above) is tracked apart.
+- **Block forecast:** the plan shows the block's estimate in cost and limit percent against
+  what is left before the caps (§9), the 5-hour window included. It does not fit → a smaller block, or the owner decides (over a cap only
+  with permission).
+- **Analysis after the block:** one report line — forecast vs actual (cost, percent, deviation), the
+  worst overrun by task, reworks and escalations. A task over twice its estimate is looked at: a wrong
+  kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
+  Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
+- The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
+  can be measured later from the same data.
 
 ## 8. Resources, parallel work and cleanup
 
@@ -417,5 +493,5 @@ Answer per [procedures/WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md).
 | Goal, scope, priorities; look and feel; business values; accepting work | **owner** (or the role `PROJECT.md` names, e.g. a business analyst for scope) |
 | Project rules, change flow, exceeding a budget, outward or irreversible actions, changing or cancelling any rule (§1.16) | **owner** — the coordinator proposes |
 | Breakdown, order, worker / model / effort, review depth within `PROJECT.md`, resources, cleanup, bookkeeping | **coordinator** |
-| Implementation inside a task's contract | **worker** |
+| Implementation inside a task's contract | **worker**; for a large task the **lead** splits and integrates it |
 | Technical disagreements a worker cannot settle | coordinator; the owner if it changes the product, budget or rules |

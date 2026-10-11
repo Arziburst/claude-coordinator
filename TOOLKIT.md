@@ -13,7 +13,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
 - **Session or subagent, per role:** `worker` — a background session in its own working copy (named
   `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
-  `PROJECT.md` allows; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
+  `PROJECT.md` allows; `lead` — a background session (`#<task> lead: …`) in its integration branch's
+  working copy, started like a worker, which itself starts its workers (`#<task>.<n> worker: …`) and
+  runs tester, verifier and scout as its own subagents — a background session can start
+  further background sessions (confirmed on Claude Code 2.1.296, Windows); if a version refuses, the
+  lead sends its start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
   `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
   session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
@@ -32,7 +36,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `tester`, `verifier`, `scout`, `researcher`. They are part
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`. They are part
   of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
@@ -150,10 +154,32 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
 
 ## Usage and limits
-- The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
+- **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and
+  `subscriptionType` (e.g. `max`; seen on 2.1.296, not in the docs, so a hint); the status line gives
+  the 5-hour and weekly use on Pro / Max only, with no per-model entry. Probe a model with
+  `claude -p --model <id> "ok" --output-format json`: a non-zero exit or an error result means not
+  available. A probe loads the full system prompt and tools, so it is not free (on Arx at list price:
+  Fable $0.47, Opus $0.18, Sonnet $0.09, Haiku $0.005). A model's own limit shows only as a message ("You've hit your Opus
+  limit"); switching family keeps working. List prices: the Claude pricing page, copied into BINDINGS.
+  [model-config](https://code.claude.com/docs/en/model-config.md)
+- **Tokens and cost per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
+  `scripts/session-tokens.ps1`; the 8-character id that `claude --bg` and `claude agents` print works
+  as a prefix) when the run ends. It prints one line per model and a `total` line summed from the
+  transcript in `~/.claude/projects/`, subagents included — input and cache counts exact, **output a
+  lower bound** (the transcript keeps the count from before a message finished) — and a `cost` line:
+  the status line's `cost.total_cost_usd` for that session (cumulative, at API list price; on a
+  subscription for comparing runs; needs the status line installed). The status JSON's
+  `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
+  session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
+  per model times the list prices. Then delete that worker's `sessions/<id>.json`; the status line
+  writes a file for every session on the machine, other projects' too, so at every cycle start run
+  `session-tokens --prune` (deletes files older than 7 days). A model cannot see its own counter (the status line is drawn
+  by the CLI), so a worker's self-reported tokens are a guess.
+- Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
-  save it to `~/.claude/coordinator/statusline.json` for the coordinator to read and print
+  save it to `~/.claude/coordinator/statusline.json` (the last session to draw) and to
+  `~/.claude/coordinator/sessions/<session_id>.json` (one per session) for the coordinator to read, and print
   `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`.
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
