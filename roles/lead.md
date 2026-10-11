@@ -33,12 +33,13 @@ worker (BINDINGS) and the phrase that ends your report.
 5. **Integrate on your branch only.** Merge each approved sub-branch into the integration branch
    (a local merge and a push, no PR of its own), run the definition-of-done checks there, and merge
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
-   protected branches. Remove a worker's session and working copy once its work is merged into your
-   branch and pushed (CORE §8).
+   protected branches. Once a sub-branch's head is in your pushed integration branch
+   (`git merge-base --is-ancestor`), remove its worker: `claude stop` and `claude rm` the session,
+   `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8).
 6. **Spend.** When each worker, tester or verifier run ends, read its tokens with
    `scripts/session-tokens` (never a worker's own count), keep them for the report and delete that
-   run's status file as TOOLKIT *Usage* says. A run over twice
-   its estimate, or the total heading past the parent budget → start nothing new; tell the coordinator
+   run's status file as TOOLKIT *Usage* says. A run over twice its estimate, or the total heading past
+   the parent budget → start nothing new; tell the coordinator
    the numbers, what is left and the options (continue, cut scope, stronger or cheaper model).
 7. **Finish.** Open the PR the parent contract names, from the integration branch, and return the
    report (CONTRACT.md *The report*) with every parent criterion's evidence, plus `runs`: one entry per
