@@ -136,7 +136,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
   (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
   escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
-  `[char]0x00A7`: 5.1 reads a BOM-less script as ANSI).
+  `[char]0x00A7`: 5.1 reads a BOM-less script as ANSI). In a double-quoted string or here-string,
+  a variable followed by `:` is read as a drive-qualified name and the file stops parsing:
+  write `"${Issue}: $title"`, not `"$Issue: $title"` (it broke a project's start-worker wrapper).
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
@@ -152,6 +154,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
+  `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
+  parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
+  installed. A language with no shell on the machine is listed as skipped, never as passed. Run it on
+  the project's coordination scripts too (CORE §12a, UPDATE-CORE).
 
 ## Usage and limits
 - **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and

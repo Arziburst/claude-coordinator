@@ -15,6 +15,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Build / run / test / lint / typecheck commands | `<fill>` |
 | Definition-of-done checks | `<fill>` |
 | Start a worker (with its session name, model, effort, working copy) | `<command>` |
+| Coordination scripts (the project's own wrappers around the core; `check-scripts` runs on them, CORE §12a) | `<folders, or none>` |
 | Models — the ladder (CORE §7) (re-detect) | light `<id>` · strong `<id>` · top `<id>` or none; own limits `<e.g. Fable>` and whether they also count toward the weekly one `<owner, from /usage>`; list prices per million tokens (input / output / cache read / cache write at the 1-hour price, TOOLKIT *Usage*) `<fill>`; probed `<date>`, login method and `subscriptionType` `<from claude auth status>` |
 | Start a reviewer | `<command>` |
 | List / stop / remove workers | `<commands>` |

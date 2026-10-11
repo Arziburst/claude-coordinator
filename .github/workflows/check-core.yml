@@ -34,6 +34,28 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: .\scripts\check-core.ps1
+      - name: Every script parses, and a broken one is reported (bash)
+        if: runner.os != 'Windows'
+        run: |
+          bash scripts/check-scripts.sh scripts
+          out="$(bash scripts/check-scripts.sh tests/check-scripts/broken)" && { echo "broken scripts must fail"; exit 1; }
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q '^tests/check-scripts/broken/bad\.sh:[0-9]*: '
+          printf '%s\n' "$out" | grep -q "^tests/check-scripts/broken/bad\.ps1:3: Variable reference is not valid. ':' was not followed by a valid variable name character"
+          printf '%s\n' "$out" | grep -qx 'check-scripts: 3 files, 2 errors'
+      - name: Every script parses, and a broken one is reported (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          .\scripts\check-scripts.ps1 scripts
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $out = @(.\scripts\check-scripts.ps1 tests/check-scripts/broken)
+          if ($LASTEXITCODE -ne 1) { "broken scripts must fail"; exit 1 }
+          $out
+          if (-not ($out -match '^tests/check-scripts/broken/bad\.sh:\d+: ')) { 'bad.sh not reported'; exit 1 }
+          if (-not ($out -match "^tests/check-scripts/broken/bad\.ps1:3: Variable reference is not valid")) { 'bad.ps1 not reported'; exit 1 }
+          if (-not ($out -ceq 'check-scripts: 3 files, 2 errors')) { 'wrong summary'; exit 1 }
+          exit 0
       - name: The example contract in CONTRACT.md passes the contract check (bash)
         if: runner.os != 'Windows'
         run: |
@@ -125,6 +147,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
+          diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
           home="$RUNNER_TEMP/home"; mkdir -p "$home"
