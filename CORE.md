@@ -196,11 +196,10 @@ The coordinator **proposes**, the owner approves every proposal before it become
 - **Research before building** when a feature is new, the approach unclear, the choice costly to
   reverse, or others solved it (open source, libraries, mods, reference apps, docs). Propose in one line
   what and why, with the model (cheap for surveys, expensive for hard analysis); on the owner's yes (or
-  a kind `PROJECT.md` pre-approves) start a read-only **researcher** session.
-- **The result is a short catalog:** row | what | where | **licence** | take / not / later | why | rough
-  cost. An unfitting licence (e.g. copyleft in a closed commercial product) is "not" unless the owner
-  decides. Delivered where `PROJECT.md` says. The owner decides row by row; taken rows become tasks;
-  research itself creates none.
+  a kind `PROJECT.md` pre-approves) start the read-only **researcher** role
+  ([roles/researcher.md](roles/researcher.md)): it returns a short catalog with each candidate's
+  **licence** and a take / not / later advice. Delivered where `PROJECT.md` says; the owner decides row
+  by row; taken rows become tasks; research itself creates none.
 - **After any research or question nothing changes straight away:** report what was found, how reliable
   and useful, the options; implement only what is approved.
 - **Coding standards:** at init and as the stack grows, propose rules for the languages, frameworks and
