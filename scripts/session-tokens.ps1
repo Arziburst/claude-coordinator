@@ -1,15 +1,20 @@
-# Tokens a Claude Code session used (Windows; macOS / Linux: session-tokens.sh — see it for the format).
-#   pwsh -File scripts/session-tokens.ps1 <session-id | transcript.jsonl>
+# Tokens a Claude Code session used (Windows; macOS / Linux: session-tokens.sh - same lines, see it).
+#   powershell -File scripts/session-tokens.ps1 <session-id | transcript.jsonl>     (or: pwsh -File ...)
 # "status" line: the CLI's own totals from ~/.claude/coordinator/sessions/<id>.json (preferred).
 # "transcript" line: summed from the transcript and its subagents; output is a LOWER BOUND.
-param([Parameter(Mandatory)][string]$Session)
+# Exit 1 when neither exists.
+param([string]$Session)
+if (-not $Session) { Get-Content -LiteralPath $PSCommandPath -TotalCount 5 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 $ErrorActionPreference = 'Stop'
+$cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
+# numbers as RUNS.tsv expects them (1.23, not 1,23 on a Russian or German Windows)
+[Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } else {
-  $main = Get-ChildItem -Path (Join-Path $HOME '.claude/projects') -Filter "$Session.jsonl" -Recurse -Depth 1 -File |
+  $main = Get-ChildItem -Path (Join-Path $cfg 'projects') -Filter "$Session.jsonl" -Recurse -Depth 1 -File |
     Select-Object -First 1 -ExpandProperty FullName
 }
 $sid = if ($main) { [IO.Path]::GetFileNameWithoutExtension($main) } else { $Session }
-$status = Join-Path $HOME ".claude/coordinator/sessions/$sid.json"
+$status = Join-Path $cfg "coordinator/sessions/$sid.json"
 if (Test-Path $status) {
   $s = Get-Content -Raw $status | ConvertFrom-Json
   $si = $s.context_window.total_input_tokens; $so = $s.context_window.total_output_tokens
@@ -37,4 +42,4 @@ if ($main) {
     $r += [long]$u.cache_read_input_tokens; $w += [long]$u.cache_creation_input_tokens
   }
   "transcript`t{0}`tin={1} out>={2} cache_read={3} cache_write={4}" -f ($i + $o + $r + $w), $i, $o, $r, $w
-} elseif (-not (Test-Path $status)) { Write-Error "no transcript or status file for $Session"; exit 1 }
+} elseif (-not (Test-Path $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }

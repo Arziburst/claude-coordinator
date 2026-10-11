@@ -4,7 +4,7 @@
 # — model (effort) · context used in this chat · 5-hour and weekly limits (claude.ai Pro / Max only) —
 # and saves Claude Code's status JSON to ~/.claude/coordinator/statusline.json for the coordinator.
 input="$(cat)"
-dir="$HOME/.claude/coordinator"
+dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator"
 mkdir -p "$dir" 2>/dev/null && printf '%s' "$input" > "$dir/statusline.json"
 # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
 # session to draw its status line, whichever that was).

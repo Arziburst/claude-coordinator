@@ -5,7 +5,7 @@
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $raw = [Console]::In.ReadToEnd()
-$dir = Join-Path $HOME '.claude/coordinator'
+$dir = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'coordinator'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)
 Set-Content -Path $tmp -Value $raw -Encoding utf8 -NoNewline

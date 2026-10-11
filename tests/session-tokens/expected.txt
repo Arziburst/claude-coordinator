@@ -1,0 +1,2 @@
+status	14707	in=14327 out=380 cost=$0.4182
+transcript	14677	in=17 out>=360 cache_read=11000 cache_write=3300
