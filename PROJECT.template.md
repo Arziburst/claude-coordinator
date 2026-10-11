@@ -149,6 +149,8 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Usage caps | `<fill>` | weekly 90%, short window 95%; over only with permission |
 | Models available | `<fill>` | Fable (own limit), Opus, Sonnet, Haiku |
 | Model pins (kinds automatic routing must not change, CORE §7) | `<fill>` | none — the coordinator routes every kind itself |
+| Leads (CORE §4, roles/lead.md) | `<fill>` | for tasks whose pieces must land together (3+ sub-contracts, more than one worker's context); up to 3 workers per lead, within the preset's parallel workers |
+| Spend forecast and report (CORE §7a) | `<fill>` | the block's estimate in tokens and limit percent in the plan; forecast vs actual in the block report |
 | Time estimates | `<fill>` | client: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic |
 | Time tracking | `<fill>` | client: a timesheet draft shown to the owner before it is written |
 

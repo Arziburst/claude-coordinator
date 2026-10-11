@@ -13,7 +13,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
 - **Session or subagent, per role:** `worker` — a background session in its own working copy (named
   `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
-  `PROJECT.md` allows; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
+  `PROJECT.md` allows; `lead` — a background session (`#<task> lead: …`) in its integration branch's
+  working copy, started like a worker, which itself starts its workers (`#<task>.<n> worker: …`) and
+  runs tester, verifier and scout as its own subagents — whether a background session may start
+  further background sessions *(unconfirmed)*: check in the dry run; if not, the lead sends its
+  start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
   `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
   session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
@@ -32,7 +36,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `tester`, `verifier`, `scout`, `researcher`. They are part
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`. They are part
   of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The

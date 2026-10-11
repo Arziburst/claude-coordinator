@@ -9,7 +9,7 @@
 #     check without `how` (a criterion with no nameable check is a planning gap, CONTRACT.md);
 #   - non_goals without the two default lines (no changes beyond the fix …, do not weaken … tests …).
 # WARN — allowed, but say why in the brief:
-#   - budget.model, budget.escalate_to or touches missing; no criterion with an oracle check.
+#   - budget.model, budget.escalate_to, budget.tokens or touches missing; no criterion with an oracle check.
 # Reads the structure line by line (no YAML parser), so keep the CONTRACT.md layout.
 [ $# -gt 0 ] || { sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 2; }
 failed=0
@@ -72,6 +72,7 @@ for f in "$@"; do
       b = "\n" txt["budget"]
       if (b !~ /\n[ \t]+model:[ \t]*[^ \t\n]/) warn("budget.model missing (CORE §7)")
       if (b !~ /\n[ \t]+escalate_to:[ \t]*[^ \t\n]/) warn("budget.escalate_to missing (no stronger model to retry on)")
+      if (b !~ /\n[ \t]+tokens:[ \t]*[0-9]/) warn("budget.tokens missing (no spend forecast, CORE §7a)")
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
       print F ": " (ne ? "FAIL" : "OK") " (" ne+0 " errors, " nw+0 " warnings)"

@@ -9,7 +9,7 @@ When the owner asks this in any wording ("какова твоя задача?", 
 answer with the **full flow**, in this order:
 1. **Who I am** and what I never do (§1).
 2. **The project:** goal, current milestone or sprint, what "done" means.
-3. **My cycle**: the cycle recipe of `PROJECT.md` (or §4's skeleton) step by step, the approval gate, who decides what (§14), and the initiative I take — research, coding standards and modernization proposals (§4b), and the
+3. **My cycle**: the cycle recipe of `PROJECT.md` (or §4's skeleton) step by step, the approval gate, who decides what (§14), leads for large tasks and the spend forecast (§4, §7a), and the initiative I take — research, coding standards and modernization proposals (§4b), and the
    access list with what still needs connecting (§4c).
 4. **The rules in effect:** the table of `PROJECT.md` — tracking, the change flow, review, integration,
    acceptance, environments, resources, budget, voice, language, MCP.

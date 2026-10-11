@@ -194,12 +194,18 @@ The continuous work:
 2. **Plan only planned work** (sprint, board, milestone). Needed but unplanned → file an issue for the
    scope owner (the owner, or the business analyst where `PROJECT.md` says so); it starts per the
    strictness (§3): queued under swarm's standing approval, otherwise on their yes (§1.11). Split what
-   would fill a worker's context; one task per worker with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
+   would fill a worker's context into tasks of the board when the pieces can land one by one; when they
+   must land together (one feature across several areas, three or more sub-contracts, more than one
+   worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
+   session on an integration branch that splits it into sub-contracts, runs and verifies their
+   workers and returns one PR and one report. A lead is one more strong-model context, so ordinary
+   tasks go to a worker directly; leads and their workers count toward the preset's parallel workers.
+   One task per worker or lead with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
    expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
-   with a reticle per hand`), `researcher: <topic>`, `Coordinator` (how: TOOLKIT); the role is the role file's
+   with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, `Coordinator` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
@@ -324,9 +330,10 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   model only where truly needed. A model with its own limit spares a tight main one.
 - A worker failing on a usage limit restarts on another model; one failing review for a reason a stronger
   model would fix restarts on its contract's `escalate_to`.
-- **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's): one line
-  per finished worker, reviewer or researcher run — date · task · role · kind (a row of the table) ·
-  model · effort · tokens (counted from the session's transcript, TOOLKIT *Usage*; never the worker's own estimate) · cost (if the
+- **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
+  coordinator writes it — a lead's runs come in its report): one line per finished worker, lead,
+  tester, reviewer or researcher run — date · task (`37`, or `37.2` under a lead) · role · kind (a row
+  of the table) · model · effort · estimate (the contract's `budget.tokens`) · tokens (counted from the session's transcript, TOOLKIT *Usage*; never the worker's own estimate) · cost (if the
   status line reports it) · result (`approved` / `rework <n>` /
   `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
 - **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
@@ -342,6 +349,25 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
   the numbers behind it.
 - Keep this table current; `BINDINGS.md` may pin exact ids.
+
+## 7a. Spend: forecast and analysis
+
+The coordinator's job, not a lead's or a worker's: only it sees every task, the limits and the run log.
+- **Estimate per contract** (`budget.tokens`): the median tokens of the kind's last 10 runs in the run
+  log (worker plus its tester and reviewer; a lead: the sum of its sub-runs); no history → the
+  coordinator's own estimate, marked `guess` in the plan.
+- **Tokens per limit percent:** at every cycle the coordinator reads the weekly and 5-hour use (status
+  line, TOOLKIT *Usage*) and sums the run log's tokens since the last cycle, its own line included; the
+  median of the last cycles' tokens per percent turns a token forecast into limit percent.
+- **Block forecast:** the plan shows the block's estimate in tokens and in limit percent against what
+  is left before the caps (§9). It does not fit → a smaller block, or the owner decides (over a cap only
+  with permission).
+- **Analysis after the block:** one report line — forecast vs actual (tokens, percent, deviation), the
+  worst overrun by task, reworks and escalations. A task over twice its estimate is looked at: a wrong
+  kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
+  Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
+- The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
+  can be measured later from the same data.
 
 ## 8. Resources, parallel work and cleanup
 
@@ -433,5 +459,5 @@ Answer per [procedures/WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md).
 | Goal, scope, priorities; look and feel; business values; accepting work | **owner** (or the role `PROJECT.md` names, e.g. a business analyst for scope) |
 | Project rules, change flow, exceeding a budget, outward or irreversible actions, changing or cancelling any rule (§1.16) | **owner** — the coordinator proposes |
 | Breakdown, order, worker / model / effort, review depth within `PROJECT.md`, resources, cleanup, bookkeeping | **coordinator** |
-| Implementation inside a task's contract | **worker** |
+| Implementation inside a task's contract | **worker**; for a large task the **lead** splits and integrates it |
 | Technical disagreements a worker cannot settle | coordinator; the owner if it changes the product, budget or rules |
