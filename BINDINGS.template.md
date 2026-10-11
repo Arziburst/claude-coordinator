@@ -3,14 +3,19 @@
 Layer 3 of the coordinator (see `CORE.md`): the concrete tools behind the generic terms. Kept current by
 the coordinator.
 
+Rows marked "(re-detect)" differ per machine: check them at every start on a new machine.
+
 | Generic term | Here |
 |---|---|
 | Operating system(s) and shells | `<Windows / macOS / Linux; PowerShell / bash / zsh>` — commands below are for these; per-OS variants where machines differ |
+| Core scripts (hook, start-worker, status line) | `<absolute path to coordinator/core/scripts>` (re-detect) |
 | Repository, main branch, protected branches | `<fill>` |
+| State repository (private) | `<url or local only>` |
 | Owner's working copy | `<path>` |
 | Build / run / test / lint / typecheck commands | `<fill>` |
 | Definition-of-done checks | `<fill>` |
 | Start a worker (with its session name, model, effort, working copy) | `<command>` |
+| Model ids for light / strong / top (CORE §7) | `<ids>` |
 | Start a reviewer | `<command>` |
 | List / stop / remove workers | `<commands>` |
 | Worker working copies | `<create / remove commands>` |
@@ -19,7 +24,7 @@ the coordinator.
 | Start / stop a task's environment | `<commands>` |
 | Shared resources and their guards | `<fill>` |
 | Move a task on the board | `<command / field ids>` |
-| Status page | `<link>` |
+| Status page (the owner's summary of `LOG.md`, CORE §12) | `<link>` |
 | Usage / limits source | `<file or command>` |
 | Periodic tick | `<how to create it>` |
 | Owner's test station / preview | `<command or URL pattern>` |

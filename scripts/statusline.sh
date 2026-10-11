@@ -15,12 +15,12 @@ if command -v jq >/dev/null 2>&1; then
     def tok: if . >= 1000000 then "\((. / 100000 | floor) / 10)M"
              elif . >= 1000 then "\(. / 1000 | floor)k" else "\(floor)" end;
     [ ((.model.display_name // "Claude") + (if .effort.level then " (\(.effort.level))" else "" end)),
-      (.context_window | select(. and .used_percentage != null) |
+      (.context_window | select(type == "object" and .used_percentage != null) |
         "ctx \(((.current_usage.input_tokens // 0) + (.current_usage.cache_read_input_tokens // 0)
-               + (.current_usage.cache_creation_input_tokens // 0)) | tok)/\(.context_window_size | tok) (\(.used_percentage | floor)%)"),
-      (.rate_limits.five_hour | select(.) | "5h \(.used_percentage | floor)%"),
-      (.rate_limits.seven_day | select(.) | "week \(.used_percentage | floor)%")
-    ] | join(" · ")'
+               + (.current_usage.cache_creation_input_tokens // 0)) | tok)/\((.context_window_size // 0) | tok) (\(.used_percentage | floor)%)"),
+      (.rate_limits.five_hour | select(type == "object" and .used_percentage != null) | "5h \(.used_percentage | floor)%"),
+      (.rate_limits.seven_day | select(type == "object" and .used_percentage != null) | "week \(.used_percentage | floor)%")
+    ] | join(" · ")' 2>/dev/null || echo "Claude"
 else
   echo "Claude · install jq for the full status line"
 fi

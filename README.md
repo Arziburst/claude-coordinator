@@ -7,8 +7,7 @@
 >    Its rules override your default habits; §1 are hard rules.
 > 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
 >    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
->    (multiple choice with a recommended option; first "commercial or non-commercial?", "swarm or
->    sequential?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
+>    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
 >    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
 >    your own.
 > 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);
@@ -34,33 +33,35 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "update the core"
-  ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)).
+  ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)), the sources of
+  truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
   messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
-- [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker.sh` (named session
-  in its own worktree), `cleanup-worker.sh` (only clean and pushed work), `hooks/safety-guard.sh`
+- [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker` (named session
+  in its own worktree), `cleanup-worker` (only clean and pushed work), `hooks/safety-guard`
   (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
-  home or a worktree by hand — work branches stay free), `statusline.sh` / `statusline.ps1`
+  home or a worktree by hand — work branches stay free), `statusline`
   (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
-  also saves usage limits for the coordinator). Run with `--dry-run` first on a new machine.
-- [settings.example.json](settings.example.json) — the worker safety file (passed by `start-worker.sh
-  --safety`): protected-branch denies, the hook and its self-test, messages accepted — the autonomous
-  baseline; the cautious level adds denies.
+  also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
+- [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)
+  — the worker safety file (passed by `start-worker --safety` / `-Safety`): protected-branch denies, the hook and its self-test, messages accepted — the swarm and
+  standard baseline; the strict preset and the cautious override add denies.
 
 ## Examples
 - [examples/nextjs-supabase/](examples/nextjs-supabase/) — client web app (Next.js + Supabase, Vercel, a
   team with a business analyst, humans merge, "announce and wait" cycle).
-- [examples/arx-fatalis-vr/](examples/arx-fatalis-vr/) — own game project (VR port, rush mode, autopilot
+- [examples/arx-fatalis-vr/](examples/arx-fatalis-vr/) — own game project (VR port, swarm preset, autopilot
   cycle with ~10 parallel workers).
 
 ## Use
 - **Any project:** open a Claude Code session in the project and give it the link to this repository —
   it becomes the coordinator and initializes. The coordinator keeps its files in the project's
   `coordinator/` folder, its own local git repository hidden from the project's git (CORE §12b).
-- **Remote or local core** — asked in the init quiz: read this repository live, or keep a local copy
-  in `coordinator/core/` (editable for that project; "update the core" brings upstream changes in on command, with an impact report first).
+- **The core is a local copy** in `coordinator/core/`, like a pinned package: editable for that project;
+  at start the coordinator says when upstream is newer, and "update the core" brings the changes in on
+  command, with an impact report first.
 - **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
 - **Moving to another machine** — say "prepare a handoff": the coordinator pushes the work and pushes
   `coordinator/` to a private remote, the project's state repository (CORE §12b, `state-repo/README.template.md`,

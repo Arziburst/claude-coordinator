@@ -19,12 +19,14 @@ intent: >                          # why this matters, 1-3 sentences - the field
 inputs:                            # exact pointers, not "the whole project"
   - src/vr/hands/*.cpp
   - docs/decisions.md#D-12
+  - "S-3 Figma: inventory screen"  # sources by id (procedures/SOURCES.md)
 outputs:
   - a PR into main from 37-feat-hand-reticle
 acceptance:                        # ordered; each criterion says how it is checked
   - criterion: each hand shows its own reticle
     check: oracle                  # oracle | review | owner
     how: test_vr_reticle (new) passes
+    source: S-3                    # where the criterion comes from; none = the coordinator's own reading
   - criterion: grabbing items does not regress
     check: oracle
     how: the existing tests/vr suite passes
@@ -36,9 +38,9 @@ non_goals:
 do_not_decide:                     # raised as questions, never decided by the worker
   - the reticle's colour and shape
 budget:
-  model: sonnet                    # per CORE §7
-  effort: medium
-  escalate_to: opus                # model for a retry after a failed review or a stuck worker
+  model: opus                      # per CORE §7: rendering and input are "hard or risky"
+  effort: high
+  escalate_to: fable               # model for a retry after a failed review or a stuck worker
 depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
 ---
@@ -49,6 +51,8 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   calculation — something other than an opinion), `review` (the independent reviewer reads it), `owner`
   (only the owner can accept it). A criterion with no nameable check is a planning gap: fix it before
   the work starts.
+- **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
+  result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, or the
   worker is stuck, the coordinator restarts the contract on this model with the failed report attached
@@ -60,10 +64,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 ---
 contract: 37
 status: ready                      # ready | blocked | failed
-model: sonnet
+model: opus
 results:
   - criterion: each hand shows its own reticle
-    evidence: oracle               # oracle | claim
+    evidence: oracle               # oracle | claim | owner
     proof: "CI run #812: test_vr_reticle passed"
   - criterion: the code follows the project's standards
     evidence: claim
@@ -74,7 +78,8 @@ known_gaps:
 ```
 
 **Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a log,
-a command and its output); everything else is `claim`. Only the reviewer can turn a claim into
+a command and its output); everything else is `claim`; a `check: owner` criterion is `owner` until the owner accepts it (the steps
+are in the report). Only the reviewer can turn a claim into
 `review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. Reports,
 the journal and the owner's summary keep the class, so "tested", "reviewed" and "said so" never look the
 same.

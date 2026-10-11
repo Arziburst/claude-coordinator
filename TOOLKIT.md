@@ -11,12 +11,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
-  Subagents (tester, scout, a verifier run as one) have no session of their own: they appear inside
-  the session that started them under their role name.
+- **Session or subagent, per role:** `worker` — a background session in its own working copy (named
+  `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
+  `PROJECT.md` allows; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
+  `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
+  session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
   the CLI: `claude --name "Coordinator"`; in an already running session the owner can rename
-  it (`/rename <name>` *(unconfirmed)*), or a `UserPromptSubmit` hook can set the title from the project
-  *(unconfirmed)*. If the coordinator cannot rename itself, it asks the owner to — once, at init.
+  it (`/rename <name>` *(unconfirmed)*). If the coordinator cannot rename itself, it asks the owner to —
+  once, at init. Every project's coordinator has this name: tell them apart by their working directory
+  (`claude agents --json` *(unconfirmed field name)*).
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
 - **Directory:** start the session from the worker's working copy (`cd` first); there is no documented
   `--cwd` *(unconfirmed)*.
@@ -41,9 +45,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `claude rm` as its own command (some guards block compound removals).
 
 ## Working copies
-- Built-in: `claude --worktree <name>` (`.claude/worktrees/<name>`, branch `worktree-<name>`);
-  background sessions get their own worktree by default (`worktree.bgIsolation: "none"` turns that off).
-  Manual `git worktree add` works too — pick **one** of the two, or a worker ends up with two copies.
+- **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`
+  (branch `<issue>-<type>-<slug>`) and starts the session there with `worktree.bgIsolation: "none"`, so
+  Claude Code does not add a second copy. Its built-in alternative (`claude --worktree <name>`, branch
+  `worktree-<name>`) is not combined with it.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
 
@@ -51,8 +56,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
   the worker is next idle (same machine, expires after 12 h).
   [cross-session-messaging](https://code.claude.com/docs/en/cross-session-messaging.md)
-- Setting **`crossSessionInbound: "accept"`** lets workers take the coordinator's messages unattended
-  (`hold` / `refuse` otherwise). Needs Claude Code v2.1.224+ (macOS / Linux / WSL2), v2.1.234+ (native
+- Setting **`crossSessionInbound: "accept"`** on the receiving side lets a session take
+  messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the
+  coordinator) **and** in the coordinator's own settings (it hears its workers). Needs Claude Code v2.1.224+ (macOS / Linux / WSL2), v2.1.234+ (native
   Windows). Native Windows and WSL2 sessions cannot message each other.
 
 ## The periodic tick
@@ -69,26 +75,47 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Never allow** patterns that run arbitrary code (interpreters, `npx`, `npm run *`, `gh api *`,
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
-  human review required for commercial work. Rules and hooks on the machine are a safety net, not a wall.
-- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`) guards only the irreversible:
-  pushing, force-pushing or deleting the protected branches (main / master — incl. quoted,
-  `refs/heads/`, `HEAD:`, `+refspec` forms, and a push resolving to the current branch while on main),
-  mirror pushes, and removing `/`, home or a worktree by hand. Work-branch operations (rebase, amend,
-  reset, force-with-lease on its own branch, deleting work branches) pass. Exit code 2 blocks and
-  shows the reason. **A hook that fails to run does not block** — so `settings.example.json` runs
-  `safety-guard.sh --self-test` at session start; a failure there means: fix before starting workers.
-  Hooks see only shell tools — **MCP tools are covered by deny rules only**. Whether hooks run in
+  human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
+- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
+  rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
+  pushing, force-pushing or deleting the protected branches (main / master — in any refspec form:
+  quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
+  `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
+  following `git checkout` / `switch`, `cd` / `Set-Location` and `git -C` in the same command;
+  `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a
+  worktree by hand (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find … -delete`). It parses
+  the command like a shell: line continuations are joined, separators inside quotes (a commit
+  message, a PR body) do not split, `$(…)`, `bash -c` / `pwsh -Command` and a heredoc fed to a shell
+  are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
+  reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
+  shows the reason. **A hook that fails to run does not block** — so the settings example runs the
+  hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
+  **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
+  it: `eval`, `iex` / `Invoke-Expression`, `cmd /c`, `Start-Process`, `xargs` feeding a refspec,
+  quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
+  variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
+  protection on the code host is the real wall; the hook is not hardened against these on purpose.
+  Hooks see only shell tools — **MCP tools are covered by deny rules only** (the settings examples
+  deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
+  any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
-- **Deny rules** in `settings.example.json` are the autonomous baseline: the protected branches only.
-  Add `gh pr merge*` / `gh pr ready*` where humans merge or mark ready; the cautious level also adds
+- **Deny rules** in `settings.example.json` are the swarm and standard baseline: the protected branches only
+  (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
+  Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans
+  merge); the cautious override also adds
   `Read(**/.env*)` and the stack candidates (database CLIs, production deploys, MCP write tools) from
   `examples/nextjs-supabase/settings.json`.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.
-- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** at the
-  autonomous level (the default — no permission prompts, the classifier and the hook as the net) or
-  `acceptEdits` at the cautious level. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
+- **Owner's voice (CORE §11):** the worker settings set `"attribution": {"commit": "", "pr": "",
+  "sessionUrl": false}`, so commits and PRs carry no AI co-author trailer, PR line or session link; put
+  the same in the coordinator's own settings (`~/.claude/settings.json`) at init. `attribution: false`
+  does the same from Claude Code 2.1.281 on, but older versions skip a settings file that holds it.
+  [settings](https://code.claude.com/docs/en/settings-reference.md)
+- **Modes:** coordinator in `default` (or `plan` for the dry run); workers in **`auto`** in every
+  preset (no permission prompts, the classifier and the hook as the net) or `acceptEdits` with the
+  cautious override. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
@@ -104,9 +131,13 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
-- Not yet in this style (ported by their own pull requests): `start-worker.sh`, `cleanup-worker.sh`,
-  `hooks/safety-guard.sh` have no `.ps1` (Git Bash on Windows until then); `statusline.sh` and
-  `hooks/safety-guard.sh` use `jq` when present.
+- **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
+- Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
+  `hooks/safety-guard.sh` uses `jq` when present and reads the JSON with `sed -E` and `awk` otherwise
+  (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
+- **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts) and
+  `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
+  repositories with stub `claude` and `gh`; the real `claude` is never called).
 
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
@@ -132,7 +163,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
   is set yet): add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
-  approves the write) the script's absolute path on this machine:
+  approves the write) the script's absolute path in the core copy (`/ABSOLUTE/PATH` = `<project>/coordinator/core`;
+  the user settings serve every project, so one project's copy is used for all):
   Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\""}`
   (`powershell` instead of `pwsh` where PowerShell 7 is missing); macOS / Linux
   `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh"}`. It
@@ -150,16 +182,19 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 Run in this order; the first cycle is a **dry run** (CORE §12a).
 1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
-3. **Worker safety file** from [settings.example.json](settings.example.json) with absolute paths (passed
-   to every worker by `start-worker.sh --safety`). **The coordinator's own settings** (its session or the
+3. **Worker safety file** from [settings.example.json](settings.example.json) (Windows:
+   [settings.example.windows.json](settings.example.windows.json)) with absolute paths (passed to every
+   worker by `start-worker.sh --safety` / `start-worker.ps1 -Safety`). **The coordinator's own settings** (its session or the
    user settings): the status line if the owner wants it (CORE §3, *Installing it* above) and
    `crossSessionInbound: "accept"`.
    Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
    pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
 4. Make the scripts executable: `chmod +x scripts/*.sh scripts/hooks/*.sh` (macOS / Linux).
-5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` → `safety-guard: OK`.
+5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` (Windows: `powershell -NoProfile
+   -ExecutionPolicy Bypass -File scripts\hooks\safety-guard.ps1 -SelfTest`) → `safety-guard: OK`.
+   Windows: start-worker needs the native `claude.exe`; an npm `claude.cmd` cuts a multi-line brief.
 6. Branch protection on the code host is on (or the owner records why not).
 7. Initialize (CORE §2 — the one start sequence): context of running sessions and PRs, open questions,
    the init quiz, `PROJECT.md` / `BINDINGS.md`, the access list and project map, the platform row, the MCP
    tool check.
-8. Dry-run cycle → the owner approves → wait for "start a new cycle"; a tick only where autopilot is on.
+8. Dry-run cycle → the owner approves → wait for "start a new cycle"; a tick only where autopilot is on (swarm, CORE §3).

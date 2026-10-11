@@ -6,9 +6,9 @@ small team with a human business analyst, Vercel hosting, Supabase database. Nam
 ## Project
 | Question | This project |
 |---|---|
-| Commercial or not | **commercial** (client work) — strict defaults |
-| Swarm or sequential | **sequential**: one or two tasks at a time, each reviewed and accepted before the next |
-| Autonomy level | **autonomous**: workers in auto mode merge main, resolve conflicts, rebase, write to their local stacks and to production when a task needs it (backup first), and report |
+| Strictness | **strict**: one task at a time, reviewed and accepted before the next; humans merge |
+| Overrides | production writes as in standard (below) |
+| Worker permission mode and production | **auto**: workers in auto mode merge main, resolve conflicts, rebase, write to their local stacks and to production when a task needs it (backup first), and report |
 | Autopilot, tick | off, no tick (cycles on the owner's word) |
 | Core | local copy in the state repository (`core/`), editable for this project; "update the core" on command |
 | Coordinator's files | `coordinator/` — its own local git repository, excluded from the client repository's git, pushed to the private state repository on a handoff |
@@ -46,8 +46,8 @@ coordinator session (or `docs/research/<topic>.md` when the team should read it)
 ## The change flow
 | Step | This project |
 |---|---|
-| Branch | `<issue>-<slug>` (multi-issue `<n1>-<n2>-<slug>`) |
-| Commit | `[APP-<n>]: type(scope): imperative lowercase subject` (≤ 72 chars), detailed body; never amend a pushed commit |
+| Branch (the client's convention) | `<issue>-<slug>` (multi-issue `<n1>-<n2>-<slug>`) |
+| Commit (the client's convention) | `[APP-<n>]: type(scope): imperative lowercase subject` (≤ 72 chars), detailed body; never amend a pushed commit |
 | Commit / push | a commit + push per finished block |
 | PR | **draft** at the first push; title with the same prefix; `Closes #` / `Refs #`; Summary / Blocks / Test plan (tick only what was run); claimed migration slot in the body |
 | AI review | reviewer agent per CORE §6, re-review until approval with no Blocker / Major |
@@ -74,7 +74,7 @@ Commits, PR and issue comments in the owner's voice, first person, terse bullets
 | Release path | merge → Vercel deploy; DB migrations via a manual CI workflow with `confirm=apply` — or applied by a worker when a task needs it, dump first |
 | Database | migration files; never edit an applied migration; production data fixes when a task needs them, dump first, logged |
 | Release flags | jobs that charge customers ship off; enabled by an env flag set exactly to `true` + redeploy, in the documented order |
-| Production rights of tools / MCP | autonomous: the Supabase MCP / CLI may write to production when a task needs it — a dump or snapshot first for schema and bulk data changes, every write logged; the connector's tools are listed at init. The candidate denies in `settings.json` (this folder) are for a cautious project |
+| Production rights of tools / MCP | the override above: the Supabase MCP / CLI may write to production when a task needs it — a dump or snapshot first for schema and bulk data changes, every write logged; the connector's tools are listed at init. The candidate denies in `settings.json` (this folder) are for a cautious project |
 
 ## Parallel work and resources
 | Question | This project |

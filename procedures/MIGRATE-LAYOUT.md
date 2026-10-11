@@ -14,7 +14,8 @@ Run read-only, in the project root:
 - `git -C coordinator rev-parse --show-toplevel` and `git -C coordinator remote -v` — whether
   `coordinator/` already is a repository; a remote pointing to claude-coordinator means the core was
   copied as the whole folder (case **core clone**);
-- `grep -n coordinator/ CLAUDE.md` — project files that point into the folder.
+- `grep -n coordinator/ CLAUDE.md` — project files that point into the folder;
+- `test -d coordinator/core` — missing means an older remote core (case **no local core**).
 
 Show the owner: the case, the files involved, the exact commands below, what changes for the project's
 other clones and teammates, and the one yes this needs.
@@ -25,6 +26,9 @@ other clones and teammates, and the one yes this needs.
 2. **Core clone only:** record its commit (`git -C coordinator rev-parse HEAD`), move the core's files
    into `coordinator/core/` (keep `PROJECT.md`, `BINDINGS.md`, `LOG.md`, `HANDOFF.md` at the top),
    remove `coordinator/.git`, and record in `PROJECT.md` a local core at that commit.
+2a. **No local core:** clone claude-coordinator to a scratch folder, copy its files into
+   `coordinator/core/`, record that commit in `PROJECT.md`, and point the worker safety file, the
+   status line and `BINDINGS.md` at `coordinator/core/scripts/`.
 3. **Create the repository:** `git -C coordinator init`, add the entry `README.md` from
    `state-repo/README.template.md` if missing, `git -C coordinator add -A`, commit.
 4. **Tracked only — untrack in the project, keep on disk:** in a separate worktree of the project
