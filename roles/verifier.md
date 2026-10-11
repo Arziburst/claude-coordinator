@@ -20,7 +20,9 @@ Inputs: the contract, the worker's report and the change (a PR, a branch or a di
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
 
-Output, per criterion: confirmed / failed / not verifiable, with the evidence.
+Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
+criterion or a business decision), each with its evidence class: `oracle` (you saw the check run or
+its output yourself), `review` (you read the change and it holds), `claim` (only the report says so).
 Each finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
 touch**. Severity: **Blocker / Major / Minor / Nit**. No patches: the author fixes.
 List the tools you used and skipped, and every known gap.

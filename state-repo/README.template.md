@@ -12,7 +12,8 @@
 >    `BINDINGS.md`, re-detect the platform and every row marked "re-detect", check the logins and
 >    accesses listed in `HANDOFF.md`, set up the safety rules, confirm the quiz briefly, then a **dry
 >    run** showing which interrupted tasks you would restart — and **wait** for the owner.
-> 4. Update this repository only on the owner's command ("prepare a handoff" / "update the state repo").
+> 4. Committed locally at the end of every cycle; pushed to this remote only on the owner's command
+>    ("prepare a handoff" / "update the state repo").
 
 **Private.** This repository holds internal project information — never make it public, never share it
 with the client.

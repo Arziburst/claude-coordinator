@@ -11,12 +11,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
-  Subagents (tester, scout, a verifier run as one) have no session of their own: they appear inside
-  the session that started them under their role name.
+- **Session or subagent, per role:** `worker` — a background session in its own working copy (named
+  `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
+  `PROJECT.md` allows; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
+  `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
+  session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
   the CLI: `claude --name "Coordinator"`; in an already running session the owner can rename
-  it (`/rename <name>` *(unconfirmed)*), or a `UserPromptSubmit` hook can set the title from the project
-  *(unconfirmed)*. If the coordinator cannot rename itself, it asks the owner to — once, at init.
+  it (`/rename <name>` *(unconfirmed)*). If the coordinator cannot rename itself, it asks the owner to —
+  once, at init. Every project's coordinator has this name: tell them apart by their working directory
+  (`claude agents --json` *(unconfirmed field name)*).
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
 - **Directory:** start the session from the worker's working copy (`cd` first); there is no documented
   `--cwd` *(unconfirmed)*.
@@ -41,9 +45,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `claude rm` as its own command (some guards block compound removals).
 
 ## Working copies
-- Built-in: `claude --worktree <name>` (`.claude/worktrees/<name>`, branch `worktree-<name>`);
-  background sessions get their own worktree by default (`worktree.bgIsolation: "none"` turns that off).
-  Manual `git worktree add` works too — pick **one** of the two, or a worker ends up with two copies.
+- **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`
+  (branch `<issue>-<type>-<slug>`) and starts the session there with `worktree.bgIsolation: "none"`, so
+  Claude Code does not add a second copy. Its built-in alternative (`claude --worktree <name>`, branch
+  `worktree-<name>`) is not combined with it.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
 
@@ -51,8 +56,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
   the worker is next idle (same machine, expires after 12 h).
   [cross-session-messaging](https://code.claude.com/docs/en/cross-session-messaging.md)
-- Setting **`crossSessionInbound: "accept"`** lets workers take the coordinator's messages unattended
-  (`hold` / `refuse` otherwise). Needs Claude Code v2.1.224+ (macOS / Linux / WSL2), v2.1.234+ (native
+- Setting **`crossSessionInbound: "accept"`** on the receiving side lets a session take
+  messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the
+  coordinator) **and** in the coordinator's own settings (it hears its workers). Needs Claude Code v2.1.224+ (macOS / Linux / WSL2), v2.1.234+ (native
   Windows). Native Windows and WSL2 sessions cannot message each other.
 
 ## The periodic tick
