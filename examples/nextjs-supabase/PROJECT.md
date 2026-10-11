@@ -46,8 +46,8 @@ coordinator session (or `docs/research/<topic>.md` when the team should read it)
 ## The change flow
 | Step | This project |
 |---|---|
-| Branch | `<issue>-<slug>` (multi-issue `<n1>-<n2>-<slug>`) |
-| Commit | `[APP-<n>]: type(scope): imperative lowercase subject` (≤ 72 chars), detailed body; never amend a pushed commit |
+| Branch (the client's convention) | `<issue>-<slug>` (multi-issue `<n1>-<n2>-<slug>`) |
+| Commit (the client's convention) | `[APP-<n>]: type(scope): imperative lowercase subject` (≤ 72 chars), detailed body; never amend a pushed commit |
 | Commit / push | a commit + push per finished block |
 | PR | **draft** at the first push; title with the same prefix; `Closes #` / `Refs #`; Summary / Blocks / Test plan (tick only what was run); claimed migration slot in the body |
 | AI review | reviewer agent per CORE §6, re-review until approval with no Blocker / Major |

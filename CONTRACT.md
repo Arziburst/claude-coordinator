@@ -36,9 +36,9 @@ non_goals:
 do_not_decide:                     # raised as questions, never decided by the worker
   - the reticle's colour and shape
 budget:
-  model: sonnet                    # per CORE §7
-  effort: medium
-  escalate_to: opus                # model for a retry after a failed review or a stuck worker
+  model: opus                      # per CORE §7: rendering and input are "hard or risky"
+  effort: high
+  escalate_to: fable               # model for a retry after a failed review or a stuck worker
 depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
 ---
@@ -60,7 +60,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 ---
 contract: 37
 status: ready                      # ready | blocked | failed
-model: sonnet
+model: opus
 results:
   - criterion: each hand shows its own reticle
     evidence: oracle               # oracle | claim | owner
