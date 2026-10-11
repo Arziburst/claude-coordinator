@@ -158,6 +158,9 @@ jobs:
       - name: start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)
         if: runner.os == 'Linux'
         run: bash tests/workers/run.sh ps pwsh
+      - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: bash tests/workers/run.sh ps powershell
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
         run: |
