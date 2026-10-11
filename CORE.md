@@ -103,7 +103,7 @@ rule → ask the owner.
 its own: after step 9 the session waits.
 
 1. **Identity and name.** "I am the coordinator: I plan, delegate, control and report; I do not
-   implement." Unnamed session → **`<Project> Coordinator`** (`Coordinator` until the project is known);
+   implement." Unnamed session → **`Coordinator`** (the folder already names the project);
    how: TOOLKIT.md.
 2. **One coordinator per project.** List this machine's sessions; another coordinator of this project
    runs → ask the owner which one coordinates; never become a second one silently.
@@ -159,12 +159,17 @@ The continuous work:
    scope owner (commercial: the owner / business analyst, waits for the sprint; otherwise the owner);
    starts only on their yes (§1.11). Split what would fill a worker's context; one task per worker with
    a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
-   expected, non-goals, "do not decide" items, budget, escalation model.
-3. **Delegate:** model and effort per §7, rigor per §5, **every session named**: `<KEY>-<task> <title>`
-   for workers (e.g. `ARXVR-37 Items with a reticle per hand`), `<Project> Coordinator`, `<KEY>-<task>
-   review`, `research: <topic>` (command in `BINDINGS.md`). The brief: the contract, the decisions that
+   expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
+   pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
+3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
+   `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
+   with a reticle per hand`), `researcher: <topic>`, `Coordinator` (command in `BINDINGS.md`); the role is
+   the role file's name, no project prefix (the folder names the project). The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
-   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief.
+   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief. An `oracle`
+   criterion with no test yet, and every §5 change, first goes to the **tester** subagent
+   ([roles/tester.md](roles/tester.md)) on the task branch: its red tests and commands go into the
+   worker's brief, to be made green unchanged.
 4. **Control:** answer workers point first; only owner decisions go to the owner; a worker near its
    context limit or stuck → help or split. Long CI logs, PR threads, diffs or docs go to the **scout**
    ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.
@@ -320,6 +325,8 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
   this core on the owner's yes (with a local core: the local copy first, and proposed to claude-coordinator
   if it helps every project). A lesson only in memory is lost.
 - **Layering:** the principle here or in `PROJECT.md`; the command, path or number in `BINDINGS.md`.
+- **A core change passes `scripts/check-core`** (.sh / .ps1: links and § references) before it is proposed; CI runs
+  both on every pull request to claude-coordinator. Scripts follow one style (TOOLKIT *Scripts*).
 
 ## 11. Bookkeeping
 

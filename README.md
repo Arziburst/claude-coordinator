@@ -28,6 +28,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
 - [roles/](roles/) — role definitions: [worker.md](roles/worker.md) implements a contract,
+  [tester.md](roles/tester.md) writes its failing tests first,
   [verifier.md](roles/verifier.md) reviews it independently, [scout.md](roles/scout.md) condenses long
   logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
@@ -38,7 +39,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
   messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
-- [scripts/](scripts/) — reference scripts (bash; Git Bash on Windows): `start-worker.sh` (named session
+- [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker.sh` (named session
   in its own worktree), `cleanup-worker.sh` (only clean and pushed work), `hooks/safety-guard.sh`
   (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
   home or a worktree by hand — work branches stay free), `statusline.sh` / `statusline.ps1`
@@ -68,4 +69,5 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 
 ## Changing the core
 Universal lessons go into `CORE.md` with the owner's yes (CORE §10); project lessons stay in the
-project's `coordinator/PROJECT.md`.
+project's `coordinator/PROJECT.md`. Before a pull request: `scripts/check-core.sh` (Windows:
+`scripts\check-core.ps1`). A new or changed script keeps the one style of TOOLKIT *Scripts*.

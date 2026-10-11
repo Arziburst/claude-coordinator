@@ -5,14 +5,16 @@ tracks Claude Code features and changes with them — re-check the linked docs w
 differently. Items marked *(unconfirmed)* were not stated in the docs; verify them in the dry run (CORE §12a).
 
 ## Workers: start, name, manage
-- **Background session per worker:** `claude --bg --name "<KEY>-<task> <title>" --model <model> --permission-mode <mode> "<brief>"`
+- **Background session per worker:** `claude --bg --name "#<task> worker: <title>" --model <model> --permission-mode <mode> "<brief>"`
   — prints an id; `claude agents [--json]`, `claude logs <id>`, `claude attach <id>`, `claude stop <id>`,
   `claude respawn <id>`, `claude rm <id>`. `--bg` cannot be combined with `-p`.
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
-  cannot tell sessions apart.
-- **The coordinator's own name** (CORE §2 step 1): `<Project> Coordinator`. Started by the owner from
-  the CLI: `claude --name "<Project> Coordinator"`; in an already running session the owner can rename
+  cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
+  Subagents (tester, scout, a verifier run as one) have no session of their own: they appear inside
+  the session that started them under their role name.
+- **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
+  the CLI: `claude --name "Coordinator"`; in an already running session the owner can rename
   it (`/rename <name>` *(unconfirmed)*), or a `UserPromptSubmit` hook can set the title from the project
   *(unconfirmed)*. If the coordinator cannot rename itself, it asks the owner to — once, at init.
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
@@ -26,7 +28,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `verifier`, `scout`, `researcher`. They are part
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `tester`, `verifier`, `scout`, `researcher`. They are part
   of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
@@ -89,6 +91,27 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `acceptEdits` at the cautious level. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
+
+## Scripts
+One style for every script in `scripts/`, so each runs on a bare Mac and a bare Windows machine:
+- **A pair with the same behaviour and output:** `<name>.sh` for macOS / Linux and `<name>.ps1` for
+  Windows. Same arguments, same messages, same exit codes; a change to one is made to the other in the
+  same pull request.
+- **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
+  (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
+  escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
+  `[char]0x00A7`: 5.1 reads a BOM-less script as ANSI).
+  No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
+- **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
+- **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
+- Not yet in this style (ported by their own pull requests): `start-worker.sh`, `cleanup-worker.sh`,
+  `hooks/safety-guard.sh` have no `.ps1` (Git Bash on Windows until then); `statusline.sh` and
+  `hooks/safety-guard.sh` use `jq` when present.
+
+## Checks
+- `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
+  delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
+  references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
 
 ## Usage and limits
 - **Tokens per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:

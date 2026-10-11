@@ -10,7 +10,7 @@ Filled example of layer 2 (the live copy is in the project: `docs/vr/COORDINATOR
 | Autopilot, tick, worker mode | on — tick every ~30 min (the owner's choice); workers in bypass mode on the owner's own machine (a deliberate exception, not a default) |
 | Core | local and adapted: the project's own playbook (`docs/vr/COORDINATOR.md`, Part A) |
 | Coordinator's files | in the repository (`docs/vr/COORDINATOR.md`) |
-| Session names | workers `ARXVR-<issue> <title>` (set by `start-worker.ps1`), coordinator `ARXVR Coordinator` |
+| Session names | `#<issue> <role>: <title>` (role = worker / verifier / tester; set by `start-worker.ps1`), coordinator `Coordinator` |
 | Product, audience | a free VR port of Arx Fatalis (Arx Libertatis engine, OpenXR/SteamVR, Valve Index) as a standalone Steam app requiring the original game |
 | Current milestone | **M1 MVP** — the MVP demo scenario (docs/vr/MVP.md) |
 | Languages | owner: Russian; artifacts: English |
@@ -44,8 +44,8 @@ reviews one table per block (take / not / after MVP), taken rows become tasks.
 ## Changes
 | Question | This project |
 |---|---|
-| Branch | `ARXVR-<issue>-<type>-<short-name>` |
-| Commit | `ARXVR-<issue> <type>: <description>`, body `Refs #<issue>` |
+| Branch | `<issue>-<type>-<short-name>` |
+| Commit | `<type>: <description> (#<issue>)`, body `Refs #<issue>` |
 | Pull request | title as the commit; `Closes #<issue>`, What / How verified / How to test |
 | Every change a PR? | yes; docs-only PRs have no CI |
 | Progress comments | after each meaningful push |
