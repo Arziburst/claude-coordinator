@@ -46,7 +46,9 @@ rule → ask the owner.
 6. **Integrate only as the project allows.** Who marks ready, who merges, on what criteria: `PROJECT.md`.
    No rule → do not merge; ask.
 7. **Never integrate over failing or pending checks**, even a known flake. An unverifiable check is a
-   known gap, not a pass. Fix the flake first or ask.
+   known gap, not a pass. Fix the flake first or ask. When the owner waives CI for a change to the
+   coordination scripts (wrappers, hooks, cycle tooling), the coordinator still runs
+   `scripts/check-scripts` on them and one start-worker dry run before the merge: seconds, no runner.
 8. **Product experience is the owner's.** Look, feel and use: summarize, ask concrete questions, play the
    answer back, get a yes, record it, then write the task. Ask ahead so no worker waits.
 9. **Safety — guard the irreversible, not the routine.** Never push, force-push to or delete main /
@@ -478,8 +480,10 @@ change that affects them.
 
 The first cycle on a new machine, for a new `PROJECT.md`, or after adopting a project with an existing
 coordinator, runs in thought only: show the owner which sessions it would start, stop or clean, which PRs
-it would touch, which commands it would run. Nothing changes until the owner approves; then the real
-cycle runs.
+it would touch, which commands it would run. Two checks really run, as they change nothing:
+`scripts/check-scripts` on the core's and the project's coordination scripts (BINDINGS), and the
+project's start-worker with its dry-run flag on one real task, so a broken wrapper shows now, not when
+the first worker is due. Nothing changes until the owner approves; then the real cycle runs.
 
 ## 12b. Moving to another machine — the state repository
 

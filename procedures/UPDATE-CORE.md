@@ -16,7 +16,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - each upstream change that conflicts with a local edit, and the proposed resolution;
 4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
-   scripts changed, re-run the hook's self-test. Then
+   scripts changed, re-run the hook's self-test. Always run `scripts/check-scripts` on the core copy
+   and on the project's coordination scripts (the wrappers that call the core: BINDINGS), and one
+   start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
+   runs until the next worker is due. Then
    install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
