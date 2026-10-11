@@ -145,7 +145,8 @@ with one line at the summary or later.
 
 ### 3.5 The summary
 
-Write `PROJECT.md` / `BINDINGS.md` from the answers, the findings and the defaults; show one summary
+Write `PROJECT.md` (its *Settings* block first, Source per row) / `BINDINGS.md` from the answers, the
+findings and the defaults; show one summary
 grouped by section — asked, found, by default, and the differences with existing rules — and ask "yes,
 or fix these rows". On the yes, write `coordinator/CHECKLIST.md` ([ONE-TIME.md](../ONE-TIME.md)): a line for
 every catalog row — the settings as answered, the checks as run in the setup (`done`, `failed`, `n/a`)

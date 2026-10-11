@@ -8,25 +8,40 @@ answer**, and a default — per the strictness preset (CORE §3) where they diff
 any)* stays `n/a` when the project has no such thing. Work starts only when no `<fill>` is left and the
 owner said yes to the summary (CORE §1.12).
 
+## Settings
+What "settings" shows (procedures/SETTINGS.md), kept in one place: **Source** is `preset`, `default`,
+`owner, <date>` or `override`; **Since** the date it took this value. "Change X to Y" edits a row here
+on the owner's yes. The sections below hold the rest of the project's rules.
+
+| Setting | Value | Source | Since | Options (default first) |
+|---|---|---|---|---|
+| **Strictness** (CORE §3) | `<fill>` | `<fill>` | `<date>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
+| Overrides of the preset (row and value) | `<fill>` | `<fill>` | `<date>` | none |
+| **Spend level** (CORE §7) | `<fill>` | `<fill>` | `<date>` | **balanced** · lean · thorough — which way model and effort choices lean; never removes a check or a rung |
+| Autopilot and tick (CORE §9) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm on, a tick every ~30 min · standard, strict off — work only on the owner's "start a new cycle" |
+| Language: conversation / artifacts | `<fill>` | `<fill>` | `<date>` | owner's language / English |
+| Voice in commits and PRs | the owner's | core | — | not a setting: always the owner's, no AI lines (CORE §11) |
+| Who merges | `<fill>` | `<fill>` | `<date>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |
+| Review gates | `<fill>` | `<fill>` | `<date>` | the verifier always (CORE §6); human review: swarm none · standard the owner on risky changes · strict developer and/or business analyst, their comments back to the same branch + re-review |
+| Production and MCP writes (CORE §1.4) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm, standard write when the task needs it, backup first · strict read-only except named actions |
+| Model pins (kinds routing must not change, CORE §7) | `<fill>` | `<fill>` | `<date>` | none — the coordinator routes every kind itself (`coordinator/ROUTING.md`) |
+| Usage caps (CORE §9) | `<fill>` | `<fill>` | `<date>` | weekly 90%, short window 95%; over only with permission |
+| State repository: remote, branch, private (CORE §12b) | `<fill>` | `<fill>` | `<date>` | solo: the owner's account · team: the team's organization · local only (lost with the disk); branch `state`; always private; pointer in `CLAUDE.md`: yes / no (never in a client's repository) |
+| Core (CORE §2) | `<fill>` | `<fill>` | `<date>` | a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
+
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
-| **Strictness** (CORE §3) | `<fill>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
-| Overrides of the preset (row and value) | `<fill>` | none |
-| **Spend level** (CORE §7) | `<fill>` | lean · **balanced** · thorough — which way model and effort choices lean; never removes a check or a rung |
 | Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
-| Core (CORE §2) | `<fill>` | always a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle |
-| State repository remote (always private) | `<fill>` | solo: the owner's account · team: the team's organization · local only (lost with the disk) — pushed after every cycle; pointer in `CLAUDE.md`: yes / no (never in a client's repository) |
 | Who reviews CI, deployment, migration and release-flag changes (CORE §1.1) | `<fill>` | per the strictness: swarm the verifier · standard the owner · strict a human |
 | Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | strict: ask · swarm, standard: allowed |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
 | Product, users; solo or team | `<fill>` | — |
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | solo: the owner · a team or a client: the business analyst / product owner (INIT 3.1, question 3) |
-| Owner's language / artifacts' language | `<fill>` | owner's language / English |
 
 ## Sources of truth (procedures/SOURCES.md)
 | Kind | Main system | The coordinator may |
@@ -62,7 +77,6 @@ What "start a new cycle" runs here — an ordered recipe, agreed at init, revise
 | Approval gate | `<fill>` | swarm: auto for queued and obvious items, ask for the rest · standard, strict: announce the plan (item → issue/PR → what and why → model) and wait for the owner's approval |
 | Obvious review comments | `<fill>` | swarm, standard: fixed automatically · strict: listed in the plan like any other item |
 | Stale comments | `<fill>` | flagged with the reason (task changed / comment obsolete); never acted on without the owner |
-| Periodic tick | `<fill>` | swarm: every ~30 min · standard, strict: only on the owner's "start a new cycle" |
 
 ## Coding standards (CORE §4b)
 | Question | This project | Default to offer |
@@ -90,8 +104,6 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 | PR | `<fill>` | **draft** at the first push; title as the commit (`feat: items with a reticle per hand (#37)`); `Closes #<issue>`; Summary / Test plan (tick only what was run) |
 | AI review | `<fill>` | independent reviewer agent per CORE §6; re-review until approval with no Blocker / Major |
 | Who marks ready | `<fill>` | the coordinator after approval + green CI; never the author |
-| Human review | `<fill>` | swarm: none · standard: the owner on risky changes · strict: developer and/or business analyst; their comments go back to the same branch + re-review |
-| Who merges | `<fill>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |
 | Progress comments | `<fill>` | a short PR comment after each meaningful push |
 | Multi-issue PRs | `<fill>` | each issue linked and moved on the board |
 | Deploy | `<fill>` | preview per PR; production from the main branch |
@@ -127,7 +139,6 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Database changes | `<fill>` | migration files; never edit an applied migration · strict: no dashboard edits, no direct pushes from a dev machine |
 | Production backup before an irreversible change *(if any)* | `<fill>` | the command and destination in `BINDINGS.md` (e.g. a database dump / platform snapshot), filled before the first such write |
 | Release flags *(if any)* | `<fill>` | features that act on real users or money ship disabled behind an env flag; enabled after merge in a documented order |
-| Production rights of tools / MCP | `<fill>` | per the strictness (swarm, standard: write when the task needs it, backup first · strict: read-only) |
 
 ## Parallel work and resources
 | Question | This project | Default to offer |
@@ -147,8 +158,6 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 ## Budget, time and models
 | Question | This project | Default to offer |
 |---|---|---|
-| Usage caps | `<fill>` | weekly 90%, short window 95%; over only with permission |
-| Model pins (kinds automatic routing must not change, CORE §7) | `<fill>` | none — the coordinator routes every kind itself |
 | Leads (CORE §4, roles/lead.md) | `<fill>` | for tasks whose pieces must land together (3+ sub-contracts, more than one worker's context); up to 3 workers per lead, within the preset's parallel workers |
 | Spend forecast and report (CORE §7a) | `<fill>` | the block's estimate in cost and limit percent in the plan; forecast vs actual in the block report |
 | Time estimates | `<fill>` | strict: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic · swarm, standard: none |
