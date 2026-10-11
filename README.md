@@ -31,7 +31,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "update the core"
-  ([UPDATE-CORE.md](procedures/UPDATE-CORE.md)).
+  ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,

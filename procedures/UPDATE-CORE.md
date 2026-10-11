@@ -18,10 +18,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    local edits, and record the new commit in `PROJECT.md`; remote core — re-read the core now. Install
    roles: into `~/.claude/agents/` on this machine, or into the project's `.claude/agents/` through the
    project's change path (§1.1). Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
-5. **Layout:** if `coordinator/` is not yet its own git repository excluded from the project's git
-   ([INIT.md](INIT.md)), say so in the report and, on the owner's yes, set it up: `git init` in
-   `coordinator/`, add it to the project's `.git/info/exclude`, commit. If the project's git already
-   tracks those files, untracking them is a change to the project and goes through its change path
-   (§1.1); a core copied as `coordinator/` itself moves into `coordinator/core/`.
+5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
+   ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
+   [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
+   project's change path and stay on disk).
 6. **Journal** the update: the old and new commits and what the owner decided per item. Tell running
    sessions to re-read their brief's rules only where the update changes them.
