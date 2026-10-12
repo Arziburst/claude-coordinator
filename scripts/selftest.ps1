@@ -48,6 +48,11 @@ switch ($Step) {
   }
   if ($shells.Count -eq 0) { $shells = @(, @((Get-Process -Id $PID).Path, '')) }
   $want = ([IO.File]::ReadAllText((Join-Path $coreDir 'tests/session-tokens/expected.txt')) -replace "`r", '').TrimEnd("`n")
+  # a local copy (no .git) must not hold the core's CLAUDE.md: Claude Code loads it into every session
+  # that reads the copy's files, telling workers they are the coordinator
+  if ((Test-Path -LiteralPath (Join-Path $coreDir 'CLAUDE.md')) -and -not (Test-Path -LiteralPath (Join-Path $coreDir '.git'))) {
+    Fail 'the local core copy holds CLAUDE.md: remove it (it tells every worker it is the coordinator)'
+  } else { Pass 'no CLAUDE.md in a local core copy' }
   $old = $env:CLAUDE_CONFIG_DIR
   foreach ($sh in $shells) {
     $exe = $sh[0]; $tag = if ($shells.Count -gt 1) { " ($($sh[1]))" } else { '' }

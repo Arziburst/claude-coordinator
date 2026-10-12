@@ -27,7 +27,7 @@ other clones and teammates, and the one yes this needs.
    into `coordinator/core/` (keep `PROJECT.md`, `BINDINGS.md`, `LOG.md`, `HANDOFF.md` at the top),
    remove `coordinator/.git`, and record in `PROJECT.md` a local core at that commit.
 2a. **No local core:** clone claude-coordinator to a scratch folder, copy all its files
-   except `.git/` and `.github/` into
+   except `.git/`, `.github/` and `CLAUDE.md` into
    `coordinator/core/`, record that commit in `PROJECT.md`, and point the worker safety file, the
    status line and `BINDINGS.md` at `coordinator/core/scripts/`.
 3. **Create the repository:** `git -C coordinator init`, `git -C coordinator symbolic-ref HEAD

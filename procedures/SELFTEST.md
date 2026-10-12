@@ -74,8 +74,11 @@ environment, not the model. `<c>` below is the core commit under test.
    - **The coordinator** checks the oracles itself (`git show selftest/<c>/st1:a.txt` → `a`, `b.txt` →
      `b`), then merges `selftest/<c>/st1` into `selftest/<c>/base` (a worktree of the base under
      `.claude/worktrees/`, `merge --no-ff`, pushed where there is a remote).
-   - **Tester, scout, researcher:** each started as a subagent on the light model with "read your role
-     file; answer in one line: your role and this contract's id (st1)". PASS when the line names both.
+   - **Tester, scout, researcher:** each started as a subagent on the light model with "read
+     `<core>/roles/<role>.md` (the absolute path); answer in one line: `role: <the name in its
+     frontmatter>; contract: st1`". PASS only when the line gives the exact role name (`tester`,
+     `scout`, `researcher`) and `st1`: a subagent that did not find the file answers from its system
+     prompt ("test-writer"), which proves nothing.
    - PASS when the lead stopped at the budget, its report is `ready`, both oracles hold, each sub-task
      has a verdict and `st1` is merged into the base.
 5. **PR flow** — where the state repository has a remote on the **owner's own account** (one in a

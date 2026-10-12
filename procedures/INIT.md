@@ -130,7 +130,9 @@ with one line at the summary or later.
 ### 3.4 Set up without asking
 
 - **The core** is always a local copy: clone claude-coordinator to a scratch folder, copy all its files except
-  `.git/` and `.github/` (`tests/` included: the self-test reads it) into
+  `.git/`, `.github/` and `CLAUDE.md` (`tests/` included: the self-test reads it; the core's `CLAUDE.md`
+  says "you are the coordinator", and Claude Code loads a nested `CLAUDE.md` into any session that reads
+  files there — every worker reading its role) into
   `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook, the status line and the
   roles run from there. It may be **edited for this project**; upstream changes come in only on "update
   the core" ([UPDATE-CORE.md](UPDATE-CORE.md)). A local edit useful for every project is proposed back
