@@ -72,7 +72,7 @@ model: opus
 results:
   - criterion: each hand shows its own reticle
     evidence: oracle               # oracle | claim | owner
-    proof: "CI run #812: test_vr_reticle passed"
+    proof: "CI run #812 on 5f3e2a1: test_vr_reticle passed"   # a CI run names the commit it ran on
   - criterion: the code follows the project's standards
     evidence: claim
 questions: []                      # do_not_decide items and new forks
@@ -95,6 +95,9 @@ runs:
 **Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a log,
 a command and its output); everything else is `claim`; a `check: owner` criterion is `owner` until the owner accepts it (the steps
 are in the report). Only the reviewer can turn a claim into
-`review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. Reports,
+`review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. **A CI run
+is an oracle only for the commit it ran on:** its proof names the run and that commit, and it counts
+for a verdict only when that commit is the head the reviewer reviewed — a run on an older head is a
+`claim`. Reports,
 the journal and the owner's summary keep the class, so "tested", "reviewed" and "said so" never look the
 same.

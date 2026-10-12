@@ -36,7 +36,8 @@ worker (BINDINGS) and the phrase that ends your report.
    sub-contract; findings go back to the same worker until there is no Blocker or Major. A failed
    review that a stronger model would fix → restart on the sub-contract's `escalate_to`.
 5. **Integrate on your branch only.** Merge each approved sub-branch into the integration branch
-   (a local merge and a push, no PR of its own), run the definition-of-done checks there, and merge
+   (a local merge and a push, no PR of its own) — exactly the commit its verdict approved (`git merge
+   <sha>`; a newer commit on the sub-branch goes back to the verifier first), run the definition-of-done checks there, and merge
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
    (`git merge-base --is-ancestor`), remove its worker — after reading its cost (step 6): `claude stop` and `claude rm` the session,

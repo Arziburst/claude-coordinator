@@ -35,6 +35,7 @@ resources and launch/test limits, and the phrase that ends your report.
      - criterion: <text>
        evidence: oracle       # oracle: with `proof` (CI run, log, command + output) | claim: everything else
        proof: "<pointer>"     #   | owner: steps written for the owner, not yet accepted
+                              # a CI run names the commit it ran on: "CI run #812 on 5f3e2a1"; a CI run names its commit
    questions: []              # do_not_decide items and new forks
    known_gaps: []             # what you could not run or check
    ```
