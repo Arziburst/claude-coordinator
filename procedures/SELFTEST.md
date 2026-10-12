@@ -47,6 +47,12 @@ subscribed right after its start (CORE §4, *Control*) and reports to the coordi
 rung up (Sonnet): a lead on the lightest model may fail its role, and a FAIL must mean the
 environment, not the model. `<c>` below is the core commit under test.
 
+**Limits.** Before step 4, check the windows have room for the run (about $0.5, in limit percent by
+the ratio of CORE §7a; the status line, TOOLKIT *Usage*); no room → wait for the reset or ask the owner.
+A limit hit mid-run (a 429 "You've hit your … limit", a session `blocked`) → pause until `resets_at`,
+then resume each blocked test session as TOOLKIT *Usage* says (respawn **and** a "continue" message);
+the report notes the interruption and the resume time.
+
 1. **Scripts:** `selftest scripts` — check-core, check-scripts, check-contract on
    `tests/selftest/contract.md`, the status line and `session-tokens` on fixtures, the hook's self-test,
    and the hook allowing `selftest/*` while blocking `main` and `master`.
@@ -85,16 +91,19 @@ environment, not the model. `<c>` below is the core commit under test.
    client's or a team's organization: only on the owner's yes):
    - A worker (`#st2 worker: selftest PR`, start-worker with the flags above, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
-     file, commits, pushes and opens a **draft** PR into `selftest/<c>/base`.
+     file, commits, pushes and opens a **draft** PR into `selftest/<c>/base`. Its brief says to push
+     **without** `-u` (`git push origin selftest/<c>/task-1`) on purpose, so every run proves
+     cleanup-worker's fallback to `origin/<branch>` (roles/worker.md pushes with `-u`).
    - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
      the coordinator posts that verdict as a PR comment.
    - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash`, never
      `--delete-branch`), checks `gh pr view --json state` → `MERGED`, and runs **cleanup-worker** on the
      worker's worktree (it must report cleaned: a merged PR with the pushed head).
    - Nothing is pushed to or merged into the state branch.
-6. **Verify and clean up:** stop and remove every `selftest` session (`claude stop`, then `claude rm`,
-   each its own command); read each one's cost with `scripts/session-tokens <id>` and delete its
-   status file (TOOLKIT *Usage*); then `selftest verify --project <root> --state <root>/coordinator
+6. **Verify and clean up:** for every `selftest` session, in this order: read its cost with
+   `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is retried once,
+   never left as `n/a`), delete its status file (TOOLKIT *Usage*), then `claude stop` and `claude rm`
+   (each its own command); then `selftest verify --project <root> --state <root>/coordinator
    --core <c> [--state-repo <owner/name>]` — no session or worktree left (clean, merged worktrees are
    removed), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
    is deleted.**

@@ -154,6 +154,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **A pair with the same behaviour and output:** `<name>.sh` for macOS / Linux and `<name>.ps1` for
   Windows. Same arguments, same messages, same exit codes; a change to one is made to the other in the
   same pull request.
+- **Run a `.ps1` with its full command** on Windows: `powershell -NoProfile -ExecutionPolicy Bypass
+  -File <script> …` (or `pwsh` the same way). A bare `.\script.ps1` or `-File` without `-ExecutionPolicy
+  Bypass` is refused under the default execution policy — a lead's cost read failed that way. Briefs
+  and role files give the full command.
 - **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
   (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
   escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
@@ -208,10 +212,17 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
   per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
   cache entries, `prompt_cache.ttl: "1h"` in the status JSON; on Arx this matched the status cost to
-  the cent). Then delete that worker's `sessions/<id>.json`; the status line writes a file for every
+  the cent). **The order** when a run ends: read its cost (a failed read retried once with the full
+  command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
+  from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
+  transcript, but not its cost line). The status line writes a file for every
   session on the machine, other projects' too, so at every cycle start run `session-tokens.sh --prune`
   / `session-tokens.ps1 -Prune` (deletes files older than 7 days; on Windows only the `-Prune` form
   reaches the script through `-File`).
+- **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
+  `blocked`): pause until the status line's `resets_at` (CORE §9), then for each blocked session
+  `claude respawn <id>` **and** a one-line SendMessage ("the limit has reset, continue") —
+  respawn alone brings it back idle and still blocked (seen on 2.1.296). The report notes the pause.
 - **Spend since a reset, account-wide** (CORE §7a): `session-tokens.sh --since <UTC time>` /
   `session-tokens.ps1 -Since <UTC time>` — the same per-model lines over every transcript on the
   machine, each message once, counted by its own timestamp (a session that crosses the reset is
