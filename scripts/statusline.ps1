@@ -5,6 +5,7 @@
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $raw = [Console]::In.ReadToEnd()
+$i = $raw.IndexOf('{'); if ($i -gt 0) { $raw = $raw.Substring($i) }   # a BOM before the JSON breaks it
 $dir = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'coordinator'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)

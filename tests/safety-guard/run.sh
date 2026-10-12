@@ -24,5 +24,20 @@ while IFS="$(printf '\t')" read -r expect branch cmd; do
   got=allow; [ "$rc" = 2 ] && got=block
   [ "$got" = "$expect" ] || { echo "FAIL ($branch) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
+
+# The input itself: a BOM before the JSON is read through; what is not a JSON object blocks.
+raw() {   # raw <expect> <what> <stdin bytes, printf format>
+  local expect="$1" what="$2" rc got; n=$((n + 1))
+  printf "$3" | "${CMD[@]}" >/dev/null 2>&1; rc=$?
+  got=allow; [ "$rc" = 2 ] && got=block
+  [ "$got" = "$expect" ] || { echo "FAIL (input) expected $expect, got $got (exit $rc): $what"; fail=1; }
+}
+CMD=("$@")
+raw block "a BOM, then a push to main" '\357\273\277{"tool_input":{"command":"git push origin main"}}'
+raw allow "a BOM, then a push to a work branch" '\357\273\277{"tool_input":{"command":"git push origin 12-fix"}}'
+raw block "not JSON" 'git push origin 12-fix'
+raw block "truncated JSON" '{"tool_input":{"command":"ls"'
+raw block "no input" ''
+raw allow "a tool call without a command" '{"tool_name":"Read","tool_input":{"file_path":"x"}}'
 echo "safety-guard cases: $n, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

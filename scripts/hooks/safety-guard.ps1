@@ -19,7 +19,12 @@ if ($SelfTest) {
 
 [Console]::InputEncoding = [Text.Encoding]::UTF8
 $raw = [Console]::In.ReadToEnd()
-try { $d = $raw | ConvertFrom-Json } catch { exit 0 }
+# A BOM (or anything else) before the JSON object is dropped. Input that is not a JSON object blocks:
+# Claude Code always sends one, and a guard that cannot read the call must not let it through.
+$i = $raw.IndexOf('{'); if ($i -gt 0) { $raw = $raw.Substring($i) }
+$d = $null; $t = $raw.Trim()
+if ($t.StartsWith('{') -and $t.EndsWith('}')) { try { $d = $raw | ConvertFrom-Json } catch { $d = $null } }
+if (-not $d) { [Console]::Error.WriteLine('Blocked by safety-guard: the tool call could not be read (not a JSON object). If this is a false positive, ask the owner.'); exit 2 }
 $cmd = [string]$d.tool_input.command
 $cwd = [string]$d.cwd
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
