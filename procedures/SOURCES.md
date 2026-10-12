@@ -67,7 +67,11 @@ whole drive, mailbox or chat history.
 
 Detected at init (INIT, *Platform* and 3.2), said to the owner in one line, recorded in `PROJECT.md`:
 
-- **No tracker** → the tasks live in `coordinator/TASKS.md`: one row per task — `T-<n>`, title,
+- **No tracker** → the owner chooses at init (INIT 3.1, question 4): a **GitHub Project** created for
+  the repository (`gh project create --owner <owner> --title <title>`, then `gh project link <number>
+  --owner <owner> --repo <repo>`; its *Status* field starts with Todo / In Progress / Done — Backlog
+  and Testing are added in the project's settings or with `gh api graphql`) — or the tasks live in
+  `coordinator/TASKS.md`: one row per task — `T-<n>`, title,
   status (Backlog / Todo / In Progress / Testing / Done), branch, PR or commit, sources (`S-<n>`). It is
   the main system for tasks (§1); the coordinator moves rows as it would cards. A tracker later → the
   tasks move there on the owner's yes and the file is retired.
