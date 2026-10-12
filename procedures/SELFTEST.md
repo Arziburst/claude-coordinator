@@ -136,7 +136,7 @@ the sandbox's `main` as the base, and `selftest clean --sandbox <dir>` removes i
 
 A FAIL whose cause is a core script, role or procedure (not the project or the machine) is a **core
 finding**: a row in `coordinator/CORE-FINDINGS.md` with the step, the command, its exit code and error
-lines, sent to claude-coordinator as the owner chose (`[core-report] selftest: <step> …`) — the one
+lines, sent to claude-coordinator as the owner chose (title `selftest: <step> …`, prefixed once) — the one
 channel of [CORE-FINDINGS.md](CORE-FINDINGS.md). The next update proves the fix with the same step.
 
 ## Not covered

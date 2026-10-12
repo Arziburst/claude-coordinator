@@ -35,7 +35,7 @@ keep them here, I pass them on by hand*.
 **The report has fixed fields only** — nothing from the project goes into a public issue:
 
 ```
-Title: [core-report] <core file or script>: <one-line summary>
+Title: <core file or script>: <one-line summary>
 Core: <the local core commit> (upstream main <sha> when filed)
 Where: <core file, section or script; the role>
 Trigger: <1-5 above>
@@ -55,8 +55,10 @@ Before filing, in this order:
 2. **Already reported?** An open issue with the same signature → a comment `+1: core <commit>,
    <environment>` instead of a new issue; the row gets that issue's number.
 3. **Rate:** at most three new issues a day from one project; the rest wait for the next day.
-4. **File** with the owner's own gh login: `gh issue create -R Arziburst/claude-coordinator --title
-   "[core-report] …" --body-file <report>`. The title prefix is enough: claude-coordinator's own
+4. **File** with the owner's own gh login, the title prefixed **once** with `[core-report] ` (the
+   `Title:` line above has no prefix, and the body does not repeat the title): `gh issue create -R
+   Arziburst/claude-coordinator --title
+   "[core-report] <Title>" --body-file <report>`. The title prefix is enough: claude-coordinator's own
    workflow adds the `core-report` label (an outside account cannot set labels). The row becomes `sent
    #<issue>`.
 
