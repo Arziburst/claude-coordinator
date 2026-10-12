@@ -428,7 +428,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   what is left before the caps (§9), the 5-hour window included. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).
 - **Analysis after the block:** one report line — forecast vs actual (cost, percent, deviation), the
-  worst overrun by task, reworks and escalations. A task over twice its estimate is looked at: a wrong
+  worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
   Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
@@ -498,6 +498,14 @@ change that affects them.
   cleaned up, decided, verdicts, questions and answers). It survives compaction, restarts and moves; the
   status page summarizes it. No customer data or secrets (§1.13); in a client's repository, written for
   the client.
+- **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
+  owner's test, CI on the main line, another task, a user) gets one line in `coordinator/ESCAPES.tsv`
+  (private, never in the client's tracker): date · the bug (issue or link) · the task that introduced
+  it — from the worker's report, the PR the bug names or `git log`, else `unknown`, never a guess · who
+  found it. Model, effort, lead and review path are not copied: they are joined from `RUNS.tsv` by the
+  task. The block report gives **escapes per 10 merged tasks** over the last blocks; a breakdown by
+  kind, model or lead only once a group has 20 merged tasks (fewer is noise). A rise is reported with
+  the tasks behind it; routing and rules change only on the owner's yes, never by themselves.
 
 ## 12a. Dry run
 
