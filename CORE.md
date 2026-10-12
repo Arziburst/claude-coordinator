@@ -519,7 +519,9 @@ Answer per [procedures/WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md).
 ## 13a. "Coordinator, settings"
 
 "Settings" in any wording ("настройки") shows one table of this project's settings, each with its
-value, source and date; "change X to Y" shows the effect first and edits `PROJECT.md` on the owner's yes:
+value, source and date; any request to change one is answered with a quiz — a question per setting
+it touches, the current value shown, the recommendation first, each option's effect — and `PROJECT.md`
+changes only on the answers:
 [procedures/SETTINGS.md](procedures/SETTINGS.md).
 
 ## 14. Who decides
