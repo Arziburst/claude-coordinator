@@ -3,6 +3,14 @@
 # the same steps and output). The steps with real sessions are run by the coordinator, not here.
 #   scripts/selftest.sh scripts                      1: the core's checks and scripts on fixtures
 #   scripts/selftest.sh env [--repo <owner/name>]    2: claude, git and gh versions; read-only GitHub
+# In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
+#   scripts/selftest.sh prepare --project <root> --state <coordinator dir> --core <commit>
+#                                                    3: the project's git ignores .claude/worktrees;
+#                                                       branch selftest/<commit>/base from the state branch
+#   scripts/selftest.sh verify --project <root> --state <coordinator dir> --core <commit> [--state-repo <owner/name>]
+#                                                    6: no session or worktree left; the evidence is there
+#                                                       (base, st1 merged into it, the merged PR); nothing deleted
+# For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
 #                                                       path, so the owner trusts its repo once per machine
@@ -13,7 +21,7 @@
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,22s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -124,6 +132,69 @@ clean)
   if [ "$f" -eq 0 ]; then
     chmod -R u+w "$d" && rm -r "$d" && pass "sandbox removed" || fail "could not remove $d"
   else echo "sandbox kept for inspection: $d"; fi
+  finish ;;
+
+prepare|verify)
+  project="" state="" c="" repo=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project) [ $# -ge 2 ] || usage; project="$2"; shift 2 ;;
+      --state) [ $# -ge 2 ] || usage; state="$2"; shift 2 ;;
+      --core) [ $# -ge 2 ] || usage; c="$2"; shift 2 ;;
+      --state-repo) [ "$step" = verify ] && [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$project" ] && [ -n "$state" ] && [ -n "$c" ] || usage
+  git -C "$project" rev-parse --show-toplevel >/dev/null 2>&1 || { fail "not a git repository: $project"; finish; }
+  git -C "$state" rev-parse --git-dir >/dev/null 2>&1 || { fail "no state repository at $state"; finish; }
+  base="selftest/$c/base"; st1="selftest/$c/st1"
+  if [ "$step" = prepare ]; then
+    # the state repository's worktrees live under the project's trusted root; its git must not see them
+    if git -C "$project" check-ignore -q .claude/worktrees/selftest; then pass "the project's git ignores .claude/worktrees"
+    else
+      ex="$(cd "$project" && git rev-parse --git-path info/exclude)"
+      case "$ex" in /*|?:*) ;; *) ex="$project/$ex" ;; esac
+      mkdir -p "$(dirname "$ex")" && printf '.claude/worktrees/\n' >> "$ex" &&
+        git -C "$project" check-ignore -q .claude/worktrees/selftest && pass "added .claude/worktrees/ to the project's info/exclude" ||
+        fail "the project's git does not ignore .claude/worktrees"
+    fi
+    if git -C "$state" show-ref -q --verify "refs/heads/$base"; then
+      fail "$base exists: core $c was tested here already - its branches are the evidence, nothing is deleted"; finish
+    fi
+    from="$(git -C "$state" rev-parse --abbrev-ref HEAD)"
+    git -C "$state" branch "$base" HEAD && pass "branch $base from $from" || fail "could not create $base"
+    if [ -n "$(git -C "$state" config --get remote.origin.url)" ]; then
+      git -C "$state" push -q -u origin "$base" 2>/dev/null && pass "pushed $base" || fail "could not push $base"
+      echo "remote: yes"
+    else echo "remote: no - local branches and a local merge"; fi
+    echo "worktrees: $(cd "$project" && pwd)/.claude/worktrees"
+    echo "base: $base"
+    echo "started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    finish
+  fi
+  # verify: worktrees of the state repository (the first listed is the repository itself) that are
+  # clean and merged into the base are removed; branches never are - they are the evidence
+  git -C "$state" worktree list --porcelain | sed -n 's/^worktree //p' | tail -n +2 | while IFS= read -r w; do
+    [ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ] &&
+      git -C "$state" merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" "$base" 2>/dev/null &&
+      git -C "$state" worktree remove "$w"
+  done
+  left="$(git -C "$state" worktree list --porcelain | grep -c '^worktree ')"
+  [ "$left" -le 1 ] && pass "no worktree left" || fail "$((left - 1)) worktree(s) left: not clean or not merged into $base"
+  for b in "$base" "$st1"; do
+    git -C "$state" show-ref -q --verify "refs/heads/$b" && pass "evidence: $b" || fail "missing: $b"
+  done
+  git -C "$state" merge-base --is-ancestor "$st1" "$base" 2>/dev/null && pass "$st1 is merged into $base" ||
+    fail "$st1 is not merged into $base"
+  if [ -n "$repo" ]; then
+    n="$(gh pr list -R "$repo" --state merged --head "selftest/$c/task-1" --base "$base" --json number --jq '.[0].number' 2>/dev/null)"
+    [ -n "$n" ] && pass "PR #$n merged into $base" || fail "no merged PR from selftest/$c/task-1 into $base"
+  else skip "PR flow: not checked (no --state-repo)"; fi
+  if command -v claude >/dev/null 2>&1; then
+    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *//')"
+    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(echo $n)"
+  else skip "no claude: sessions not checked"; fi
   finish ;;
 
 *) usage ;;

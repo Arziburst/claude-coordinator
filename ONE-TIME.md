@@ -20,7 +20,7 @@ is new and never asks a recorded answer again (CORE §3, [procedures/UPDATE-CORE
 | `spend-ratio` | #21 dba3845 | project | check | run | the first limit percent per dollar, from `scripts/session-tokens --since <reset>`, written to BINDINGS *Models* (CORE §7a) |
 | `branch-protection` | #7 c8655e4 | project | check | run | the main branch on the code host requires a PR and passing checks (and a human review in the strict preset), or why not is recorded (INIT *Safety check*) |
 | `first-real-pr-watched` | #45 c6982d5 | project | check | run | the first real PR after init is followed end to end — CI, review, merge — and the result reported: what no sandbox can show |
-| `selftest` | #48 | machine | check | run | the full self-test passes on this machine ([procedures/SELFTEST.md](procedures/SELFTEST.md)): scripts, environment, a mini block with real sessions in a sandbox, the PR flow where the state repository has a remote |
+| `selftest` | #48 | machine | check | run | the full self-test passes on this machine at the core commit in use ([procedures/SELFTEST.md](procedures/SELFTEST.md)): in the state repository, its branches and PR kept as evidence; it runs again after every update (UPDATE-CORE step 4), each CHECKLIST line naming the commit |
 
 - **scope** — `project`: once per project; `machine`: once per project on each machine (its
   CHECKLIST row names the machine's `hostname`), so a new machine is asked again.

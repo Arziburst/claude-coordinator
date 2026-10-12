@@ -2,6 +2,14 @@
 # the same steps and output). The steps with real sessions are run by the coordinator, not here.
 #   powershell -File scripts/selftest.ps1 scripts                 1: the core's checks and scripts on fixtures
 #   powershell -File scripts/selftest.ps1 env [-Repo <owner/name>]   2: claude, git and gh versions; read-only GitHub
+# In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
+#   powershell -File scripts/selftest.ps1 prepare -Project <root> -State <coordinator dir> -Core <commit>
+#                                                    3: the project's git ignores .claude/worktrees;
+#                                                       branch selftest/<commit>/base from the state branch
+#   powershell -File scripts/selftest.ps1 verify -Project <root> -State <coordinator dir> -Core <commit> [-StateRepo <owner/name>]
+#                                                    6: no session or worktree left; the evidence is there
+#                                                       (base, st1 merged into it, the merged PR); nothing deleted
+# For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   powershell -File scripts/selftest.ps1 sandbox [-In <folder>]   3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
 #                                                       path, so the owner trusts its repo once per machine
@@ -11,14 +19,15 @@
 # Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`.
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
 # Exit 1 on any FAIL, 2 on a usage error.
-param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In)
+param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In,
+      [string]$Project, [string]$State, [string]$Core)
 # Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
 # the caller set (GitHub's powershell shell runs with Stop)
 $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
-$core = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 13 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+$coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 21 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 $script:p = 0; $script:f = 0; $script:s = 0
 function Pass([string]$m) { "PASS ${Step}: $m"; $script:p++ }
@@ -38,32 +47,32 @@ switch ($Step) {
     if ($cmd) { $shells += , @($cmd.Source, $c[1]) }
   }
   if ($shells.Count -eq 0) { $shells = @(, @((Get-Process -Id $PID).Path, '')) }
-  $want = ([IO.File]::ReadAllText((Join-Path $core 'tests/session-tokens/expected.txt')) -replace "`r", '').TrimEnd("`n")
+  $want = ([IO.File]::ReadAllText((Join-Path $coreDir 'tests/session-tokens/expected.txt')) -replace "`r", '').TrimEnd("`n")
   $old = $env:CLAUDE_CONFIG_DIR
   foreach ($sh in $shells) {
     $exe = $sh[0]; $tag = if ($shells.Count -gt 1) { " ($($sh[1]))" } else { '' }
-    function Run([string]$script) { $input | & $exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $core $script) @args }
+    function Run([string]$script) { $input | & $exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $coreDir $script) @args }
     # stdin from a file, not a PowerShell pipe: 5.1 piping into pwsh sometimes delivers nothing
     function Feed([string]$file, [string]$script) {
       if ($env:OS -eq 'Windows_NT') { & cmd /d /s /c "`"$exe`" -NoProfile -ExecutionPolicy Bypass -File `"$script`" < `"$file`" 2>nul" }
       else { Get-Content -Raw -LiteralPath $file | & $exe -NoProfile -File $script 2>$null }
     }
-    $null = Run 'scripts/check-core.ps1' $core; if ($LASTEXITCODE -eq 0) { Pass "check-core$tag" } else { Fail "check-core$tag" }
-    $null = Run 'scripts/check-scripts.ps1' (Join-Path $core 'scripts'); if ($LASTEXITCODE -eq 0) { Pass "check-scripts$tag" } else { Fail "check-scripts$tag" }
-    $null = Run 'scripts/check-contract.ps1' (Join-Path $core 'tests/selftest/contract.md')
+    $null = Run 'scripts/check-core.ps1' $coreDir; if ($LASTEXITCODE -eq 0) { Pass "check-core$tag" } else { Fail "check-core$tag" }
+    $null = Run 'scripts/check-scripts.ps1' (Join-Path $coreDir 'scripts'); if ($LASTEXITCODE -eq 0) { Pass "check-scripts$tag" } else { Fail "check-scripts$tag" }
+    $null = Run 'scripts/check-contract.ps1' (Join-Path $coreDir 'tests/selftest/contract.md')
     if ($LASTEXITCODE -eq 0) { Pass "check-contract on the fixture$tag" } else { Fail "check-contract on the fixture$tag" }
     $t = NewTemp
     $env:CLAUDE_CONFIG_DIR = $t
-    $out = "$(Feed (Join-Path $core 'tests/selftest/status.json') (Join-Path $core 'scripts/statusline.ps1'))"
+    $out = "$(Feed (Join-Path $coreDir 'tests/selftest/status.json') (Join-Path $coreDir 'scripts/statusline.ps1'))"
     if ($out -notmatch '5h 14%.*week 92%') { Fail "statusline$tag`: printed '$out'" }
     elseif (-not (Test-Path -LiteralPath (Join-Path $t 'coordinator/sessions/selftest-fixture.json'))) { Fail "statusline$tag`: no session file" }
     else { Pass "statusline$tag" }
     Remove-Item -LiteralPath $t -Recurse
-    $env:CLAUDE_CONFIG_DIR = Join-Path $core 'tests/session-tokens/claude'
+    $env:CLAUDE_CONFIG_DIR = Join-Path $coreDir 'tests/session-tokens/claude'
     $got = (@(Run 'scripts/session-tokens.ps1' 's1') -join "`n")
     if ($got -eq $want) { Pass "session-tokens$tag" } else { Fail "session-tokens$tag`: differs from tests/session-tokens/expected.txt" }
     $env:CLAUDE_CONFIG_DIR = $old
-    $hook = Join-Path $core 'scripts/hooks/safety-guard.ps1'
+    $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     function Hook([string]$cmd) { [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"' + $cmd + '"}}'); $null = Feed $jf $hook; $LASTEXITCODE }
     if ("$(& $exe -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest)".Trim() -eq 'safety-guard: OK') { Pass "safety-guard self-test$tag" } else { Fail "safety-guard self-test$tag" }
@@ -157,6 +166,69 @@ switch ($Step) {
   if ($script:f -eq 0) {
     try { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction Stop; Pass 'sandbox removed' } catch { Fail "could not remove $d" }
   } else { "sandbox kept for inspection: $d" }
+  Finish
+}
+{ $_ -eq 'prepare' -or $_ -eq 'verify' } {
+  if (-not ($Project -and $State -and $Core) -or $Repo -or $Sandbox -or $In -or ($StateRepo -and $Step -eq 'prepare')) { Usage }
+  $null = & git -C $Project rev-parse --show-toplevel 2>$null
+  if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Project"; Finish }
+  $null = & git -C $State rev-parse --git-dir 2>$null
+  if ($LASTEXITCODE -ne 0) { Fail "no state repository at $State"; Finish }
+  $base = "selftest/$Core/base"; $st1 = "selftest/$Core/st1"
+  if ($Step -eq 'prepare') {
+    # the state repository's worktrees live under the project's trusted root; its git must not see them
+    & git -C $Project check-ignore -q .claude/worktrees/selftest
+    if ($LASTEXITCODE -eq 0) { Pass "the project's git ignores .claude/worktrees" }
+    else {
+      Push-Location -LiteralPath $Project; $ex = & git rev-parse --git-path info/exclude; Pop-Location
+      if (-not [IO.Path]::IsPathRooted($ex)) { $ex = Join-Path $Project $ex }
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ex) | Out-Null
+      [IO.File]::AppendAllText($ex, ".claude/worktrees/`n")
+      & git -C $Project check-ignore -q .claude/worktrees/selftest
+      if ($LASTEXITCODE -eq 0) { Pass "added .claude/worktrees/ to the project's info/exclude" } else { Fail "the project's git does not ignore .claude/worktrees" }
+    }
+    & git -C $State show-ref -q --verify "refs/heads/$base"
+    if ($LASTEXITCODE -eq 0) { Fail "$base exists: core $Core was tested here already - its branches are the evidence, nothing is deleted"; Finish }
+    $from = & git -C $State rev-parse --abbrev-ref HEAD
+    & git -C $State branch $base HEAD
+    if ($LASTEXITCODE -eq 0) { Pass "branch $base from $from" } else { Fail "could not create $base" }
+    if (& git -C $State config --get remote.origin.url) {
+      & git -C $State push -q -u origin $base 2>$null
+      if ($LASTEXITCODE -eq 0) { Pass "pushed $base" } else { Fail "could not push $base" }
+      'remote: yes'
+    } else { 'remote: no - local branches and a local merge' }
+    'worktrees: ' + (Join-Path (Resolve-Path -LiteralPath $Project).Path '.claude/worktrees')
+    "base: $base"
+    'started: ' + (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+    Finish
+  }
+  # verify: worktrees of the state repository (the first listed is the repository itself) that are
+  # clean and merged into the base are removed; branches never are - they are the evidence
+  $wts = @(& git -C $State worktree list --porcelain | Where-Object { $_ -like 'worktree *' } | ForEach-Object { $_.Substring(9) })
+  foreach ($w in ($wts | Select-Object -Skip 1)) {
+    $dirty = & git -C $w status --porcelain 2>$null
+    if ($LASTEXITCODE -ne 0 -or $dirty) { continue }
+    $head = & git -C $w rev-parse HEAD
+    & git -C $State merge-base --is-ancestor $head $base 2>$null
+    if ($LASTEXITCODE -eq 0) { & git -C $State worktree remove $w }
+  }
+  $left = @(& git -C $State worktree list --porcelain | Where-Object { $_ -like 'worktree *' }).Count
+  if ($left -le 1) { Pass 'no worktree left' } else { Fail "$($left - 1) worktree(s) left: not clean or not merged into $base" }
+  foreach ($b in @($base, $st1)) {
+    & git -C $State show-ref -q --verify "refs/heads/$b"
+    if ($LASTEXITCODE -eq 0) { Pass "evidence: $b" } else { Fail "missing: $b" }
+  }
+  & git -C $State merge-base --is-ancestor $st1 $base 2>$null
+  if ($LASTEXITCODE -eq 0) { Pass "$st1 is merged into $base" } else { Fail "$st1 is not merged into $base" }
+  if ($StateRepo) {
+    $n = & gh pr list -R $StateRepo --state merged --head "selftest/$Core/task-1" --base $base --json number --jq '.[0].number' 2>$null
+    if ($n) { Pass "PR #$n merged into $base" } else { Fail "no merged PR from selftest/$Core/task-1 into $base" }
+  } else { Skip 'PR flow: not checked (no -StateRepo)' }
+  if (Get-Command claude -ErrorAction SilentlyContinue) {
+    $json = "$(& claude agents --json 2>$null)"
+    $n = @([regex]::Matches($json, '"name":\s*"([^"]*selftest[^"]*)"') | ForEach-Object { $_.Groups[1].Value })
+    if ($n.Count -eq 0) { Pass 'no self-test session left' } else { Fail "sessions left: $($n -join ' ')" }
+  } else { Skip 'no claude: sessions not checked' }
   Finish
 }
 default { Usage }

@@ -64,6 +64,7 @@ start() {
         --safety) a+=(-Safety "$2"); shift 2 ;; --dry-run) a+=(-DryRun); shift ;;
         --launch-from) a+=(-LaunchFrom "$2"); shift 2 ;;
         --report-to) a+=(-ReportTo "$2"); shift 2 ;;
+        --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -120,6 +121,21 @@ grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with pat
 mkdir -p "$tmp/launch"
 check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+# the self-test's shape: a repository without an origin (a local state repository), its worktree under
+# another folder, launched from that folder - the branch starts from the local base, the brief says to
+# work by absolute path instead of EnterWorktree
+git init -q -b state "$tmp/state" && g -C "$tmp/state" commit -q --allow-empty -m state && git -C "$tmp/state" branch selftest-base
+mkdir -p "$tmp/project"
+: > "$STUB_LOG"
+check 0 "start: a local repository, worktree elsewhere" -- start --repo "$tmp/state" --name "#st1 lead: selftest" --branch st1 \
+  --base selftest-base --model haiku --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "Core lead" \
+  --launch-from "$tmp/project" --worktree-root "$tmp/project/.claude/worktrees"
+[ -d "$tmp/project/.claude/worktrees/st1" ] || { echo "FAIL: no worktree under --worktree-root"; fail=1; }
+[ "$(git -C "$tmp/state" rev-parse st1)" = "$(git -C "$tmp/state" rev-parse selftest-base)" ] || { echo "FAIL: st1 did not start from the local base"; fail=1; }
+grep -q "YOUR WORKING COPY is .*/project/.claude/worktrees/st1, a worktree of " "$STUB_LOG" ||
+  { echo "FAIL: the brief does not send it to the worktree by absolute path:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+grep -q "EnterWorktree tool with path" "$STUB_LOG" && { echo "FAIL: EnterWorktree asked for another repository's worktree"; fail=1; }
+git -C "$tmp/state" worktree remove "$tmp/project/.claude/worktrees/st1"
 # a hook path with backslashes: Git Bash drops them on Windows and the hook never runs
 sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
 check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x
