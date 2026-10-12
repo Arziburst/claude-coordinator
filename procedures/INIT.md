@@ -97,6 +97,15 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
    coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
    *No:* nothing installed; the coordinator asks about limits when it matters.
+10. **The coordinator's name.** Explain in the question: workers, leads and other sessions find this
+    coordinator by its session name — they send their reports to it, and when that name is not found
+    they look for a session whose name contains `Coordinator` in this project's folder; with several
+    projects on one machine, each has its coordinator, so the name must say which project. Options:
+    *`<Project> Coordinator`* (recommended — the project's short name, e.g. `Shop Coordinator`) · the
+    owner's own name, which **must contain the English word `Coordinator`** (the fallback looks for
+    it; a translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
+    session — `/rename <name>` (a session cannot rename itself) — and starts it with `claude --name
+    "<name>"` from then on.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the

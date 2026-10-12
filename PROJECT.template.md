@@ -28,11 +28,12 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Usage caps (CORE §9) | `<fill>` | `<fill>` | `<date>` | weekly 90%, short window 95%; over only with permission |
 | State repository: remote, branch, private (CORE §12b) | `<fill>` | `<fill>` | `<date>` | solo: the owner's account · team: the team's organization · local only (lost with the disk); branch `state`; always private; pointer in `CLAUDE.md`: yes / no (never in a client's repository) |
 | Core (CORE §2) | `<fill>` | `<fill>` | `<date>` | a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
+| Coordinator name (CORE §2) | `<fill>` | `<fill>` | `<date>` | `<Project> Coordinator` — always containing the English word `Coordinator`; the session is started with `claude --name "<name>"` or renamed with `/rename <name>` |
 
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
-| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, coordinator `Coordinator`; no project prefix |
+| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, the coordinator by its name in *Settings*; no project prefix in the others |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle |

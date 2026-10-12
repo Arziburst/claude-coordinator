@@ -20,11 +20,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   lead sends its start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
   `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
   session that started it, under its role name.
-- **The coordinator's own name** (CORE §2 step 1): `Coordinator`. Started by the owner from
-  the CLI: `claude --name "Coordinator"`; in an already running session the owner can rename
-  it (`/rename <name>` *(unconfirmed)*). If the coordinator cannot rename itself, it asks the owner to —
-  once, at init. Every project's coordinator has this name: tell them apart by their working directory
-  (`claude agents --json` *(unconfirmed field name)*).
+- **The coordinator's own name** (CORE §2 step 1): the coordinator name in `PROJECT.md` *Settings*,
+  `<Project> Coordinator` by default (INIT 3.1, question 10). It must contain the English word
+  `Coordinator`: the roles' fallback looks for it when a report address fails. Several projects on one
+  machine each have a coordinator, and a bare name shared by two is ambiguous for SendMessage, so the
+  project's short name goes in front. Started by the owner from the CLI: `claude --name "<name>"`; in a
+  running session the owner types `/rename <name>` (or Ctrl+R in agent view) — a session cannot rename
+  itself, and no CLI command renames a running one (`claude --bg --resume <id> --name …` starts a
+  copy). `claude agents --json` shows each session's `name`, `cwd`, `id` and `sessionId`; only the name
+  works as a SendMessage address, and only the name survives a `claude respawn` (2.1.296).
 - **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
   "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
@@ -69,8 +73,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
   the worker is next idle (same machine, expires after 12 h). A session **waiting on a permission
   prompt is not idle**: no notice comes; `ListAgents` shows it as `waiting` (seen on 2.1.296).
-- **Names change:** a restarted session may come back under another name (Arx: `Coordinator` →
-  `ARXVR Coordinator`), so a report address written into a brief can go stale. start-worker writes
+- **Names change:** a restarted or renamed session may come back under another name, so a report
+  address written into a brief can go stale. start-worker writes
   the address it is given (`--report-to`, the coordinator's name as `ListAgents` shows it now); the
   roles fall back to the project's Coordinator and never drop a report silently. A session the
   coordinator starts any other way (a raw `claude --bg`) has no such net: after a rename, tell every
