@@ -1,0 +1,780 @@
+# Features — what the core implements
+
+A map of every feature of the coordinator core, for the **machines that test it** — one session per
+feature, looking for holes — and for people who want to see what is there.
+
+**How to use it (a tester):** take one ID; read its block and every file it names; try to break each
+`promises` line on a real or throwaway project; anything that breaks is a core finding, reported through
+[procedures/CORE-FINDINGS.md](procedures/CORE-FINDINGS.md) (an issue titled `[core-report] …`). A block
+says what is already tested (`tested by`) and what is known to be open (`not covered`), so a tester
+starts where the core is weakest. The rules themselves live in the files a block names; this map only
+points to them and never replaces them.
+
+**Kept in sync:** `scripts/check-core` fails when a file a block names does not exist, when a script,
+procedure, role or one-time step is in no feature, when an ID repeats, when a block lacks one of its
+five fields, or when the table and the blocks disagree.
+
+Block shape: `defined` (where the rule lives) · `entry` (what triggers it) · `promises` (checkable
+statements) · `tested by` (tests, CI steps, self-test steps) · `not covered` (known gaps). A rule with
+no test rests on the sessions following it: the likeliest place for a hole.
+
+## Summary
+
+| ID | Feature | In one line | Group |
+|---|---|---|---|
+| F-START-01 | The one start sequence | every session runs the same nine steps and then waits | START |
+| F-START-02 | One coordinator per project | a second coordinator session in the same folder is raised, never joined silently | START |
+| F-START-03 | The coordinator's name | `<Project> Coordinator`, always containing `Coordinator`, set by the owner | START |
+| F-START-04 | The init quiz | twelve owner questions with a recommended option, then one summary for a yes | START |
+| F-START-05 | Strictness presets | swarm / standard / strict set the owner's gates between tasks | START |
+| F-START-06 | Spend level | lean / balanced / thorough only tilts model and effort | START |
+| F-START-07 | Settings | one table of the project's settings; a change is always a quiz | START |
+| F-START-08 | "What is your task?" | the coordinator explains its flow and the rules in effect | START |
+| F-START-09 | Restart on the same machine | the name first, the core re-read, running sessions taken over | START |
+| F-START-10 | Sources of truth | one main system per kind of information, a weighted catalog for the rest | START |
+| F-START-11 | Project scenarios | empty folder, existing project, older coordinator, new machine | START |
+| F-WORK-01 | Work modes | by task or batch, chosen at init; no cycle of the core's own | WORK |
+| F-WORK-02 | Housekeeping on events | sync, cleanup, reports and findings run on events in every mode | WORK |
+| F-WORK-03 | The batch skeleton | sync, clean, triage, plan, gate, delegate, report | WORK |
+| F-WORK-04 | Contracts | every delegated task is a contract with criteria and checks | WORK |
+| F-WORK-05 | Delegation and naming | one task per worker, every session named with its role | WORK |
+| F-WORK-06 | Tests first | the tester writes failing tests before the worker starts | WORK |
+| F-WORK-07 | Leads for large tasks | a lead splits a large task, runs its workers, returns one PR | WORK |
+| F-WORK-08 | The worker role | stay inside the contract, prove each criterion, report to the named address | WORK |
+| F-WORK-09 | Scout for long output | long logs and threads are condensed on the light model | WORK |
+| F-WORK-10 | Research and the radar | read-only research returns a catalog; the owner decides row by row | WORK |
+| F-WORK-11 | Conflict foresight | overlapping work is ordered before it starts | WORK |
+| F-WORK-12 | Approval gate and autopilot | approved work only; the tick exists only with autopilot on | WORK |
+| F-WORK-13 | Risk tiers | money, permissions, security and customer data get stronger handling | WORK |
+| F-WORK-14 | Dry run | the first work runs in thought; two harmless checks really run | WORK |
+| F-WORK-15 | Who decides | owner, coordinator, worker and lead decisions are fixed | WORK |
+| F-WORKERS-01 | start-worker | a named background session in its own worktree with safety settings | WORKERS |
+| F-WORKERS-02 | Worker safety settings checked | no worker starts with a guard that would not block | WORKERS |
+| F-WORKERS-03 | Start from a trusted folder | the session starts in the trusted root and enters its worktree | WORKERS |
+| F-WORKERS-04 | Report address and subscription | `--report-to` is required; the subscribe line is printed once the session is listed | WORKERS |
+| F-WORKERS-05 | Worktrees kept out of git | one `.git/info/exclude` line, never `.gitignore` | WORKERS |
+| F-WORKERS-06 | cleanup-worker | only clean, pushed and merged work is removed | WORKERS |
+| F-WORKERS-07 | Permission modes | workers run in `auto` or `acceptEdits`; bypass is refused | WORKERS |
+| F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
+| F-WORKERS-09 | Messages between sessions | the name is the address; renames are announced | WORKERS |
+| F-WORKERS-10 | A run cut by a usage limit | pause to the reset, then respawn and say "continue" | WORKERS |
+| F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of main / master are blocked | SAFE |
+| F-SAFE-02 | Destructive removals guarded | removing `/`, a drive, home or a worktree by hand is blocked | SAFE |
+| F-SAFE-03 | The guard parses like a shell | quotes, continuations, `$(…)`, `bash -c` and heredocs are understood | SAFE |
+| F-SAFE-04 | Unreadable input blocks | input that is not a JSON object blocks; a BOM is dropped | SAFE |
+| F-SAFE-05 | The guard's self-test | the hook proves itself at every session start | SAFE |
+| F-SAFE-06 | The guard through Claude Code | settings and real sessions prove the block reaches the harness | SAFE |
+| F-SAFE-07 | Deny rules | the settings examples deny protected-branch writes, MCP writes included | SAFE |
+| F-SAFE-08 | The owner's voice | no AI co-author, PR line or session link in project artifacts | SAFE |
+| F-SAFE-09 | Hard rules | sixteen rules that override every habit | SAFE |
+| F-SAFE-10 | Customer data stays in production | no production data in issues, logs, briefs or reports | SAFE |
+| F-SAFE-11 | Code-host protection and runners | branch protection is the wall; self-hosted runners stay safe on public repositories | SAFE |
+| F-REVIEW-01 | Independent verifier | a separate session or human verifies against the contract | REVIEW |
+| F-REVIEW-02 | Evidence classes | oracle / review / claim travel with every result | REVIEW |
+| F-REVIEW-03 | Verdict on the head commit | CI counts only on the reviewed SHA; merge pins that SHA | REVIEW |
+| F-REVIEW-04 | Oracles a verifier may not run | the worker's run marked as such, or a queued run | REVIEW |
+| F-REVIEW-05 | Red checks classified | cancelled / code / infrastructure / flake before acting | REVIEW |
+| F-REVIEW-06 | Never over failing checks | no merge over red or pending checks | REVIEW |
+| F-REVIEW-07 | One escalation per contract | a second failure goes to the owner with options | REVIEW |
+| F-REVIEW-08 | Re-review scope | only what can have changed is reviewed again | REVIEW |
+| F-REVIEW-09 | CI rules for projects | current-head runs, non-failing uploads, required checks without paths filters | REVIEW |
+| F-SPEND-01 | The model ladder | models detected per subscription, rungs not names | SPEND |
+| F-SPEND-02 | Automatic routing | per-kind model and effort learn from the run log | SPEND |
+| F-SPEND-03 | The run log | one line per finished run with tokens, cost and result | SPEND |
+| F-SPEND-04 | session-tokens | tokens and cost of one session from its transcript | SPEND |
+| F-SPEND-05 | Subagent cost | a subagent is read by its agentId and counted once | SPEND |
+| F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
+| F-SPEND-07 | Status files pruned | per-session status files older than 7 days are deleted | SPEND |
+| F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
+| F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast, analysis after | SPEND |
+| F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
+| F-SPEND-11 | A lead's cost order | read the cost, then delete the status file, then stop and remove | SPEND |
+| F-STATE-01 | The state repository | `coordinator/` is its own git, hidden from the project's | STATE |
+| F-STATE-02 | The state branch | one branch, `state`, also the remote's default | STATE |
+| F-STATE-03 | A private remote | the state remote is always private | STATE |
+| F-STATE-04 | Commit and push policy | commit at every change, push at events, at most every 15 minutes otherwise | STATE |
+| F-STATE-05 | Handoff and finding the state | a move prepared only on command; a new machine finds the state first | STATE |
+| F-STATE-06 | Layout migration | an older layout moves to its own git only on the owner's yes | STATE |
+| F-STATE-07 | The journal and open questions | one dated line per event; open questions asked first on return | STATE |
+| F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
+| F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
+| F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
+| F-UPDATE-04 | One-time steps | a catalog and a per-project checklist, like migrations | UPDATE |
+| F-UPDATE-05 | Wrapper fallback | workers start through the core directly while a wrapper is broken | UPDATE |
+| F-FINDINGS-01 | Core findings recorded | a core failure gets a row the moment it happens | FINDINGS |
+| F-FINDINGS-02 | Core reports as issues | fixed-field, deduplicated, rate-limited issues to the maintainer | FINDINGS |
+| F-FINDINGS-03 | The core-report label | a workflow labels issues titled `[core-report]` | FINDINGS |
+| F-FINDINGS-04 | Fixes proven after an update | a sent finding is marked fixed only when proven in the project | FINDINGS |
+| F-FINDINGS-05 | Escaped bugs | bugs found after merge, per 10 merged tasks | FINDINGS |
+| F-FINDINGS-06 | Mistakes become rules | a lesson is written as a rule, never kept only in memory | FINDINGS |
+| F-SELFTEST-01 | The self-test | real cheap sessions prove the core in the project's state repository | SELFTEST |
+| F-SELFTEST-02 | Evidence branches kept | the self-test's branches and PR stay as proof of a version | SELFTEST |
+| F-SELFTEST-03 | The sandbox | the core itself is self-tested in a throwaway sandbox | SELFTEST |
+| F-SELFTEST-04 | check-core | links, section references and this map stay consistent | SELFTEST |
+| F-SELFTEST-05 | check-scripts | every script parses under the shells the machine has | SELFTEST |
+| F-SELFTEST-06 | check-contract | a contract with an ERROR never goes out | SELFTEST |
+| F-SELFTEST-07 | Script pairs | every script is a `.sh` + `.ps1` pair with the same behaviour and output | SELFTEST |
+
+## START
+
+### F-START-01 The one start sequence
+- defined: CORE.md §2, procedures/INIT.md, README.md
+- entry: any fresh session in a project; the link to this repository; this repository's own CLAUDE file
+- promises: the nine steps run in order (identity → one coordinator → files → context → open questions → quiz → platform and safety → dry run → wait); after step 9 nothing starts until the owner gives a task or a batch command; a question is answered, never treated as an order (§1.2)
+- tested by: none (model behaviour)
+- not covered: no automated check that a session follows the order
+
+### F-START-02 One coordinator per project
+- defined: CORE.md §2
+- entry: `claude agents --json` at start
+- promises: another session whose name contains `Coordinator` and whose working directory is this project makes the coordinator ask the owner which one coordinates; sessions of other projects are told apart by their folder
+- tested by: none
+- not covered: two coordinators started at the same moment
+
+### F-START-03 The coordinator's name
+- defined: CORE.md §2, TOOLKIT.md, procedures/INIT.md
+- entry: INIT 3.1 question 10; one-time step `coordinator-name`
+- promises: the name contains the English word `Coordinator`; a session named otherwise asks the owner for `/rename`; the coordinator never renames itself; a rename is announced to every running session
+- tested by: none
+- not covered: whether every role's fallback finds a renamed coordinator
+
+### F-START-04 The init quiz
+- defined: CORE.md §3, procedures/INIT.md
+- entry: step 6 of the start sequence; a new or adopted project
+- promises: no worker and no change before every applicable question is answered and the summary gets a yes (§1.12); each question is multiple choice with the recommendation first; what the project already shows is confirmed in one table, not asked
+- tested by: none
+- not covered: the quiz's wording is not checked against the twelve questions
+
+### F-START-05 Strictness presets
+- defined: CORE.md §3, PROJECT.template.md
+- entry: INIT question 1; one-time step `strictness`
+- promises: the preset sets which tasks run, parallel workers, who merges, review, new tasks, production writes and the autopilot; a worker works alone inside its task in every preset; an older project is mapped to a preset only on the owner's yes
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-START-06 Spend level
+- defined: CORE.md §7, PROJECT.template.md
+- entry: one-time step `spend-level`
+- promises: the level forbids no rung; it tilts the choice only between neighbouring rungs or efforts; quality checks and the risk floors never depend on it
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-START-07 Settings
+- defined: CORE.md §13a, procedures/SETTINGS.md, PROJECT.template.md
+- entry: the owner says "settings" in any wording
+- promises: showing the settings changes nothing; a change is asked as a quiz with the current value and the recommendation first; `PROJECT.md` changes only on the answers
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-START-08 "What is your task?"
+- defined: CORE.md §13, procedures/WHAT-IS-YOUR-TASK.md
+- entry: "Coordinator, what is your task?" in any wording
+- promises: the answer covers the role, the work mode and what runs on events, the gates, who decides, and the rules in effect for this project
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-START-09 Restart on the same machine
+- defined: CORE.md §2, procedures/INIT.md
+- entry: a journal exists and no live session carries the coordinator name
+- promises: the coordinator asks for its name first, re-reads the local core, and subscribes to the running sessions instead of starting new ones
+- tested by: none
+- not covered: a restart while a worker waits on a permission prompt
+
+### F-START-10 Sources of truth
+- defined: procedures/SOURCES.md, CORE.md §4c
+- entry: INIT question 4; anything the owner hands over (links, documents, screenshots)
+- promises: one main system per kind of information; everything else goes to the catalog with a weight; evidence that contradicts a main source becomes a question to the owner; no tracker, host or git → the modes of SOURCES §3
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-START-11 Project scenarios
+- defined: procedures/INIT.md
+- entry: an empty folder, an existing project, a project with an older coordinator, a new machine
+- promises: an empty folder gets infrastructure proposals with one yes each; an existing project is read before anything is asked; rules in other agents' formats are read, not overwritten
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## WORK
+
+### F-WORK-01 Work modes
+- defined: CORE.md §4, procedures/INIT.md, PROJECT.template.md
+- entry: INIT question 12; one-time step `work-mode`; a task from the owner; the batch command ("start a new cycle" by default)
+- promises: by task — a named task runs and is reported, then the coordinator waits; batch — the command runs the project's batch recipe, or the core's skeleton; a single task can be handed over in either mode
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-02 Housekeeping on events
+- defined: CORE.md §4
+- entry: a session start (and once a day in a long session); a task accepted, merged or dropped; a core finding; a change in `coordinator/`
+- promises: the sync, cleanup of merged work and filing of unfiled findings happen at session start without a batch; every finished task gets its cleanup, log lines, report and the core-findings question
+- tested by: none
+- not covered: the once-a-day sync in a long session depends on the session noticing the date
+
+### F-WORK-03 The batch skeleton
+- defined: CORE.md §4, PROJECT.template.md
+- entry: the batch command; the autopilot's tick
+- promises: steps run in order — sync, clean up, collect and triage feedback, plan, approval gate, delegate, report; stale comments are flagged with a reason, never acted on without the owner
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-04 Contracts
+- defined: CONTRACT.md, CORE.md §4
+- entry: every delegation; scripts/check-contract.sh, scripts/check-contract.ps1
+- promises: each criterion names its check (oracle / review / owner) and an oracle names how; non-goals keep the two default lines; a contract with an ERROR is not delegated
+- tested by: tests/selftest/contract.md, CI step "the example contract passes the contract check" (bash, PowerShell)
+- not covered: whether a contract's intent is good is a review matter
+
+### F-WORK-05 Delegation and naming
+- defined: CORE.md §4, TOOLKIT.md
+- entry: delegating a task
+- promises: one task per worker or lead; every session is named `#<task> <role>: <title>` with no project prefix; the brief carries the contract, decisions, parallel work, resources and the report phrase, not the role rules
+- tested by: tests/workers/run.sh (the name reaches the session and the subscribe line)
+- not covered: none known
+
+### F-WORK-06 Tests first
+- defined: roles/tester.md, CORE.md §4
+- entry: an oracle criterion with no test yet; every risky change (§5)
+- promises: the tester writes only test files; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-07 Leads for large tasks
+- defined: roles/lead.md, CORE.md §4, TOOLKIT.md
+- entry: a task that would not fit one worker, or whose pieces must land together
+- promises: the lead splits into sub-contracts, starts and verifies its workers, integrates on its own branch only and returns one PR and one report with every run's spend; a lead over its budget starts nothing new
+- tested by: SELFTEST step 4 (a lead with two workers)
+- not covered: none known
+
+### F-WORK-08 The worker role
+- defined: roles/worker.md, CONTRACT.md
+- entry: a worker's brief
+- promises: the worker changes only what the criteria need, works on its own branch, proves each oracle itself, reports to the address in its brief with every criterion's evidence class and any suspected core fault in `core_findings`; stuck → a `blocked` report
+- tested by: SELFTEST step 4
+- not covered: none known
+
+### F-WORK-09 Scout for long output
+- defined: roles/scout.md, CORE.md §4
+- entry: a long CI log, PR thread, diff or document
+- promises: the scout is read-only and runs on the light model; the coordinator acts on its quoted facts, not on raw output
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-10 Research and the radar
+- defined: roles/researcher.md, CORE.md §4b
+- entry: a new or costly-to-reverse feature; the radar list in the project's settings
+- promises: research is read-only and returns a catalog with each candidate's licence and advice; research creates no task; the owner decides row by row; no customer data or private code goes into a search
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-11 Conflict foresight
+- defined: CORE.md §4a
+- entry: before every task; after every merge
+- promises: a task's footprint (`touches`) is checked against open PRs and running tasks; overlap is ordered or briefed; affected sessions are told to pull right after a merge
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-12 Approval gate and autopilot
+- defined: CORE.md §9, CORE.md §3, TOOLKIT.md
+- entry: the strictness preset; the tick
+- promises: autopilot runs only approved tasks; the tick exists only with autopilot on and is recreated after a restart; with autopilot off new work is only proposed
+- tested by: none
+- not covered: the tick dies with the session and after 7 days
+
+### F-WORK-13 Risk tiers
+- defined: CORE.md §5, CORE.md §7
+- entry: a change touching money, roles and permissions, security, data access, audit, business time or customer data
+- promises: a stronger model and effort, mandatory independent review, negative tests and the owner told before integration; risky features ship disabled where the project says so
+- tested by: none
+- not covered: classifying a change as risky is the coordinator's judgement
+
+### F-WORK-14 Dry run
+- defined: CORE.md §12a, TOOLKIT.md
+- entry: the first work on a new machine, a new or adopted project
+- promises: the run is shown, not done; check-scripts and one start-worker dry run really run; nothing changes before the owner approves
+- tested by: tests/workers/run.sh (start-worker's dry run changes nothing)
+- not covered: none known
+
+### F-WORK-15 Who decides
+- defined: CORE.md §14, CORE.md §1
+- entry: any decision
+- promises: goal, scope, look and feel, business values, rules and irreversible actions are the owner's; breakdown, models and cleanup are the coordinator's; implementation inside a contract is the worker's; only the owner's own typing counts (§1.14)
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## WORKERS
+
+### F-WORKERS-01 start-worker
+- defined: scripts/start-worker.sh, scripts/start-worker.ps1, TOOLKIT.md
+- entry: scripts/start-worker.sh, scripts/start-worker.ps1
+- promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); `--dry-run` changes nothing
+- tested by: tests/workers/run.sh, CI step "start-worker and cleanup-worker against temporary repositories" (bash, PowerShell 7, Windows PowerShell 5.1)
+- not covered: none known
+
+### F-WORKERS-02 Worker safety settings checked
+- defined: scripts/start-worker.sh, TOOLKIT.md
+- entry: `--safety` / `-Safety`
+- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused
+- tested by: tests/workers/run.sh (backslash path, PowerShell shell)
+- not covered: other wrappers that could swallow the exit code
+
+### F-WORKERS-03 Start from a trusted folder
+- defined: scripts/start-worker.sh, TOOLKIT.md
+- entry: `--launch-from`, `--worktree-root`
+- promises: the session starts in the repository root (or the given folder) and its brief's first line enters the worktree with EnterWorktree; started outside the repository root, the brief says to work by absolute path instead
+- tested by: tests/workers/run.sh (launch from another folder, worktree elsewhere)
+- not covered: trust itself is the owner's step and never written by the coordinator
+
+### F-WORKERS-04 Report address and subscription
+- defined: scripts/start-worker.sh, CORE.md §4, TOOLKIT.md
+- entry: `--report-to`
+- promises: start-worker refuses to start without a report address; the address heads the brief; the subscribe line is printed only after the session is listed (up to about 20 seconds); one subscription per expected report
+- tested by: tests/workers/run.sh (no report address, the subscribe line)
+- not covered: a session waiting on a permission prompt sends no idle notice
+
+### F-WORKERS-05 Worktrees kept out of git
+- defined: scripts/start-worker.sh, procedures/INIT.md
+- entry: every real start
+- promises: `/.claude/worktrees/` is written once to the project's `.git/info/exclude`, never to `.gitignore`; a dry run writes nothing
+- tested by: tests/workers/run.sh (one exclude line however many starts; the dry run writes none)
+- not covered: none known
+
+### F-WORKERS-06 cleanup-worker
+- defined: scripts/cleanup-worker.sh, scripts/cleanup-worker.ps1, CORE.md §8
+- entry: scripts/cleanup-worker.sh, scripts/cleanup-worker.ps1
+- promises: removes a worktree and session only if the worktree is clean, every commit is on the remote and a merged PR has the pushed head (or a head that contains it, after a server-side commit); a reused branch name with newer commits is refused; a branch pushed without `-u` is found by its `origin/<branch>`; exit 3 changes nothing
+- tested by: tests/workers/run.sh (eleven cleanup cases)
+- not covered: none known
+
+### F-WORKERS-07 Permission modes
+- defined: scripts/start-worker.sh, TOOLKIT.md, CORE.md §3
+- entry: `--mode`
+- promises: workers run in `auto` by default or `acceptEdits` (cautious); `bypassPermissions` is refused by the script
+- tested by: tests/workers/run.sh (bypassPermissions refused)
+- not covered: whether hooks run in bypass mode is unconfirmed
+
+### F-WORKERS-08 Roles installed
+- defined: TOOLKIT.md, roles/worker.md
+- entry: every start; every core update
+- promises: each upstream role is copied to the user's agents folder when missing or different, the old file saved as `.bak`; a role edited in the local core is never installed there; the project's own agents folder is never written
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORKERS-09 Messages between sessions
+- defined: TOOLKIT.md, CORE.md §4
+- entry: SendMessage, ListAgents
+- promises: the session name is the address; after a rename every running session is told the new name; roles fall back to the project's Coordinator and never drop a report silently
+- tested by: none
+- not covered: native Windows and WSL2 sessions cannot message each other
+
+### F-WORKERS-10 A run cut by a usage limit
+- defined: TOOLKIT.md, CORE.md §9
+- entry: a 429 limit message; a session shown `blocked`
+- promises: the coordinator pauses until `resets_at`, then respawns each blocked session and sends "continue"; the report notes the pause
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## SAFE
+
+### F-SAFE-01 Protected branches guarded
+- defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, TOOLKIT.md, CORE.md §1
+- entry: every Bash or PowerShell tool call (PreToolUse)
+- promises: a push, force-push or delete of main or master is blocked in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch, `git branch -D`, `git update-ref -d`; work branches and tag pushes pass
+- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt, CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
+- not covered: deliberate evasion (eval, quoting inside a name, aliases, a branch name in a variable) is out of scope by design
+
+### F-SAFE-02 Destructive removals guarded
+- defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
+- entry: every Bash or PowerShell tool call
+- promises: recursive removal of `/`, a drive, home or a worktree by hand (`rm -rf`, `Remove-Item -Recurse`, `rd /s`, `find … -delete`) is blocked; removing a worktree goes through cleanup-worker
+- tested by: tests/safety-guard/cases.txt
+- not covered: removal through a script written to a file and then run
+
+### F-SAFE-03 The guard parses like a shell
+- defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
+- entry: every Bash or PowerShell tool call
+- promises: line continuations are joined; separators inside quotes do not split; `$(…)`, `bash -c`, `pwsh -Command` and a heredoc fed to a shell are checked as commands of their own; `git -C`, `cd` and `checkout` in the same command are followed
+- tested by: tests/safety-guard/cases.txt
+- not covered: none known
+
+### F-SAFE-04 Unreadable input blocks
+- defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
+- entry: the hook's stdin
+- promises: input that is not a JSON object blocks; a BOM or other bytes before the object are dropped; extra project patterns come from the project's own deny file
+- tested by: tests/safety-guard/cases.txt
+- not covered: none known
+
+### F-SAFE-05 The guard's self-test
+- defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
+- entry: `--self-test` / `-SelfTest` at session start; one-time step `safety-hook-test`
+- promises: the self-test prints `safety-guard: OK` or the session is told to fix it before starting workers
+- tested by: CI steps for the guard (the self-test runs in each)
+- not covered: it calls the guard directly, so it cannot see a harness that drops the block (F-SAFE-06)
+
+### F-SAFE-06 The guard through Claude Code
+- defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, TOOLKIT.md
+- entry: `selftest hooks --settings <file>`, `selftest hookcheck --session <id>`; SELFTEST step 2a
+- promises: a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked
+- tested by: tests/selftest/hooks, tests/selftest/claude, CI step "selftest - the guard's settings and transcripts" (bash, Windows PowerShell 5.1, parity on Linux)
+- not covered: hooks load at session start, so a fixed file is proven only in a new session
+
+### F-SAFE-07 Deny rules
+- defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
+- entry: the worker safety file; the strict preset; the cautious override
+- promises: the baseline denies protected-branch writes in shell and PowerShell forms and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
+- tested by: none
+- not covered: MCP tools are covered by deny rules only, not by the hook
+
+### F-SAFE-08 The owner's voice
+- defined: CORE.md §11, TOOLKIT.md, settings.example.json
+- entry: every commit, PR and comment in a project
+- promises: project artifacts carry no AI co-author trailer, PR line or session link; the worker settings set `attribution` empty
+- tested by: none
+- not covered: text a worker writes by hand is not scanned
+
+### F-SAFE-09 Hard rules
+- defined: CORE.md §1
+- entry: always
+- promises: sixteen rules override every habit — delegate and never implement, a question is not an order, no invented business values, independent review, no integration over failing checks, guard the irreversible, truthful reports, no deviation without the owner, a blocking rule raised, not worked around
+- tested by: scripts/check-core.sh counts the rules and checks every §1.N reference
+- not covered: obedience to the rules is model behaviour
+
+### F-SAFE-10 Customer data stays in production
+- defined: CORE.md §1, procedures/CORE-FINDINGS.md
+- entry: any issue, PR, log, brief, report or core report
+- promises: no production rows, personal data, customer records or secrets leave production; project code goes to outside services only as the project allows (§1.13); core reports hold only the core's own facts
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-SAFE-11 Code-host protection and runners
+- defined: TOOLKIT.md, procedures/INIT.md, ONE-TIME.md
+- entry: one-time steps `branch-protection` and `state-private`; a change of the repository's visibility
+- promises: branch protection (PRs and checks required) is the real enforcement; a self-hosted runner on a public repository never runs fork PRs and requires approval for outside contributors, or the repository stays private
+- tested by: none
+- not covered: the protection's settings on the host are not read back automatically
+
+## REVIEW
+
+### F-REVIEW-01 Independent verifier
+- defined: roles/verifier.md, CORE.md §6
+- entry: a worker reports ready with green checks
+- promises: the verifier is not the author and changes nothing; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner
+- tested by: SELFTEST step 4 (a verifier run)
+- not covered: none known
+
+### F-REVIEW-02 Evidence classes
+- defined: CONTRACT.md, CORE.md §6
+- entry: every report and verdict
+- promises: every result is `oracle`, `review` or `claim`; a check run by the reviewer on the reviewed commit is an oracle; the class survives into reports and the owner's summary
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-03 Verdict on the head commit
+- defined: CORE.md §6, roles/verifier.md
+- entry: a verdict; a merge
+- promises: the verdict names the commit it reviewed; a CI run on that commit counts as its oracle and is not re-run; a run on another commit is a claim; the merge pins the reviewed head (`gh pr merge --match-head-commit`)
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-04 Oracles a verifier may not run
+- defined: CORE.md §6, roles/verifier.md, CONTRACT.md
+- entry: a shared device, a lock or a cost the brief forbids
+- promises: the worker's raw output for the reviewed commit is marked `oracle (worker's run, <commit>)`, never plain `oracle`, or the verifier's own run is queued; the brief forbids only the scarce resource by name; the coordinator never runs it itself
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-05 Red checks classified
+- defined: CORE.md §4, CORE.md §1, TOOLKIT.md
+- entry: a red or cancelled check
+- promises: cancelled → read the current head's run; code → back to the worker; infrastructure → its own bug, fixed first, named as the blocker; flake → one re-run on the same commit, a second red is a flake bug
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-06 Never over failing checks
+- defined: CORE.md §1
+- entry: every integration
+- promises: nothing integrates over failing or pending checks, a known flake included (§1.7); a coordination-tooling fix held by an unrelated red main line needs the owner's waiver
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-07 One escalation per contract
+- defined: CORE.md §7, roles/lead.md
+- entry: a review failure a stronger model would fix
+- promises: the contract's `escalate_to` is used once; a failed or stuck escalated run restarts nothing and the owner gets both reports and the options
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-REVIEW-08 Re-review scope
+- defined: CORE.md §6, roles/verifier.md
+- entry: a fix after review
+- promises: only failed criteria, findings and criteria whose files the fix touched are reviewed again; untouched confirmed criteria keep their evidence and commit
+- tested by: none
+- not covered: a criterion affected indirectly (behaviour, not files) can be missed
+
+### F-REVIEW-09 CI rules for projects
+- defined: TOOLKIT.md
+- entry: a project's CI setup and its runs
+- promises: the watcher reads the current head's run; artifact uploads never fail a build; a required check has no paths filter on its trigger
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## SPEND
+
+### F-SPEND-01 The model ladder
+- defined: CORE.md §7, TOOLKIT.md, BINDINGS.template.md
+- entry: one-time steps `model-probe` and `model-own-limits`; a run failing with "model not available"
+- promises: the ladder is detected (auth status as a hint, one probe per model), never assumed; a missing rung takes the next one down; a model hitting its own limit leaves the ladder until the next probe
+- tested by: none
+- not covered: a probe costs money, so it runs only at the moments the core names
+
+### F-SPEND-02 Automatic routing
+- defined: CORE.md §7
+- entry: every run; the run log
+- promises: a proven kind tries one level down and reverts below 80%; a failing kind goes one level up; limits push routine work down; floors and the owner's pins are never changed
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-SPEND-03 The run log
+- defined: CORE.md §7, CORE.md §7a
+- entry: every finished worker, lead, tester, reviewer or researcher run
+- promises: one line per run with model, effort, estimate, tokens from the transcript (never the worker's own count), cost and result; only the coordinator writes it; leads and direct work stay apart
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-SPEND-04 session-tokens
+- defined: scripts/session-tokens.sh, scripts/session-tokens.ps1, TOOLKIT.md
+- entry: `session-tokens <session id or prefix or transcript>`
+- promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; an ambiguous prefix fails and lists ids only, never project folders
+- tested by: tests/session-tokens/expected.txt, CI step "session-tokens counts the fixture exactly" (bash, PowerShell, parity on Linux)
+- not covered: output tokens are a lower bound by design
+
+### F-SPEND-05 Subagent cost
+- defined: scripts/session-tokens.sh, roles/lead.md, TOOLKIT.md
+- entry: `session-tokens <agentId>`
+- promises: a subagent is found by its agentId or a unique prefix; its tokens print without a cost line; its cost is reported as part of its parent and counted once
+- tested by: tests/session-tokens/expected-agent.txt
+- not covered: none known
+
+### F-SPEND-06 Account-wide spend and the ratio
+- defined: scripts/session-tokens.sh, CORE.md §7a
+- entry: `session-tokens --since <UTC time>`; one-time step `spend-ratio`
+- promises: every transcript on the machine counts, each message by its own timestamp; the ratio is trusted only once the window rose 10 points
+- tested by: tests/session-tokens/expected-since.txt
+- not covered: transcripts on other machines of the same account are not seen
+
+### F-SPEND-07 Status files pruned
+- defined: scripts/session-tokens.sh, TOOLKIT.md
+- entry: `session-tokens --prune` at every session start
+- promises: only status files older than 7 days are deleted
+- tested by: CI step "session-tokens counts the fixture exactly" (the prune case)
+- not covered: none known
+
+### F-SPEND-08 The status line
+- defined: scripts/statusline.sh, scripts/statusline.ps1, TOOLKIT.md
+- entry: INIT question 9; one-time step `statusline-verified`
+- promises: installed only on the owner's yes and only where no status line exists; it saves the status JSON per session for the coordinator and prints model, context and limits
+- tested by: selftest scripts step (the status line on a fixture)
+- not covered: only the owner sees the drawn line
+
+### F-SPEND-09 Estimates and forecasts
+- defined: CORE.md §7a
+- entry: every contract; every block
+- promises: an estimate is the median cost of the kind's last runs, else a seed marked `guess`; a block that does not fit the caps is cut or decided by the owner; a task over twice its estimate is looked at
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-SPEND-10 Caps and autopilot budget
+- defined: CORE.md §9, procedures/INIT.md
+- entry: INIT question 8; the status line's limits
+- promises: a short-window cap pauses workers to the reset; a long-window cap starts no new worker; going over a cap needs the owner's permission for that occasion
+- tested by: none
+- not covered: API-key setups have no limit data and budget by cost
+
+### F-SPEND-11 A lead's cost order
+- defined: roles/lead.md, TOOLKIT.md
+- entry: a lead's run ending
+- promises: the cost is read with the full command first (retried once, never `n/a`), then the status file is deleted, then the session stopped and removed
+- tested by: SELFTEST step 6
+- not covered: none known
+
+## STATE
+
+### F-STATE-01 The state repository
+- defined: CORE.md §12b, procedures/INIT.md, state-repo/README.template.md
+- entry: INIT 3.4; question 5
+- promises: `coordinator/` is its own git repository, excluded from the project's git by `.git/info/exclude`; the core copy, journal, run log and findings live there, never in the project's history
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-02 The state branch
+- defined: CORE.md §12b, ONE-TIME.md
+- entry: one-time step `state-branch`
+- promises: the one branch is `state`, also the remote's default; a state repository on main or master moves on the owner's yes; the old remote branch is deleted by the owner (the guard blocks it)
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-03 A private remote
+- defined: CORE.md §12b, procedures/INIT.md
+- entry: one-time step `state-private`
+- promises: the state remote is private, verified with the host's visibility field; a change of visibility re-runs the check
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-04 Commit and push policy
+- defined: CORE.md §12b, procedures/HANDOFF.md
+- entry: any change in `coordinator/`; a session start; a task ending; an owner decision; a handoff
+- promises: every change is committed at once; pushes happen at those events and otherwise at most once per 15 minutes; a failed push stops nothing and is retried at the next event
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-05 Handoff and finding the state
+- defined: procedures/HANDOFF.md, HANDOFF.template.md, CORE.md §2
+- entry: "prepare a handoff"; a new machine without `coordinator/`
+- promises: a handoff is prepared only on the owner's command; a new machine finds the state repository before anything else; one that exists but cannot be read is named to the owner, never replaced by a second state
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-06 Layout migration
+- defined: procedures/MIGRATE-LAYOUT.md, procedures/UPDATE-CORE.md
+- entry: "update the core" on a project whose `coordinator/` is not its own git
+- promises: nothing is moved, untracked or deleted before the owner's yes to the exact plan; every file stays on disk and in the new repository
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-07 The journal and open questions
+- defined: CORE.md §12
+- entry: every event that matters; the owner's return
+- promises: one dated line per event; unanswered questions are asked first, preferably as a quiz; no customer data or secrets in it
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## UPDATE
+
+### F-UPDATE-01 The local core copy
+- defined: CORE.md §2, procedures/INIT.md
+- entry: every start
+- promises: the core is a copy of the whole repository except `.git/`, `.github/` and `CLAUDE.md`, pinned at a recorded commit; a newer upstream is one line to the owner, nothing applied; the rules followed are the copy's
+- tested by: selftest scripts step (no CLAUDE file in a local copy)
+- not covered: none known
+
+### F-UPDATE-02 Update with an impact report
+- defined: procedures/UPDATE-CORE.md
+- entry: "update the core", only on the owner's command
+- promises: an impact report comes before any change — conflicts with local edits, breaking lines, one-time steps not done, findings the update fixes; files merge only on the owner's yes, keeping the agreed local edits; running sessions are told
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-UPDATE-03 Breaking-line detection
+- defined: procedures/UPDATE-CORE.md, README.md
+- entry: `git log <old>..<new> --grep '^Breaking for project wrappers:'`
+- promises: every change to a script's required arguments or wrapper-read output carries a line starting with `Breaking for project wrappers:`; the grep is anchored, so a message that only mentions the rule does not match; the wrapper is fixed before the update applies
+- tested by: none
+- not covered: a commit that forgets the line is not caught
+
+### F-UPDATE-04 One-time steps
+- defined: ONE-TIME.md, procedures/UPDATE-CORE.md, CORE.md §3
+- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `model-own-limits`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `model-probe`, `spend-ratio`, `branch-protection`, `first-real-pr-watched`, `selftest`
+- promises: each project's checklist records which steps ran; an update offers only the steps added since, so an older project is asked instead of getting defaults silently; settings are asked as a quiz
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-UPDATE-05 Wrapper fallback
+- defined: BINDINGS.template.md, procedures/UPDATE-CORE.md
+- entry: a project wrapper broken by an update
+- promises: workers start through the core's start-worker directly, the brief built as the wrapper would, until the wrapper's fix lands
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## FINDINGS
+
+### F-FINDINGS-01 Core findings recorded
+- defined: procedures/CORE-FINDINGS.md, CORE-FINDINGS.template.md, CORE.md §10
+- entry: a core rule that cannot be followed, a core script that misbehaves, a safeguard that silently fails, a missing step, a role that cannot do its job; one-time step `core-findings`
+- promises: a row is written the moment it happens, with re-checkable evidence and before any workaround; roles report suspected faults in `core_findings`; the core-or-project test decides
+- tested by: selftest prepare (the file's header and statuses), CI step "selftest - prepare and verify in a project's state repository"
+- not covered: a fault worked around without noticing is lost
+
+### F-FINDINGS-02 Core reports as issues
+- defined: procedures/CORE-FINDINGS.md, procedures/INIT.md
+- entry: INIT question 11; one-time step `core-reports`
+- promises: the report has fixed fields only, nothing of the project; the title is prefixed once with `[core-report]`; a fix already upstream → no issue; an open issue with the same signature → a +1 comment; at most three new issues a day; saying no sends nothing
+- tested by: none
+- not covered: the sanitizing is the coordinator's judgement
+
+### F-FINDINGS-03 The core-report label
+- defined: .github/workflows/label-core-report.yml
+- entry: an issue opened or edited with a title starting `[core-report]`
+- promises: the workflow adds the `core-report` label; the title is compared, never put into a command
+- tested by: real issues (the first core report was labelled within seconds)
+- not covered: none known
+
+### F-FINDINGS-04 Fixes proven after an update
+- defined: procedures/CORE-FINDINGS.md, procedures/UPDATE-CORE.md
+- entry: "update the core"
+- promises: sent rows whose issue the update closes are listed with the workaround edits it makes unnecessary; each is proven in the project before it is marked fixed; one still broken goes back to new and is filed again
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-FINDINGS-05 Escaped bugs
+- defined: CORE.md §12, CORE.md §7a
+- entry: a bug found after its change merged
+- promises: one line per escaped bug with the introducing task or `unknown`, never a guess; escapes per 10 merged tasks in every block report; breakdowns only at 20 merged tasks per group; routing and rules change only on the owner's yes
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-FINDINGS-06 Mistakes become rules
+- defined: CORE.md §10
+- entry: a correction or a found mistake
+- promises: acknowledged in one line, the consequence fixed, the lesson written as a rule — project-specific in the project's settings, universal proposed for the core
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+## SELFTEST
+
+### F-SELFTEST-01 The self-test
+- defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, CORE.md §12a
+- entry: after the dry run at init; after every core update; one-time step `selftest`
+- promises: real sessions on the cheapest models run a lead, two workers, a verifier, a merge and, with a remote, one PR in the project's state repository; the report is one table with the run's cost; a core FAIL becomes a core finding
+- tested by: CI steps "selftest - the scripted steps" (bash, Windows PowerShell 5.1 and pwsh)
+- not covered: the project's real CI and branch protection; the first real PR is watched instead (`first-real-pr-watched`)
+
+### F-SELFTEST-02 Evidence branches kept
+- defined: procedures/SELFTEST.md, scripts/selftest.sh
+- entry: `selftest prepare`, `selftest verify`
+- promises: prepare refuses a core commit already tested here; its branches and PR are never deleted; verify fails on a worktree left behind or a branch not merged into the base
+- tested by: CI step "selftest - prepare and verify in a project's state repository" (bash, Windows PowerShell 5.1)
+- not covered: none known
+
+### F-SELFTEST-03 The sandbox
+- defined: procedures/SELFTEST.md, scripts/selftest.sh
+- entry: `selftest sandbox`, `selftest clean`
+- promises: the core itself is tested in a throwaway sandbox with a local bare origin; a sandbox that already exists is refused; clean refuses a folder without the sandbox marker and removes only worktrees that are clean and merged
+- tested by: none
+- not covered: no automated check — it rests on the sessions following the rule
+
+### F-SELFTEST-04 check-core
+- defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
+- entry: before every core pull request; CI
+- promises: a broken relative link, a missing section, a §1.N past the last hard rule, or a feature map out of sync fails; the `.sh` and `.ps1` print the same
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux)
+- not covered: none known
+
+### F-SELFTEST-05 check-scripts
+- defined: scripts/check-scripts.sh, scripts/check-scripts.ps1, TOOLKIT.md
+- entry: before every pull request; the dry run; "update the core"
+- promises: every `.sh` and `.ps1` parses; a language with no shell on the machine is listed as skipped, never passed; a `#Requires -Version 7` file is parsed with pwsh
+- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, CI steps "every script parses, and a broken one is reported"
+- not covered: none known
+
+### F-SELFTEST-06 check-contract
+- defined: scripts/check-contract.sh, scripts/check-contract.ps1, CONTRACT.md
+- entry: before every delegation
+- promises: a missing field, a criterion without a check, an oracle without how, or non-goals without the default lines is an ERROR and blocks delegation; a missing budget or footprint is a WARN explained in the brief
+- tested by: tests/selftest/contract.md, CI steps "the example contract passes the contract check"
+- not covered: none known
+
+### F-SELFTEST-07 Script pairs
+- defined: TOOLKIT.md, .github/workflows/check-core.yml
+- entry: every script change
+- promises: every script is a `.sh` + `.ps1` pair with the same arguments, messages and exit codes; `.sh` runs on bash 3.2 with BSD tools, `.ps1` on Windows PowerShell 5.1; nothing is installed; CI compares both outputs
+- tested by: CI steps "both variants print the same", macOS system bash 3.2
+- not covered: none known
