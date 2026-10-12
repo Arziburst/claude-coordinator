@@ -46,7 +46,9 @@ rule → ask the owner.
 6. **Integrate only as the project allows.** Who marks ready, who merges, on what criteria: `PROJECT.md`.
    No rule → do not merge; ask.
 7. **Never integrate over failing or pending checks**, even a known flake. An unverifiable check is a
-   known gap, not a pass. Fix the flake first or ask. When the owner waives CI for a change to the
+   known gap, not a pass. **Integrate exactly the commit the verdict approved** (gh: `gh pr merge
+   --match-head-commit <sha>`): a head that moved after the verdict is reviewed again — only the change
+   since — and its checks must be green. Fix the flake first or ask. When the owner waives CI for a change to the
    coordination scripts (wrappers, hooks, cycle tooling), the coordinator still runs
    `scripts/check-scripts` on them and one start-worker dry run before the merge: seconds, no runner.
 8. **Product experience is the owner's.** Look, feel and use: summarize, ask concrete questions, play the
@@ -330,7 +332,8 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 - The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) on the contract, the
   report and the change: contract first, `oracle` checks run itself, every result keeps its evidence class
   (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
-  cites (`source:`, SOURCES §4).
+  cites (`source:`, SOURCES §4). The verdict names the head commit it reviewed; a CI run on that commit
+  counts as its oracle and is not run again, a run on any other commit is a `claim`.
 - Independent of the author (a separate session, or the human the project names); changes nothing.
 - The hand-off opens with: **nothing here is established fact** — verdict per criterion: confirmed /
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /
