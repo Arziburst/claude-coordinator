@@ -35,7 +35,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      `owner` or `preset` as found, Since the date of the move — on the owner's yes.
 4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
-   scripts changed, re-run the hook's self-test. Always run `scripts/check-scripts` on the core copy
+   scripts changed, re-run the hook's self-test and `selftest hooks --settings` on the worker safety file and
+   the coordinator's own settings files (SELFTEST step 2a). Always run `scripts/check-scripts` on the core copy
    and on the project's coordination scripts (the wrappers that call the core: BINDINGS), and one
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
    runs until the next worker is due. Then the **full self-test** at the new commit

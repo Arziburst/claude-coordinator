@@ -1,0 +1,2 @@
+{"type":"attachment","attachment":{"type":"hook_success","hookName":"SessionStart:startup","exitCode":0}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"PreToolUse:Bash hook error: [powershell -File C:/core/scripts/hooks/safety-guard.ps1]: Blocked by safety-guard: push to a protected branch. If this is a false positive, ask the owner.","is_error":true}]}}

@@ -71,6 +71,31 @@ jobs:
             b="$(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-scripts.ps1 "$d" | tr -d '\r')" || true
             [ "$a" = "$b" ] || { echo "differ on $d"; printf '%s\n--\n%s\n' "$a" "$b"; exit 1; }
           done
+      - name: selftest - the guard's settings and transcripts (bash)
+        if: runner.os != 'Windows'
+        run: |
+          s=scripts/selftest.sh; h=tests/selftest/hooks
+          bash $s hooks --settings $h/good.json
+          bash $s hooks --settings $h/shellexit.json
+          for f in shell backslash envvar; do
+            if bash $s hooks --settings $h/$f.json; then echo "$f.json must fail"; exit 1; fi
+          done
+          export CLAUDE_CONFIG_DIR="$PWD/tests/selftest/claude"
+          bash $s hookcheck --session blocked0
+          for id in nonblock noblock0 missing0; do
+            if bash $s hookcheck --session $id; then echo "$id must fail"; exit 1; fi
+          done
+      - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $h = 'tests/selftest/hooks'
+          foreach ($f in @('good', 'shellexit')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 0) { "$f.json must pass"; exit 1 } }
+          foreach ($f in @('shell', 'backslash', 'envvar')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 1) { "$f.json must fail"; exit 1 } }
+          $env:CLAUDE_CONFIG_DIR = "$PWD\tests\selftest\claude"
+          .\scripts\selftest.ps1 hookcheck -Session blocked0; if ($LASTEXITCODE -ne 0) { 'blocked0 must pass'; exit 1 }
+          foreach ($id in @('nonblock', 'noblock0', 'missing0')) { .\scripts\selftest.ps1 hookcheck -Session $id; if ($LASTEXITCODE -ne 1) { "$id must fail"; exit 1 } }
+          exit 0
       - name: The example contract in CONTRACT.md passes the contract check (bash)
         if: runner.os != 'Windows'
         run: |
@@ -248,6 +273,8 @@ jobs:
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           diff <(bash scripts/selftest.sh scripts) <(pwsh -NoProfile -File scripts/selftest.ps1 scripts)
+          for f in good shell shellexit backslash envvar; do diff <(bash scripts/selftest.sh hooks --settings tests/selftest/hooks/$f.json) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings tests/selftest/hooks/$f.json); done
+          for id in blocked0 nonblock noblock0 missing0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")

@@ -147,6 +147,10 @@ git -C "$tmp/state" worktree remove "$tmp/project/.claude/worktrees/st1"
 [ -z "$(git -C "$tmp/repo" status --porcelain)" ] || { echo "FAIL: the project's git sees the worktrees:"; git -C "$tmp/repo" status --short | sed 's/^/    /'; fail=1; }
 [ "$(grep -c '^/.claude/worktrees/$' "$tmp/repo/.git/info/exclude")" = 1 ] || { echo "FAIL: /.claude/worktrees/ is not in info/exclude exactly once"; fail=1; }
 grep -q '^/.claude/worktrees/$' "$tmp/repo/.gitignore" 2>/dev/null && { echo "FAIL: .gitignore was written"; fail=1; }
+# a PowerShell shell around the hook: its exit 2 would reach Claude Code as a non-blocking 1
+awk '/safety-guard\./ && !/-SelfTest/ && !/--self-test/ { print "            \"shell\": \"powershell\"," } { print }' "$tmp/safety.json" > "$tmp/safety-shell.json"
+check 1 "start: the hook under a PowerShell shell" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-shell.json" --report-to x
+expect_in "PowerShell shell"
 # a hook path with backslashes: Git Bash drops them on Windows and the hook never runs
 sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
 check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x
@@ -188,6 +192,19 @@ expect_in "NO UPSTREAM"
 git -C "$wt2" push -q origin 13-fix 2>/dev/null
 STUB_HEADS="$(git -C "$wt2" rev-parse HEAD)" check 0 "cleanup: pushed without -u" -- cleanup --worktree "$wt2" --session s2
 expect_in "cleaned: s2"
+# the server added a commit on top of the pushed head (gh pr update-branch) and the branch was deleted
+# after the merge: the local origin/<branch> stays at the pushed head, the merged PR's head is newer
+wt3="$tmp/repo/.claude/worktrees/15-fix"
+git -C "$tmp/repo" worktree add -q -b 15-fix "$wt3" main && g -C "$wt3" commit -q --allow-empty -m work3
+git -C "$wt3" push -q -u origin 15-fix 2>/dev/null
+git clone -q "$tmp/remote.git" "$tmp/server" 2>/dev/null && git -C "$tmp/server" checkout -q 15-fix &&
+  g -C "$tmp/server" commit -q --allow-empty -m "merge main into 15-fix" && git -C "$tmp/server" push -q origin 15-fix 2>/dev/null
+prhead="$(git -C "$tmp/server" rev-parse HEAD)"
+git -C "$tmp/server" push -q origin --delete 15-fix 2>/dev/null
+git -C "$tmp/remote.git" config uploadpack.allowAnySHA1InWant true
+STUB_HEADS="$prhead" check 0 "cleanup: a server-side commit on the merged PR's head" -- cleanup --worktree "$wt3" --session s3
+expect_in "cleaned: s3"
+expect_in "server-side commit"
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

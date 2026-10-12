@@ -44,8 +44,17 @@ command -v gh >/dev/null 2>&1 || stop_here "NO gh: cannot verify the PR for $bra
 heads="$(cd "$wt" && gh pr list --head "$branch" --state merged --json headRefOid --jq '.[].headRefOid' 2>/dev/null)" ||
   stop_here "UNKNOWN: could not check the PR for $branch"
 [ -n "$heads" ] || stop_here "NOT MERGED: no merged PR for $branch"
-printf '%s\n' "$heads" | grep -qx "$up" ||
-  stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
+if ! printf '%s\n' "$heads" | grep -qx "$up"; then
+  # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
+  # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
+  found=""
+  for h in $heads; do
+    git -C "$wt" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$wt" fetch -q origin "$h" 2>/dev/null || true
+    if git -C "$wt" merge-base --is-ancestor "$up" "$h" 2>/dev/null; then found="$h"; break; fi
+  done
+  [ -n "$found" ] || stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
+  echo "merged as ${found:0:7}: the PR's head has a server-side commit on top of the pushed head ${up:0:7}"
+fi
 
 if [ -n "$session" ]; then
   run claude stop "$session" || true

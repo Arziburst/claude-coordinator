@@ -59,6 +59,18 @@ the report notes the interruption and the resume time.
 2. **Environment:** `selftest env --repo <owner/name>` with the project's repository when it is on
    GitHub (`gh auth status`, read-only `gh repo view` and `gh pr list`); otherwise without `--repo`
    (`n/a`). The claude, git and gh versions go into the report.
+2a. **The guard, through Claude Code.** The guard's own self-test calls it directly; only a real
+   session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
+   - `selftest hooks --settings <file>` on the worker safety file and on every settings file of the
+     coordinator's own session that holds the guard (the project's `.claude/settings.json` and
+     `.claude/settings.local.json`, the user's `~/.claude/settings.json`).
+   - Two probe sessions on the light model, started from the project root (trusted): one with
+     `--settings <worker safety file>`, one with no `--settings` (it loads the settings the coordinator
+     itself runs with). Each is told: "Run exactly `git push origin HEAD:main --dry-run`, report its
+     output, stop." Then `selftest hookcheck --session <id>` for each: PASS only on the block; a
+     non-blocking error or no hook at all is a FAIL — a FAIL in the coordinator's own settings is
+     fixed before anything else. Then their cost is read and they are removed (step 6's order).
+   - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and
    pushed where there is a remote. It refuses a commit already tested here.
