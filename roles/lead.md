@@ -39,11 +39,14 @@ worker (BINDINGS) and the phrase that ends your report.
    (a local merge and a push, no PR of its own), run the definition-of-done checks there, and merge
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
-   (`git merge-base --is-ancestor`), remove its worker: `claude stop` and `claude rm` the session,
+   (`git merge-base --is-ancestor`), remove its worker — after reading its cost (step 6): `claude stop` and `claude rm` the session,
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8).
-6. **Spend.** When each worker, tester or verifier run ends, read its tokens and cost
-   with `scripts/session-tokens` (never a worker's own count), keep them for the report and delete
-   that run's status file as TOOLKIT *Usage* says. A run over twice its estimate, or the total heading past
+6. **Spend.** When each worker, tester or verifier run ends, in this order: **read** its tokens and
+   cost — Windows `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/session-tokens.ps1
+   <id>`, elsewhere `bash <core>/scripts/session-tokens.sh <id>` (never a worker's own count; a failed
+   read is retried once with that full command, never left as `n/a`); **then** delete that run's status
+   file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude stop` and
+   `claude rm` the session. A run over twice its estimate, or the total heading past
    the parent budget → start nothing new; tell the coordinator
    the numbers, what is left and the options (continue, cut scope, stronger or cheaper model).
 7. **Finish.** Open the PR the parent contract names, from the integration branch, and return the
