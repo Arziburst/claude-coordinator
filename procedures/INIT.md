@@ -118,13 +118,21 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     it; a translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
     session — `/rename <name>` (a session cannot rename itself) — and starts it with `claude --name
     "<name>"` from then on.
-11. **Core reports — send the core's bugs to its maintainer?** Explain: when the coordinator core itself
-    fails here (a rule, a script, a safeguard), it records a finding and can open an issue in the public
-    repository claude-coordinator with the owner's gh account, so the maintainer fixes it and the next
-    update brings the fix; the report holds only the core's own facts (versions, the core file, the
-    error) — nothing of the project ([CORE-FINDINGS.md](CORE-FINDINGS.md)). Options: *automatically*
-    (recommended) · *show me each one first* (recommended for client work) · *never — I pass them on by
-    hand*. Recorded in `PROJECT.md` *Settings*.
+11. **Core reports — send the core's bugs to its maintainer?** Explain, in the question itself:
+    - **why it matters:** the maintainer can fix only the bugs that reach them. A bug of the core that
+      nobody reports stays — in this project and in every other one; a reported one comes back fixed
+      with the next "update the core", and this project then proves the fix itself.
+    - **what happens:** when the coordinator core itself fails here (a rule, a script, a safeguard), the
+      coordinator records it in `coordinator/CORE-FINDINGS.md` and, the moment it is recorded, opens an
+      issue in the public repository claude-coordinator with the owner's gh account — unless the same
+      issue is already open (then a "+1") or upstream already fixed it (then "update the core").
+    - **what it holds:** only the core's own facts — versions, the core file, the error. Nothing of the
+      project: no names, paths, code or customers ([CORE-FINDINGS.md](CORE-FINDINGS.md)). The issue is
+      public and under the owner's account.
+    - **saying no is fine:** nothing is sent; the findings stay in the file and can be passed on by hand.
+    Options: *automatically* (recommended) · *show me each one first* (recommended for client work) ·
+    *no — keep them here, I pass them on by hand*. Recorded in `PROJECT.md` *Settings*; changed later
+    with "settings".
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the
