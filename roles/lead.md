@@ -34,7 +34,8 @@ worker (BINDINGS) and the phrase that ends your report.
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
    sub-contract; findings go back to the same worker until there is no Blocker or Major. A failed
-   review that a stronger model would fix → restart on the sub-contract's `escalate_to`.
+   review that a stronger model would fix → restart on the sub-contract's `escalate_to`, once; if
+   that run fails too, start nothing more for it and tell the coordinator, with both reports.
 5. **Integrate on your branch only.** Merge each approved sub-branch into the integration branch
    (a local merge and a push, no PR of its own) — exactly the commit its verdict approved (`git merge
    <sha>`; a newer commit on the sub-branch goes back to the verifier first), run the definition-of-done checks there, and merge
