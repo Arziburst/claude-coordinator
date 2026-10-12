@@ -101,7 +101,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   message, a PR body) do not split, `$(…)`, `bash -c` / `pwsh -Command` and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
   reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
-  shows the reason. **A hook that fails to run does not block** — on Windows hook commands run through
+  shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped.
+  **A hook that fails to run does not block** — on Windows hook commands run through
   Git Bash, so a path with backslashes (`C:\x\y`) or a PowerShell variable (`$env:CLAUDE_PROJECT_DIR`, read
   as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`). So the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.

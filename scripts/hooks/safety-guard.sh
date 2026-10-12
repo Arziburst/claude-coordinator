@@ -16,6 +16,15 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 input="$(cat)"
+# A BOM (or anything else) before the JSON object is dropped. Input that is not a JSON object blocks:
+# Claude Code always sends one, and a guard that cannot read the call must not let it through.
+case "$input" in '{'*) ;; *'{'*) input="{${input#*\{}" ;; esac
+unreadable() {
+  echo "Blocked by safety-guard: the tool call could not be read (not a JSON object). If this is a false positive, ask the owner." >&2
+  exit 2
+}
+case "$(printf '%s' "$input" | tr -d ' \t\r\n')" in '{'*'}') ;; *) unreadable ;; esac
+if command -v jq >/dev/null 2>&1; then printf '%s' "$input" | jq -e 'type == "object"' >/dev/null 2>&1 || unreadable; fi
 
 # Extract tool_input.command and cwd: jq if present, otherwise sed (the raw JSON string) and awk
 # (decoding its escapes; linear, so a long heredoc stays fast with BSD awk).
