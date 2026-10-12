@@ -97,5 +97,12 @@ else
   ( cd "$from" && claude --bg --name "$name" --model "$model" --permission-mode "$mode" --settings "$safety" "$first
 
 $(cat "$brief")" )
+  # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
+  i=0
+  while [ "$i" -lt 20 ]; do
+    claude agents --json 2>/dev/null | grep -qF "\"$name\"" && break
+    i=$((i + 1)); sleep 1
+  done
+  [ "$i" -lt 20 ] || echo "not listed after 20 s: if the subscribe fails, retry it in a few seconds" >&2
 fi
 echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"

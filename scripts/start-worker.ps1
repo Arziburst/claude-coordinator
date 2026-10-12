@@ -93,5 +93,11 @@ Push-Location -LiteralPath $from
 try { & $claude.Source --bg --name $Name --model $Model --permission-mode $Mode --settings $Safety $brief }
 finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
+for ($i = 0; $i -lt 20; $i++) {
+  if ("$(& $claude.Source agents --json)".Contains('"' + $Name + '"')) { break }
+  Start-Sleep -Seconds 1
+}
+if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the subscribe fails, retry it in a few seconds') }
 $subscribe
 exit 0

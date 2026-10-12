@@ -16,7 +16,9 @@ mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_LOG"
-[ "${1:-}" = --bg ] && printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"
+# --bg: remember the folder and the session name; agents --json: list the names started so far
+if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
+if [ "${1:-}" = agents ]; then printf '[%s]\n' "$(sed 's/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"; fi
 exit 0
 EOF
 cat > "$tmp/bin/gh" <<'EOF'
@@ -108,6 +110,9 @@ expect_in "[dry-run]"
 [ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
 check 0 "start: real start with the stub claude" -- start "${S[@]}"
 expect_in 'subscribe: SendMessage(to: "#12 worker: Fix", notify_when_idle: true)'
+# it waited until the new session was listed before printing the subscribe line (no race)
+grep -qx "agents --json" "$STUB_LOG" || { echo "FAIL: start-worker did not wait for the session to be listed"; fail=1; }
+case "$LAST" in *"not listed after"*) echo "FAIL: the started session was not found in claude agents"; fail=1 ;; esac
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] || { echo "FAIL: no worktree after start"; fail=1; }
 grep -q -- "--bg --name #12 worker: Fix --model opus --permission-mode auto --settings" "$STUB_LOG" ||
   { echo "FAIL: claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
