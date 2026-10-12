@@ -191,3 +191,16 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
 - **A new machine or a teammate** (a state repository exists): find it (HANDOFF, *Finding it*); no
   access → name the repository and whom to ask, stop. With access: clone it, re-detect the "re-detect"
   rows, and instead of the quiz one "still so?" per section; then the dry run.
+- **A coordinator restarted on the same machine** — the session was closed or removed, `coordinator/`
+  with its journal is here, and no live session carries the coordinator name from `PROJECT.md`: work
+  went on before, and may still go on. In this order:
+  1. **The name first.** Ask the owner to `/rename <the coordinator name>` before anything else: the
+     running workers' briefs hold that name, so their reports reach this session again.
+  2. **The local core's rules.** Re-read `coordinator/core/CORE.md` (and the procedures from there)
+     and follow them, not the upstream text the link pointed to: the project is pinned to its copy;
+     a newer upstream is only the one line of CORE §2 step 3.
+  3. **Take over the running sessions** of this project (`claude agents --json`, its folder and its
+     `.claude/worktrees/`): subscribe to each (`notify_when_idle`, CORE §4 *Control*) — the old
+     session's subscriptions died with it — and match each to its task in the journal and the board.
+  4. Then the open questions and one "still so?" per section instead of the quiz; no dry run or
+     self-test when the machine and the core commit are the same (CHECKLIST says so).
