@@ -38,6 +38,11 @@ case "$step" in
 scripts)
   [ $# -eq 0 ] || usage
   t="$(mktemp -d)"; trap 'rm -r "$t"' EXIT
+  # a local copy (no .git) must not hold the core's CLAUDE.md: Claude Code loads it into every session
+  # that reads the copy's files, telling workers they are the coordinator
+  if [ -f "$core/CLAUDE.md" ] && [ ! -e "$core/.git" ]; then
+    fail "the local core copy holds CLAUDE.md: remove it (it tells every worker it is the coordinator)"
+  else pass "no CLAUDE.md in a local core copy"; fi
   check "check-core" -- bash "$core/scripts/check-core.sh" "$core"
   check "check-scripts" -- bash "$core/scripts/check-scripts.sh" "$core/scripts"
   check "check-contract on the fixture" -- bash "$core/scripts/check-contract.sh" "$core/tests/selftest/contract.md"

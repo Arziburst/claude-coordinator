@@ -119,8 +119,8 @@ its own: after step 9 the session waits.
    apart.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
    folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
-   docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/` and
-   `.github/`) is always a **local copy** in `coordinator/core/` at the claude-coordinator
+   docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/`,
+   `.github/` and `CLAUDE.md`) is always a **local copy** in `coordinator/core/` at the claude-coordinator
    commit recorded in `PROJECT.md`, editable for the project — like a pinned package. At start compare
    that commit with upstream (`git ls-remote`); newer → one line to the owner ("the core is behind
    upstream; update?"), nothing applied. "Update the core" →
@@ -228,7 +228,11 @@ The continuous work:
    notify_when_idle: true)` right after it starts (start-worker prints the line), and its brief names
    the coordinator's current session name as the report address (`--report-to`), never a guessed
    one. A session waiting on a permission prompt sends no idle notice: no report or notice when one
-   is due → `ListAgents`; `waiting` → tell the owner, never answer the prompt (§1.9). Answer workers
+   is due → `ListAgents`; `waiting` → tell the owner, never answer the prompt (§1.9). **One
+   subscription per expected report:** a lead idle while its workers run is normal — check
+   `ListAgents` once, never re-subscribe in a loop, wait for its report. **Renamed** (by the owner, or
+   after a restart) → tell every running session the new name, one SendMessage each; the roles'
+   fallback to the project's Coordinator is only the net. Answer workers
    point first; only owner decisions go to the owner; a worker near its context limit or stuck → help
    or split. Long CI logs, PR threads, diffs or docs go to the **scout**
    ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.

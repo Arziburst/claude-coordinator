@@ -72,7 +72,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Names change:** a restarted session may come back under another name (Arx: `Coordinator` →
   `ARXVR Coordinator`), so a report address written into a brief can go stale. start-worker writes
   the address it is given (`--report-to`, the coordinator's name as `ListAgents` shows it now); the
-  roles fall back to the project's Coordinator and never drop a report silently.
+  roles fall back to the project's Coordinator and never drop a report silently. A session the
+  coordinator starts any other way (a raw `claude --bg`) has no such net: after a rename, tell every
+  running session the new name (CORE §4, *Control*).
+- **Subscribing right after a start can race:** the new session may not be listed yet ("No agent named
+  … is reachable"). start-worker waits until `claude agents --json` lists it; if a subscribe still
+  fails, retry once a few seconds later. One subscription per expected report — every re-subscription
+  to an idle lead (idle while its workers run) only brings another notice for the same pause.
   [cross-session-messaging](https://code.claude.com/docs/en/cross-session-messaging.md)
 - Setting **`crossSessionInbound: "accept"`** on the receiving side lets a session take
   messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the
