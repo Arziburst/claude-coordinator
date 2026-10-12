@@ -36,6 +36,11 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - **No Settings block in `PROJECT.md`** (written before it existed): offer once to move its
      settings rows into the block at the top ([SETTINGS.md](SETTINGS.md)) — values unchanged, Source
      `owner` or `preset` as found, Since the date of the move — on the owner's yes.
+   - **Core findings** ([CORE-FINDINGS.md](CORE-FINDINGS.md) §3): every `sent` row of
+     `coordinator/CORE-FINDINGS.md` whose issue a commit of this update closes, and every local edit made
+     as its workaround that the update makes unnecessary; after the update each is proven here and
+     marked `fixed <commit>`, or goes back to `new`. A project that kept its core problems in another
+     form gets the template's file, its rows converted, on the owner's yes.
 4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
    scripts changed, re-run the hook's self-test and `selftest hooks --settings` on the worker safety file and

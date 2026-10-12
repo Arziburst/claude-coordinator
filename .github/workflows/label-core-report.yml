@@ -1,0 +1,20 @@
+name: label core reports
+# A project's coordinator files its core findings as issues titled "[core-report] ..." with its owner's
+# own account (procedures/CORE-FINDINGS.md); an outside account cannot set labels, so this adds it.
+# The title is only compared here, never put into a command.
+on:
+  issues:
+    types: [opened, edited]
+permissions:
+  issues: write
+jobs:
+  label:
+    if: startsWith(github.event.issue.title, '[core-report]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add the core-report label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: gh issue edit "$NUMBER" --repo "$REPO" --add-label core-report

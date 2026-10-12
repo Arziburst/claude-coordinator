@@ -78,6 +78,7 @@ results:
 questions: []                      # do_not_decide items and new forks
 known_gaps:
   - not run on the headset: no device
+core_findings: []                  # a suspected fault of the core itself, with evidence (procedures/CORE-FINDINGS.md)
 ---
 ```
 

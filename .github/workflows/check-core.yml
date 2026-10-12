@@ -215,6 +215,7 @@ jobs:
           g() { git -c user.email=t@t -c user.name=t "$@"; }
           git init -q -b main "$t"; g -C "$t" commit -q --allow-empty -m p
           git init -q -b state "$s"; g -C "$s" commit -q --allow-empty -m s; printf 'coordinator/\n' >> "$t/.git/info/exclude"
+          cp CORE-FINDINGS.template.md "$s/CORE-FINDINGS.md"
           bash scripts/selftest.sh prepare --project "$t" --state "$s" --core $c | tee "$RUNNER_TEMP/prep.txt"
           grep -qx 'PASS prepare: added .claude/worktrees/ to the project'"'"'s info/exclude' "$RUNNER_TEMP/prep.txt"
           if bash scripts/selftest.sh prepare --project "$t" --state "$s" --core $c; then echo "a tested commit must be refused"; exit 1; fi
@@ -225,6 +226,8 @@ jobs:
           bash scripts/selftest.sh verify --project "$t" --state "$s" --core $c
           [ -z "$(git -C "$t" status --porcelain)" ] || { echo "the project's git sees the test"; exit 1; }
           [ "$(git -C "$s" branch --list 'selftest/*' | wc -l)" -eq 2 ] || { echo "the evidence branches were deleted"; exit 1; }
+          printf '| CF-1 | 2026-10-13 | abc | 2 | x | none | weird |\n' >> "$s/CORE-FINDINGS.md"
+          if bash scripts/selftest.sh prepare --project "$t" --state "$s" --core other; then echo "an unknown status must fail prepare"; exit 1; fi
       - name: selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
@@ -233,6 +236,7 @@ jobs:
           git init -q -b main $t; git -C $t -c user.email=t@t -c user.name=t commit -q --allow-empty -m p
           git init -q -b state $s; git -C $s -c user.email=t@t -c user.name=t commit -q --allow-empty -m s
           Add-Content -Path (Join-Path $t '.git/info/exclude') -Value 'coordinator/'
+          Copy-Item CORE-FINDINGS.template.md (Join-Path $s 'CORE-FINDINGS.md')
           .\scripts\selftest.ps1 prepare -Project $t -State $s -Core $c
           if ($LASTEXITCODE -ne 0) { 'prepare failed'; exit 1 }
           .\scripts\selftest.ps1 prepare -Project $t -State $s -Core $c

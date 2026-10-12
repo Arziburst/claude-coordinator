@@ -227,6 +227,18 @@ switch ($Step) {
       & git -C $Project check-ignore -q .claude/worktrees/selftest
       if ($LASTEXITCODE -eq 0) { Pass "added .claude/worktrees/ to the project's info/exclude" } else { Fail "the project's git does not ignore .claude/worktrees" }
     }
+    # the record of the core's own failures (procedures/CORE-FINDINGS.md) in the template's format
+    $fnd = Join-Path $State 'CORE-FINDINGS.md'
+    if (-not (Test-Path -LiteralPath $fnd -PathType Leaf)) { Fail 'no CORE-FINDINGS.md in the state repository (INIT 3.4, CORE-FINDINGS.template.md)' }
+    else {
+      $fl = @([IO.File]::ReadAllLines($fnd) | ForEach-Object { $_.TrimEnd("`r") })
+      if ($fl -notcontains '| id | date | core | trigger | what happened (evidence) | workaround | status |') { Fail "CORE-FINDINGS.md lacks the template's table header" }
+      else {
+        $bad = @($fl | Where-Object { $_.StartsWith('|') -and -not $_.StartsWith('| id |') -and -not $_.StartsWith('|---') } | ForEach-Object {
+          $c = $_.Split('|'); $c[$c.Count - 2].Trim() } | Where-Object { $_ -notmatch '^(new|discussed|sent|fixed|dropped|not core)' })
+        if ($bad.Count -eq 0) { Pass "CORE-FINDINGS.md in the template's format" } else { Fail "CORE-FINDINGS.md: unknown status '$($bad[0])'" }
+      }
+    }
     & git -C $State show-ref -q --verify "refs/heads/$base"
     if ($LASTEXITCODE -eq 0) { Fail "$base exists: core $Core was tested here already - its branches are the evidence, nothing is deleted"; Finish }
     $from = & git -C $State rev-parse --abbrev-ref HEAD

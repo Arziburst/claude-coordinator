@@ -38,7 +38,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "settings"
   ([SETTINGS.md](procedures/SETTINGS.md)), the self-test ([SELFTEST.md](procedures/SELFTEST.md)), "update the core"
   ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)), the sources of
-  truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)).
+  truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)), the
+  core's own failures sent to its maintainer and proven fixed ([CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
@@ -70,7 +71,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - **"Coordinator, what is your task?"** — it explains its full flow and the rules in effect (CORE §13).
 
 ## Changing the core
-Universal lessons go into `CORE.md` with the owner's yes (CORE §10); project lessons stay in the
+Issues titled `[core-report]` come from projects' coordinators (a workflow labels them `core-report`):
+reproduce, fix in a PR that names the issue, close it with the fixing commit, keep project details out
+([procedures/CORE-FINDINGS.md](procedures/CORE-FINDINGS.md) §4). Universal lessons go into `CORE.md` with the owner's yes (CORE §10); project lessons stay in the
 project's `coordinator/PROJECT.md`. Before a pull request: `scripts/check-core.sh` (Windows:
 `scripts\check-core.ps1`). A new or changed script keeps the one style of TOOLKIT *Scripts*. A change
 to a script's required arguments or to the output a project's wrapper reads puts a line **starting

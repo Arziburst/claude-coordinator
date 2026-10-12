@@ -29,7 +29,9 @@ never from memory:
   9. the core — the claude-coordinator commit in `coordinator/core/`, and whether upstream is newer
      (one `git ls-remote`, CORE §2); the coordinator name, and whether this session carries it
      (`ListAgents` shows it);
-  10. one-time steps — from `coordinator/CHECKLIST.md`: done *n* · not done *n* (their ids) ·
+  10. core reports (automatically / show first / by hand) and the open rows of
+      `coordinator/CORE-FINDINGS.md`;
+  11. one-time steps — from `coordinator/CHECKLIST.md`: done *n* · not done *n* (their ids) ·
       declined *n* ([ONE-TIME.md](../ONE-TIME.md)).
 - The values come from the **Settings** block at the top of `PROJECT.md`. A `PROJECT.md` without it
   (written before it existed) is read from its rows elsewhere, marked `from the text`, and moving it
