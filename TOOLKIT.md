@@ -213,7 +213,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
-  references (CORE §10). Windows: `powershell -File scripts\check-core.ps1`.
+  references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
   installed. A language with no shell on the machine is listed as skipped, never as passed. Run it on

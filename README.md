@@ -26,6 +26,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
   returns, and the evidence classes (oracle / review / claim).
+- [FEATURES.md](FEATURES.md) — the map of every feature the core implements: where it is defined, what
+  triggers it, what it promises, what tests it and what is not covered — for sessions that test one
+  feature at a time, and for people; `scripts/check-core` keeps it in sync.
 - [ONE-TIME.md](ONE-TIME.md) — one-time settings and checks, like migrations: each project's
   `coordinator/CHECKLIST.md` records which ran, so "update the core" asks only the new ones.
 - [roles/](roles/) — role definitions: [worker.md](roles/worker.md) implements a contract,

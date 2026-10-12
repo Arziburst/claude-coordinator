@@ -521,7 +521,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   this core on the owner's yes (the local copy first, and proposed to claude-coordinator if it helps
   every project). A lesson only in memory is lost.
 - **Layering:** the principle here or in `PROJECT.md`; the command, path or number in `BINDINGS.md`.
-- **A core change passes `scripts/check-core`** (.sh / .ps1: links and § references) before it is proposed; CI runs
+- **A core change passes `scripts/check-core`** (.sh / .ps1: links, § references and the feature map
+  `FEATURES.md`; a new feature gets its block) before it is proposed; CI runs
   both on every pull request to claude-coordinator. Scripts follow one style (TOOLKIT *Scripts*).
 
 ## 11. Bookkeeping
