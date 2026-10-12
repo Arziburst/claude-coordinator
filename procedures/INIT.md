@@ -25,7 +25,9 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
 - **Safety check:**
   - **Branch protection on the code host** — the main branch requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it
-    (or record why it cannot be, e.g. the plan does not offer it).
+    (or record why it cannot be, e.g. the plan does not offer it). A **self-hosted runner** on a public
+    repository: fork PRs never reach it and every external contributor needs approval, or the
+    repository stays private (TOOLKIT *CI*). A change of the repository's visibility re-runs this check.
   - **Worker safety settings** (`settings.example.json`, Windows `settings.example.windows.json` → a
     file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
     which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where

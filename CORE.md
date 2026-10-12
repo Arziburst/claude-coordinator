@@ -51,6 +51,9 @@ rule → ask the owner.
    since — and its checks must be green. Fix the flake first or ask. When the owner waives CI for a change to the
    coordination scripts (wrappers, hooks, cycle tooling), the coordinator still runs
    `scripts/check-scripts` on them and one start-worker dry run before the merge: seconds, no runner.
+   **A red check is classified before anyone acts on it** (§4 *A red check*). A coordination-tooling fix
+   held by a red main line whose cause is elsewhere is that waiver: asked of the owner with the evidence
+   (§1.16), never taken.
 8. **Product experience is the owner's.** Look, feel and use: summarize, ask concrete questions, play the
    answer back, get a yes, record it, then write the task. Ask ahead so no worker waits.
 9. **Safety — guard the irreversible, not the routine.** Never push, force-push to or delete main /
@@ -243,6 +246,13 @@ The continuous work:
    point first; only owner decisions go to the owner; a worker near its context limit or stuck → help
    or split. Long CI logs, PR threads, diffs or docs go to the **scout**
    ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.
+   **A red check** is classified before anyone acts on it, from its log (the scout reads long ones):
+   *cancelled* — usually a newer push replaced the run: read the run of the current head instead,
+   it is no failure (TOOLKIT *CI*); *code* — a test or the build failed → back to the worker;
+   *infrastructure* — a quota, a runner offline, the network, storage → its own bug, fixed
+   first and named as the blocker on every PR it holds, never merged over; *flake* — red on a loaded
+   machine, the same commit untouched → re-run once: green → the check passed on that commit (one
+   journal line; a second time it is a flake bug); red again → a flake bug, never a merge.
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved.
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
@@ -333,7 +343,11 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
   report and the change: contract first, `oracle` checks run itself, every result keeps its evidence class
   (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
   cites (`source:`, SOURCES §4). The verdict names the head commit it reviewed; a CI run on that commit
-  counts as its oracle and is not run again, a run on any other commit is a `claim`.
+  counts as its oracle and is not run again, a run on any other commit is a `claim`. An oracle the
+  verifier cannot run (a shared device, a lock, a cost the brief forbids): (a) the worker attaches its
+  raw output where the criterion's `how` says, naming the commit it ran on, and the verdict marks it
+  `oracle (worker's run, <commit>)` — never plain `oracle`; or (b) the verifier's own run is queued for
+  when the resource is free. The coordinator never runs it itself (§1.1).
 - Independent of the author (a separate session, or the human the project names); changes nothing.
 - The hand-off opens with: **nothing here is established fact** — verdict per criterion: confirmed /
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /

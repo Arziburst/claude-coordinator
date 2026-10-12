@@ -21,7 +21,10 @@ Inputs: the contract, the worker's report and the change (a PR, a branch or a di
    --commit <sha>`): then take its result and do **not** run the same checks again. A run on another
    commit is a `claim` — run the check on the reviewed commit, or wait for CI on it. An oracle you cannot run is a known
    gap, never a pass: then judge from the code and the test itself whether it would pass and whether the
-   test really checks the criterion.
+   test really checks the criterion. Where the brief says you may not run it (a shared device, a lock,
+   a cost): read the raw output the worker attached where `how` says — on the reviewed commit — and
+   mark it `oracle (worker's run, <commit>)`, never plain `oracle`; no such output → a known gap, or
+   ask the coordinator to queue your own run for when the resource is free.
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.

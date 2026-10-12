@@ -21,7 +21,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
      (BINDINGS; `grep -rn <script name>`): the wrapper is fixed through the project's change path
-     **before** the update is applied, or the first worker start after it fails;
+     **before** the update is applied, or the first worker start after it fails. A wrapper that broke
+     anyway (its fix needs a worker, or waits behind a red main line) does not stop the work: workers
+     start through the core's start-worker directly, with the brief built as the wrapper would build
+     it (BINDINGS *fallback*), until the wrapper's fix lands;
    - **Not done yet:** every row of the new core's [ONE-TIME.md](../ONE-TIME.md) with no line in
      `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
      by `hostname`), and every row whose newest line is `failed`. A setting is asked with its default

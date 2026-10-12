@@ -28,6 +28,9 @@ is new and never asks a recorded answer again (CORE §3, [procedures/UPDATE-CORE
 - **kind** — a `setting` is a question, asked with its default first (INIT 3.1); the answer goes where
   the row says and into CHECKLIST. A `check` is an action, offered as "run now? yes/no".
 - **added** — the core PR and its squash commit (`git log --grep '(#45)'` finds a commit not yet listed).
+- **Re-run on a change:** `branch-protection` and `state-private` are offered again when the
+  repository's visibility differs from the one their CHECKLIST note recorded (`gh repo view --json
+  visibility`, read at start): a public repository brings fork PRs and free branch protection.
 - A new setting or check adds its row **in the same PR** that adds it. Rows are never removed or
   renumbered: a retired step stays, marked *retired*, and is no longer asked.
 
