@@ -12,6 +12,9 @@
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
 # Exit 1 on any FAIL, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In)
+# Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
+# the caller set (GitHub's powershell shell runs with Stop)
+$ErrorActionPreference = 'Continue'
 $core = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 13 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
