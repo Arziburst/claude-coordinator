@@ -63,6 +63,7 @@ start() {
         --mode) a+=(-Mode "$2"); shift 2 ;; --brief-file) a+=(-BriefFile "$2"); shift 2 ;;
         --safety) a+=(-Safety "$2"); shift 2 ;; --dry-run) a+=(-DryRun); shift ;;
         --launch-from) a+=(-LaunchFrom "$2"); shift 2 ;;
+        --report-to) a+=(-ReportTo "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -91,24 +92,28 @@ check() {   # check <expected exit> <description> -- command...
   LAST="$out"
 }
 expect_in() { case "$LAST" in *"$1"*) ;; *) echo "FAIL: output lacks '$1'"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac; }
-S=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json")
+S=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "Core lead")
 
 # --- start-worker ---
 if [ "$kind" = sh ]; then check 1 "start: --model without a value" -- start --repo "$tmp/repo" --model; fi
 check 1 "start: bypassPermissions refused" -- start "${S[@]}" --mode bypassPermissions
 expect_in "only the owner's own explicit setup"
-check 1 "start: not a git repository" -- start --repo "$tmp" --name x --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json"
+check 1 "start: not a git repository" -- start --repo "$tmp" --name x --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
+check 1 "start: no report address" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json"
+expect_in "<session>"
 check 0 "start: dry run" -- start "${S[@]}" --dry-run
 expect_in "[dry-run]"
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] && { echo "FAIL: the dry run created the worktree"; fail=1; }
 [ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
 check 0 "start: real start with the stub claude" -- start "${S[@]}"
+expect_in 'subscribe: SendMessage(to: "#12 worker: Fix", notify_when_idle: true)'
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] || { echo "FAIL: no worktree after start"; fail=1; }
 grep -q -- "--bg --name #12 worker: Fix --model opus --permission-mode auto --settings" "$STUB_LOG" ||
   { echo "FAIL: claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -q 'Second line "quoted".' "$STUB_LOG" || { echo "FAIL: the brief did not reach claude intact"; fail=1; }
 # launched from the repository root (trusted), the brief's first action entering the worktree
 grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not launched from the repository root:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+grep -q 'Report to: the session named "Core lead"' "$STUB_LOG" || { echo "FAIL: the brief does not name the report address"; fail=1; }
 grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/12-fix\." "$STUB_LOG" ||
   { echo "FAIL: the brief does not start with entering the worktree"; fail=1; }
 : > "$STUB_LOG"
@@ -117,7 +122,7 @@ check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 # a hook path with backslashes: Git Bash drops them on Windows and the hook never runs
 sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
-check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json"
+check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x
 expect_in "forward slashes"
 
 # --- cleanup-worker ---

@@ -2,7 +2,10 @@
 # (Windows; macOS / Linux: start-worker.sh - the same steps and checks).
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
-#       [-LaunchFrom <folder>] [-DryRun]
+#       -ReportTo <coordinator session> [-LaunchFrom <folder>] [-DryRun]
+# -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
+# (names change on a restart). It heads the brief; at the end the script prints the line that
+# subscribes to the new session's idle notice (CORE section 4, Control).
 # -Safety: a settings file for the worker (from settings.example.windows.json) with the deny rules, the
 #          PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. The hook's
 #          self-test must pass, or no worker starts. -Model is required (CORE section 7). Default mode auto;
@@ -14,13 +17,13 @@
 # backslashes, and a hook that fails to run blocks nothing.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
-      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [switch]$DryRun)
+      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [switch]$DryRun)
 $ErrorActionPreference = 'Stop'
 function Fail([string]$m) { [Console]::Error.WriteLine($m); exit 1 }
 
-if (-not ($Repo -and $Name -and $Branch -and $Model -and $BriefFile -and $Safety) -or
+if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> -BriefFile <file> -Safety <settings.json> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-DryRun]'
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 # Absolute paths: both files are used from inside the worktree.
@@ -62,8 +65,10 @@ else {
 
 $wtFwd = $wt.Replace('\', '/')
 $first = "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wtFwd. Work only inside it; never change files outside it."
+$first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions."
 $brief = $first + "`n`n" + [IO.File]::ReadAllText($BriefFile)
-if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model --permission-mode $Mode --settings $Safety <EnterWorktree $wtFwd, then the brief>)"; exit 0 }
+$subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
+if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model --permission-mode $Mode --settings $Safety <EnterWorktree $wtFwd, report to `"$ReportTo`", then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
@@ -73,4 +78,6 @@ if ($PSVersionTable.PSVersion -lt [version]'7.3') { $brief = ($brief -replace '(
 Push-Location -LiteralPath $from
 try { & $claude.Source --bg --name $Name --model $Model --permission-mode $Mode --settings $Safety $brief }
 finally { Pop-Location }
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$subscribe
+exit 0
