@@ -36,7 +36,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "settings"
-  ([SETTINGS.md](procedures/SETTINGS.md)), "update the core"
+  ([SETTINGS.md](procedures/SETTINGS.md)), the self-test ([SELFTEST.md](procedures/SELFTEST.md)), "update the core"
   ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)), the sources of
   truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)).
 
@@ -46,7 +46,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker` (named session
   in its own worktree), `cleanup-worker` (only clean and pushed work), `hooks/safety-guard`
   (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
-  home or a worktree by hand — work branches stay free), `statusline`
+  home or a worktree by hand — work branches stay free), `selftest` (the scripted steps of the
+  self-test: checks, environment, a sandbox and its cleanup), `statusline`
   (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
   also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
 - [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)

@@ -20,6 +20,7 @@ is new and never asks a recorded answer again (CORE §3, [procedures/UPDATE-CORE
 | `spend-ratio` | #21 dba3845 | project | check | run | the first limit percent per dollar, from `scripts/session-tokens --since <reset>`, written to BINDINGS *Models* (CORE §7a) |
 | `branch-protection` | #7 c8655e4 | project | check | run | the main branch on the code host requires a PR and passing checks (and a human review in the strict preset), or why not is recorded (INIT *Safety check*) |
 | `first-real-pr-watched` | #45 c6982d5 | project | check | run | the first real PR after init is followed end to end — CI, review, merge — and the result reported: what no sandbox can show |
+| `selftest` | #48 | machine | check | run | the full self-test passes on this machine ([procedures/SELFTEST.md](procedures/SELFTEST.md)): scripts, environment, a mini block with real sessions in a sandbox, the PR flow where the state repository has a remote |
 
 - **scope** — `project`: once per project; `machine`: once per project on each machine (its
   CHECKLIST row names the machine's `hostname`), so a new machine is asked again.
@@ -37,7 +38,7 @@ In the coordinator's own git (CORE §12b), one line per step that ran, newest la
 | id | date | core | machine | result | note |
 |---|---|---|---|---|---|
 | strictness | 2026-10-12 | 1ebe968 | - | done | swarm (owner) |
-| safety-hook-test | 2026-10-12 | 1ebe968 | ARZIB-PC | done | safety-guard: OK |
+| safety-hook-test | 2026-10-12 | 1ebe968 | dev-laptop | done | safety-guard: OK |
 | branch-protection | 2026-10-12 | 1ebe968 | - | declined | the plan does not offer it |
 ```
 

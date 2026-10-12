@@ -1,0 +1,1 @@
+{"session_id":"selftest-fixture","model":{"display_name":"Opus 5.5"},"effort":{"level":"high"},"context_window":{"used_percentage":84.2,"context_window_size":1000000,"current_usage":{"input_tokens":800000,"cache_read_input_tokens":37000}},"rate_limits":{"five_hour":{"used_percentage":14.9},"seven_day":{"used_percentage":92}}}
