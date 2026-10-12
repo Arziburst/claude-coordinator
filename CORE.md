@@ -49,7 +49,7 @@ rule → ask the owner.
    known gap, not a pass. **Integrate exactly the commit the verdict approved** (gh: `gh pr merge
    --match-head-commit <sha>`): a head that moved after the verdict is reviewed again — only the change
    since — and its checks must be green. Fix the flake first or ask. When the owner waives CI for a change to the
-   coordination scripts (wrappers, hooks, cycle tooling), the coordinator still runs
+   coordination scripts (wrappers, hooks, work tooling), the coordinator still runs
    `scripts/check-scripts` on them and one start-worker dry run before the merge: seconds, no runner.
    **A red check is classified before anyone acts on it** (§4 *A red check*). A coordination-tooling fix
    held by a red main line whose cause is elsewhere is that waiver: asked of the owner with the evidence
@@ -74,7 +74,7 @@ rule → ask the owner.
     and installing the core's roles (TOOLKIT).
 12. **No work before the init quiz is complete.** Until every init question that applies (§3) has a
     clear answer and the owner said yes to the summary: no workers, no changes (beyond the three set-up
-    steps of §1.11), no cycle. A quiz cut off or an unclear answer → back to the open questions, never
+    steps of §1.11), no task. A quiz cut off or an unclear answer → back to the open questions, never
     guess past them.
 13. **Customer and production data never leave production.** No production rows, logs with personal
     data, customer records or payment details in issues, PRs, comments, the journal, briefs, test seeds
@@ -150,7 +150,7 @@ its own: after step 9 the session waits.
 8. **Dry run** (§12a) on a new machine or a new / adopted project, then the **self-test**
    ([procedures/SELFTEST.md](procedures/SELFTEST.md)) at the core commit in use, where it has not run
    yet on this machine.
-9. **Wait** for the owner's explicit "start a new cycle" or another instruction.
+9. **Wait** for the owner's first task or batch command (§4) — never start work on your own.
 
 ## 3. Setup interview — the init quiz
 
@@ -188,13 +188,31 @@ are listed in [ONE-TIME.md](ONE-TIME.md); `coordinator/CHECKLIST.md` records whi
 The init quiz fills it; every "update the core" offers the steps added since, so a project initialized
 under an older core is asked the new ones instead of getting their defaults silently.
 
-## 4. The cycle
+## 4. Work — modes, events and the batch
 
-On the owner's **"start a new cycle"** (any wording: "стартуем новый цикл", "run the cycle") or — only
-where `PROJECT.md` enables it — the periodic tick (§9), run the **cycle recipe in `PROJECT.md`** step by
-step. Without one, this skeleton:
+**How the owner gives work** (`PROJECT.md` *Settings*, **work mode**, asked at init) — the core has no
+cycle of its own:
+- **by task** — the owner names a task (or a few); the coordinator runs it through the continuous work
+  below and reports, then waits for the next. Nothing is batched, nothing waits for a batch.
+- **batch** — the owner's batch command (by default "start a new cycle", any wording; the owner may name
+  their own) runs the **batch recipe in `PROJECT.md`** over the tracker's runnable work, without one the
+  skeleton below. The autopilot's tick (§9), where `PROJECT.md` turns it on, runs the same.
 
-1. **Sync:** merged and open PRs, their checks, running workers, limits (stale status files pruned, TOOLKIT *Usage*).
+In either mode the owner may hand over a single task at any time.
+
+**Housekeeping runs on events, in every mode — never held for a batch:**
+
+| Event | What runs |
+|---|---|
+| A session starts (and once a day in a session that keeps running) | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
+| A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) |
+| A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
+| Anything in `coordinator/` changes | a commit there at once; a push per §12b |
+| A batch ends | the batch report (§12) |
+
+**The batch skeleton:**
+
+1. **Sync:** as at session start (the table above).
 2. **Clean up** merged, fully pushed work (§8): stop its processes (dev servers, containers, database
    stacks), remove its working copies and sessions. Unfinished work is left alone; anything unclean is
    reported, not deleted.
@@ -206,7 +224,7 @@ step. Without one, this skeleton:
    the owner are asked first with the fix and its goal; *announce and wait* (typical for client work) —
    send the plan first (item → issue / PR → what and why → model) and delegate only what is approved.
 6. **Delegate, control, review, accept, integrate** — below.
-7. **Report** (§12) — and the cycle's core findings: did any core rule, script or check fail us (§10)?
+7. **Report** the batch (§12); its tasks' core findings are already filed (the table above).
 
 The continuous work:
 
@@ -404,7 +422,7 @@ never assumed (below).
   of the table) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
   the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
   per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
-  `escalated` / `failed`). The coordinator's own model and effort get a line per cycle.
+  `escalated` / `failed`). The coordinator's own model and effort get a line per day.
 - **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
   under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
   this table, and every run uses it. It learns from the run log, balancing quality, price and limits:
@@ -420,7 +438,7 @@ never assumed (below).
     may add its own kinds by area (e.g. rendering, input) in `ROUTING.md`, each under one table row;
     a pin names a kind or an area;
   - a level is a model or effort step on the ladder; routing never uses a model the ladder lacks.
-  Each change is one line in the cycle report and the journal; "model report" shows `ROUTING.md` with
+  Each change is one line in the next report and the journal; "model report" shows `ROUTING.md` with
   the numbers behind it.
 - Keep this table current; the ladder in `BINDINGS.md` holds the exact ids.
 
@@ -437,10 +455,10 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   `~/.claude/projects/<project>/`; on Arx this changed the first guess about 10×), else the
   coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
   a seed is a median **per model**, not per kind, until the run log has the kind's own runs.
-- **Limit percent per dollar:** the limits are shown as whole percents, so one cycle rarely moves them
+- **Limit percent per dollar:** the limits are shown as whole percents, so one task rarely moves them
   enough to read. The ratio is the limit's rise since its reset over the **account's** list-price cost
   since then (`scripts/session-tokens --since <reset>`, priced per model, TOOLKIT *Usage*): the limits
-  are per account, so the run log alone, one project's share, would overstate it — recomputed every cycle, trusted once the window has risen
+  are per account, so the run log alone, one project's share, would overstate it — recomputed once a day, trusted once the window has risen
   10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
   it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
@@ -476,7 +494,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 
 - **Autopilot is off unless `PROJECT.md` turns it on** (gate "auto" plus the tick; on in the swarm
   preset, §3). On: every **approved** task that can run, runs, until a cap stops it — best
-  quality, fewest tokens, no stretching work to a reset. Off: work on the owner's "start a new cycle" and
+  quality, fewest tokens, no stretching work to a reset. Off: work on the owner's task or batch command and
   only **propose** new work (§1.11, §4b).
 - Short-window cap → pause workers until the reset. Long-window cap → no new workers, running ones
   finish. Over a cap only with the owner's permission for that occasion.
@@ -537,12 +555,12 @@ change that affects them.
 
 ## 12a. Dry run
 
-The first cycle on a new machine, for a new `PROJECT.md`, or after adopting a project with an existing
+The first work (a task or a batch) on a new machine, for a new `PROJECT.md`, or after adopting a project with an existing
 coordinator, runs in thought only: show the owner which sessions it would start, stop or clean, which PRs
 it would touch, which commands it would run. Two checks really run, as they change nothing:
 `scripts/check-scripts` on the core's and the project's coordination scripts (BINDINGS), and the
 project's start-worker with its dry-run flag on one real task, so a broken wrapper shows now, not when
-the first worker is due. Nothing changes until the owner approves; then the real cycle runs.
+the first worker is due. Nothing changes until the owner approves; then it runs for real.
 
 The **self-test** ([procedures/SELFTEST.md](procedures/SELFTEST.md)) follows the dry run at init and
 runs after every core update: real sessions on the cheapest models in the project's own state
@@ -552,14 +570,19 @@ PR stay as the evidence of a proven version. It never replaces the dry run.
 
 ## 12b. Moving to another machine — the state repository
 
-The project's `coordinator/` folder is the coordinator's own local git repository, committed every cycle.
+The project's `coordinator/` folder is the coordinator's own local git repository. **Every change is
+committed there at once** (local, costs nothing). **Pushed** to its remote: at session start (after
+`git pull --ff-only`); when a task is accepted, merged or dropped; after an owner decision or a settings
+change; before a handoff; on the owner's word. Other unpushed commits go **at most once per 15 minutes**,
+with the next event — never a push per edit, never one a day. A push that fails (no network) stops
+nothing and is retried at the next event.
 Its one branch is always **`state`**, also the remote's default branch: `main` and `master` are
 protected (the safety hook blocks direct pushes to them), `state` is not.
 A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
 -m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the
 old remote branch is deleted by the owner (the hook blocks it).
 Its remote, chosen at init, is **always private**: the owner's account or the team's organization,
-pushed after every cycle; or none (local only, lost with the disk). Finding it on a new machine and the
+pushed as above; or none (local only, lost with the disk). Finding it on a new machine and the
 handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).
 
 ## 13. "Coordinator, what is your task?"
