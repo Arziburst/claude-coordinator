@@ -97,7 +97,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    `gh repo create <owner>/<project>-coordinator-state --private`, first push `git push -u origin state`; *the team's organization*
    (recommended for a team); *local only* — warn: a lost disk or a move without a handoff loses the
    journal, the rules and the decisions. With a remote: verify `PRIVATE` (`gh repo view --json
-   visibility`), push after every cycle, record the link in `BINDINGS.md`, offer a pointer the next
+   visibility`), push as CORE §12b says (at every event that matters, at most every 15 minutes), record the link in `BINDINGS.md`, offer a pointer the next
    machine can find (HANDOFF, *Finding it*).
 6. **Risky areas:** money, roles and permissions, personal data, audit — what was found in the code
    filled in; confirm (CORE §5).
@@ -133,6 +133,13 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     Options: *automatically* (recommended) · *show me each one first* (recommended for client work) ·
     *no — keep them here, I pass them on by hand*. Recorded in `PROJECT.md` *Settings*; changed later
     with "settings".
+12. **Work mode — how do you give work?** Explain: the coordinator has no cycle of its own; cleanup,
+    syncing the state and core reports run on events in every mode (CORE §4). Options: *by task*
+    (recommended for solo work) — you name a task, it is done and reported, you name the next · *batch*
+    (recommended for a team with a board or a tracker) — a command of yours (by default "start a new
+    cycle") runs the batch recipe over the runnable work; the recipe is agreed in the summary. In both,
+    a single task can be handed over any time. The autopilot (swarm) runs the batch recipe on its tick.
+    Recorded in `PROJECT.md` *Settings*.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the
@@ -158,7 +165,7 @@ start sequence* says, and every place they differ from the core is one line in t
 
 Everything else in `PROJECT.template.md`: what follows from the strictness preset (parallel workers,
 who merges, review, the approval gate, obvious review comments, autopilot and the tick, code to other
-services, reports) and the template's defaults (session names, the cycle recipe, commit and PR format,
+services, reports) and the template's defaults (session names, the batch recipe, commit and PR format,
 progress comments, research, the radar list and the expectations checklist (CORE §4b), risk-area
 rules, status page, issue fields). The owner changes any of them
 with one line at the summary or later.
@@ -178,7 +185,7 @@ with one line at the summary or later.
   see none of it. Create it if missing — `git -C coordinator init`, then `git -C coordinator symbolic-ref HEAD
   refs/heads/state` before the first commit (its branch is always `state`, §12b), add `coordinator/` to the project's
   `.git/info/exclude`, first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
-  commit at the end of every cycle and push where it has a remote. The owner may choose to commit the
+  commit at every change and push per CORE §12b where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
 - **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
   record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
@@ -212,8 +219,8 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
   Then **propose the infrastructure, one yes each**: `git init`; a private repository on the code host;
   a board for the tasks (a GitHub Project, or `TASKS.md`: question 4); a CI skeleton with the definition-of-done checks; branch
   protection; the state repository (question 5). Risky areas and production (6, 7) wait until there is
-  code that has them. The first tasks of the first cycle are the project skeleton, CI and the board's
-  first epics — after the dry run and the owner's "start a new cycle".
+  code that has them. The first tasks are the project skeleton, CI and the board's
+  first epics — after the dry run, on the owner's word.
 - **An existing project without a coordinator.** Read everything first (code, history, CI, PRs, the
   board, README / CLAUDE.md / docs, the project's own workflow and decision documents, connected MCP,
   the platform, any device). One table of findings (3.2) with the project's own conventions kept as its

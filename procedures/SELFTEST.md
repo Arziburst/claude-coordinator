@@ -13,7 +13,7 @@ passed here, so the owner can go back to a proven version. It does **not** repla
 
 ## When
 
-- **At init:** after the summary's yes and the dry run, before waiting for "start a new cycle" (CORE §2
+- **At init:** after the summary's yes and the dry run, before waiting for the owner's first task (CORE §2
   step 8).
 - **After every "update the core"** (UPDATE-CORE step 4): the full test, at the new commit.
 - On the owner's word, any time. A commit already tested here (its `selftest/<commit>/base` exists) is
@@ -141,5 +141,5 @@ channel of [CORE-FINDINGS.md](CORE-FINDINGS.md). The next update proves the fix 
 
 ## Not covered
 
-The real project's CI and its branch protection: the test's branches have neither. The first real PR of
-the first cycle is watched end to end as the last check (CHECKLIST `first-real-pr-watched`).
+The real project's CI and its branch protection: the test's branches have neither. The first real PR
+is watched end to end as the last check (CHECKLIST `first-real-pr-watched`).

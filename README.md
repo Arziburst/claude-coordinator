@@ -8,8 +8,8 @@
 >    `coordinator/core/`, that local copy is the core you follow (CORE §2 step 3).
 > 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
 >    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
->    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new
->    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
+>    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's first task or
+>    batch command. Start no work until every quiz question is answered (CORE §1.12); never start work on
 >    your own.
 > 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);
 >    machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md).
@@ -21,7 +21,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 ## Layers
 - [CORE.md](CORE.md) — who the coordinator is and how it works; the same everywhere.
 - [PROJECT.template.md](PROJECT.template.md) → `coordinator/PROJECT.md` in the project — how this
-  project works: the cycle, tracking, the change flow, review, merging, acceptance, environments,
+  project works: the work mode, tracking, the change flow, review, merging, acceptance, environments,
   resources, budget, voice, language, MCP. Filled in a setup interview with the owner.
 - [BINDINGS.template.md](BINDINGS.template.md) → `coordinator/BINDINGS.md` — the concrete commands and tools.
 - [CONTRACT.md](CONTRACT.md) — the unit of delegated work: the contract a worker gets, the report it
@@ -63,8 +63,9 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - **The core is a local copy** in `coordinator/core/`, like a pinned package: editable for that project;
   at start the coordinator says when upstream is newer, and "update the core" brings the changes in on
   command, with an impact report first.
-- **"Start a new cycle"** — the coordinator runs the project's cycle recipe (CORE §4).
-- **Moving to another machine** — `coordinator/` is pushed after every cycle to a private remote, the
+- **Give it work** — name a task (work mode *by task*), or say the batch command ("start a new cycle" by default) to run
+  the project's batch recipe (*batch*). Cleanup, syncing the state and core reports run on events in either mode (CORE §4).
+- **Moving to another machine** — `coordinator/` is pushed at every event that matters (CORE §12b) to a private remote, the
   project's state repository, if the owner chose one at init; say "prepare a handoff" before a move: the
   coordinator pushes the work in flight and writes `HANDOFF.md` (CORE §12b, `state-repo/README.template.md`,
   `HANDOFF.template.md`). On the new machine give a session only that repository's link.

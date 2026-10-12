@@ -12,9 +12,10 @@ holding the coordinator's files —
 `state-repo/README.template.md`.
 
 - **Day to day:** the project's `coordinator/` folder *is* the state repository — a local git
-  repository, excluded from the project's git (`.git/info/exclude`), committed at the end of every cycle
-  (one line in the report), on its one branch `state` (CORE §12b). With a remote (`PROJECT.md`, chosen at init) it is pushed after every
-  commit: `git pull --ff-only` first; the remote ahead and not fast-forwardable (another machine's or a
+  repository, excluded from the project's git (`.git/info/exclude`), committed at every change
+  on its one branch `state` (CORE §12b). With a remote (`PROJECT.md`, chosen at init) it is pushed at the
+  events of CORE §12b (otherwise at most every 15 minutes):
+  `git pull --ff-only` first; the remote ahead and not fast-forwardable (another machine's or a
   teammate's coordinator wrote it) → stop and ask the owner, never force-push it. Before every push
   check it is still `PRIVATE`; public → stop and tell the owner. Local only → a lost disk loses it.
 - **Finding it** (a new machine, a teammate's fresh clone, no `coordinator/`): in this order — the

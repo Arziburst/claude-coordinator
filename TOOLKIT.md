@@ -251,7 +251,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every
-  session on the machine, other projects' too, so at every cycle start run `session-tokens.sh --prune`
+  session on the machine, other projects' too, so at every session start run `session-tokens.sh --prune`
   / `session-tokens.ps1 -Prune` (deletes files older than 7 days; on Windows only the `-Prune` form
   reaches the script through `-File`).
 - **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
@@ -294,7 +294,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   check the login.
 
 ## New machine — safe start checklist
-Run in this order; the first cycle is a **dry run** (CORE §12a).
+Run in this order; the first work is a **dry run** (CORE §12a).
 1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
 3. **Worker safety file** from [settings.example.json](settings.example.json) (Windows:
@@ -312,4 +312,4 @@ Run in this order; the first cycle is a **dry run** (CORE §12a).
 7. Initialize (CORE §2 — the one start sequence): context of running sessions and PRs, open questions,
    the init quiz, `PROJECT.md` / `BINDINGS.md`, the access list and project map, the platform row, the MCP
    tool check.
-8. Dry-run cycle → the owner approves → wait for "start a new cycle"; a tick only where autopilot is on (swarm, CORE §3).
+8. Dry run → the owner approves → wait for the owner's first task or batch command; a tick only where autopilot is on (swarm, CORE §3).

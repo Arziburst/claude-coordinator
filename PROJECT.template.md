@@ -18,7 +18,8 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | **Strictness** (CORE §3) | `<fill>` | `<fill>` | `<date>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
 | Overrides of the preset (row and value) | `<fill>` | `<fill>` | `<date>` | none |
 | **Spend level** (CORE §7) | `<fill>` | `<fill>` | `<date>` | **balanced** · lean · thorough — which way model and effort choices lean; never removes a check or a rung |
-| Autopilot and tick (CORE §9) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm on, a tick every ~30 min · standard, strict off — work only on the owner's "start a new cycle" |
+| Autopilot and tick (CORE §9) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm on, a tick every ~30 min · standard, strict off — work on the owner's task or batch command |
+| **Work mode** (CORE §4) | `<fill>` | `<fill>` | `<date>` | **by task** — the owner names a task, then the next (solo work) · batch — a batch command runs the recipe below over the tracker (a team, a board) |
 | Language: conversation / artifacts | `<fill>` | `<fill>` | `<date>` | owner's language / English |
 | Voice in commits and PRs | the owner's | core | — | not a setting: always the owner's, no AI lines (CORE §11) |
 | Who merges | `<fill>` | `<fill>` | `<date>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |
@@ -37,7 +38,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, the coordinator by its name in *Settings*; no project prefix in the others |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
-| Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git, committed every cycle |
+| Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git; committed at every change, pushed per CORE §12b |
 | Who reviews CI, deployment, migration and release-flag changes (CORE §1.1) | `<fill>` | per the strictness: swarm the verifier · standard the owner · strict a human |
 | Project code to other services — web search, third-party tools (CORE §1.13) | `<fill>` | strict: ask · swarm, standard: allowed |
 | Standing approvals (CORE §1, Definitions) | `<fill>` | none |
@@ -69,13 +70,14 @@ Other sources: the catalog `coordinator/SOURCES.md`. Missing tools (no tracker, 
 | Issue fields | `<fill>` | scope, out of scope, **do not decide**, depends on, acceptance criteria, verification, estimate |
 | Status page / progress line | `<fill>` | a pinned issue; "milestone ≈ N% (closed/all)" after each merge |
 
-## The cycle (CORE §4)
-What "start a new cycle" runs here — an ordered recipe, agreed at init, revised any time.
+## The batch recipe (CORE §4)
+What the batch command runs here (work mode *batch*, and the autopilot's tick) — an ordered recipe, agreed at init,
+revised any time. Under *by task* only the approval gate and the comment rows apply.
 
 | Question | This project | Default to offer |
 |---|---|---|
-| Recipe (ordered steps) | `<fill>` | sync PRs → clean up merged work → collect and triage new comments → plan next work and merge order → approval gate → delegate → report |
-| Parallel tasks per cycle | `<fill>` | per the strictness: swarm as many as runnable (e.g. 10) · standard 2–3 · strict one |
+| Batch command and recipe (ordered steps) | `<fill>` | "start a new cycle" (or the owner's own words): sync PRs → clean up merged work → collect and triage new comments → plan next work and merge order → approval gate → delegate → report |
+| Parallel tasks | `<fill>` | per the strictness: swarm as many as runnable (e.g. 10) · standard 2–3 · strict one |
 | Approval gate | `<fill>` | swarm: auto for queued and obvious items, ask for the rest · standard, strict: announce the plan (item → issue/PR → what and why → model) and wait for the owner's approval |
 | Obvious review comments | `<fill>` | swarm, standard: fixed automatically · strict: listed in the plan like any other item |
 | Stale comments | `<fill>` | flagged with the reason (task changed / comment obsolete); never acted on without the owner |

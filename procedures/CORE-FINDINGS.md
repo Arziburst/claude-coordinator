@@ -23,8 +23,8 @@ it is a core finding. Only this project's wrapper or setting broke → a project
 fixes its setting, the core lacks the warning or the check) → both, each in its place.
 
 Workers, leads and verifiers report a suspected core problem in their report's `core_findings:` list
-(roles/worker.md); the coordinator decides and writes the row. At the end of every cycle it asks itself:
-did any core rule, script or check fail us this cycle? (CORE §4).
+(roles/worker.md); the coordinator decides and writes the row. When a task ends it asks itself:
+did any core rule, script or check fail us in this task? (CORE §4).
 
 ## 2. Send — an issue in claude-coordinator
 
