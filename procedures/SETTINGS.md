@@ -27,7 +27,8 @@ never from memory:
   8. the state repository — remote (or local only), branch (`state`, CORE §12b), private yes / no
      (`gh repo view --json visibility`);
   9. the core — the claude-coordinator commit in `coordinator/core/`, and whether upstream is newer
-     (one `git ls-remote`, CORE §2);
+     (one `git ls-remote`, CORE §2); the coordinator name, and whether this session carries it
+     (`ListAgents` shows it);
   10. one-time steps — from `coordinator/CHECKLIST.md`: done *n* · not done *n* (their ids) ·
       declined *n* ([ONE-TIME.md](../ONE-TIME.md)).
 - The values come from the **Settings** block at the top of `PROJECT.md`. A `PROJECT.md` without it

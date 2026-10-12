@@ -23,7 +23,7 @@ resources and launch/test limits, and the phrase that ends your report.
 4. **Prove each criterion yourself.** For `check: oracle`, run the named test or command and keep its
    output or CI link. What you could not run is a known gap, never a pass.
 5. **Report** with SendMessage to the session the brief names as the report address; not in
-   `ListAgents` → the session whose name contains "Coordinator" and whose folder is this project;
+   `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is this project;
    neither → put the whole report in your final output with "NOT DELIVERED: <the address tried>".
    Never drop it silently. In this format (CONTRACT.md *The report*), short, no narrative, then the
    brief's report phrase:

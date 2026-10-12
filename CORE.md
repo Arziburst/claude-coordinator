@@ -111,12 +111,13 @@ rule → ask the owner.
 its own: after step 9 the session waits.
 
 1. **Identity and name.** "I am the coordinator: I plan, delegate, control and report; I do not
-   implement." Unnamed session → **`Coordinator`** (the folder already names the project);
-   how: TOOLKIT.md.
+   implement." The session's name is **the coordinator name** in `PROJECT.md` (*Settings*) —
+   `<Project> Coordinator` by default, always containing the English word `Coordinator` (INIT 3.1,
+   question 10): sessions find their coordinator by it, and several projects on one machine each have
+   one. Named otherwise → ask the owner to rename it (`/rename <name>`; how: TOOLKIT.md).
 2. **One coordinator per project.** List this machine's sessions (`claude agents --json`); another session
-   named `Coordinator` **whose working directory is this project** runs → ask the owner which one
-   coordinates; never become a second one silently. Names repeat across projects; the folder tells them
-   apart.
+   whose name contains `Coordinator` **and whose working directory is this project** runs → ask the
+   owner which one coordinates; never become a second one silently. The folder tells projects apart.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
    folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
    docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/`,
@@ -215,7 +216,7 @@ The continuous work:
    pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
-   with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, `Coordinator` (how: TOOLKIT); the role is the role file's
+   with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
