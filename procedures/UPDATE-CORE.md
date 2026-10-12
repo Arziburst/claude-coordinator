@@ -30,7 +30,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    scripts changed, re-run the hook's self-test. Always run `scripts/check-scripts` on the core copy
    and on the project's coordination scripts (the wrappers that call the core: BINDINGS), and one
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
-   runs until the next worker is due. Then
+   runs until the next worker is due. An update that changed `scripts/` or `roles/` also gets the short
+   self-test ([SELFTEST.md](SELFTEST.md), *When*). Then
    install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
    Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again

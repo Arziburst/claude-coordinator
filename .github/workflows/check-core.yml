@@ -161,10 +161,52 @@ jobs:
       - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         run: bash tests/workers/run.sh ps powershell
+      - name: selftest - the scripted steps (bash)
+        if: runner.os != 'Windows'
+        run: |
+          bash scripts/selftest.sh scripts
+          # no claude on the runner: env must fail on it and still report git
+          out="$(bash scripts/selftest.sh env)" && { echo "env must fail without claude"; exit 1; }
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -qx 'FAIL env: claude not found'
+          printf '%s\n' "$out" | grep -q '^PASS env: git '
+          # a sandbox with a merged and an unmerged branch: kept while one is left, removed once merged
+          out="$(bash scripts/selftest.sh sandbox)"; printf '%s\n' "$out"
+          d="$(printf '%s\n' "$out" | sed -n 's/^sandbox: //p')"; r="$d/repo"
+          g() { git -c user.email=t@t -c user.name=t "$@"; }
+          git -C "$r" worktree add -q -b t1 "$r/.claude/worktrees/t1" main
+          echo a > "$r/.claude/worktrees/t1/a.txt"; git -C "$r/.claude/worktrees/t1" add a.txt; g -C "$r/.claude/worktrees/t1" commit -q -m a
+          if bash scripts/selftest.sh clean --sandbox "$d"; then echo "an unmerged branch must fail clean"; exit 1; fi
+          [ -d "$d" ] || { echo "the sandbox was removed with a branch left"; exit 1; }
+          g -C "$r" merge -q --no-edit t1
+          bash scripts/selftest.sh clean --sandbox "$d"
+          [ ! -e "$d" ] || { echo "the sandbox is still there"; exit 1; }
+          if bash scripts/selftest.sh clean --sandbox "$HOME"; then echo "a folder without the marker must fail"; exit 1; fi
+          [ -d "$HOME" ]
+      - name: selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $out = @(.\scripts\selftest.ps1 scripts); $out
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not ($out -ceq 'PASS scripts: session-tokens (5.1)') -or -not ($out -ceq 'PASS scripts: session-tokens (7)')) { 'not run under both PowerShells'; exit 1 }
+          $out = @(.\scripts\selftest.ps1 sandbox); $out
+          $d = ($out | Where-Object { $_ -like 'sandbox: *' }).Substring(9); $r = Join-Path $d 'repo'
+          git -C $r worktree add -q -b t1 (Join-Path $r '.claude/worktrees/t1') main
+          Set-Content -Path (Join-Path $r '.claude/worktrees/t1/a.txt') -Value a
+          git -C (Join-Path $r '.claude/worktrees/t1') add a.txt
+          git -C (Join-Path $r '.claude/worktrees/t1') -c user.email=t@t -c user.name=t commit -q -m a
+          .\scripts\selftest.ps1 clean -Sandbox $d
+          if ($LASTEXITCODE -ne 1 -or -not (Test-Path -LiteralPath $d)) { 'an unmerged branch must fail clean and keep the sandbox'; exit 1 }
+          git -C $r -c user.email=t@t -c user.name=t merge -q --no-edit t1
+          .\scripts\selftest.ps1 clean -Sandbox $d
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $d)) { 'the merged sandbox was not removed'; exit 1 }
+          exit 0
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
+          diff <(bash scripts/selftest.sh scripts) <(pwsh -NoProfile -File scripts/selftest.ps1 scripts)
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")

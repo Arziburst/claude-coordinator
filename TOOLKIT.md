@@ -168,6 +168,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   message instead of a parse error, and check-scripts parses it with `pwsh` (skipped where there is
   none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
   where it exists.
+  `scripts/selftest.sh|.ps1 scripts|env|sandbox|clean` — the scripted steps of the self-test
+  ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines, exit 1 on a FAIL. The
+  `.ps1` runs the `.ps1` scripts under every PowerShell on the machine (5.1 and pwsh).
 
 ## Usage and limits
 - **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and
