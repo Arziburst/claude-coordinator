@@ -98,6 +98,8 @@ are in the report). Only the reviewer can turn a claim into
 `review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. **A CI run
 is an oracle only for the commit it ran on:** its proof names the run and that commit, and it counts
 for a verdict only when that commit is the head the reviewer reviewed — a run on an older head is a
-`claim`. Reports,
+`claim`. A check the reviewer may not run (a shared device, a lock) can rest on the worker's raw output
+for the reviewed commit, attached where `how` says: it is shown as `oracle (worker's run, <commit>)`,
+never as plain `oracle` (CORE §6). Reports,
 the journal and the owner's summary keep the class, so "tested", "reviewed" and "said so" never look the
 same.

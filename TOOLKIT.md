@@ -190,6 +190,26 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
   repositories with stub `claude` and `gh`; the real `claude` is never called).
 
+## CI
+- **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
+  a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
+  head (`gh pr view <n> --json headRefOid`, then `gh run list --commit <sha>`); on `cancelled`, look for
+  a newer run on the same branch before reporting anything.
+- **Evidence uploads never fail a build.** An artifact upload step gets `continue-on-error: true` and
+  a warning in the job summary, and keeps a short retention: a full artifact quota otherwise turns
+  every PR red while the build and the tests passed (an *infrastructure* red, CORE §4).
+- **A required check runs on every PR.** A workflow with a `paths` filter on its `pull_request` trigger
+  cannot be a required check: a PR outside the paths never gets it and waits forever. Filter inside
+  the job (a scope step that ends early) instead.
+- **A self-hosted runner and a public repository.** On a public repository a fork's pull request runs
+  its code on the runner once a person approves the contributor's first run (GitHub's default
+  `first_time_contributors`). Either the repository stays private, or both hold: fork PRs never reach
+  the runner (the job's `if: github.event_name != 'pull_request' ||
+  github.event.pull_request.head.repo.full_name == github.repository`), and approval is required for
+  all external contributors. A job skipped by `if:` counts as a passed required check, so a fork PR is
+  merged only after a person has read its code, never on CI alone. A change of visibility re-runs the
+  `branch-protection` and `state-private` checks (ONE-TIME).
+
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
