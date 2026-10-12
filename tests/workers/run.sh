@@ -147,6 +147,15 @@ git -C "$tmp/state" worktree remove "$tmp/project/.claude/worktrees/st1"
 [ -z "$(git -C "$tmp/repo" status --porcelain)" ] || { echo "FAIL: the project's git sees the worktrees:"; git -C "$tmp/repo" status --short | sed 's/^/    /'; fail=1; }
 [ "$(grep -c '^/.claude/worktrees/$' "$tmp/repo/.git/info/exclude")" = 1 ] || { echo "FAIL: /.claude/worktrees/ is not in info/exclude exactly once"; fail=1; }
 grep -q '^/.claude/worktrees/$' "$tmp/repo/.gitignore" 2>/dev/null && { echo "FAIL: .gitignore was written"; fail=1; }
+# a lead's integration branch, created locally and not pushed yet: the worker starts from the local one
+git -C "$tmp/repo" branch 20-lead main
+W=(--repo "$tmp/repo" --name "#20.1 worker: Part" --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "#20 lead: Big")
+check 0 "start: a base not on origin yet" -- start "${W[@]}" --branch 20.1-part --base 20-lead
+expect_in "not on origin yet"
+[ "$(git -C "$tmp/repo" rev-parse 20.1-part)" = "$(git -C "$tmp/repo" rev-parse 20-lead)" ] || { echo "FAIL: 20.1-part did not start from the local base"; fail=1; }
+git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/20.1-part"
+check 1 "start: a base nowhere" -- start "${W[@]}" --branch 21.1-part --base no-such-branch
+expect_in "not on origin and no local branch"
 # a PowerShell shell around the hook: its exit 2 would reach Claude Code as a non-blocking 1
 awk '/safety-guard\./ && !/-SelfTest/ && !/--self-test/ { print "            \"shell\": \"powershell\"," } { print }' "$tmp/safety.json" > "$tmp/safety-shell.json"
 check 1 "start: the hook under a PowerShell shell" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-shell.json" --report-to x
