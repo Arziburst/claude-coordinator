@@ -72,6 +72,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 Universal lessons go into `CORE.md` with the owner's yes (CORE §10); project lessons stay in the
 project's `coordinator/PROJECT.md`. Before a pull request: `scripts/check-core.sh` (Windows:
 `scripts\check-core.ps1`). A new or changed script keeps the one style of TOOLKIT *Scripts*. A change
-to a script's required arguments or to the output a project's wrapper reads puts a line
-`Breaking for project wrappers: <script> - <what changed, what a wrapper must do>` into its commit
-message (the squash commit's body), so "update the core" finds it (UPDATE-CORE step 3).
+to a script's required arguments or to the output a project's wrapper reads puts a line **starting
+with** `Breaking for project wrappers: <script> - <what changed, what a wrapper must do>` into its
+commit message (the squash commit's body), so "update the core" finds it with an anchored grep
+(UPDATE-CORE step 3); a message that only mentions the rule never starts a line with it.
