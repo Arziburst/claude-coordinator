@@ -15,6 +15,8 @@ param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [
 # Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
 # the caller set (GitHub's powershell shell runs with Stop)
 $ErrorActionPreference = 'Continue'
+# What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $core = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 13 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
@@ -41,13 +43,18 @@ switch ($Step) {
   foreach ($sh in $shells) {
     $exe = $sh[0]; $tag = if ($shells.Count -gt 1) { " ($($sh[1]))" } else { '' }
     function Run([string]$script) { $input | & $exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $core $script) @args }
+    # stdin from a file, not a PowerShell pipe: 5.1 piping into pwsh sometimes delivers nothing
+    function Feed([string]$file, [string]$script) {
+      if ($env:OS -eq 'Windows_NT') { & cmd /d /s /c "`"$exe`" -NoProfile -ExecutionPolicy Bypass -File `"$script`" < `"$file`" 2>nul" }
+      else { Get-Content -Raw -LiteralPath $file | & $exe -NoProfile -File $script 2>$null }
+    }
     $null = Run 'scripts/check-core.ps1' $core; if ($LASTEXITCODE -eq 0) { Pass "check-core$tag" } else { Fail "check-core$tag" }
     $null = Run 'scripts/check-scripts.ps1' (Join-Path $core 'scripts'); if ($LASTEXITCODE -eq 0) { Pass "check-scripts$tag" } else { Fail "check-scripts$tag" }
     $null = Run 'scripts/check-contract.ps1' (Join-Path $core 'tests/selftest/contract.md')
     if ($LASTEXITCODE -eq 0) { Pass "check-contract on the fixture$tag" } else { Fail "check-contract on the fixture$tag" }
     $t = NewTemp
     $env:CLAUDE_CONFIG_DIR = $t
-    $out = "$([IO.File]::ReadAllText((Join-Path $core 'tests/selftest/status.json')) | Run 'scripts/statusline.ps1')"
+    $out = "$(Feed (Join-Path $core 'tests/selftest/status.json') (Join-Path $core 'scripts/statusline.ps1'))"
     if ($out -notmatch '5h 14%.*week 92%') { Fail "statusline$tag`: printed '$out'" }
     elseif (-not (Test-Path -LiteralPath (Join-Path $t 'coordinator/sessions/selftest-fixture.json'))) { Fail "statusline$tag`: no session file" }
     else { Pass "statusline$tag" }
@@ -57,11 +64,13 @@ switch ($Step) {
     if ($got -eq $want) { Pass "session-tokens$tag" } else { Fail "session-tokens$tag`: differs from tests/session-tokens/expected.txt" }
     $env:CLAUDE_CONFIG_DIR = $old
     $hook = Join-Path $core 'scripts/hooks/safety-guard.ps1'
-    function Hook([string]$cmd) { $null = ('{"tool_input":{"command":"' + $cmd + '"}}') | & $exe -NoProfile -ExecutionPolicy Bypass -File $hook 2>$null; $LASTEXITCODE }
+    $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
+    function Hook([string]$cmd) { [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"' + $cmd + '"}}'); $null = Feed $jf $hook; $LASTEXITCODE }
     if ("$(& $exe -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest)".Trim() -eq 'safety-guard: OK') { Pass "safety-guard self-test$tag" } else { Fail "safety-guard self-test$tag" }
     if ((Hook 'git push -u origin selftest/task-1') -eq 0) { Pass "safety-guard allows selftest/*$tag" } else { Fail "safety-guard blocks selftest/*$tag" }
     if ((Hook 'git push origin main') -eq 2 -and (Hook 'git push origin master') -eq 2) { Pass "safety-guard blocks main and master$tag" }
     else { Fail "safety-guard lets a push to main or master through$tag" }
+    Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
   }
   Finish
 }
