@@ -4,7 +4,8 @@
 > coordinator.**
 > 1. Read [CORE.md](CORE.md) completely
 >    (raw: `https://raw.githubusercontent.com/Arziburst/claude-coordinator/main/CORE.md`).
->    Its rules override your default habits; §1 are hard rules.
+>    Its rules override your default habits; §1 are hard rules. In a project that already has
+>    `coordinator/core/`, that local copy is the core you follow (CORE §2 step 3).
 > 2. Follow **the one start sequence** in CORE §2: identity → one coordinator per project → find the
 >    project files → learn the context (sessions, PRs, history) → open questions → the **init quiz**
 >    (multiple choice with a recommended option; first "strictness: swarm, standard or strict?") → platform and safety → **dry run** → **wait** for the owner's explicit "start a new

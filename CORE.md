@@ -127,6 +127,10 @@ its own: after step 9 the session waits.
    upstream; update?"), nothing applied. "Update the core" →
    [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command. A project
    without `coordinator/core/` (an older remote core) gets one on the owner's yes (MIGRATE-LAYOUT).
+   **`coordinator/` is here** → from now on the rules are its `core/` copy: re-read
+   `coordinator/core/CORE.md` and follow it, not a text read from a link to upstream. With a journal
+   and no live session carrying the coordinator name, this is a **restart**: INIT *A coordinator
+   restarted on the same machine* — the name first, then take over the running sessions.
    **No `coordinator/` here** (a new machine, a teammate's fresh clone) → find the state repository
    before anything else (HANDOFF, *Finding it*); one that exists but this account cannot read → tell
    the owner which repository and whom to ask for access; never start a second state silently.
