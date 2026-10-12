@@ -17,7 +17,7 @@
 # --worktree-root puts the worktree elsewhere (default <repo>/.claude/worktrees). Launched from a folder
 # that is not the repository's root (the self-test: the state repository's worktrees under the trusted
 # project), the brief says to work in the worktree by absolute path instead. A repository without an
-# origin starts the branch from the local --base.
+# origin, or a --base not on origin yet (a lead's integration branch), starts the branch from the local --base.
 # The hook path in --safety uses forward slashes: on Windows hooks run through Git Bash, which drops
 # backslashes, and a hook that fails to run blocks nothing.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -92,9 +92,15 @@ else
   fi
 fi
 
-# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch
+# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
+# a base not on origin yet (a lead's integration branch before its first push): the local one too
 if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
-  run git -C "$root" fetch -q origin "$base"; start="origin/$base"
+  rc=0; git -C "$root" ls-remote -q --exit-code --heads origin "$base" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then run git -C "$root" fetch -q origin "$base"; start="origin/$base"
+  elif [ "$rc" -eq 2 ] && git -C "$root" show-ref -q --verify "refs/heads/$base"; then
+    echo "base $base is not on origin yet: the branch starts from the local $base"; start="$base"
+  elif [ "$rc" -eq 2 ]; then echo "base $base: not on origin and no local branch" >&2; exit 1
+  else echo "cannot reach origin to read the base $base" >&2; exit 1; fi
 else start="$base"; fi
 if [ -d "$wt" ]; then
   echo "reusing worktree $wt"
