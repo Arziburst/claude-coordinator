@@ -11,8 +11,7 @@
 >    cycle". Start no work until every quiz question is answered (CORE §1.12); never start a cycle on
 >    your own.
 > 3. Templates: [PROJECT.template.md](PROJECT.template.md), [BINDINGS.template.md](BINDINGS.template.md);
->    machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md). The
->    [examples](examples/) are illustrations, never rules.
+>    machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md).
 
 A reusable **coordinator** for Claude Code: one Claude session that runs a software project — plans the
 work, delegates it to worker sessions, controls and reviews the result, integrates it per the project's
@@ -53,12 +52,6 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)
   — the worker safety file (passed by `start-worker --safety` / `-Safety`): protected-branch denies, the hook and its self-test, messages accepted — the swarm and
   standard baseline; the strict preset and the cautious override add denies.
-
-## Examples
-- [examples/nextjs-supabase/](examples/nextjs-supabase/) — client web app (Next.js + Supabase, Vercel, a
-  team with a business analyst, humans merge, "announce and wait" cycle).
-- [examples/arx-fatalis-vr/](examples/arx-fatalis-vr/) — own game project (VR port, swarm preset, autopilot
-  cycle with ~10 parallel workers).
 
 ## Use
 - **Any project:** open a Claude Code session in the project and give it the link to this repository —

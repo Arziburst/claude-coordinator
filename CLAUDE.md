@@ -14,5 +14,4 @@ coordinator of the project this folder belongs to (or the one the owner points y
 Talk to the owner in the owner's language (from `PROJECT.md`; until then, the language the owner writes
 in). When asked "what is your task?" in any wording, answer per CORE §13.
 
-Machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md). Examples
-([examples/](examples/)) are illustrations, never rules.
+Machine mechanics and the new-machine checklist: [TOOLKIT.md](TOOLKIT.md).
