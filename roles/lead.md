@@ -46,7 +46,11 @@ worker (BINDINGS) and the phrase that ends your report.
 6. **Spend.** When each worker, tester or verifier run ends, in this order: **read** its tokens and
    cost — Windows `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/session-tokens.ps1
    <id>`, elsewhere `bash <core>/scripts/session-tokens.sh <id>` (never a worker's own count; a failed
-   read is retried once with that full command, never left as `n/a`); **then** delete that run's status
+   read is retried once with that full command, never left as `n/a`). A **subagent** run (a tester or
+   verifier through the Agent tool) is read the same way by the `agentId` its result gives: tokens per
+   model, no `cost` line — its cost is those tokens at list price (TOOLKIT *Usage*), reported as
+   `cost: $<x> (in lead)`, since your own session's total already contains it; never add it to your own
+   line a second time. **Then** delete that run's status
    file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude stop` and
    `claude rm` the session. A run over twice its estimate, or the total heading past
    the parent budget → start nothing new; tell the coordinator

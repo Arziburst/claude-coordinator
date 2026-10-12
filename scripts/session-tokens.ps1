@@ -1,9 +1,9 @@
 # What a Claude Code session used (Windows; macOS / Linux: session-tokens.sh - same lines, see it).
-#   powershell -File scripts/session-tokens.ps1 <session-id | id prefix | transcript.jsonl>     (or: pwsh -File ...)
+#   powershell -File scripts/session-tokens.ps1 <session-id | id prefix | a subagent's agentId | transcript.jsonl>   (or: pwsh -File ...)
 #   powershell -File scripts/session-tokens.ps1 -Since 2026-10-05T17:00:00Z   every session on the account, from then on (UTC)
 #   powershell -File scripts/session-tokens.ps1 -Prune    delete status files older than 7 days
 # One line per model and a "total" line, summed from the transcripts and their subagents, each message
-# once (output is a LOWER BOUND); for one session a "cost" line from ~/.claude/coordinator/sessions/<id>.json
+# once (output is a LOWER BOUND); for one session (not a subagent) a "cost" line from ~/.claude/coordinator/sessions/<id>.json
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous.
 param([string]$Session, [string]$Since, [switch]$Prune)
@@ -84,6 +84,17 @@ if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } elseif 
     if ($found.Count -gt 1) {
       # ids only: the folder names would show other projects
       $ids = [string[]]@($found | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) }); [Array]::Sort($ids, [StringComparer]::Ordinal)
+      [Console]::Error.WriteLine("ambiguous id ${Session}:"); foreach ($x in $ids) { [Console]::Error.WriteLine($x) }; exit 1
+    }
+    if ($found.Count -eq 1) { $main = $found[0] }
+  }
+  if (-not $main) {
+    # a subagent's agentId (the Agent tool's result): its transcript sits in its parent's subagents/ folder
+    $found = @(Get-ChildItem -Path $projects -Filter "agent-$Session*.jsonl" -Recurse -Depth 3 -File |
+      Where-Object { $_.Directory.Name -eq 'subagents' -and $_.Directory.Parent.Parent.Parent.FullName -eq (Get-Item -LiteralPath $projects).FullName } |
+      ForEach-Object { $_.FullName })
+    if ($found.Count -gt 1) {
+      $ids = [string[]]@($found | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) -replace '^agent-', '' }); [Array]::Sort($ids, [StringComparer]::Ordinal)
       [Console]::Error.WriteLine("ambiguous id ${Session}:"); foreach ($x in $ids) { [Console]::Error.WriteLine($x) }; exit 1
     }
     if ($found.Count -eq 1) { $main = $found[0] }
