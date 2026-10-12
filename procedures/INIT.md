@@ -31,7 +31,7 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
     whose self-test must pass before any worker starts. **Stack-specific denies are candidates, not impositions**: offer
-    them in the quiz (e.g. `examples/nextjs-supabase/settings.json`) and keep what the owner chooses —
+    them in the quiz (TOOLKIT *Safety*, the stack candidates) and keep what the owner chooses —
     the coordinator exists to automate, and some "dangerous" actions are exactly what a project needs.
   - **No stalled workers:** workers run in auto mode and do not wait on permission prompts; with the
     cautious override (`acceptEdits`) the owner sets allow rules for routine commands (build,
@@ -130,7 +130,7 @@ with one line at the summary or later.
 ### 3.4 Set up without asking
 
 - **The core** is always a local copy: clone claude-coordinator to a scratch folder, copy all its files except
-  `.git/` and `.github/` (examples and tests included: check-core and the self-test read them) into
+  `.git/` and `.github/` (`tests/` included: the self-test reads it) into
   `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook, the status line and the
   roles run from there. It may be **edited for this project**; upstream changes come in only on "update
   the core" ([UPDATE-CORE.md](UPDATE-CORE.md)). A local edit useful for every project is proposed back

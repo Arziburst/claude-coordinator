@@ -119,8 +119,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
   Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans
   merge); the cautious override also adds
-  `Read(**/.env*)` and the stack candidates (database CLIs, production deploys, MCP write tools) from
-  `examples/nextjs-supabase/settings.json`.
+  `Read(**/.env*)` and the **stack candidates** the owner picks at init (never imposed), per kind:
+  production database by CLI (`supabase db push*`, `psql *`, a migration repair) and by MCP
+  (`mcp__<db>__execute_sql`, `apply_migration`, branch reset / merge / delete); function deploys and
+  secrets; production deploys (`vercel --prod*`, `vercel promote*`, `vercel rollback*`, `vercel env *`);
+  code-host settings and workflows (`gh workflow run*`, `gh secret set*`, `gh release*`, `gh api *`).
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.

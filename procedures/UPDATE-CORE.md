@@ -7,9 +7,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    No `coordinator/core/` (an older remote core) → the plan is to create it at the latest commit
    (MIGRATE-LAYOUT), shown in the report.
 2. **What changed upstream:** clone claude-coordinator to a scratch folder; the commits and files since
-   the recorded commit. The core is the whole repository except `.git/` and `.github/` —
-   `examples/` and `tests/` included: check-core follows README's links into `examples/`, and the self-test
-   reads `tests/`; a copy without them fails its own checks.
+   the recorded commit. The core is the whole repository except `.git/` and `.github/` — `tests/`
+   included: the self-test reads it, so a copy without it fails its own checks. A local copy that still
+   has `examples/` (removed upstream) drops it with the update.
 3. **Impact report to the owner, before changing anything:**
    - per change: what it does and what it changes in this project's work (briefs, review, models, init);
    - every line of `PROJECT.md` / `BINDINGS.md` that now overlaps or disagrees with the new core — the

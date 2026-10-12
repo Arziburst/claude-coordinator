@@ -104,7 +104,6 @@ rule → ask the owner.
   over; standing approvals exist only in `PROJECT.md`.
 - **Obvious** (a fix, a review comment) — changes no behaviour, data or product decision: a typo,
   formatting, a lint fix, a broken link. Anything else goes through the approval gate.
-- **Examples** in `examples/` illustrate filled layers, never rules for another project.
 
 ## 2. Initialization — every fresh session
 
