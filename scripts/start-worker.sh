@@ -2,7 +2,7 @@
 # Start a named worker session in its own git worktree, with the safety settings applied.
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
-#       --report-to <coordinator session> [--launch-from <folder>] [--dry-run]
+#       --report-to <coordinator session> [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -14,6 +14,10 @@
 # The session starts in the repository root (--launch-from overrides it), which the owner trusts once:
 # Claude Code refuses --bg in a folder nobody trusted, and a new worktree never is (trust is not
 # inherited from a parent). The brief's first line sends it into its worktree (EnterWorktree).
+# --worktree-root puts the worktree elsewhere (default <repo>/.claude/worktrees). Launched from a folder
+# that is not the repository's root (the self-test: the state repository's worktrees under the trusted
+# project), the brief says to work in the worktree by absolute path instead. A repository without an
+# origin starts the branch from the local --base.
 # The hook path in --safety uses forward slashes: on Windows hooks run through Git Bash, which drops
 # backslashes, and a hook that fails to run blocks nothing.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -23,7 +27,7 @@
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" report="" dry=0
+repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" dry=0
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -36,20 +40,21 @@ while [ $# -gt 0 ]; do
     --safety) need "$@"; safety="$2"; shift 2 ;;
     --base) need "$@"; base="$2"; shift 2 ;;
     --launch-from) need "$@"; from="$2"; shift 2 ;;
+    --worktree-root) need "$@"; wtroot="$2"; shift 2 ;;
     --report-to) need "$@"; report="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--dry-run]" >&2; exit 1; }
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
 [ "$mode" = "bypassPermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 # Absolute paths: both files are used after "cd" into the worktree.
 abs() { (cd "$(dirname "$1")" && printf '%s/%s' "$(pwd)" "$(basename "$1")"); }
 safety="$(abs "$safety")"; brief="$(abs "$brief")"
 
 root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git repository: $repo" >&2; exit 1; }
-wt="$root/.claude/worktrees/$branch"
+wt="${wtroot:-$root/.claude/worktrees}/$branch"
 from="${from:-$root}"
 [ -d "$from" ] || { echo "no folder to launch from: $from" >&2; exit 1; }
 
@@ -65,20 +70,29 @@ selftest=$(bash "$hook" --self-test)
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
 
-run git -C "$root" fetch -q origin "$base"
+# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch
+if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
+  run git -C "$root" fetch -q origin "$base"; start="origin/$base"
+else start="$base"; fi
 if [ -d "$wt" ]; then
   echo "reusing worktree $wt"
 elif git -C "$root" show-ref -q --verify "refs/heads/$branch"; then
   run git -C "$root" worktree add "$wt" "$branch"
 else
-  run git -C "$root" worktree add --no-track -b "$branch" "$wt" "origin/$base"
+  run git -C "$root" worktree add --no-track -b "$branch" "$wt" "$start"
 fi
 
-first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
+if [ "$(cd "$from" && pwd -P)" = "$(cd "$root" && pwd -P)" ]; then
+  first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
+else
+  # launched outside the repository (its root not trusted): EnterWorktree into another repository's
+  # worktree asks for permission and the session would wait, so it works there by absolute path
+  first="YOUR WORKING COPY is $wt, a worktree of $root. Work in it by absolute path (git -C $wt ..., files under $wt); do not use EnterWorktree; never change files outside it."
+fi
 first="$first
 Report to: the session named \"$report\" (SendMessage) - your report and your questions."
 if [ "$dry" = 1 ]; then
-  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <EnterWorktree $wt, report to \"$report\", then the brief>)"
+  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", then the brief>)"
 else
   ( cd "$from" && claude --bg --name "$name" --model "$model" --permission-mode "$mode" --settings "$safety" "$first
 

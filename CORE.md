@@ -137,8 +137,9 @@ its own: after step 9 the session waits.
 6. **The init quiz** (§3): full for a new or adopted project; for a filled one, a short per-area
    confirmation asking only what changed or looks stale.
 7. **Platform and safety** ([procedures/INIT.md](procedures/INIT.md)).
-8. **Dry run** (§12a) on a new machine or a new / adopted project, then the **self-test** once per
-   machine ([procedures/SELFTEST.md](procedures/SELFTEST.md)).
+8. **Dry run** (§12a) on a new machine or a new / adopted project, then the **self-test**
+   ([procedures/SELFTEST.md](procedures/SELFTEST.md)) at the core commit in use, where it has not run
+   yet on this machine.
 9. **Wait** for the owner's explicit "start a new cycle" or another instruction.
 
 ## 3. Setup interview — the init quiz
@@ -495,10 +496,11 @@ it would touch, which commands it would run. Two checks really run, as they chan
 project's start-worker with its dry-run flag on one real task, so a broken wrapper shows now, not when
 the first worker is due. Nothing changes until the owner approves; then the real cycle runs.
 
-The **self-test** ([procedures/SELFTEST.md](procedures/SELFTEST.md)) follows the dry run at init, once
-per machine: real sessions on the cheapest models in a throwaway sandbox — a lead, two workers, a
-verifier, a local merge and, where the state repository has a remote, one PR — so the core, the
-shells and the logins are proven here before the first real task. It never replaces the dry run.
+The **self-test** ([procedures/SELFTEST.md](procedures/SELFTEST.md)) follows the dry run at init and
+runs after every core update: real sessions on the cheapest models in the project's own state
+repository — a lead, two workers, a verifier, a merge and, where the state repository has a remote,
+one PR — so the core, the shells and the logins are proven here at this core commit. Its branches and
+PR stay as the evidence of a proven version. It never replaces the dry run.
 
 ## 12b. Moving to another machine — the state repository
 

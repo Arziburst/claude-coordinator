@@ -183,6 +183,47 @@ jobs:
           [ ! -e "$d" ] || { echo "the sandbox is still there"; exit 1; }
           if bash scripts/selftest.sh clean --sandbox "$HOME"; then echo "a folder without the marker must fail"; exit 1; fi
           [ -d "$HOME" ]
+      - name: selftest - prepare and verify in a project's state repository (bash)
+        if: runner.os != 'Windows'
+        run: |
+          t="$RUNNER_TEMP/st-project"; s="$t/coordinator"; c=abc1234; w="$t/.claude/worktrees"
+          g() { git -c user.email=t@t -c user.name=t "$@"; }
+          git init -q -b main "$t"; g -C "$t" commit -q --allow-empty -m p
+          git init -q -b state "$s"; g -C "$s" commit -q --allow-empty -m s; printf 'coordinator/\n' >> "$t/.git/info/exclude"
+          bash scripts/selftest.sh prepare --project "$t" --state "$s" --core $c | tee "$RUNNER_TEMP/prep.txt"
+          grep -qx 'PASS prepare: added .claude/worktrees/ to the project'"'"'s info/exclude' "$RUNNER_TEMP/prep.txt"
+          if bash scripts/selftest.sh prepare --project "$t" --state "$s" --core $c; then echo "a tested commit must be refused"; exit 1; fi
+          git -C "$s" worktree add -q -b "selftest/$c/st1" "$w/selftest/$c/st1" "selftest/$c/base"
+          echo a > "$w/selftest/$c/st1/a.txt"; git -C "$w/selftest/$c/st1" add a.txt; g -C "$w/selftest/$c/st1" commit -q -m a
+          if bash scripts/selftest.sh verify --project "$t" --state "$s" --core $c; then echo "an unmerged st1 must fail verify"; exit 1; fi
+          git -C "$s" worktree add -q "$w/selftest/$c/base" "selftest/$c/base"; g -C "$w/selftest/$c/base" merge -q --no-ff --no-edit "selftest/$c/st1"
+          bash scripts/selftest.sh verify --project "$t" --state "$s" --core $c
+          [ -z "$(git -C "$t" status --porcelain)" ] || { echo "the project's git sees the test"; exit 1; }
+          [ "$(git -C "$s" branch --list 'selftest/*' | wc -l)" -eq 2 ] || { echo "the evidence branches were deleted"; exit 1; }
+      - name: selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $t = Join-Path $env:RUNNER_TEMP 'st-project'; $s = Join-Path $t 'coordinator'; $c = 'abc1234'; $w = Join-Path $t '.claude/worktrees'
+          git init -q -b main $t; git -C $t -c user.email=t@t -c user.name=t commit -q --allow-empty -m p
+          git init -q -b state $s; git -C $s -c user.email=t@t -c user.name=t commit -q --allow-empty -m s
+          Add-Content -Path (Join-Path $t '.git/info/exclude') -Value 'coordinator/'
+          .\scripts\selftest.ps1 prepare -Project $t -State $s -Core $c
+          if ($LASTEXITCODE -ne 0) { 'prepare failed'; exit 1 }
+          .\scripts\selftest.ps1 prepare -Project $t -State $s -Core $c
+          if ($LASTEXITCODE -ne 1) { 'a tested commit must be refused'; exit 1 }
+          git -C $s worktree add -q -b "selftest/$c/st1" "$w/selftest/$c/st1" "selftest/$c/base"
+          Set-Content -Path "$w/selftest/$c/st1/a.txt" -Value a
+          git -C "$w/selftest/$c/st1" add a.txt; git -C "$w/selftest/$c/st1" -c user.email=t@t -c user.name=t commit -q -m a
+          .\scripts\selftest.ps1 verify -Project $t -State $s -Core $c
+          if ($LASTEXITCODE -ne 1) { 'an unmerged st1 must fail verify'; exit 1 }
+          git -C $s worktree add -q "$w/selftest/$c/base" "selftest/$c/base"
+          git -C "$w/selftest/$c/base" -c user.email=t@t -c user.name=t merge -q --no-ff --no-edit "selftest/$c/st1"
+          .\scripts\selftest.ps1 verify -Project $t -State $s -Core $c
+          if ($LASTEXITCODE -ne 0) { 'verify failed after the merge'; exit 1 }
+          if (git -C $t status --porcelain) { "the project's git sees the test"; exit 1 }
+          if (@(git -C $s branch --list 'selftest/*').Count -ne 2) { 'the evidence branches were deleted'; exit 1 }
+          exit 0
       - name: selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
         if: runner.os == 'Windows'
         shell: powershell

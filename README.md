@@ -46,7 +46,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   in its own worktree), `cleanup-worker` (only clean and pushed work), `hooks/safety-guard`
   (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
   home or a worktree by hand — work branches stay free), `selftest` (the scripted steps of the
-  self-test: checks, environment, a sandbox and its cleanup), `statusline`
+  self-test: checks, environment, the evidence branches in the state repository; a sandbox for the
+  core itself), `statusline`
   (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
   also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
 - [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)
