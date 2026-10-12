@@ -247,7 +247,11 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
   per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
   cache entries, `prompt_cache.ttl: "1h"` in the status JSON; on Arx this matched the status cost to
-  the cent). **The order** when a run ends: read its cost (a failed read retried once with the full
+  the cent). **A subagent** (the Agent tool) has no session id and no status file: pass the `agentId`
+  its result gives (or a unique prefix) — session-tokens reads `<parent>/subagents/agent-<id>.jsonl`
+  and prints its own tokens per model, never a `cost` line; its cost is those tokens at list price. It
+  is already inside its parent session's lines and cost, so its run-log row says `in <parent>` and a
+  sum of the project's spend counts it once. **The order** when a run ends: read its cost (a failed read retried once with the full
   command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every

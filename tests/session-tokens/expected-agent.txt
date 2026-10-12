@@ -1,0 +1,2 @@
+claude-haiku-5-5	2205	in=5 out>=200 cache_read=0 cache_write=2000
+total	2205	in=5 out>=200 cache_read=0 cache_write=2000

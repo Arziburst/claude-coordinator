@@ -116,6 +116,7 @@ jobs:
           export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
           bash scripts/session-tokens.sh s1 | diff - tests/session-tokens/expected.txt
           bash scripts/session-tokens.sh s2 | diff - tests/session-tokens/expected-s2.txt
+          bash scripts/session-tokens.sh x | diff - tests/session-tokens/expected-agent.txt
           if bash scripts/session-tokens.sh s 2>/dev/null; then echo "an ambiguous prefix must fail"; exit 1; fi
           bash scripts/session-tokens.sh --since 2026-10-05T17:00:00Z | diff - tests/session-tokens/expected-since.txt
           t="$RUNNER_TEMP/prune"; mkdir -p "$t/coordinator/sessions"
@@ -127,7 +128,7 @@ jobs:
         shell: powershell
         run: |
           $env:CLAUDE_CONFIG_DIR = "$PWD\tests\session-tokens\claude"
-          foreach ($c in @(@('s1', 'expected.txt'), @('s2', 'expected-s2.txt'))) {
+          foreach ($c in @(@('s1', 'expected.txt'), @('s2', 'expected-s2.txt'), @('x', 'expected-agent.txt'))) {
             $got = (.\scripts\session-tokens.ps1 $c[0]) -join "`n"
             $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\$($c[1])") -replace "`r", '').TrimEnd("`n")
             if ($got -ne $want) { "got:`n$got`nwant:`n$want"; exit 1 }
@@ -291,7 +292,7 @@ jobs:
             [ "$a" = "$b" ] || { echo "statusline differs: sh '$a' / ps '$b'"; exit 1; }
           done
           export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
-          for id in s1 s2; do
+          for id in s1 s2 x; do
             diff <(bash scripts/session-tokens.sh $id) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done
           # a non-UTC zone: PowerShell 7 parses the timestamps into dates

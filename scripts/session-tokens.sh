@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # What a Claude Code session used (macOS / Linux, no dependencies; Windows: session-tokens.ps1).
-#   scripts/session-tokens.sh <session-id | id prefix | transcript.jsonl>
+#   scripts/session-tokens.sh <session-id | id prefix | a subagent's agentId | transcript.jsonl>
 #   scripts/session-tokens.sh --since <UTC time, e.g. 2026-10-05T17:00:00Z>   every session on the account
 #                             (all projects: the limits are per account), messages from that time on
 #   scripts/session-tokens.sh --prune     delete status files older than 7 days (other projects' too)
@@ -10,11 +10,12 @@
 #            output is a LOWER BOUND (the transcript stores the count from before a message finished)
 #   total    <total>  in=… out>=… cache_read=… cache_write=…          — all models together
 #   cost     $<usd>   — one session only: the CLI's own cumulative cost at list price, from the status
-#            line's per-session file ~/.claude/coordinator/sessions/<id>.json; absent if never drawn
+#            line's per-session file ~/.claude/coordinator/sessions/<id>.json; absent if never drawn,
+#            and for a subagent (its tokens are already counted in its parent session's lines)
 # The status file's token fields are the LAST request's usage, not the session's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous. Reads the JSON as text, no parser needed.
 set -eu
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 dir="$cfg/coordinator/sessions"
@@ -74,6 +75,14 @@ if [ -f "$arg" ]; then main="$arg"; else
     if [ "$(printf '%s' "$found" | grep -c .)" -gt 1 ]; then
       # ids only: the folder names would show other projects
       echo "ambiguous id $arg:" >&2; printf '%s\n' "$found" | sed 's|.*/||; s|\.jsonl$||' | LC_ALL=C sort >&2; exit 1
+    fi
+    main="$found"
+  fi
+  if [ -z "$main" ]; then
+    # a subagent's agentId (the Agent tool's result): its transcript sits in its parent's subagents/ folder
+    found="$(find "$cfg/projects" -mindepth 4 -maxdepth 4 -path '*/subagents/*' -name "agent-$arg*.jsonl" 2>/dev/null)"
+    if [ "$(printf '%s' "$found" | grep -c .)" -gt 1 ]; then
+      echo "ambiguous id $arg:" >&2; printf '%s\n' "$found" | sed 's|.*/agent-||; s|\.jsonl$||' | LC_ALL=C sort >&2; exit 1
     fi
     main="$found"
   fi
