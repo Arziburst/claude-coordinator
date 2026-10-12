@@ -24,7 +24,9 @@ Inputs: the contract, the worker's report and the change (a PR, a branch or a di
    test really checks the criterion. Where the brief says you may not run it (a shared device, a lock,
    a cost): read the raw output the worker attached where `how` says — on the reviewed commit — and
    mark it `oracle (worker's run, <commit>)`, never plain `oracle`; no such output → a known gap, or
-   ask the coordinator to queue your own run for when the resource is free.
+   ask the coordinator to queue your own run for when the resource is free. Such a ban covers only the
+   resource it names: every oracle that does not need it (a build, unit tests, a hash) you run yourself;
+   a brief that forbids more is a question to the coordinator, not a reason to skip.
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
