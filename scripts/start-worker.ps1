@@ -16,7 +16,7 @@
 # -WorktreeRoot puts the worktree elsewhere (default <repo>/.claude/worktrees). Launched from a folder
 # that is not the repository's root (the self-test: the state repository's worktrees under the trusted
 # project), the brief says to work in the worktree by absolute path instead. A repository without an
-# origin starts the branch from the local -Base.
+# origin, or a -Base not on origin yet (a lead's integration branch), starts the branch from the local -Base.
 # The hook path in -Safety uses forward slashes: hooks run through Git Bash on Windows, which drops
 # backslashes, and a hook that fails to run blocks nothing.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
@@ -86,9 +86,21 @@ else {
   }
 }
 
-# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch
+# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
+# a base not on origin yet (a lead's integration branch before its first push): the local one too
 $origin = git -C $root config --get remote.origin.url
-if ($origin) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" } else { $start = $Base }
+if ($origin) {
+  git -C $root ls-remote -q --exit-code --heads origin $Base *> $null
+  $rc = $LASTEXITCODE
+  if ($rc -eq 0) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" }
+  else {
+    git -C $root show-ref -q --verify "refs/heads/$Base" *> $null
+    $local = ($LASTEXITCODE -eq 0)
+    if ($rc -eq 2 -and $local) { "base $Base is not on origin yet: the branch starts from the local $Base"; $start = $Base }
+    elseif ($rc -eq 2) { Fail "base ${Base}: not on origin and no local branch" }
+    else { Fail "cannot reach origin to read the base $Base" }
+  }
+} else { $start = $Base }
 if (Test-Path -LiteralPath $wt) { "reusing worktree $wt" }
 else {
   git -C $root show-ref -q --verify "refs/heads/$Branch"

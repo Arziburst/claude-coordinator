@@ -25,7 +25,8 @@ worker (BINDINGS) and the phrase that ends your report.
    estimates) and start; you need no approval inside your task.
 3. **Delegate.** Tests first where CONTRACT and CORE §4 say so (the tester subagent). Each worker is a
    background session named `#<task>.<n> worker: <title>` (TOOLKIT), started with the project's
-   start-worker on a branch from your integration branch, never from main; at most the number of workers
+   start-worker on a branch from your integration branch (`--base <it>`; not pushed yet, the local one
+   is used — push it with `-u` when it has its first commit), never from main; at most the number of workers
    the brief allows at once, each with `--report-to` your own session name. Their briefs carry the
    sub-contract and the facts, not the rules (roles/worker.md). Right after each start,
    `SendMessage(to: <its name>, notify_when_idle: true)`; no notice or report when due → `ListAgents`,
