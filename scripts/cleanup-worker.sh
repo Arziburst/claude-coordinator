@@ -33,10 +33,13 @@ gitdir="$(git -C "$wt" rev-parse --path-format=absolute --git-dir)"
 root="$(dirname "$common")"
 [ -n "$(git -C "$wt" status --porcelain)" ] && stop_here "NOT CLEAN: $wt has uncommitted changes"
 branch="$(git -C "$wt" rev-parse --abbrev-ref HEAD)"
-git -C "$wt" rev-parse -q --verify '@{u}' >/dev/null || stop_here "NO UPSTREAM: $branch was never pushed"
 git -C "$wt" fetch -q || stop_here "FETCH FAILED: cannot confirm $branch is on the remote"
-[ -n "$(git -C "$wt" log --oneline '@{u}..')" ] && stop_here "UNPUSHED: $branch has commits not on its remote"
-up="$(git -C "$wt" rev-parse '@{u}')"
+# its remote branch: the upstream, or origin/<branch> when it was pushed without -u
+if git -C "$wt" rev-parse -q --verify '@{u}' >/dev/null; then u='@{u}'
+elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then u="origin/$branch"
+else stop_here "NO UPSTREAM: $branch was never pushed"; fi
+[ -n "$(git -C "$wt" log --oneline "$u..")" ] && stop_here "UNPUSHED: $branch has commits not on its remote"
+up="$(git -C "$wt" rev-parse "$u")"
 command -v gh >/dev/null 2>&1 || stop_here "NO gh: cannot verify the PR for $branch is merged"
 heads="$(cd "$wt" && gh pr list --head "$branch" --state merged --json headRefOid --jq '.[].headRefOid' 2>/dev/null)" ||
   stop_here "UNKNOWN: could not check the PR for $branch"

@@ -18,8 +18,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      project rule still wins, the owner decides whether to keep, adapt or drop it;
    - each upstream change that conflicts with a local edit, and the proposed resolution;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
-     a `Breaking for project wrappers:` line (`git log <old>..<new> --grep 'Breaking for project
-     wrappers'`), and for each script it names, every call to it in the project's coordination scripts
+     a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
+     for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
      (BINDINGS; `grep -rn <script name>`): the wrapper is fixed through the project's change path
      **before** the update is applied, or the first worker start after it fails;
    - **Not done yet:** every row of the new core's [ONE-TIME.md](../ONE-TIME.md) with no line in

@@ -174,6 +174,14 @@ STUB_HEADS="$head" check 0 "cleanup: merged" -- cleanup --worktree "$wt" --sessi
 expect_in "cleaned: s1"
 [ -d "$wt" ] && { echo "FAIL: the worktree is still there"; fail=1; }
 grep -qx "stop s1" "$STUB_LOG" && grep -qx "rm s1" "$STUB_LOG" || { echo "FAIL: the session was not stopped and removed"; fail=1; }
+# a branch pushed without -u (no upstream configured): origin/<branch> counts as its remote branch
+wt2="$tmp/repo/.claude/worktrees/13-fix"
+git -C "$tmp/repo" worktree add -q -b 13-fix "$wt2" main && g -C "$wt2" commit -q --allow-empty -m work2
+check 3 "cleanup: not on the remote at all" -- cleanup --worktree "$wt2"
+expect_in "NO UPSTREAM"
+git -C "$wt2" push -q origin 13-fix 2>/dev/null
+STUB_HEADS="$(git -C "$wt2" rev-parse HEAD)" check 0 "cleanup: pushed without -u" -- cleanup --worktree "$wt2" --session s2
+expect_in "cleaned: s2"
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

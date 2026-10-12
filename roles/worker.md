@@ -16,7 +16,7 @@ resources and launch/test limits, and the phrase that ends your report.
    beyond it is a question first — CORE §1.11). Never weaken or loosen tests, timeouts or tolerances; never decide a
    `do_not_decide` item or invent a business value — raise it as a question and continue with what
    does not depend on it.
-3. **Your branch only.** Work in your own working copy and branch (never the coordinator's checkout); commit and push as you go; open the
+3. **Your branch only.** Work in your own working copy and branch (never the coordinator's checkout); commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its remote); open the
    PR the contract names. Never push to or rewrite the protected branches or anyone else's branch.
    Merge main when the coordinator says another PR landed. Secrets are used, never copied; customer
    data never leaves production; production actions only as the brief allows (CORE §1.4, §1.13).

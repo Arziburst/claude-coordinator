@@ -21,12 +21,17 @@ if ("$gitdir" -eq "$common") { StopHere "MAIN CHECKOUT: $Worktree is the reposit
 $root = Split-Path -Parent $common
 if (git -C $Worktree status --porcelain) { StopHere "NOT CLEAN: $Worktree has uncommitted changes" }
 $branch = (git -C $Worktree rev-parse --abbrev-ref HEAD)
-git -C $Worktree rev-parse -q --verify '@{u}' *> $null
-if ($LASTEXITCODE -ne 0) { StopHere "NO UPSTREAM: $branch was never pushed" }
 git -C $Worktree fetch -q
 if ($LASTEXITCODE -ne 0) { StopHere "FETCH FAILED: cannot confirm $branch is on the remote" }
-if (git -C $Worktree log --oneline '@{u}..') { StopHere "UNPUSHED: $branch has commits not on its remote" }
-$up = "$(git -C $Worktree rev-parse '@{u}')".Trim()
+# its remote branch: the upstream, or origin/<branch> when it was pushed without -u
+git -C $Worktree rev-parse -q --verify '@{u}' *> $null
+if ($LASTEXITCODE -eq 0) { $u = '@{u}' }
+else {
+  git -C $Worktree rev-parse -q --verify "refs/remotes/origin/$branch" *> $null
+  if ($LASTEXITCODE -eq 0) { $u = "origin/$branch" } else { StopHere "NO UPSTREAM: $branch was never pushed" }
+}
+if (git -C $Worktree log --oneline "$u..") { StopHere "UNPUSHED: $branch has commits not on its remote" }
+$up = "$(git -C $Worktree rev-parse $u)".Trim()
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { StopHere "NO gh: cannot verify the PR for $branch is merged" }
 Push-Location -LiteralPath $Worktree
 $heads = @(gh pr list --head $branch --state merged --json headRefOid --jq '.[].headRefOid' 2>$null)

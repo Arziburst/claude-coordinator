@@ -86,7 +86,8 @@ environment, not the model. `<c>` below is the core commit under test.
    - A worker (`#st2 worker: selftest PR`, start-worker with the flags above, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
      file, commits, pushes and opens a **draft** PR into `selftest/<c>/base`.
-   - A verifier subagent reviews it and posts its verdict as a PR comment.
+   - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
+     the coordinator posts that verdict as a PR comment.
    - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash`, never
      `--delete-branch`), checks `gh pr view --json state` → `MERGED`, and runs **cleanup-worker** on the
      worker's worktree (it must report cleaned: a merged PR with the pushed head).
