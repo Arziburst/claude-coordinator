@@ -106,6 +106,8 @@ check 1 "start: no report address" -- start --repo "$tmp/repo" --name "#12 worke
 expect_in "<session>"
 check 0 "start: dry run" -- start "${S[@]}" --dry-run
 expect_in "[dry-run]"
+expect_in "keep "
+grep -q 'worktrees' "$tmp/repo/.git/info/exclude" 2>/dev/null && { echo "FAIL: the dry run wrote info/exclude"; fail=1; }
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] && { echo "FAIL: the dry run created the worktree"; fail=1; }
 [ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
 check 0 "start: real start with the stub claude" -- start "${S[@]}"
@@ -141,6 +143,10 @@ grep -q "YOUR WORKING COPY is .*/project/.claude/worktrees/st1, a worktree of " 
   { echo "FAIL: the brief does not send it to the worktree by absolute path:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -q "EnterWorktree tool with path" "$STUB_LOG" && { echo "FAIL: EnterWorktree asked for another repository's worktree"; fail=1; }
 git -C "$tmp/state" worktree remove "$tmp/project/.claude/worktrees/st1"
+# the worker copies stay out of the project's git: one local info/exclude line, however many starts
+[ -z "$(git -C "$tmp/repo" status --porcelain)" ] || { echo "FAIL: the project's git sees the worktrees:"; git -C "$tmp/repo" status --short | sed 's/^/    /'; fail=1; }
+[ "$(grep -c '^/.claude/worktrees/$' "$tmp/repo/.git/info/exclude")" = 1 ] || { echo "FAIL: /.claude/worktrees/ is not in info/exclude exactly once"; fail=1; }
+grep -q '^/.claude/worktrees/$' "$tmp/repo/.gitignore" 2>/dev/null && { echo "FAIL: .gitignore was written"; fail=1; }
 # a hook path with backslashes: Git Bash drops them on Windows and the hook never runs
 sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
 check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x

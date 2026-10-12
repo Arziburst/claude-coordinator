@@ -62,7 +62,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`
   (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
   trust*) with `worktree.bgIsolation: "none"`, so
-  Claude Code does not add a second copy. Its built-in alternative (`claude --worktree <name>`, branch
+  Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
+  local `.git/info/exclude` line (INIT 3.4). Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md`.
