@@ -347,7 +347,10 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
   verifier cannot run (a shared device, a lock, a cost the brief forbids): (a) the worker attaches its
   raw output where the criterion's `how` says, naming the commit it ran on, and the verdict marks it
   `oracle (worker's run, <commit>)` — never plain `oracle`; or (b) the verifier's own run is queued for
-  when the resource is free. The coordinator never runs it itself (§1.1).
+  when the resource is free. The coordinator never runs it itself (§1.1). **A verifier's brief forbids
+  only the scarce resource by name** (the device, the lock, the paid call), never "building" or "running"
+  in general: every oracle that does not need that resource — a build, unit tests, a hash, a script —
+  the verifier runs itself.
 - Independent of the author (a separate session, or the human the project names); changes nothing.
 - The hand-off opens with: **nothing here is established fact** — verdict per criterion: confirmed /
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /
