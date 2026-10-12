@@ -29,7 +29,8 @@ did any core rule, script or check fail us this cycle? (CORE §4).
 ## 2. Send — an issue in claude-coordinator
 
 How a project sends is the owner's choice at init (INIT 3.1, question 11; `PROJECT.md` *Settings*,
-**core reports**): *automatically* · *show me each one first* · *never — I pass them on by hand*.
+**core reports**): *automatically* — filed the moment the row is written · *show me each one first* · *no —
+keep them here, I pass them on by hand*.
 
 **The report has fixed fields only** — nothing from the project goes into a public issue:
 
@@ -59,7 +60,7 @@ Before filing, in this order:
    workflow adds the `core-report` label (an outside account cannot set labels). The row becomes `sent
    #<issue>`.
 
-*Show me each one first*: the owner sees the report and says yes or no per issue. *Never*: the
+*Show me each one first*: the owner sees the report and says yes or no per issue. *No*: the
 coordinator prints the same reports for the owner to pass on by hand (rows `discussed` → `sent <date>`).
 No gh or no access: printed the same way. Customer data and secrets never go into a report, in any mode
 (CORE §1.13).
