@@ -79,7 +79,14 @@ words. Keep a list of open questions; an unclear answer goes back on it.
 3. **Who is who:** solo or team; who owns the scope; who accepts work, how and where (the owner, QA, a
    business analyst, the client; preview, a device).
 4. **Sources** ([SOURCES.md](SOURCES.md)): the sources-of-truth table with what was found filled in —
-   confirm or fix rows; then "send everything useful you have" for the catalog.
+   confirm or fix rows; then "send everything useful you have" for the catalog. **No source of tasks
+   found anywhere** (no tracker, no board, no task list in a document — a fresh project, an idea)
+   → an optional question, *where will the tasks live?* — *a GitHub Project* (recommended where the
+   code is on GitHub: a board with the statuses Backlog / Todo / In Progress / Testing / Done, linked
+   to the repository, the team and the owner see it in the browser; needs `gh auth refresh -s project`
+   once; in a client's or a team's organization only on the owner's yes) · *`coordinator/TASKS.md`*
+   (private, nothing to set up, only the coordinator sees it; SOURCES §3) · *later*. A task source the
+   project already has (a document, Jira, a board) stays the source: nothing is proposed then.
 5. **State repository — where does it live?** `coordinator/` is always a local git (3.4); the question
    is its remote, **always private**: *the owner's account* (recommended solo) —
    `gh repo create <owner>/<project>-coordinator-state --private`, first push `git push -u origin state`; *the team's organization*
@@ -181,7 +188,7 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
   recommendation** and the first radar list of competitors and references (CORE §4b); the owner decides,
   and each decision goes into the decision log with its reason.
   Then **propose the infrastructure, one yes each**: `git init`; a private repository on the code host;
-  a board with the statuses (or `TASKS.md`); a CI skeleton with the definition-of-done checks; branch
+  a board for the tasks (a GitHub Project, or `TASKS.md`: question 4); a CI skeleton with the definition-of-done checks; branch
   protection; the state repository (question 5). Risky areas and production (6, 7) wait until there is
   code that has them. The first tasks of the first cycle are the project skeleton, CI and the board's
   first epics — after the dry run and the owner's "start a new cycle".
