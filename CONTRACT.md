@@ -60,7 +60,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   its sub-contracts inside it and stops to ask when a run goes over twice its own estimate.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, or the
   worker is stuck, the coordinator restarts the contract on this model with the failed report attached
-  (CORE §7).
+  (CORE §7) — once; a second failure goes to the owner, not to another restart.
 
 ## The report
 

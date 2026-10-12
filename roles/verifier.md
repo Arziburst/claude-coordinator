@@ -35,4 +35,6 @@ List the tools you used and skipped, and every known gap.
 
 Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherwise **request
 changes**. The verdict holds for that commit only: anything pushed after it is reviewed again — only
-the change since that commit.
+the change since that commit. A re-review gets the previous verdict: re-check the failed criteria,
+the findings and every criterion whose files changed since the reviewed commit; the others stay
+confirmed, with their evidence and the commit they were confirmed on.
