@@ -120,8 +120,8 @@ its own: after step 9 the session waits.
    apart.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
    folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
-   docs (README, CLAUDE.md, contribution guide). The core (every file in this repository a coordinator
-   uses, scripts included) is always a **local copy** in `coordinator/core/` at the claude-coordinator
+   docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/` and
+   `.github/`) is always a **local copy** in `coordinator/core/` at the claude-coordinator
    commit recorded in `PROJECT.md`, editable for the project — like a pinned package. At start compare
    that commit with upstream (`git ls-remote`); newer → one line to the owner ("the core is behind
    upstream; update?"), nothing applied. "Update the core" →

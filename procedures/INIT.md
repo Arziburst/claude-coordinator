@@ -129,7 +129,8 @@ with one line at the summary or later.
 
 ### 3.4 Set up without asking
 
-- **The core** is always a local copy: clone claude-coordinator to a scratch folder, copy its files into
+- **The core** is always a local copy: clone claude-coordinator to a scratch folder, copy all its files except
+  `.git/` and `.github/` (examples and tests included: check-core and the self-test read them) into
   `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook, the status line and the
   roles run from there. It may be **edited for this project**; upstream changes come in only on "update
   the core" ([UPDATE-CORE.md](UPDATE-CORE.md)). A local edit useful for every project is proposed back
