@@ -51,6 +51,11 @@ environment, not the model.
      `tests/selftest/contract.md`, the start-worker command for its workers (`--repo <sandbox>/repo
      --base st1-selftest`, the light model, effort low, at most two at once, names `#st1.<n> worker:
      selftest …`) and "no PR: merge each approved sub-branch into `st1-selftest` and push it".
+   - **The budget stop:** the contract's `budget.cost` is below any real plan on purpose, so the lead
+     must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
+     coordinator checks that no `#st1.<n>` session runs and the sandbox origin has no `st1-<n>-…`
+     branch (`git ls-remote <sandbox>/remote.git`) — a lead that started anyway is a FAIL of the role —
+     then answers "go: the budget is now <the plan's total>".
    - **Two workers** each make a branch, a commit and a push; the lead's **verifier** subagent gives a
      verdict on each; the lead merges them and reports (`runs` included).
    - **The coordinator** checks the oracles itself (`git show st1-selftest:a.txt` → `a`, `b.txt` → `b`),
@@ -58,7 +63,8 @@ environment, not the model.
      (not pushed: the hook protects every `main`).
    - **Tester, scout, researcher:** each started as a subagent on the light model with "read your role
      file; answer in one line: your role and this contract's id (st1)". PASS when the line names both.
-   - PASS when the lead's report is `ready`, both oracles hold, each sub-task has a verdict and the merge
+   - PASS when the lead stopped at the budget, its report is `ready`, both oracles hold, each sub-task
+     has a verdict and the merge
      is in `main`.
 5. **PR flow** — only when the state repository has a remote on the **owner's own account** (one in a
    client's or a team's organization: only on the owner's yes); no remote → `SKIP pr-flow: no remote`,
