@@ -70,6 +70,21 @@ selftest=$(bash "$hook" --self-test)
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
 
+# The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
+# local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
+wroot="${wtroot:-$root/.claude/worktrees}"
+if [ "$dry" = 1 ]; then
+  echo "[dry-run] keep $wroot out of its repository's git (.git/info/exclude)"
+else
+  mkdir -p "$wroot"
+  if prefix="$(git -C "$wroot" rev-parse --show-prefix 2>/dev/null)" && [ -n "$prefix" ] &&
+     ! git -C "$wroot" check-ignore -q x; then
+    common="$(git -C "$wroot" rev-parse --path-format=absolute --git-common-dir)"
+    mkdir -p "$common/info" && printf '/%s\n' "$prefix" >> "$common/info/exclude" &&
+      echo "added /$prefix to the repository's .git/info/exclude"
+  fi
+fi
+
 # no origin (a local-only repository, e.g. a state repository without a remote): the local base branch
 if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
   run git -C "$root" fetch -q origin "$base"; start="origin/$base"

@@ -59,6 +59,27 @@ function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')" } else { & $exe @a; if ($LASTEXITCODE -ne 0) { Fail "$exe failed" } }
 }
 
+# The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
+# local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
+$wroot = if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }
+if ($DryRun) { "[dry-run] keep $wroot out of its repository's git (.git/info/exclude)" }
+else {
+  New-Item -ItemType Directory -Force -Path $wroot | Out-Null
+  $r = & {
+    $ErrorActionPreference = 'Continue'
+    $p = git -C $wroot rev-parse --show-prefix 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $p) { return }
+    git -C $wroot check-ignore -q x 2>$null
+    if ($LASTEXITCODE -eq 0) { return }
+    , @($p, (git -C $wroot rev-parse --path-format=absolute --git-common-dir))
+  }
+  if ($r) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $r[1] 'info') | Out-Null
+    [IO.File]::AppendAllText((Join-Path $r[1] 'info/exclude'), "/$($r[0])`n")
+    "added /$($r[0]) to the repository's .git/info/exclude"
+  }
+}
+
 # no origin (a local-only repository, e.g. a state repository without a remote): the local base branch
 $origin = git -C $root config --get remote.origin.url
 if ($origin) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" } else { $start = $Base }

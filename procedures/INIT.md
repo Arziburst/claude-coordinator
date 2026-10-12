@@ -153,6 +153,12 @@ with one line at the summary or later.
   `.git/info/exclude`, first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
   commit at the end of every cycle and push where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
+- **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
+  `.git/info/exclude` (`/.claude/worktrees/`) unless the project's git already ignores it — start-worker
+  checks and adds it before every start, so an older project gets it at its next worker. Never
+  `.gitignore`: that is a project file its team and the client would see. Nothing else of the
+  coordinator is written into the project's tree (the roles go to `~/.claude/agents/`, the hook is
+  referenced by its absolute path in `coordinator/core/`).
 - **The voice** is not asked: artifacts are always in the owner's voice, with no AI co-author lines
   (§11).
 
