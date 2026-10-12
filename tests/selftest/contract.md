@@ -23,7 +23,7 @@ budget:
   model: haiku
   effort: low
   escalate_to: sonnet
-  cost: 2
+  cost: 0.1                        # below any real plan on purpose: the lead must stop and ask (SELFTEST)
 touches: [a.txt, b.txt]
 ---
 A throwaway sandbox (procedures/SELFTEST.md): no PRs, no code host. Split into st1.1 (a.txt) and
