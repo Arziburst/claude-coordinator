@@ -1,0 +1,2 @@
+{"type":"attachment","attachment":{"type":"hook_non_blocking_error","hookName":"PreToolUse:Bash","stderr":"Failed with non-blocking status code: Blocked by safety-guard: push to a protected branch.","exitCode":1}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"To github.com:o/r.git\n * [new branch] HEAD -> main"}]}}

@@ -9,6 +9,11 @@
 #   powershell -File scripts/selftest.ps1 verify -Project <root> -State <coordinator dir> -Core <commit> [-StateRepo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
+# The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
+#   powershell -File scripts/selftest.ps1 hooks -Settings <settings.json>   the guard hook's command: forward slashes,
+#                                                       no $env:, no PowerShell shell that turns its exit 2 into 1
+#   powershell -File scripts/selftest.ps1 hookcheck -Session <id>   a session told to push to main: its transcript
+#                                                       shows the block, not a non-blocking hook error
 # For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   powershell -File scripts/selftest.ps1 sandbox [-In <folder>]   3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -20,14 +25,14 @@
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
 # Exit 1 on any FAIL, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In,
-      [string]$Project, [string]$State, [string]$Core)
+      [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session)
 # Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
 # the caller set (GitHub's powershell shell runs with Stop)
 $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 21 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 $script:p = 0; $script:f = 0; $script:s = 0
 function Pass([string]$m) { "PASS ${Step}: $m"; $script:p++ }
@@ -171,6 +176,36 @@ switch ($Step) {
   if ($script:f -eq 0) {
     try { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction Stop; Pass 'sandbox removed' } catch { Fail "could not remove $d" }
   } else { "sandbox kept for inspection: $d" }
+  Finish
+}
+'hooks' {
+  if (-not $Settings -or $Repo -or $Sandbox -or $StateRepo -or $In -or $Project -or $State -or $Core -or $Session) { Usage }
+  if (-not (Test-Path -LiteralPath $Settings -PathType Leaf)) { Fail "no settings file $Settings"; Finish }
+  $cfg = $null; try { $cfg = Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json } catch { }
+  # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test)
+  $h = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+  if (-not $h) { Fail 'no safety-guard hook in the file'; Finish }
+  Pass 'a safety-guard hook'
+  $cmd = [string]$h.command
+  # after JSON decoding a path backslash is a single \ (an escaped quote is just ")
+  if ($cmd.Contains('\')) { Fail 'its path has backslashes: Git Bash drops them and the hook never runs' } else { Pass 'its path uses forward slashes' }
+  if ($cmd.Contains('$env:')) { Fail 'its command uses $env: - bash reads it as $env and the path breaks' } else { Pass 'no $env: in its command' }
+  if ($h.shell -eq 'powershell') {
+    if ($cmd.Contains('exit $LASTEXITCODE')) { Pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' }
+    else { Fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' }
+  } else { Pass 'no PowerShell shell around it' }
+  Finish
+}
+'hookcheck' {
+  if (-not $Session -or $Repo -or $Sandbox -or $StateRepo -or $In -or $Project -or $State -or $Core -or $Settings) { Usage }
+  $base = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'projects'
+  $tf = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$Session*.jsonl" -ErrorAction SilentlyContinue })[0]
+  if (-not $tf) { Fail "no transcript for session $Session"; Finish }
+  $lines = [IO.File]::ReadAllLines($tf.FullName)
+  if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) {
+    Fail 'the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1'
+  } elseif (@($lines | Where-Object { $_.Contains('Blocked by safety-guard') }).Count) { Pass 'the push to a protected branch was blocked through Claude Code' }
+  else { Fail 'no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)' }
   Finish
 }
 { $_ -eq 'prepare' -or $_ -eq 'verify' } {

@@ -120,8 +120,18 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped.
   **A hook that fails to run does not block** — on Windows hook commands run through
   Git Bash, so a path with backslashes (`C:\x\y`) or a PowerShell variable (`$env:CLAUDE_PROJECT_DIR`, read
-  as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`). So the settings example runs the
+  as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`).
+  **No `"shell": "powershell"` on the guard hook:** a PowerShell shell around it turns its exit 2
+  (block) into 1, which Claude Code takes as a non-blocking error, and the call goes ahead (measured on
+  2.1.296: `hook_non_blocking_error`, `exitCode: 1`). Where PowerShell must be the shell, the command
+  ends with `; exit $LASTEXITCODE` (measured: blocks). This applies to the coordinator's own settings
+  as much as to the workers'. Hooks load at session start: a fixed settings file is proven only in a
+  new session. Checks: `selftest hooks --settings <file>` reads a settings file; `selftest hookcheck
+  --session <id>` reads the transcript of a session told to push to `main` — the block, or the
+  non-blocking error, or no hook at all. So the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
+  That self-test calls the guard directly, never through Claude Code, so it cannot see a shell wrapper
+  or a path the harness breaks — only `hookcheck` on a real session can.
   **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
   it: `eval`, `iex` / `Invoke-Expression`, `cmd /c`, `Start-Process`, `xargs` feeding a refspec,
   quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
@@ -192,7 +202,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   message instead of a parse error, and check-scripts parses it with `pwsh` (skipped where there is
   none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
   where it exists.
-  `scripts/selftest.sh|.ps1 scripts|env|prepare|verify` (in a project: the state repository, evidence kept)
+  `scripts/selftest.sh|.ps1 scripts|env|hooks|hookcheck|prepare|verify` (in a project: the state repository, evidence kept)
   and `sandbox|clean` (the core itself) — the scripted steps of the self-test
   ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines, exit 1 on a FAIL. The
   `.ps1` runs the `.ps1` scripts under every PowerShell on the machine (5.1 and pwsh).

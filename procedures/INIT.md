@@ -30,7 +30,10 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
     which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
-    whose self-test must pass before any worker starts. **Stack-specific denies are candidates, not impositions**: offer
+    whose self-test must pass before any worker starts. `selftest hooks --settings <file>` passes on it
+    and on every settings file of the coordinator's own session that holds the guard (no `"shell":
+    "powershell"` without `; exit $LASTEXITCODE`, forward slashes, no `$env:`; TOOLKIT *Safety*); the
+    self-test proves both through Claude Code (SELFTEST step 2a). **Stack-specific denies are candidates, not impositions**: offer
     them in the quiz (TOOLKIT *Safety*, the stack candidates) and keep what the owner chooses —
     the coordinator exists to automate, and some "dangerous" actions are exactly what a project needs.
   - **No stalled workers:** workers run in auto mode and do not wait on permission prompts; with the

@@ -10,6 +10,11 @@
 #   scripts/selftest.sh verify --project <root> --state <coordinator dir> --core <commit> [--state-repo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
+# The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
+#   scripts/selftest.sh hooks --settings <settings.json>   the guard hook's command: forward slashes, no $env:,
+#                                                       no PowerShell shell that turns its exit 2 into 1
+#   scripts/selftest.sh hookcheck --session <id>       a session told to push to main: its transcript shows
+#                                                       the block, not a non-blocking hook error
 # For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -21,7 +26,7 @@
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,22s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,27s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -137,6 +142,42 @@ clean)
   if [ "$f" -eq 0 ]; then
     chmod -R u+w "$d" && rm -r "$d" && pass "sandbox removed" || fail "could not remove $d"
   else echo "sandbox kept for inspection: $d"; fi
+  finish ;;
+
+hooks)
+  file=""
+  while [ $# -gt 0 ]; do case "$1" in --settings) [ $# -ge 2 ] || usage; file="$2"; shift 2 ;; *) usage ;; esac; done
+  [ -n "$file" ] || usage
+  [ -f "$file" ] || { fail "no settings file $file"; finish; }
+  # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test)
+  n="$(grep -n 'safety-guard\.' "$file" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
+  [ -n "$n" ] || { fail "no safety-guard hook in the file"; finish; }
+  pass "a safety-guard hook"
+  line="$(sed -n "${n}p" "$file")"
+  # a backslash that is not the JSON escape of a quote (\") is a path separator
+  if printf '%s\n' "$line" | sed 's/\\"//g' | grep -q '\\'; then
+    fail "its path has backslashes: Git Bash drops them and the hook never runs"
+  else pass "its path uses forward slashes"; fi
+  case "$line" in *'$env:'*) fail 'its command uses $env: - bash reads it as $env and the path breaks' ;;
+    *) pass 'no $env: in its command' ;; esac
+  # the hook object's own fields sit next to its command
+  near="$(sed -n "$((n > 3 ? n - 3 : 1)),$((n + 3))p" "$file")"
+  if printf '%s\n' "$near" | grep -q '"shell"[[:space:]]*:[[:space:]]*"powershell"'; then
+    case "$line" in *'exit $LASTEXITCODE'*) pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' ;;
+      *) fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' ;; esac
+  else pass "no PowerShell shell around it"; fi
+  finish ;;
+
+hookcheck)
+  id=""
+  while [ $# -gt 0 ]; do case "$1" in --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;; *) usage ;; esac; done
+  [ -n "$id" ] || usage
+  tf="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null | head -n 1)"
+  [ -n "$tf" ] || { fail "no transcript for session $id"; finish; }
+  if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
+    fail "the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
+  elif grep -q 'Blocked by safety-guard' "$tf"; then pass "the push to a protected branch was blocked through Claude Code"
+  else fail "no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
   finish ;;
 
 prepare|verify)

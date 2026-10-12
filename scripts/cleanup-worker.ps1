@@ -40,7 +40,19 @@ Pop-Location
 if ($ghExit -ne 0) { StopHere "UNKNOWN: could not check the PR for $branch" }
 $heads = @($heads | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 if (-not $heads.Count) { StopHere "NOT MERGED: no merged PR for $branch" }
-if ($heads -notcontains $up) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $($up.Substring(0, [Math]::Min(7, $up.Length))) (branch name reused?)" }
+if ($heads -notcontains $up) {
+  # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
+  # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
+  $found = ''
+  foreach ($h in $heads) {
+    git -C $Worktree cat-file -e "$h^{commit}" *> $null
+    if ($LASTEXITCODE -ne 0) { git -C $Worktree fetch -q origin $h *> $null }
+    git -C $Worktree merge-base --is-ancestor $up $h *> $null
+    if ($LASTEXITCODE -eq 0) { $found = $h; break }
+  }
+  if (-not $found) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $($up.Substring(0, [Math]::Min(7, $up.Length))) (branch name reused?)" }
+  "merged as $($found.Substring(0, 7)): the PR's head has a server-side commit on top of the pushed head $($up.Substring(0, 7))"
+}
 
 if ($Session) {
   Run claude @('stop', $Session)

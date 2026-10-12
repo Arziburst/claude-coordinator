@@ -59,8 +59,15 @@ from="${from:-$root}"
 [ -d "$from" ] || { echo "no folder to launch from: $from" >&2; exit 1; }
 
 # Safety settings: the hook path inside the file must exist and pass its self-test.
-if grep 'safety-guard\.' "$safety" | grep -q '\\'; then
+if grep 'safety-guard\.' "$safety" | sed 's/\\"//g' | grep -q '\\'; then
   echo "safety settings: write the hook path with forward slashes (C:/...): hooks run through Git Bash on Windows, which drops backslashes, and a hook that fails to run blocks nothing" >&2; exit 1
+fi
+# a PowerShell shell around the hook turns its exit 2 (block) into 1 (a non-blocking error), unless the
+# command passes the code through; the hook object's fields sit next to its command line
+n="$(grep -n 'safety-guard\.' "$safety" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
+if [ -n "$n" ] && sed -n "$((n > 3 ? n - 3 : 1)),$((n + 3))p" "$safety" | grep -q '"shell"[[:space:]]*:[[:space:]]*"powershell"' &&
+   ! sed -n "${n}p" "$safety" | grep -q 'exit \$LASTEXITCODE'; then
+  echo "safety settings: the hook runs under a PowerShell shell without \"; exit \$LASTEXITCODE\": its block (exit 2) would reach Claude Code as a non-blocking error (1)" >&2; exit 1
 fi
 hook=$(grep -o '[^"]*safety-guard\.sh' "$safety" | head -1 | sed 's/^bash //' || true)
 [ -n "$hook" ] && [ -f "$hook" ] || { echo "safety settings: hook not found at '$hook' (use an absolute path)" >&2; exit 1; }
