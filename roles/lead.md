@@ -26,8 +26,11 @@ worker (BINDINGS) and the phrase that ends your report.
 3. **Delegate.** Tests first where CONTRACT and CORE §4 say so (the tester subagent). Each worker is a
    background session named `#<task>.<n> worker: <title>` (TOOLKIT), started with the project's
    start-worker on a branch from your integration branch, never from main; at most the number of workers
-   the brief allows at once. Their briefs carry the sub-contract and the facts, not the rules
-   (roles/worker.md).
+   the brief allows at once, each with `--report-to` your own session name. Their briefs carry the
+   sub-contract and the facts, not the rules (roles/worker.md). Right after each start,
+   `SendMessage(to: <its name>, notify_when_idle: true)`; no notice or report when due → `ListAgents`,
+   and a `waiting` worker (a permission prompt) is reported to the coordinator, never answered.
+   Your own report goes to the address your brief names, with the fallback of roles/worker.md step 5.
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
    sub-contract; findings go back to the same worker until there is no Blocker or Major. A failed

@@ -67,7 +67,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
-  the worker is next idle (same machine, expires after 12 h).
+  the worker is next idle (same machine, expires after 12 h). A session **waiting on a permission
+  prompt is not idle**: no notice comes; `ListAgents` shows it as `waiting` (seen on 2.1.296).
+- **Names change:** a restarted session may come back under another name (Arx: `Coordinator` →
+  `ARXVR Coordinator`), so a report address written into a brief can go stale. start-worker writes
+  the address it is given (`--report-to`, the coordinator's name as `ListAgents` shows it now); the
+  roles fall back to the project's Coordinator and never drop a report silently.
   [cross-session-messaging](https://code.claude.com/docs/en/cross-session-messaging.md)
 - Setting **`crossSessionInbound: "accept"`** on the receiving side lets a session take
   messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the

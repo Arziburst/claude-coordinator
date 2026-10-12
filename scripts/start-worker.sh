@@ -2,7 +2,7 @@
 # Start a named worker session in its own git worktree, with the safety settings applied.
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
-#       [--launch-from <folder>] [--dry-run]
+#       --report-to <coordinator session> [--launch-from <folder>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -16,11 +16,14 @@
 # inherited from a parent). The brief's first line sends it into its worktree (EnterWorktree).
 # The hook path in --safety uses forward slashes: on Windows hooks run through Git Bash, which drops
 # backslashes, and a hook that fails to run blocks nothing.
+# --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
+# (names change on a restart). It heads the brief; at the end the script prints the line that
+# subscribes to the new session's idle notice (CORE section 4, Control).
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" dry=0
+repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" report="" dry=0
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,12 +36,13 @@ while [ $# -gt 0 ]; do
     --safety) need "$@"; safety="$2"; shift 2 ;;
     --base) need "$@"; base="$2"; shift 2 ;;
     --launch-from) need "$@"; from="$2"; shift 2 ;;
+    --report-to) need "$@"; report="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-[ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> [--mode auto] [--base main] [--launch-from <folder>] [--dry-run]" >&2; exit 1; }
+[ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--dry-run]" >&2; exit 1; }
 [ "$mode" = "bypassPermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 # Absolute paths: both files are used after "cd" into the worktree.
 abs() { (cd "$(dirname "$1")" && printf '%s/%s' "$(pwd)" "$(basename "$1")"); }
@@ -71,10 +75,13 @@ else
 fi
 
 first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
+first="$first
+Report to: the session named \"$report\" (SendMessage) - your report and your questions."
 if [ "$dry" = 1 ]; then
-  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <EnterWorktree $wt, then the brief>)"
+  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <EnterWorktree $wt, report to \"$report\", then the brief>)"
 else
   ( cd "$from" && claude --bg --name "$name" --model "$model" --permission-mode "$mode" --settings "$safety" "$first
 
 $(cat "$brief")" )
 fi
+echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"

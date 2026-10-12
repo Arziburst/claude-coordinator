@@ -223,8 +223,13 @@ The continuous work:
    ([roles/tester.md](roles/tester.md)): create the task's working copy and branch first (the
    start-worker steps without the launch), run the tester there; it pushes its red tests, and they and
    their commands go into the worker's brief, to be made green unchanged.
-4. **Control:** answer workers point first; only owner decisions go to the owner; a worker near its
-   context limit or stuck → help or split. Long CI logs, PR threads, diffs or docs go to the **scout**
+4. **Control:** every session started, by any script, gets `SendMessage(to: <its name>,
+   notify_when_idle: true)` right after it starts (start-worker prints the line), and its brief names
+   the coordinator's current session name as the report address (`--report-to`), never a guessed
+   one. A session waiting on a permission prompt sends no idle notice: no report or notice when one
+   is due → `ListAgents`; `waiting` → tell the owner, never answer the prompt (§1.9). Answer workers
+   point first; only owner decisions go to the owner; a worker near its context limit or stuck → help
+   or split. Long CI logs, PR threads, diffs or docs go to the **scout**
    ([roles/scout.md](roles/scout.md), the light model): act on its quoted facts, not on raw output.
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved.

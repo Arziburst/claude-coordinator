@@ -47,9 +47,9 @@ environment, not the model.
 4. **Mini block** in the sandbox, with the project's real start-worker (BINDINGS) and worker safety
    file:
    - **Lead:** start-worker `--repo <sandbox>/repo --branch st1-selftest --name "#st1 lead: selftest"
-     --model sonnet`, effort low; the brief is `roles/lead.md`, the contract
+     --model sonnet --report-to <the coordinator>`, effort low; the brief is `roles/lead.md`, the contract
      `tests/selftest/contract.md`, the start-worker command for its workers (`--repo <sandbox>/repo
-     --base st1-selftest`, the light model, effort low, at most two at once, names `#st1.<n> worker:
+     --base st1-selftest --report-to "#st1 lead: selftest"`, the light model, effort low, at most two at once, names `#st1.<n> worker:
      selftest …`) and "no PR: merge each approved sub-branch into `st1-selftest` and push it".
    - **The budget stop:** the contract's `budget.cost` is below any real plan on purpose, so the lead
      must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
@@ -73,7 +73,7 @@ environment, not the model.
      (`gh repo view <repo> --json defaultBranchRef --jq .defaultBranchRef.name`), never assume it;
      create `selftest/base` from it (`git push origin <default>:refs/heads/selftest/base`).
    - A worker (`#st2 worker: selftest PR`, start-worker `--repo <sandbox>/state --base selftest/base
-     --branch selftest/task-1`, light model) adds one file, commits, pushes and opens a **draft** PR
+     --branch selftest/task-1 --report-to <the coordinator>`, light model) adds one file, commits, pushes and opens a **draft** PR
      into `selftest/base`.
    - A verifier subagent reviews it and posts its verdict as a PR comment.
    - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash`), checks
