@@ -205,6 +205,15 @@ prepare|verify)
         git -C "$project" check-ignore -q .claude/worktrees/selftest && pass "added .claude/worktrees/ to the project's info/exclude" ||
         fail "the project's git does not ignore .claude/worktrees"
     fi
+    # the record of the core's own failures (procedures/CORE-FINDINGS.md) in the template's format
+    fnd="$state/CORE-FINDINGS.md"
+    if [ ! -f "$fnd" ]; then fail "no CORE-FINDINGS.md in the state repository (INIT 3.4, CORE-FINDINGS.template.md)"
+    elif ! tr -d '\r' < "$fnd" | grep -qxF '| id | date | core | trigger | what happened (evidence) | workaround | status |'; then
+      fail "CORE-FINDINGS.md lacks the template's table header"
+    else
+      bad="$(tr -d '\r' < "$fnd" | awk -F'|' '/^\|/ && !/^\| id \|/ && !/^\|---/ { s = $(NF - 1); gsub(/^ +| +$/, "", s); if (s !~ /^(new|discussed|sent|fixed|dropped|not core)/) print s }' | head -n 1)"
+      if [ -z "$bad" ]; then pass "CORE-FINDINGS.md in the template's format"; else fail "CORE-FINDINGS.md: unknown status '$bad'"; fi
+    fi
     if git -C "$state" show-ref -q --verify "refs/heads/$base"; then
       fail "$base exists: core $c was tested here already - its branches are the evidence, nothing is deleted"; finish
     fi

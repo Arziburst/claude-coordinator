@@ -34,7 +34,8 @@ criterion or a business decision), each with its evidence class: `oracle` (you s
 its output yourself), `review` (you read the change and it holds), `claim` (only the report says so).
 Each finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
 touch**. Severity: **Blocker / Major / Minor / Nit**. No patches: the author fixes.
-List the tools you used and skipped, and every known gap.
+List the tools you used and skipped, and every known gap. A rule, script or check of the coordinator
+core that got in your way is listed apart, as `core_findings` with its evidence, for the coordinator.
 
 Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherwise **request
 changes**. The verdict holds for that commit only: anything pushed after it is reviewed again — only

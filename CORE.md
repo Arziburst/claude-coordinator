@@ -206,7 +206,7 @@ step. Without one, this skeleton:
    the owner are asked first with the fix and its goal; *announce and wait* (typical for client work) —
    send the plan first (item → issue / PR → what and why → model) and delegate only what is approved.
 6. **Delegate, control, review, accept, integrate** — below.
-7. **Report** (§12).
+7. **Report** (§12) — and the cycle's core findings: did any core rule, script or check fail us (§10)?
 
 The continuous work:
 
@@ -489,6 +489,12 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   never delegated, changed on the owner's yes (§1.1): its own files committed in `coordinator/`, documents
   in the project's repository through review and merge; changes every session follows go first in the
   queue and are announced once in force.
+- **Core findings.** A problem whose cause is the core itself — a rule that cannot be followed, a core
+  script that behaves wrongly, a safeguard that silently does not work, a real situation with no step,
+  a role that cannot do what the core asks — gets a row in `coordinator/CORE-FINDINGS.md` the moment it
+  happens, with evidence and before any workaround, and goes to the maintainer as an issue in
+  claude-coordinator as the owner chose at init; the next update proves the fix here
+  ([procedures/CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)).
 - **Mistake → lesson.** Corrected or a mistake found: acknowledge in one line, fix the consequence,
   **write the lesson as a rule** — project-specific into `PROJECT.md` (*Lessons*), universal proposed for
   this core on the owner's yes (the local copy first, and proposed to claude-coordinator if it helps

@@ -12,6 +12,8 @@ is new and never asks a recorded answer again (CORE §3, [procedures/UPDATE-CORE
 | `strictness` | #32 e8f78a1 | project | setting | from the init research; standard when unsure | swarm / standard / strict and the rows the project overrides (CORE §3) → `PROJECT.md` |
 | `spend-level` | #21 dba3845 | project | setting | balanced | lean / balanced / thorough (CORE §7) → `PROJECT.md` |
 | `coordinator-name` | #60 | project | setting | `<Project> Coordinator` | the coordinator session's name, always containing the English word `Coordinator` (INIT 3.1, question 10) → `PROJECT.md` *Settings*; the owner renames the session with `/rename` |
+| `core-reports` | #70 | project | setting | automatically (client work: show me first) | how core findings reach claude-coordinator (INIT 3.1, question 11) → `PROJECT.md` *Settings* |
+| `core-findings` | #70 | project | check | run | `coordinator/CORE-FINDINGS.md` exists in the template's format; an older record of core problems is converted to it on the owner's yes ([procedures/CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)) |
 | `model-own-limits` | #21 dba3845 | project | setting | none known | which models have their own limit (e.g. Fable) and whether their spend also counts toward the weekly one, read by the owner in `/usage` (CORE §7a) → BINDINGS *Models* |
 | `state-branch` | #44 1ebe968 | project | check | run | the state repository is on its one branch `state`, also the remote's default; on `main` / `master` → the move of CORE §12b, on the owner's yes |
 | `state-private` | #12 0e9f5f0 | project | check | run | the state repository's remote is `PRIVATE` (`gh repo view --json visibility`), or local only is recorded in `PROJECT.md` |

@@ -38,6 +38,7 @@ resources and launch/test limits, and the phrase that ends your report.
                               # a CI run names the commit it ran on: "CI run #812 on 5f3e2a1"; a CI run names its commit
    questions: []              # do_not_decide items and new forks
    known_gaps: []             # what you could not run or check
+   core_findings: []          # a suspected fault of the core itself (a rule, a script, a check), with evidence
    ```
 6. **Stuck or near your context limit:** stop and send a `blocked` report with what is done, what is
    left and why — do not push half-finished guesses to finish.

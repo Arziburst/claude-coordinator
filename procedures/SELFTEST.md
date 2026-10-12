@@ -73,7 +73,9 @@ the report notes the interruption and the resume time.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and
-   pushed where there is a remote. It refuses a commit already tested here.
+   pushed where there is a remote. It refuses a commit already tested here. It also checks
+   `coordinator/CORE-FINDINGS.md`: present, with the template's table header, every row's status a
+   known one.
 4. **Mini block**, with the project's real start-worker (BINDINGS) and worker safety file:
    - **Lead:** start-worker (the flags above) `--branch selftest/<c>/st1 --base selftest/<c>/base
      --name "#st1 lead: selftest" --model sonnet --report-to <the coordinator>`, effort low; the brief
@@ -132,21 +134,10 @@ the sandbox's `main` as the base, and `selftest clean --sandbox <dir>` removes i
 
 ## A FAIL that comes from the core
 
-A FAIL whose cause is a core script, role or procedure (not the project or the machine):
-
-1. Write a **sanitized report**: the core commit; OS and version, shell and PowerShell versions,
-   claude, git and gh versions; the step, the command, its exit code and error lines. Project names
-   and paths become `<project>` / `<path>`; no tokens, no customer data (CORE §1.13).
-2. Show it to the owner and ask once: "Send this report to claude-coordinator as an issue? yes/no".
-3. **Yes**, with the owner's own gh login: `gh issue create -R Arziburst/claude-coordinator --title
-   "selftest: <step> fails on <os>" --label selftest-report --body-file <report>` (the label created
-   first with `gh label create` if missing); print the link. A fix found and checked goes as its own
-   draft PR through claude-coordinator's change path, on the owner's yes.
-   No write access or no gh → print the report for the owner to send by hand.
-4. **No** → keep it in `coordinator/selftest/<date>.md`.
-
-The maintainer triages issues labelled `selftest-report`: reproduce, fix in a PR that names the issue,
-close it with the fixing commit.
+A FAIL whose cause is a core script, role or procedure (not the project or the machine) is a **core
+finding**: a row in `coordinator/CORE-FINDINGS.md` with the step, the command, its exit code and error
+lines, sent to claude-coordinator as the owner chose (`[core-report] selftest: <step> …`) — the one
+channel of [CORE-FINDINGS.md](CORE-FINDINGS.md). The next update proves the fix with the same step.
 
 ## Not covered
 

@@ -118,6 +118,13 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     it; a translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
     session — `/rename <name>` (a session cannot rename itself) — and starts it with `claude --name
     "<name>"` from then on.
+11. **Core reports — send the core's bugs to its maintainer?** Explain: when the coordinator core itself
+    fails here (a rule, a script, a safeguard), it records a finding and can open an issue in the public
+    repository claude-coordinator with the owner's gh account, so the maintainer fixes it and the next
+    update brings the fix; the report holds only the core's own facts (versions, the core file, the
+    error) — nothing of the project ([CORE-FINDINGS.md](CORE-FINDINGS.md)). Options: *automatically*
+    (recommended) · *show me each one first* (recommended for client work) · *never — I pass them on by
+    hand*. Recorded in `PROJECT.md` *Settings*.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the
@@ -165,6 +172,8 @@ with one line at the summary or later.
   `.git/info/exclude`, first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
   commit at the end of every cycle and push where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
+- **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
+  record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
   `.git/info/exclude` (`/.claude/worktrees/`) unless the project's git already ignores it — start-worker
   checks and adds it before every start, so an older project gets it at its next worker. Never
