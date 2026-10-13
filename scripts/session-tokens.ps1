@@ -1,7 +1,7 @@
 # What a Claude Code session used (Windows; macOS / Linux: session-tokens.sh - same lines, see it).
 #   powershell -File scripts/session-tokens.ps1 <session-id | id prefix | a subagent's agentId | transcript.jsonl>   (or: pwsh -File ...)
 #   powershell -File scripts/session-tokens.ps1 -Since 2026-10-05T17:00:00Z   every session on the account, from then on (UTC; or Unix seconds as resets_at)
-#   powershell -File scripts/session-tokens.ps1 -Prune    delete status files older than 7 days
+#   powershell -File scripts/session-tokens.ps1 -Prune    delete status files older than 7 days, the status line's statusline.*.tmp older than an hour
 # One line per model and a "total" line, summed from the transcripts and their subagents, each message
 # once (output is a LOWER BOUND); for one session (not a subagent) a "cost" line from ~/.claude/coordinator/sessions/<id>.json
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
@@ -30,6 +30,12 @@ if ($Prune) {
   if (Test-Path -LiteralPath $dir) {
     # older than exactly 7 x 24 hours, as the .sh
     Get-ChildItem -LiteralPath $dir -Filter '*.json' -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
+      ForEach-Object { $_.FullName; Remove-Item -LiteralPath $_.FullName }
+  }
+  # the status line's temp file older than an hour, left when it was killed between writing and moving it
+  $co = Join-Path $cfg 'coordinator'
+  if (Test-Path -LiteralPath $co) {
+    Get-ChildItem -LiteralPath $co -Filter 'statusline.*.tmp' -File | Where-Object { $_.Name -like 'statusline.*.tmp' -and $_.LastWriteTime -lt (Get-Date).AddHours(-1) } |
       ForEach-Object { $_.FullName; Remove-Item -LiteralPath $_.FullName }
   }
   exit 0

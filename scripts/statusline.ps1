@@ -8,14 +8,24 @@ $raw = [Console]::In.ReadToEnd()
 $i = $raw.IndexOf('{'); if ($i -gt 0) { $raw = $raw.Substring($i) }   # a BOM before the JSON breaks it
 $dir = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'coordinator'
 New-Item -ItemType Directory -Force $dir | Out-Null
+# Written to a temp file and moved over, so a reader never sees half a file. Move-Item -Force deletes the
+# target, then moves: another status line moving its own copy in between (Claude Code draws several at
+# once), or a reader holding the file open, fails the move. Three tries 20 ms apart, then the old file
+# stays for this tick; the temp file is removed whatever happened (one left by a kill mid-write is
+# deleted by session-tokens -Prune after an hour).
 $tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)
-Set-Content -Path $tmp -Value $raw -Encoding utf8 -NoNewline
-Move-Item -Force $tmp (Join-Path $dir 'statusline.json')
+try {
+  Set-Content -LiteralPath $tmp -Value $raw -Encoding utf8 -NoNewline -ErrorAction Stop
+  for ($n = 0; $n -lt 3; $n++) {
+    try { Move-Item -Force -LiteralPath $tmp -Destination (Join-Path $dir 'statusline.json') -ErrorAction Stop; break }
+    catch { if ($n -lt 2) { Start-Sleep -Milliseconds 20 } }
+  }
+} catch { } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp } }
 # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
 # session to draw its status line, whichever that was).
 if ($raw -match '"session_id"\s*:\s*"([^"]+)"') {
   $sdir = Join-Path $dir 'sessions'; New-Item -ItemType Directory -Force $sdir | Out-Null
-  Set-Content -Path (Join-Path $sdir ($Matches[1] + '.json')) -Value $raw -Encoding utf8 -NoNewline
+  Set-Content -LiteralPath (Join-Path $sdir ($Matches[1] + '.json')) -Value $raw -Encoding utf8 -NoNewline
 }
 
 try { $j = $raw | ConvertFrom-Json } catch { 'Claude'; exit 0 }

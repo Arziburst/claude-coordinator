@@ -3,7 +3,8 @@
 #   scripts/session-tokens.sh <session-id | id prefix | a subagent's agentId | transcript.jsonl>
 #   scripts/session-tokens.sh --since <UTC time 2026-10-05T17:00:00Z, or Unix seconds as resets_at>
 #                             every session on the account (all projects: the limits are per account)
-#   scripts/session-tokens.sh --prune     delete status files older than 7 days (other projects' too)
+#   scripts/session-tokens.sh --prune     delete status files older than 7 days (other projects' too) and the status
+#                             line's leftover statusline.*.tmp older than an hour
 # Prints lines for RUNS.tsv (CORE §7):
 #   <model>  <total>  in=<n> out>=<n> cache_read=<n> cache_write=<n>   — per model, summed from the
 #            transcripts and their subagents, each message once; input and cache counts are exact,
@@ -24,7 +25,7 @@
 # The status file's token fields are the LAST request's usage, not the session's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text.
 set -eu
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,25s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,26s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 dir="$cfg/coordinator/sessions"
@@ -117,6 +118,8 @@ case "$arg" in
     [ $# -eq 1 ] || exit 2
     # older than 7 x 24 hours to the minute (-mtime +7 would keep a file up to 8 days old)
     [ -d "$dir" ] && find "$dir" -maxdepth 1 -type f -name '*.json' -mmin +10080 -print -delete
+    # the Windows status line's temp file, left when it was killed between writing and moving it
+    [ -d "$cfg/coordinator" ] && find "$cfg/coordinator" -maxdepth 1 -type f -name 'statusline.*.tmp' -mmin +60 -print -delete
     exit 0 ;;
   --since)
     [ $# -eq 2 ] || { echo "usage: --since <UTC time, e.g. 2026-10-05T17:00:00Z, or Unix seconds>" >&2; exit 2; }
