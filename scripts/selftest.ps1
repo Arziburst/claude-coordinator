@@ -16,18 +16,20 @@
 #   powershell -File scripts/selftest.ps1 hookcheck -Session <id> [-Expect edit]   a session told to push to main
 #                                                       (with edit: to Write into the protected root): its transcript
 #                                                       shows the block, not a non-blocking hook error
-# For the core itself (the maintainer, CI) - a throwaway sandbox:
-#   powershell -File scripts/selftest.ps1 sandbox [-In <folder>]   3: a throwaway repository with a local bare origin,
+# For the core itself (the maintainer, CI) - a sandbox, kept between runs or removed:
+#   powershell -File scripts/selftest.ps1 sandbox [-In <folder>]   3: a repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
-#                                                       path, so the owner trusts its repo once per machine
-#   powershell -File scripts/selftest.ps1 clean -Sandbox <dir> [-StateRepo <owner/name>]
+#                                                       path, so the owner trusts its repo once per machine;
+#                                                       a sandbox kept by clean -Keep is reused
+#   powershell -File scripts/selftest.ps1 clean -Sandbox <dir> [-Keep] [-StateRepo <owner/name>]
 #                                                    6: no worktree, branch, session or selftest/* branch
-#                                                       left; then the sandbox folder is removed
+#                                                       left; then the sandbox folder is removed - or, with
+#                                                       -Keep, kept: only main, at the sandbox's first commit
 # Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`.
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
 # Exit 1 on any FAIL, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In,
-      [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session, [string]$Expect,
+      [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session, [string]$Expect, [switch]$Keep,
       [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -41,7 +43,7 @@ $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 28 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 30 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 # a step takes only its own parameters: anything else (another step's, an unknown one, a stray word) is a
 # usage error, as in selftest.sh
@@ -54,6 +56,34 @@ function Skip([string]$m) { "SKIP ${Step}: $m"; $script:s++ }
 function Finish { "selftest ${Step}: $($script:p) pass, $($script:f) fail, $($script:s) skipped"; if ($script:f -gt 0) { exit 1 }; exit 0 }
 function G { & git -c user.email=selftest@localhost -c user.name=selftest @args }
 $marker = '.coordinator-selftest'
+# the sandbox's first commit, which sandbox records in the marker as `initial <commit>` (outside the
+# repository, where no git command in the sandbox can move it); empty for a sandbox from an older core
+function Initial([string]$d) {
+  $m = Join-Path $d $marker
+  if (-not (Test-Path -LiteralPath $m -PathType Leaf)) { return '' }
+  $x = [regex]::Match("$(Get-Content -LiteralPath $m -Raw)", '(?m)^initial ([0-9a-f]{40,})\r?$')
+  if ($x.Success) { $x.Groups[1].Value } else { '' }
+}
+# the untracked and ignored files of a repository, except .claude/settings.local.json: the permissions
+# the owner gave its sessions there, kept with the sandbox like the trust
+function Untracked([string]$r) {
+  @(& git -C $r status --porcelain --ignored --untracked-files=all | Where-Object { $_ -cne '?? .claude/settings.local.json' -and $_ -cne '!! .claude/settings.local.json' })
+}
+# KeptWhy <sandbox>: nothing when it is a kept sandbox ready for the next run (only main, at the first
+# commit, in the repo and in its origin; no worktree; nothing untracked), else why it is not
+function KeptWhy([string]$d) {
+  $r = Join-Path $d 'repo'; $o = Join-Path $d 'remote.git'
+  $i = Initial $d
+  if (-not $i) { return "no first commit recorded in its $marker" }
+  if ("$(& git -C $r rev-parse --git-dir 2>$null)" -cne '.git' -or "$(& git -C $o rev-parse --is-bare-repository 2>$null)" -cne 'true') { return 'no repo and remote.git' }
+  if (@(& git -C $r worktree list --porcelain | Where-Object { $_ -like 'worktree *' }).Count -gt 1) { return 'worktrees left' }
+  if ("$(& git -C $r for-each-ref --format='%(refname)' refs/heads)" -cne 'refs/heads/main' -or
+      "$(& git -C $o for-each-ref --format='%(refname)' refs/heads)" -cne 'refs/heads/main') { return 'branches other than main' }
+  if ("$(& git -C $r symbolic-ref -q HEAD)" -cne 'refs/heads/main' -or "$(& git -C $r rev-parse -q --verify refs/heads/main)" -cne $i -or
+      "$(& git -C $o rev-parse -q --verify refs/heads/main)" -cne $i) { return 'main is not at the first commit' }
+  if (@(Untracked $r).Count -gt 0) { return 'changed or untracked files in the repo' }
+  ''
+}
 function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::GetTempPath() }; $d = Join-Path $parent ('coordinator-selftest.' + [IO.Path]::GetRandomFileName().Replace('.', '')); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 
 switch ($Step) {
@@ -128,34 +158,56 @@ switch ($Step) {
 'sandbox' {
   Only @('In')
   if ($In -and -not (Test-Path -LiteralPath $In -PathType Container)) { Fail "no folder $In"; Finish }
+  # a relative -In made absolute: the repo's origin URL is stored from it, and a relative one breaks
+  # every git command run from another folder (a reused sandbox's fetch); an absolute one is kept as given
+  if ($In -and -not ($In -match '^(/|\\|[A-Za-z]:[/\\])')) { $In = (Resolve-Path -LiteralPath $In).ProviderPath }
   $d = Join-Path $(if ($In) { $In } else { $HOME }) 'coordinator-selftest'
-  if (Test-Path -LiteralPath $d) { Fail "$d already exists: a previous run left it (selftest clean -Sandbox $d)"; Finish }
-  New-Item -ItemType Directory -Path $d | Out-Null
-  New-Item -ItemType File -Path (Join-Path $d $marker) | Out-Null
-  $remote = Join-Path $d 'remote.git'; $r = Join-Path $d 'repo'
-  $ok = $true
-  foreach ($a in @(
-      @('init', '-q', '--bare', $remote), @('-C', $remote, 'symbolic-ref', 'HEAD', 'refs/heads/main'),
-      @('init', '-q', $r), @('-C', $r, 'symbolic-ref', 'HEAD', 'refs/heads/main'))) {
-    if ($ok) { & git @a; $ok = $LASTEXITCODE -eq 0 }
+  if (Test-Path -LiteralPath $d) {
+    # a sandbox kept by clean -Keep is reused (its repo's path keeps the owner's trust); nothing else is
+    if (-not (Test-Path -LiteralPath (Join-Path $d $marker) -PathType Leaf)) { Fail "$d already exists and is not a self-test sandbox (no $marker): nothing changed"; Finish }
+    $why = KeptWhy $d
+    if ($why) { Fail "$d already exists and is not clean ($why): run selftest clean -Sandbox $d [-Keep] first"; Finish }
+    Pass "reusing the kept sandbox $d"
+  } else {
+    New-Item -ItemType Directory -Path $d | Out-Null
+    New-Item -ItemType File -Path (Join-Path $d $marker) | Out-Null
+    $remote = Join-Path $d 'remote.git'; $r = Join-Path $d 'repo'
+    $ok = $true
+    foreach ($a in @(
+        @('init', '-q', '--bare', $remote), @('-C', $remote, 'symbolic-ref', 'HEAD', 'refs/heads/main'),
+        @('init', '-q', $r), @('-C', $r, 'symbolic-ref', 'HEAD', 'refs/heads/main'))) {
+      if ($ok) { & git @a; $ok = $LASTEXITCODE -eq 0 }
+    }
+    if ($ok) {
+      [IO.File]::WriteAllText((Join-Path $r 'README.md'), "Coordinator self-test sandbox: reset or removed by ``selftest clean``.`n")
+      & git -C $r add README.md 2>$null; $ok = $LASTEXITCODE -eq 0
+      if ($ok) { G -C $r commit -q -m 'selftest: sandbox'; $ok = $LASTEXITCODE -eq 0 }
+      if ($ok) { & git -C $r remote add origin $remote; $ok = $LASTEXITCODE -eq 0 }
+      if ($ok) { & git -C $r push -q -u origin main 2>$null; $ok = $LASTEXITCODE -eq 0 }
+      if ($ok) {
+        $i = "$(& git -C $r rev-parse HEAD)"; $ok = $LASTEXITCODE -eq 0
+        if ($ok) { [IO.File]::WriteAllText((Resolve-Path -LiteralPath (Join-Path $d $marker)).Path, "initial $i`n") }
+      }
+    }
+    if ($ok) { Pass 'repository with a local bare origin, branch main' } else { Fail 'could not set up the repositories' }
   }
-  if ($ok) {
-    [IO.File]::WriteAllText((Join-Path $r 'README.md'), "Coordinator self-test sandbox: throwaway, removed by ``selftest clean``.`n")
-    & git -C $r add README.md 2>$null; $ok = $LASTEXITCODE -eq 0
-    if ($ok) { G -C $r commit -q -m 'selftest: sandbox'; $ok = $LASTEXITCODE -eq 0 }
-    if ($ok) { & git -C $r remote add origin $remote; $ok = $LASTEXITCODE -eq 0 }
-    if ($ok) { & git -C $r push -q -u origin main 2>$null; $ok = $LASTEXITCODE -eq 0 }
-  }
-  if ($ok) { Pass 'repository with a local bare origin, branch main' } else { Fail 'could not set up the repositories' }
   "sandbox: $d"
   'started: ' + (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
   Finish
 }
 'clean' {
-  Only @('Sandbox', 'StateRepo'); if (-not $Sandbox) { Usage }
+  Only @('Sandbox', 'StateRepo', 'Keep'); if (-not $Sandbox) { Usage }
   $d = $Sandbox
   if (-not (Test-Path -LiteralPath (Join-Path $d $marker) -PathType Leaf)) { Fail "$d is not a self-test sandbox (no $marker): nothing removed"; Finish }
-  $r = Join-Path $d 'repo'
+  $r = Join-Path $d 'repo'; $o = Join-Path $d 'remote.git'
+  if ($Keep) {
+    # -Keep resets the sandbox to its first commit (the marker records it), so it needs both repositories
+    $i = Initial $d
+    if (-not $i) { Fail "no first commit recorded in $d/$marker (a sandbox from an older core): run selftest clean -Sandbox $d without -Keep"; Finish }
+    $ok = "$(& git -C $r rev-parse --git-dir 2>$null)" -ceq '.git' -and "$(& git -C $o rev-parse --is-bare-repository 2>$null)" -ceq 'true'
+    if ($ok) { & git -C $r cat-file -e "$i^{commit}" 2>$null; $ok = $LASTEXITCODE -eq 0 }
+    if (-not $ok) { Fail "$d has no repo and remote.git with its first commit ${i}: nothing changed"; Finish }
+  }
   # worktrees (the first one listed is the repository itself): removed only when clean and merged into main
   $wts = @(& git -C $r worktree list --porcelain | Where-Object { $_ -like 'worktree *' } | ForEach-Object { $_.Substring(9) })
   foreach ($w in ($wts | Select-Object -Skip 1)) {
@@ -174,6 +226,17 @@ switch ($Step) {
   }
   $b = @(& git -C $r for-each-ref --format='%(refname:short)' refs/heads | Where-Object { $_ -ne 'main' })
   if ($b.Count -eq 0) { Pass 'no branch left' } else { Fail "branches not merged into main: $($b -join ' ')" }
+  # the origin's branches go too (deleted by -Keep, removed with the folder otherwise), so each must be
+  # merged into the repo's main (the guard blocks pushing main: the origin's own main may lag behind)
+  $b = ''
+  $heads = @(if (Test-Path -LiteralPath $o -PathType Container) { & git -C $o for-each-ref --format='%(refname:short)' refs/heads 2>$null })
+  foreach ($x in $heads) {
+    if ($x -ceq 'main') { continue }
+    $sha = "$(& git -C $o rev-parse "refs/heads/$x")"
+    & git -C $r merge-base --is-ancestor $sha main 2>$null
+    if ($LASTEXITCODE -ne 0) { $b += " $x" }
+  }
+  if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
   if (Get-Command claude -ErrorAction SilentlyContinue) {
     $json = "$(& claude agents --json 2>$null)"
     $n = @([regex]::Matches($json, '"name":\s*"([^"]*selftest[^"]*)"') | ForEach-Object { $_.Groups[1].Value })
@@ -187,9 +250,29 @@ switch ($Step) {
       if ($n.Count -eq 0) { Pass "no selftest/* branch on $StateRepo" } else { Fail "branches left on ${StateRepo}: $($n -join ' ')" }
     }
   } else { Skip 'state repository: not checked (no -StateRepo)' }
-  if ($script:f -eq 0) {
+  if ($script:f -ne 0) { "sandbox kept for inspection: $d" }
+  elseif ($Keep) {
+    # the folder, its marker, the repo's path (Claude Code trusts a folder by its path) and the origin
+    # stay; every other branch goes, main of both goes back to the first commit, untracked files go
+    # (git clean on the repo only)
+    foreach ($x in @(& git -C $o for-each-ref --format='%(refname)' refs/heads)) {
+      if ($x -cne 'refs/heads/main') { & git -C $o update-ref -d $x }
+    }
+    & git -C $o update-ref refs/heads/main $i; $ok = $LASTEXITCODE -eq 0
+    foreach ($a in @(
+        @('-C', $o, 'symbolic-ref', 'HEAD', 'refs/heads/main'), @('-C', $r, 'checkout', '-q', '-f', 'main'),
+        @('-C', $r, 'reset', '-q', '--hard', $i), @('-C', $r, 'fetch', '-q', '--prune', 'origin'),
+        @('-C', $r, 'worktree', 'prune'), @('-C', $r, 'clean', '-q', '-ffdx', '-e', '.claude/settings.local.json'))) {
+      if ($ok) { & git @a 2>$null; $ok = $LASTEXITCODE -eq 0 }
+    }
+    $why = KeptWhy $d; if (-not $ok -and -not $why) { $why = 'a git command failed' }
+    if (-not $why) {
+      Pass "only main, at the first commit $(& git -C $r rev-parse --short $i), in the repo and its origin; nothing untracked"
+      "sandbox kept for the next run: $d"
+    } else { Fail "could not reset ${d}: $why" }
+  } else {
     try { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction Stop; Pass 'sandbox removed' } catch { Fail "could not remove $d" }
-  } else { "sandbox kept for inspection: $d" }
+  }
   Finish
 }
 'hooks' {
