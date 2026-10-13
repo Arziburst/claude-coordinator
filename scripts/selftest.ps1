@@ -183,17 +183,31 @@ switch ($Step) {
   if (-not (Test-Path -LiteralPath $Settings -PathType Leaf)) { Fail "no settings file $Settings"; Finish }
   $cfg = $null; try { $cfg = Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json } catch { }
   # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test)
-  $h = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+  $h = $null; $matcher = $null
+  foreach ($entry in @($cfg.hooks.PreToolUse)) {
+    $x = @($entry.hooks | Where-Object { $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+    if ($x) { $h = $x; $matcher = $entry.matcher; break }
+  }
   if (-not $h) { Fail 'no safety-guard hook in the file'; Finish }
   Pass 'a safety-guard hook'
   $cmd = [string]$h.command
   # after JSON decoding a path backslash is a single \ (an escaped quote is just ")
   if ($cmd.Contains('\')) { Fail 'its path has backslashes: Git Bash drops them and the hook never runs' } else { Pass 'its path uses forward slashes' }
   if ($cmd.Contains('$env:')) { Fail 'its command uses $env: - bash reads it as $env and the path breaks' } else { Pass 'no $env: in its command' }
+  # an unquoted path must be one word: a space splits it and the hook never runs
+  if ($cmd -match '"[^"]*safety-guard\.(sh|ps1)"') { Pass 'its path is quoted or has no space' }
+  else {
+    $word = (($cmd -replace 'safety-guard\..*$', '') -split ' ')[-1]
+    if ($word -match '^(/|[A-Za-z]:|\$|~)') { Pass 'its path is quoted or has no space' }
+    else { Fail 'its path has a space and is not quoted: the hook never runs' }
+  }
   if ($h.shell -eq 'powershell') {
     if ($cmd.Contains('exit $LASTEXITCODE')) { Pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' }
     else { Fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' }
   } else { Pass 'no PowerShell shell around it' }
+  # its entry's matcher (none: every tool) must take in the PowerShell tool too
+  if (-not $matcher -or "$matcher".Contains('PowerShell') -or "$matcher" -eq '*') { Pass 'its matcher covers the PowerShell tool' }
+  else { Fail 'its matcher leaves out PowerShell: the PowerShell tool runs unguarded' }
   Finish
 }
 'hookcheck' {
