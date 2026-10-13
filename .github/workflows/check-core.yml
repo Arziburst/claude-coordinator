@@ -201,6 +201,18 @@ jobs:
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-insights/run.sh ps powershell
           bash tests/session-insights/run.sh ps pwsh
+      - name: retro measures the fixture weeks (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/retro/run.sh sh
+      - name: retro measures the fixture weeks (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/retro/run.sh ps pwsh
+      - name: retro measures the fixture weeks (PowerShell)
+        if: runner.os == 'Windows'
+        run: |
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/retro/run.sh ps powershell
+          bash tests/retro/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (bash)
         if: runner.os != 'Windows'
         run: bash tests/statusline/run.sh sh
@@ -451,4 +463,15 @@ jobs:
           for since in 2026-10-05T17:00:00Z 1791219600; do
             diff <(CLAUDE_CONFIG_DIR=tests/session-insights/multi bash scripts/session-insights.sh --since $since) \
                  <(CLAUDE_CONFIG_DIR=tests/session-insights/multi TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 -Since $since)
+          done
+          # session-insights' retro filters, and the retro's report and public body: the same under another
+          # time zone and a German locale
+          r=tests/retro
+          diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/session-insights.sh --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project C:/work/acme-shop) \
+               <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 -Since 2026-10-05T00:00:00Z -Until 2026-10-12T00:00:00Z -SkipTests -Project C:/work/acme-shop)
+          for w in 2026-10-07 2026-09-30; do
+            diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/retro.sh $r/coordinator/RUNS.tsv --week $w --project C:/work/acme-shop) \
+                 <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/retro.ps1 $r/coordinator/RUNS.tsv -Week $w -Project C:/work/acme-shop)
+            diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/retro.sh $r/coordinator/RUNS.tsv --week $w --project C:/work/acme-shop --public --id 3f9a0c1b7e42) \
+                 <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/retro.ps1 $r/coordinator/RUNS.tsv -Week $w -Project C:/work/acme-shop -Public -Id 3f9a0c1b7e42)
           done

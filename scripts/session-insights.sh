@@ -3,7 +3,16 @@
 # Windows: session-insights.ps1). The input of the weekly retro (CORE §7a); reads only, sends nothing.
 #   scripts/session-insights.sh <session-id | id prefix | a subagent's agentId | transcript.jsonl> [--detail]
 #   scripts/session-insights.sh --since <UTC time 2026-10-05T17:00:00Z, or Unix seconds> [--detail]
-#                               every transcript on the account from then on (each record by its timestamp)
+#                               [--until <UTC time>] [--skip-tests] [--project <folder>]
+#                               every transcript on the account from then on (each record by its timestamp;
+#                               --until: before that time). The retro's filters, by a session's name (its last
+#                               customTitle / agentName) and its first cwd, a subagent's by its parent's:
+#                               --skip-tests leaves out probe and self-test sessions - a name with probe,
+#                               selftest or self-test as a word before its first colon (#0 probe: ..., probe:
+#                               ..., selftest), a task #st<n> (#st1 lead: selftest), or a cwd inside a
+#                               coordinator-selftest folder; a product task about a self-test stays (its
+#                               title, after the colon, only names it); --project keeps the sessions whose
+#                               first cwd is the folder or inside it (\ read as /, case ignored, C:/x as /c/x)
 # One session is its transcript and its subagents'; each transcript is read in order on its own. Lines,
 # tab-separated, one kind per line, no header (nothing at all for a session without messages):
 #   block  <reason>  count=<n> changed=<n> retried=<n> around=<n> stopped=<n>   — per safety-guard reason
@@ -35,25 +44,29 @@
 # A result whose call is not in the files read (or before --since) is skipped; so is a line that is no
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
-usage() { sed -n '2,36s/^# \{0,1\}//p' "$0"; exit 2; }
-arg=""; since=""; mode=one; detail=0
+usage() { sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 2; }
+arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --detail) detail=1 ;;
     --since) [ $# -ge 2 ] && [ "$mode" = one ] || usage; mode=since; since="$2"; shift ;;
+    --until) [ $# -ge 2 ] && [ -z "$till" ] || usage; till="$2"; shift ;;
+    --skip-tests) skip=1 ;;
+    --project) [ $# -ge 2 ] && [ -z "$proj" ] && [ -n "$2" ] || usage; proj="$2"; shift ;;
     -*) usage ;;
     *) [ -z "$arg" ] || usage; arg="$1" ;;
   esac
   shift
 done
-if [ "$mode" = since ]; then [ -z "$arg" ] || usage; else [ -n "$arg" ] || usage; fi
+if [ "$mode" = since ]; then [ -z "$arg" ] || usage
+else [ -n "$arg" ] && [ -z "$till" ] && [ "$skip" = 0 ] && [ -z "$proj" ] || usage; fi
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 projects="$cfg/projects"
 
 # the records on stdin, every transcript followed by a line holding only \001
 insights() {
-  SINCE="$since" DETAIL="$detail" LC_ALL=C awk '
-    BEGIN { since = substr(ENVIRON["SINCE"], 1, 19); detail = ENVIRON["DETAIL"] + 0
+  SINCE="$since" UNTIL="$till" DETAIL="$detail" LC_ALL=C awk '
+    BEGIN { since = substr(ENVIRON["SINCE"], 1, 19); until = substr(ENVIRON["UNTIL"], 1, 19); detail = ENVIRON["DETAIL"] + 0
       MK = "Blocked by safety-guard: "; NO = "\001"; q = sprintf("%c", 39)
       SEP = "[ \t\n\r;&|()<>" q "\"`,=]+" }
     # the record s own timestamp, outside "message" (as session-tokens): the first on the line when it
@@ -222,6 +235,7 @@ insights() {
       if (!isR && $0 !~ /"type":[ \t]*"assistant"/) next
       ts = rects($0)
       if (since != "" && (ts == "" || substr(ts, 1, 19) < since)) next
+      if (until != "" && substr(ts, 1, 19) >= until) next
       ms = tms(ts)
       if (isR) result(); else assistant() }
     END { endfile()
@@ -241,21 +255,70 @@ insights() {
 # every file, then the \001 line (after a newline: a last line without one stays its own)
 feed() { while IFS= read -r f; do [ -n "$f" ] || continue; cat "$f"; printf '\n\001\n'; done; }
 
-if [ "$mode" = since ]; then
-  bad="--since needs YYYY-MM-DDTHH:MM:SS in UTC (Z or nothing after it) or Unix seconds, got $since"
-  case "$since" in
+# --skip-tests / --project: of the paths on stdin, those of the sessions kept, in their order. Per file its
+# first cwd and its last name (customTitle / agentName), read with grep; a subagent's file is judged by its
+# parent's transcript when that is listed (its own cwd also counts for the sandbox)
+pick() {
+  if [ "$skip" = 0 ] && [ -z "$proj" ]; then cat; return 0; fi
+  local list; list="$(cat)"
+  [ -n "$list" ] || return 0
+  { printf '%s\n' "$list" | sed 's/^/F /'
+    # /dev/null: a file grep never matches, so a list xargs leaves empty never reads stdin
+    printf '%s\n' "$list" | tr '\n' '\0' | LC_ALL=C xargs -0 grep -a -H -m 1 -o '"cwd":"[^"]*"' /dev/null | sed 's/^/M /'
+    printf '%s\n' "$list" | tr '\n' '\0' | LC_ALL=C xargs -0 grep -a -H -o -E '"(customTitle|agentName)":"[^"]*"' /dev/null | sed 's/^/M /'
+  } | SKIP="$skip" PROJ="$proj" LC_ALL=C awk '
+    # a path compared: \ read as /, repeated / as one, lower case, C:/x as /c/x, no trailing /
+    function norm(p) { gsub(/\\/, "/", p); gsub(/\/+/, "/", p); p = tolower(p)
+      if (p ~ /^[a-z]:\//) p = "/" substr(p, 1, 1) substr(p, 3)
+      sub(/\/$/, "", p); return p }
+    # w in s as a whole word: no letter, digit, _ or - right before or after it
+    function word(s, w,   i, p, b, a) { p = 0
+      while ((i = index(substr(s, p + 1), w)) > 0) { p += i
+        b = p > 1 ? substr(s, p - 1, 1) : ""; a = substr(s, p + length(w), 1)
+        if (b !~ /[a-z0-9_-]/ && a !~ /[a-z0-9_-]/) return 1 }
+      return 0 }
+    # a probe or self-test session by its name: probe, selftest or self-test as a word before the first
+    # colon, or a task #st<n>; the title after the colon never counts (a task about a self-test is work)
+    function tested(n,   v, i, h) { v = tolower(n); i = index(v, ":"); h = i ? substr(v, 1, i - 1) : v
+      return v ~ /^#st[0-9]/ || word(h, "probe") || word(h, "selftest") || word(h, "self-test") }
+    function sandbox(c) { return norm(c) ~ /\/coordinator-selftest(\/|$)/ }
+    function inside(c) { if (c == "") return 0; c = norm(c); return c == R || substr(c, 1, length(R) + 1) == R "/" }
+    BEGIN { skip = ENVIRON["SKIP"] + 0; R = ENVIRON["PROJ"]; if (R != "") R = norm(R) }
+    $1 == "F" { f[++n] = substr($0, 3); listed[f[n]] = 1; next }
+    $1 == "M" { s = substr($0, 3); i = index(s, ".jsonl:\""); if (!i) next
+      p = substr(s, 1, i + 5); m = substr(s, i + 7)
+      if (substr(m, 1, 7) == "\"cwd\":\"") { if (!(p in cwd)) { v = substr(m, 8); sub(/"$/, "", v); cwd[p] = v } }
+      else { v = m; sub(/^"[A-Za-z]*":"/, "", v); sub(/"$/, "", v); nm[p] = v }
+      next }
+    END { for (k = 1; k <= n; k++) { p = f[k]; q = p
+        if (match(p, /\/subagents\/[^\/]*\.jsonl$/) && (substr(p, 1, RSTART - 1) ".jsonl") in listed) q = substr(p, 1, RSTART - 1) ".jsonl"
+        cq = (q in cwd) ? cwd[q] : ""; cp = (p in cwd) ? cwd[p] : ""; nq = (q in nm) ? nm[q] : ""
+        if (skip && (tested(nq) || sandbox(cq) || sandbox(cp))) continue
+        if (R != "" && !inside(cq != "" ? cq : cp)) continue
+        print p } }'
+}
+# a --since / --until value as YYYY-MM-DDTHH:MM:SS[...] in UTC (the awk reads its first 19 characters)
+utc() {
+  local v="$2" bad="$1 needs YYYY-MM-DDTHH:MM:SS in UTC (Z or nothing after it) or Unix seconds, got $2"
+  case "$v" in
     '' | *[!0-9]*)
       re='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z?$'   # no other offset
-      [[ $since =~ $re ]] || { echo "$bad" >&2; exit 2; } ;;
+      [[ $v =~ $re ]] || { echo "$bad" >&2; return 2; }
+      printf '%s\n' "$v" ;;
     *)
       # Unix seconds (the status line's resets_at): GNU date reads @<n>, BSD date -r <n>
-      [ ${#since} -le 10 ] || { echo "$bad" >&2; exit 2; }
-      if date --version >/dev/null 2>&1; then since="$(date -u -d "@$since" +%Y-%m-%dT%H:%M:%S)"
-      else since="$(date -u -r "$since" +%Y-%m-%dT%H:%M:%S)"; fi ;;
+      [ ${#v} -le 10 ] || { echo "$bad" >&2; return 2; }
+      if date --version >/dev/null 2>&1; then date -u -d "@$v" +%Y-%m-%dT%H:%M:%S
+      else date -u -r "$v" +%Y-%m-%dT%H:%M:%S; fi ;;
   esac
+}
+
+if [ "$mode" = since ]; then
+  since="$(utc --since "$since")" || exit 2
+  if [ -n "$till" ]; then till="$(utc --until "$till")" || exit 2; fi
   [ -d "$projects" ] || { echo "no transcripts in $projects" >&2; exit 1; }
   # in the order of their paths, so that the .ps1 reads them in the same order
-  find "$projects" -name '*.jsonl' -type f | LC_ALL=C sort | feed | insights
+  find "$projects" -name '*.jsonl' -type f | LC_ALL=C sort | pick | feed | insights
   exit 0
 fi
 main=""

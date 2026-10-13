@@ -144,6 +144,18 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     cycle") runs the batch recipe over the runnable work; the recipe is agreed in the summary. In both,
     a single task can be handed over any time. The autopilot (swarm) runs the batch recipe on its tick.
     Recorded in `PROJECT.md` *Settings*.
+13. **Help improve the coordinator?** Asked softly, in the owner's language, close to: "Would you like to
+    help improve the coordinator? Once a week it would send its repository a short anonymous summary —
+    numbers only: what tasks cost and how long they took, how many were reworked, where the safety guard
+    got in the way. No code, no file names, nothing of what the tasks were about. You can see each
+    summary before it is sent, or turn it off at any time." (Russian: "Хотите помочь улучшать координатор?
+    Раз в неделю он будет отправлять в его репозиторий короткую обезличенную сводку — только цифры:
+    сколько стоили и длились задачи, сколько было доработок, где мешала защита. Ни кода, ни имён файлов,
+    ни содержания задач. Каждую сводку можно посмотреть до отправки или выключить в любой момент.")
+    Options: *show me each summary first* (recommended — and for the first week whatever the answer;
+    then the owner picks the mode, [RETRO.md](RETRO.md)) · *send it* · *only me — the weekly retro runs,
+    nothing leaves this machine*. Recorded in `PROJECT.md` *Settings* with the anonymous id
+    (`scripts/retro --new-id`, random, never derived from a name); the weekly retro runs in every mode.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the

@@ -214,6 +214,7 @@ In either mode the owner may hand over a single task at any time.
 | A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
 | A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) |
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
+| The weekly retro is due (*last retro* in `PROJECT.md` before the last complete week; checked with the sync), or the owner says "retro" | the retro ([procedures/RETRO.md](procedures/RETRO.md)): the report, at most three proposals, the summary as the owner chose |
 | Anything in `coordinator/` changes | a commit there at once; a push per §12b |
 | A batch ends | the batch report (§12) |
 
@@ -398,12 +399,12 @@ Claude only. Per task, weigh **difficulty and risk (§5) against the remaining b
 **rungs**, not models: which model stands on which rung depends on the subscription and is detected,
 never assumed (below).
 
-| Task | Rung | Effort |
+| Task (its kind's name) | Rung | Effort |
 |---|---|---|
-| trivial: docs, small tooling, mechanical edits, research summaries, small reviews | light | low–medium |
-| ordinary product work | strong | medium |
-| hard or risky (architecture, money, security, concurrency, rendering, input) | strong | high |
-| the hardest problems, unexplained failures | top | xhigh–max |
+| `trivial`: docs, small tooling, mechanical edits, research summaries, small reviews | light | low–medium |
+| `ordinary`: product work | strong | medium |
+| `hard`: hard or risky (architecture, money, security, concurrency, rendering, input) | strong | high |
+| `hardest`: the hardest problems, unexplained failures | top | xhigh–max |
 
 - **The ladder** (`BINDINGS.md`, *Models*): the available models, cheapest first, each on a rung — e.g.
   light Haiku / Sonnet, strong Opus, top Fable; on a plan without Fable the top rung is Opus; where the block forecast (§7a)
@@ -433,7 +434,7 @@ never assumed (below).
 - **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
   coordinator writes it — a lead's runs come in its report): one line per finished worker, lead,
   tester, reviewer or researcher run — date · task (`37`, or `37.2` under a lead) · role · kind (a row
-  of the table) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
+  of the table by its name, or a project's own kind under one) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
   the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
   per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
   `escalated` / `failed`) · start (UTC) · wall · active (minutes; the `time` line of
@@ -537,10 +538,10 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   behind them (`scripts/run-stats <RUNS.tsv>`: every kind and model).
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
-- **The weekly retro's input** is `scripts/session-insights --since <a week ago>` (TOOLKIT *Usage*): from
-  the transcripts, where sessions lose money, time, quality or stability — guard blocks, refusals and what the
-  session did next, tool errors and repeats, waits on a person, cache rewrites, rereads — counts only,
-  its `--detail` file names never leaving the machine.
+- **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)) measures the coordinator on cost, speed,
+  quality, predictability and stability, week against week, from the run log and the project's transcripts
+  (`scripts/retro`, its input `scripts/session-insights`, TOOLKIT *Usage*), writes at most three proposals
+  for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init.
 
 ## 8. Resources, parallel work and cleanup
 

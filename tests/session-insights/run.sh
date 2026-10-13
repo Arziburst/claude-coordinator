@@ -4,14 +4,15 @@
 # errors and a repeat; waits on a person; rereads with --detail; a cache
 # rewrite after a pause; refusals by other hooks, the classifier, a safety check and the user; errors
 # that are only an exit code; a subagent counted with its session and alone; --since across two sessions;
-# CRLF, a BOM and malformed lines; the error cases and their exit codes.
+# CRLF, a BOM and malformed lines; the retro's filters --until, --skip-tests and --project on tests/retro/claude;
+# the error cases and their exit codes.
 #   tests/session-insights/run.sh sh              # scripts/session-insights.sh, with the bash running this file
 #   tests/session-insights/run.sh ps pwsh         # scripts/session-insights.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -23,7 +24,7 @@ run() {
   local cfg; cfg="$(winpath "$1")"; shift
   if [ "$kind" = ps ]; then
     local a=()
-    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --detail) a+=(-Detail) ;; *) a+=("$x") ;; esac; done
+    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --detail) a+=(-Detail) ;; --until) a+=(-Until) ;; --skip-tests) a+=(-SkipTests) ;; --project) a+=(-Project) ;; *) a+=("$x") ;; esac; done
     CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/session-insights.ps1")" ${a[@]+"${a[@]}"} > "$tmp/out.raw" 2> "$tmp/err.raw"
   else
     CLAUDE_CONFIG_DIR="$cfg" bash "$core/scripts/session-insights.sh" "$@" > "$tmp/out.raw" 2> "$tmp/err.raw"
@@ -74,5 +75,19 @@ expect "CRLF line ends and a BOM" 0 "$t/expected-e1.txt" - -- "$tmp/crlf" e1
 mkdir -p "$tmp/cfg[1]"; cp -R "$cl/." "$tmp/cfg[1]/"
 expect "a config path with [ ]" 0 "$t/expected-sub1.txt" - -- "$tmp/cfg[1]" sub1
 expect "a config path with [ ], --since" 0 "$t/expected-all.txt" - -- "$tmp/cfg[1]" --since 2026-01-01T00:00:00Z --detail
+# the retro's filters on tests/retro/claude: a coordinator, a worker launched from the root into its worktree and a
+# product task titled about a self-test (kept); a probe, a self-test lead with its subagent and a session in a
+# coordinator-selftest sandbox (left out by --skip-tests); another project whose folder only starts with this one's
+# name (left out by --project); a block after --until
+rd="$here/../retro/claude"
+expect "--until, --skip-tests and --project together (the retro's week)" 0 "$t/expected-filter-both.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project C:/work/acme-shop
+expect "--project in another spelling: backslashes, capitals, a trailing separator" 0 "$t/expected-filter-both.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project 'C:\WORK\Acme-Shop\'
+expect "--skip-tests alone: every project, no probe or self-test session" 0 "$t/expected-filter-tests.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests
+expect "--project alone: the probe and the self-test lead with its subagent stay" 0 "$t/expected-filter-project.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --project C:/work/acme-shop
+expect "the previous week (--until in Unix seconds)" 0 "$t/expected-filter-prev.txt" - -- "$rd" --since 2026-09-28T00:00:00Z --until 1791158400 --skip-tests --project C:/work/acme-shop
+expect "--project with no session inside prints nothing" 0 - - -- "$rd" --since 2026-10-05T00:00:00Z --project C:/work/none
+expect "--until without --since is refused" 2 any - -- "$rd" b1 --until 2026-10-12T00:00:00Z
+expect "--skip-tests with a session is refused" 2 any - -- "$rd" c1 --skip-tests
+expect "--until with an offset other than Z is refused" 2 - - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00+02:00
 [ "$fail" = 0 ] && echo "session-insights: $n cases passed" || echo "session-insights: failures above ($n cases)"
 exit "$fail"

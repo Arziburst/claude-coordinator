@@ -31,6 +31,9 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Core (CORE §2) | `<fill>` | `<fill>` | `<date>` | a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
 | Coordinator name (CORE §2) | `<fill>` | `<fill>` | `<date>` | `<Project> Coordinator` — always containing the English word `Coordinator`; the session is started with `claude --name "<name>"` or renamed with `/rename <name>` |
 | Core reports (procedures/CORE-FINDINGS.md) | `<fill>` | `<fill>` | `<date>` | **automatically** · show me each one first (client work) · no — by hand: how the core's own failures reach claude-coordinator |
+| Self-improvement summaries (procedures/RETRO.md) | `<fill>` | `<fill>` | `<date>` | **show me first** (the first week always) · send · only me — whether the weekly retro sends its anonymous summary of numbers to claude-coordinator |
+| Self-improvement id | `<fill>` | `<fill>` | `<date>` | 12 random hex digits from `scripts/retro --new-id`, made once, never derived from a name |
+| Last retro (week of) | `<fill>` | `<fill>` | `<date>` | none yet — the weekly retro sets it (procedures/RETRO.md) |
 
 ## Project
 | Question | This project | Default to offer |

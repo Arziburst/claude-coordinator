@@ -118,6 +118,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   after 7 days, max 50 per session. `--resume` restores cron tasks (not self-paced loops). Recreate the
   tick after every restart. Durable alternatives: Routines (cloud, ≥ 1 h) or Desktop scheduled tasks.
   [scheduled-tasks](https://code.claude.com/docs/en/scheduled-tasks.md)
+- A weekly job cannot live in a cron that expires after 7 days: the **weekly retro** is a due check
+  instead — *last retro* in `PROJECT.md` against the last complete week, at session start, with the daily
+  sync and on the tick where there is one ([procedures/RETRO.md](procedures/RETRO.md)).
 
 ## Safety
 - **Permission rules:** `deny` → `ask` → `allow`; a deny always wins. Compound commands are split
@@ -270,7 +273,13 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `tests/session-insights/run.sh` (fixture transcripts: guard blocks followed by a retry, a way around,
   a change and a stop, a deny rule, refusals by another hook, the classifier, a safety check and the
   user, tool errors and a repeat, errors that are only an exit code, waits, rereads, a cache rewrite, a subagent,
-  `--since` across two sessions, CRLF, a BOM and malformed lines),
+  `--since` across two sessions, CRLF, a BOM and malformed lines; `--until`, `--skip-tests` and `--project`
+  on `tests/retro/claude/`), `tests/retro/run.sh` (a run log with a history, a thin previous week, a week
+  with a rework, an escalation, a failed run, a lead and a subagent row, a project's own kind and an open
+  wait, a self-test and a probe left out; its journal, escapes and transcripts; the local report and the
+  public body against their expected files, the folder's name absent from the public body, a week with too
+  little data and no transcripts, CRLF and a BOM; the public check failing on an injected path, the
+  folder's name, free text and a foreign label; the proposal check; `--new-id`; usage errors),
 `tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
 and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
 values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
@@ -389,8 +398,14 @@ BOM, models priced apart),
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
   as session-tokens: a session is its transcript and its subagents', `--since` every transcript on the
-  machine, each record by its own timestamp. It only reads and prints; nothing is sent anywhere. Lines,
-  tab-separated, one kind per line, no header; nothing for a session without messages:
+  machine, each record by its own timestamp. It only reads and prints; nothing is sent anywhere. With
+  `--since`, the retro's filters: `--until <time>` (`-Until`: records before it only); `--skip-tests`
+  (`-SkipTests`: no probe or self-test session — a name with `probe`, `selftest` or `self-test` as a word
+  before its first colon, a task `#st<n>`, or a first cwd inside a `coordinator-selftest` folder; a
+  product task whose title only mentions a self-test stays); `--project <folder>` (`-Project`: only the
+  sessions whose first cwd is the folder or inside it, `\` read as `/`, case ignored, `C:/x` as `/c/x`) —
+  a session judged by its last name (`customTitle` / `agentName`) and its first `cwd`, a subagent by its
+  parent's. Lines, tab-separated, one kind per line, no header; nothing for a session without messages:
   - `block <reason> count= changed= retried= around= stopped=` — per safety-guard reason (the text
     after `Blocked by safety-guard: ` up to `. If this is a false positive`, a path in parentheses as
     `(<path>)`, so no folder leaves the machine) and `deny rule` (a `Permission to use … has been
@@ -435,6 +450,34 @@ BOM, models priced apart),
   record after the result); a result whose call is not in the files read (or before `--since`) is
   skipped, and so is a line that is no record (a malformed or cut line). Exit 1 when no transcript is
   found or a prefix is ambiguous, 2 on a usage error.
+- **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)): `scripts/retro.sh <RUNS.tsv> [--week
+  <YYYY-MM-DD>] [--project <root>] [--journal <LOG.md>] [--escapes <ESCAPES.tsv>] [--no-insights]`
+  (`retro.ps1 <RUNS.tsv> -Week … -Project … -Journal … -Escapes … -NoInsights`). The week is Monday to
+  Sunday UTC holding `--week` (default: the last complete week), against the 7 days before it; the
+  project root defaults to the folder above the run log's, the journal and escapes to `LOG.md` and
+  `ESCAPES.tsv` next to it. A task is its rows as in run-stats, in the week of its latest row date; rows of
+  a task `st<n>` or `0`, or a kind or role naming probe or self-test, are left out; a task-less row is the
+  coordinator's own cost. The transcripts: `session-insights --since <week> --until <its end> --skip-tests
+  --project <root>` per week. It prints, tab-separated, `retro` with the weeks, `axis measure week
+  previous` and a line per measure — *cost*: `tasks merged median_per_task total coordinator
+  per_merged_task`; *speed*: `ready_median work_median owner_wait_median owner_wait_open` (the owner wait
+  apart); *quality*: `rework_rate escalated_rate failed_rate escapes escapes_per_10_merged`;
+  *predictability*: per cost, work and ready `_forecasts _in_range _ratio_median` (a forecast: 3 or more
+  earlier tasks of the kind and model, the last 10 before the task's first row, its range run-stats'
+  25th–75th percentile, min–max under 4); *stability*: `failed_runs guard_blocks deny_rule_blocks
+  guard_around guard_false_positives guard_errors refusals tool_errors tool_calls tool_error_rate
+  cache_rewrites cache_rewrites_per_task waiting_minutes rereads` — then `kind name tasks rework escalated
+  failed` per kind of the week and the week's `block` / `refusal` lines. Money to the cent, minutes and
+  percents whole, rounded half up from integers, the same from the .sh and the .ps1; `—` is too little
+  data (under 3 values; under 100 tool calls; no transcripts, journal or escapes file). `--public --id
+  <12 hex>` (`-Public -Id`) prints instead the anonymous Markdown body: a fixed template, numbers and the
+  allowlist only (the core's kinds or `other`, the guard's reasons and refusal sources as fixed keys, the
+  id, the dates), checked before it is printed. `--check-public <file>` (`-CheckPublic`) checks a summary
+  body — it fails on a line outside the template, a cell outside the allowlist, a `/` or `\`, or the
+  folder name of `--project`; `--check-proposal <file>` (`-CheckProposal`) checks a proposal body against
+  RETRO's template (its core file a file of the core, its two text lines with no path outside the core,
+  link, address or task number); `--new-id` (`-NewId`) prints a random id. Exit 1 when a file cannot be
+  read or a check fails, 2 on a usage error.
 - **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
   prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
   cost_low cost_high time_n time_median time_low time_high ready_n ready_median ready_low ready_high` —

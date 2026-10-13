@@ -31,7 +31,8 @@ never from memory:
      (one `git ls-remote`, CORE §2); the coordinator name, and whether this session carries it
      (`ListAgents` shows it);
   10. core reports (automatically / show first / by hand) and the open rows of
-      `coordinator/CORE-FINDINGS.md`;
+      `coordinator/CORE-FINDINGS.md`; the self-improvement summaries (send / show me first / only me),
+      the anonymous id and the last retro ([RETRO.md](RETRO.md));
   11. one-time steps — from `coordinator/CHECKLIST.md`: done *n* · not done *n* (their ids) ·
       declined *n* ([ONE-TIME.md](../ONE-TIME.md)).
 - The values come from the **Settings** block at the top of `PROJECT.md`. A `PROJECT.md` without it
