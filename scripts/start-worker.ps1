@@ -54,11 +54,12 @@ $wt = Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.
 $from = if ($LaunchFrom) { $LaunchFrom } else { $root }
 if (-not (Test-Path -LiteralPath $from -PathType Container)) { Fail "no folder to launch from: $from" }
 # the branch exactly as named: on a case-insensitive file system (Windows, macOS) a branch that differs
-# only in letter case is the same branch file and the same worktree folder
+# only in letter case is the same branch file and the same worktree folder; with packed refs git lets
+# both exist, so another one in another letter case is refused even then
 $heads = @(git -C $root for-each-ref --format='%(refname)' refs/heads | ForEach-Object { $_ -replace '^refs/heads/', '' })
 $hasBranch = $heads -ccontains $Branch
-if (-not $hasBranch -and (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)) {
-  $other = @($heads | Where-Object { $_ -eq $Branch })[0]
+if (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS) {
+  $other = @($heads | Where-Object { $_ -eq $Branch -and $_ -cne $Branch })[0]
   if ($other) { Fail "branch $Branch differs only in letter case from the existing ${other}: on this file system they are one branch - pick another name" }
 }
 
@@ -186,6 +187,9 @@ if (Test-Path -LiteralPath $wt) {
     "$(git -C $wt rev-parse --path-format=absolute --git-common-dir)" -eq "$(git -C $root rev-parse --path-format=absolute --git-common-dir)"
   }
   if (-not $ok) { Fail "$wt exists but is not a worktree of ${root}: remove or rename it first" }
+  # and only with this branch checked out (a folder in another letter case is the same folder)
+  $cur = & { $ErrorActionPreference = 'Continue'; "$(git -C $wt symbolic-ref --short -q HEAD 2>$null)".Trim() }
+  if ($cur -cne $Branch) { Fail "$wt has $(if ($cur) { $cur } else { 'a detached HEAD' }) checked out, not $Branch" }
   "reusing worktree $wt"
 }
 else {
@@ -232,10 +236,15 @@ $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
 if ($claude.Source -match '\.(cmd|bat)$') { Fail "claude is a $($Matches[1]) shim ($($claude.Source)): install the native claude.exe, which carries a multi-line brief intact" }
-# Windows PowerShell 5.1 (and 7.0-7.2) does not escape quotes inside native arguments: do it here.
-if ($PSVersionTable.PSVersion -lt [version]'7.3') { $brief = ($brief -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1' }
+# Windows PowerShell 5.1 (and 7.0-7.2) does not escape quotes inside native arguments: do it here,
+# for the brief and the session's name (a name with a " would reach claude without it).
+$argName = $Name
+if ($PSVersionTable.PSVersion -lt [version]'7.3') {
+  $brief = ($brief -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
+  $argName = ($Name -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
+}
 Push-Location -LiteralPath $from
-try { & $claude.Source --bg --name $Name --model $Model --permission-mode $Mode --settings $Safety $brief }
+try { & $claude.Source --bg --name $argName --model $Model --permission-mode $Mode --settings $Safety $brief }
 finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it

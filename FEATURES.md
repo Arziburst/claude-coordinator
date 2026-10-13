@@ -231,7 +231,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: CORE.md §4, TOOLKIT.md
 - entry: delegating a task
 - promises: one task per worker or lead; workers, leads, testers and verifiers are named `#<task> <role>: <title>` with no project prefix (a researcher `researcher: <topic>`, the coordinator by its name); the brief's text carries the contract, decisions, parallel work, resources and the report phrase, never the role rules (start-worker prepends the role file)
-- tested by: tests/workers/run.sh (the name reaches the session and the subscribe line)
+- tested by: tests/workers/run.sh (the name reaches the session and the subscribe line; a name with a quote or a backslash reaches claude intact)
 - not covered: none known
 
 ### F-WORK-06 Tests first
@@ -310,7 +310,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/start-worker.sh, scripts/start-worker.ps1, TOOLKIT.md
 - entry: scripts/start-worker.sh, scripts/start-worker.ps1
 - promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); a stale folder at the worktree path is refused, a worktree reached through a symlinked `--worktree-root` is reused, a relative `--worktree-root` is taken from the current folder, a flag in place of a value is refused; on a case-insensitive file system (Windows, macOS) a branch that differs from an existing one only in letter case is refused; the role file (from `#<task> <role>: …`) heads the brief once; `--dry-run` changes nothing
-- tested by: tests/workers/run.sh, CI step "start-worker and cleanup-worker against temporary repositories" (bash, PowerShell 7, Windows PowerShell 5.1)
+- tested by: tests/workers/run.sh (among them a reused worktree folder with another branch checked out, refused; a branch beside one in another letter case under packed refs, refused), CI step "start-worker and cleanup-worker against temporary repositories" (bash, PowerShell 7, Windows PowerShell 5.1)
 - not covered: none known
 
 ### F-WORKERS-02 Worker safety settings checked
@@ -331,7 +331,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/start-worker.sh, CORE.md §4, TOOLKIT.md
 - entry: `--report-to`
 - promises: start-worker refuses to start without a report address; the address heads the brief; the subscribe line is printed only after the session is listed (up to about 20 seconds; a name with a quote or a backslash is found as the JSON listing escapes it); one subscription per expected report
-- tested by: tests/workers/run.sh (no report address, the subscribe line, names the listing escapes)
+- tested by: tests/workers/run.sh (no report address, the subscribe line, names the listing escapes, reaching claude intact under Windows PowerShell 5.1 and PowerShell 7)
 - not covered: a session waiting on a permission prompt sends no idle notice
 
 ### F-WORKERS-05 Worktrees kept out of git
@@ -389,21 +389,21 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: every Bash or PowerShell tool call
 - promises: recursive removal of `/`, a drive, home or a worktree by hand (`rm -rf`, `Remove-Item -Recurse`, `rd /s`, `find … -delete`, `Get-ChildItem … | Remove-Item -Recurse`, `git worktree remove --force`) is blocked — home also written out (`/c/Users/<user>`, `C:\Users\<user>`, `~<user>`, `~/**`), a drive also as `/c`, `/mnt/c`, `/cygdrive/c`, a worktree's contents (`.claude/worktrees/x/*`) too, and `.` or `*` after a `cd` to one of them or with one as the working folder; removing a worktree goes through cleanup-worker
-- tested by: tests/safety-guard/cases.txt
-- not covered: removal through a script written to a file and then run; `..` in a path is not resolved; a plain `git worktree remove` passes (git refuses a worktree with changes; a lead removes its sub-workers' copies that way, roles/lead.md)
+- tested by: tests/safety-guard/cases.txt (also `..` up to a worktree, the worktrees' folder, `.claude`, the project's folder and the folders holding it or home, from a cwd inside a worktree and after a `cd`, for the Bash and the PowerShell tool; `~name` as home for the Bash tool only)
+- not covered: removal through a script written to a file and then run; `..` is taken out by the text, so a symlink in the path is not followed; a plain `git worktree remove` passes (git refuses a worktree with changes; a lead removes its sub-workers' copies that way, roles/lead.md)
 
 ### F-SAFE-03 The guard parses like a shell
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: every Bash or PowerShell tool call
 - promises: line continuations are joined; separators inside quotes do not split; `{ … }` groups and PowerShell script blocks (`& {…}`, `% {…}`, `Invoke-Command -ScriptBlock {…}`) split; wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf -oL`, `builtin`, `noglob`; on macOS `caffeinate -i`, `arch -arm64`, `script -q <file>` and the Homebrew `gtimeout`, `gnice`, `gstdbuf`, `genv`); `$(…)`, `bash -c` (also `-c --`), `pwsh -Command` (also a prefix such as `-Com`) and a heredoc fed to a shell are checked as commands of their own; `git -C`, `cd` and `checkout` in the same command are followed
-- tested by: tests/safety-guard/cases.txt
+- tested by: tests/safety-guard/cases.txt (also wrappers and the command given as a path or with `.exe`: `/usr/bin/env`, `timeout.exe`, `git.exe`)
 - not covered: none known
 
 ### F-SAFE-04 Unreadable input blocks
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: the hook's stdin
 - promises: input that is not a JSON object blocks (without jq too); a BOM or other bytes before the object are dropped; only `tool_input`'s own `command` is read; extra project patterns come from the project's own deny file (trimmed, CRLF or LF, a UTF-8 BOM dropped, blank lines skipped), and a pattern that cannot be read, or a deny file that cannot be read (no permission, a folder), blocks every call
-- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt
+- tested by: tests/safety-guard/run.sh (a folder in place of the deny file, a file without read permission: chmod, or in Git Bash an NTFS permission set with icacls; UTF-16 deny files with and without a BOM, big-endian, BOM only, with their message), tests/safety-guard/cases.txt
 - not covered: none known
 
 ### F-SAFE-05 The guard's self-test

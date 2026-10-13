@@ -280,15 +280,34 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
   expect_in "reusing worktree"
   git -C "$tmp/repo" worktree remove "$tmp/real48/48-a" 2>/dev/null ;;
 esac
-# a name that the JSON listing escapes is found at once, not after the 20 s wait
-names=('#49 worker: a\b')
-[ "$kind" = sh ] && names+=('#50 worker: say "hi"')
-for nm in "${names[@]}"; do
+# a name that the JSON listing escapes is found at once, not after the 20 s wait; it reaches claude
+# intact (Windows PowerShell 5.1 drops a " from a native argument unless it is escaped)
+for nm in '#49 worker: a\b' '#50 worker: say "hi"'; do
   br="$(printf '%s' "$nm" | cut -c2-3)-a"
+  : > "$STUB_LOG"
   check 0 "start: the name $nm in the listing" -- start --repo "$tmp/repo" --name "$nm" --branch "$br" "${W[@]}" --safety "$tmp/safety.json"
   case "$LAST" in *"not listed after"*) echo "FAIL: the name $nm was not found in the listing"; fail=1 ;; esac
+  grep -qF -- "--bg --name $nm --model" "$STUB_LOG" || { echo "FAIL: the name $nm did not reach claude intact:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
   git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/$br" 2>/dev/null
 done
+# --- findings of re-proving on Windows (start-worker) ---
+# a worktree folder is reused only with the requested branch checked out
+git -C "$tmp/repo" worktree add -q -b 52-other "$tmp/repo/.claude/worktrees/52-a" main
+check 1 "start: a worktree folder with another branch checked out" -- start --repo "$tmp/repo" --name "#52 worker: a" --branch 52-a "${W[@]}" --safety "$tmp/safety.json"
+expect_in "has 52-other checked out, not 52-a"
+git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/52-a"
+# with packed refs git creates a branch beside one that differs only in letter case (Windows, macOS):
+# start-worker refuses it although the exact name exists, and never enters the other branch's worktree
+case "$(uname -s)" in Darwin|MINGW*|MSYS*|CYGWIN*)
+  check 0 "start: a branch for the packed-refs check" -- start --repo "$tmp/repo" --name "#53 worker: a" --branch 53-case "${W[@]}" --safety "$tmp/safety.json"
+  git -C "$tmp/repo" pack-refs --all
+  if git -C "$tmp/repo" branch 53-CASE main 2>/dev/null; then
+    check 1 "start: a branch beside another in another letter case (packed refs)" -- start --repo "$tmp/repo" --name "#53 worker: b" --branch 53-CASE "${W[@]}" --safety "$tmp/safety.json"
+    expect_in "differs only in letter case from the existing 53-case"
+    git -C "$tmp/repo" update-ref -d refs/heads/53-CASE
+  else echo "FAIL: git did not create 53-CASE beside the packed 53-case"; fail=1; fi
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/53-case" ;;
+esac
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"

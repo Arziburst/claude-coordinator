@@ -128,22 +128,28 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
   following `git checkout` / `switch` (with `--track origin/main` and `-` too; `git checkout main
   <file>` restores a file and leaves the branch), `cd` / `Set-Location` and `git -C` in the same command;
-  `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a
-  worktree by hand (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find … -delete`, a
+  `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a folder
+  that holds it, the project's folder or a folder that holds it, or a worktree by hand (also the
+  worktrees' folder and `.claude`) (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find …
+  -delete` — with a test such as `-name` the project's folder may be its path —, a
   `Get-ChildItem` / `ls` piped into `Remove-Item -Recurse`, `git worktree remove --force`; a drive also
-  as `/c`, `/mnt/c`, `/cygdrive/c`, home also written out in its Windows or Git Bash form; `.`, `*` and
-  other relative targets count from the folder a `cd` led to). It parses
+  as `/c`, `/mnt/c`, `/cygdrive/c`, home also written out in its Windows or Git Bash form, `~name` as
+  a user's home for the Bash tool only; `.`, `*`, `..` and other relative targets count from the folder
+  a `cd` led to, and `.` and `x/..` are taken out of the path by its text). It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
   wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf
-  -oL`, `builtin`, `noglob`, `time`, `nohup`, `exec`), `$(…)`, `bash -c` / `pwsh -Command` (or a prefix
+  -oL`, `builtin`, `noglob`, `time`, `nohup`, `exec`; also given as a path or with `.exe`, as the
+  command itself: `/usr/bin/env`, `timeout.exe`, `git.exe`), `$(…)`, `bash -c` / `pwsh -Command` (or a prefix
   such as `-Com`) and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
   reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
   shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
   only `tool_input`'s own `command` is read. A project's own patterns (`.claude/coordinator-deny.txt`,
   one regex per line, trimmed, CRLF or LF) block what they match; a pattern that cannot be read blocks
-  every call (`project rule cannot be read: <line>`) until the file is fixed.
+  every call (`project rule cannot be read: <line>`) until the file is fixed, and so does a deny file
+  that cannot be read (no read permission — tested by opening it —, a folder) or is saved in UTF-16, as
+  Windows PowerShell 5.1's `>` writes it (`… (not UTF-8: re-save it as UTF-8)`).
   **A hook that fails to run does not block** unless it says so: the guard hook carries `"onFailure":
   "block"` (Claude Code 2.1.295+; measured on 2.1.296: a wrong path let a push through with exit 127,
   with the field the call was blocked), so a broken path, a crash or a timeout fails closed. Still,
