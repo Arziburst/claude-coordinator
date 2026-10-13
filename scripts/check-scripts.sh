@@ -16,12 +16,15 @@ case "${1:-}" in -h|--help) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2 ;; esac
 for d in "$@"; do [ -d "$d" ] || { echo "not a folder: $d" >&2; exit 2; }; done
 
 n=0; e=0
-# every file as <folder>/<path below it>, sorted the same way on every system. The core's deliberately
-# broken fixtures (tests/check-scripts/broken/) are left out unless the folder given is that folder or
-# inside it: a whole core copy passes, and their own check still sees them fail.
-list() { for d in "$@"; do d="${d%/}"; find "$d" -type f -name "*.$ext" | sed "s|^$d/||" | LC_ALL=C sort |
-  A="$(cd "$d" && pwd)/" awk 'BEGIN { a = ENVIRON["A"]; p = "/tests/check-scripts/broken/" } index(a, p) || !index(a $0, p)' |
-  sed "s|^|$d/|"; done; }
+# every file as <folder>/<path below it>, sorted the same way on every system; the extension in any letter
+# case (Foo.SH), as check-scripts.ps1 matches it. The core's deliberately broken fixtures
+# (tests/check-scripts/broken/) are left out unless the folder given is that folder or inside it: a whole
+# core copy passes, and their own check still sees them fail. The folder's name goes through the
+# environment, never into a sed or awk program: `&`, `[x]` or `|` in it stay as they are.
+list() { for d in "$@"; do d="${d%/}"; find "$d" -type f -iname "*.$ext" |
+  D="$d" A="$(cd "$d" && pwd)/" awk 'BEGIN { d = ENVIRON["D"]; a = ENVIRON["A"]; p = "/tests/check-scripts/broken/" }
+    { r = substr($0, length(d) + 2); if (index(a, p) || !index(a r, p)) print r }' | LC_ALL=C sort |
+  D="$d" awk '{ print ENVIRON["D"] "/" $0 }'; done; }
 
 ext=sh
 while IFS= read -r f; do
@@ -30,7 +33,8 @@ while IFS= read -r f; do
   out="$(bash -n "$f" 2>&1)" && continue
   e=$((e + 1))
   # "file: line 3: message" -> "file:3: message"
-  printf '%s\n' "$out" | sed "s|^.*: line \([0-9][0-9]*\): |$f:\1: |"
+  printf '%s\n' "$out" | F="$f" awk '!match($0, /^.*: line [0-9]+: /) { print; next }
+    { m = substr($0, 1, RLENGTH - 2); sub(/^.*: line /, "", m); print ENVIRON["F"] ":" m ": " substr($0, RLENGTH + 1) }'
 done <<LIST
 $(list "$@")
 LIST

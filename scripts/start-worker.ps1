@@ -24,6 +24,12 @@
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 $ErrorActionPreference = 'Stop'
 function Fail([string]$m) { [Console]::Error.WriteLine($m); exit 1 }
 
@@ -213,3 +219,4 @@ for ($i = 0; $i -lt 20; $i++) {
 if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the subscribe fails, retry it in a few seconds') }
 $subscribe
 exit 0
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

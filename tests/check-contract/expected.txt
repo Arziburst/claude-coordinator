@@ -6,5 +6,18 @@ empty-id-title.md: ERROR `title` is empty
 empty-id-title.md: FAIL (2 errors, 0 warnings)
 misplaced.md: ERROR criterion must be the first key of each acceptance item
 misplaced.md: FAIL (1 errors, 0 warnings)
+empty-how.md: ERROR criterion 1: oracle check without `how`
+empty-how.md: ERROR criterion 2: oracle check without `how`
+empty-how.md: ERROR criterion 3: oracle check without `how`
+empty-how.md: ERROR criterion 4: oracle check without `how`
+empty-how.md: ERROR criterion 5: oracle check without `how`
+empty-how.md: FAIL (5 errors, 0 warnings)
+commented-defaults.md: ERROR non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)
+commented-defaults.md: ERROR non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)
+commented-defaults.md: WARN  budget.model missing (CORE §7)
+commented-defaults.md: WARN  budget.escalate_to missing (no stronger model to retry on)
+commented-defaults.md: WARN  budget.cost missing (no spend forecast, CORE §7a)
+commented-defaults.md: WARN  touches missing or empty (no conflict foresight, CORE §4a)
+commented-defaults.md: FAIL (2 errors, 4 warnings)
 bom.md: OK (0 errors, 0 warnings)
 missing.md: cannot read

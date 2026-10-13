@@ -6,6 +6,12 @@
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
 # 3 a check failed, nothing changed.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 function StopHere([string]$m) { [Console]::Error.WriteLine("$m - left as is"); exit 3 }
 function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')"; $global:LASTEXITCODE = 0 } else { & $exe @a }
@@ -77,3 +83,4 @@ Run git @('-C', $root, 'branch', '-d', $branch)
 if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
 "cleaned: $(if ($Session) { $Session } else { 'no session' }) $Worktree"
 exit 0
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
