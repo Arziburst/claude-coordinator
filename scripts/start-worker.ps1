@@ -53,6 +53,14 @@ if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Repo" }
 $wt = Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch
 $from = if ($LaunchFrom) { $LaunchFrom } else { $root }
 if (-not (Test-Path -LiteralPath $from -PathType Container)) { Fail "no folder to launch from: $from" }
+# the branch exactly as named: on a case-insensitive file system (Windows, macOS) a branch that differs
+# only in letter case is the same branch file and the same worktree folder
+$heads = @(git -C $root for-each-ref --format='%(refname)' refs/heads | ForEach-Object { $_ -replace '^refs/heads/', '' })
+$hasBranch = $heads -ccontains $Branch
+if (-not $hasBranch -and (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)) {
+  $other = @($heads | Where-Object { $_ -eq $Branch })[0]
+  if ($other) { Fail "branch $Branch differs only in letter case from the existing ${other}: on this file system they are one branch - pick another name" }
+}
 
 # Safety settings: the hook path inside the file must exist and pass its self-test.
 $text = [IO.File]::ReadAllText($Safety)
@@ -60,13 +68,22 @@ $cfg = $text | ConvertFrom-Json
 $hookCmd = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | ForEach-Object { $_.command } |
   Where-Object { $_ -match 'safety-guard\.(ps1|sh)' })[0]
 if (-not $hookCmd) { Fail "safety settings: no PreToolUse safety-guard hook in $Safety" }
-# every guard path in the file must exist; the self-test runs the PreToolUse hook itself
-foreach ($m in [regex]::Matches($text, '[^"\s]*safety-guard\.(ps1|sh)')) {
-  if (-not (Test-Path -LiteralPath $m.Value -PathType Leaf)) { Fail "safety settings: hook not found at '$($m.Value)' (use an absolute path)" }
+# the guard's path in one hook command: quoted ("..." or '...'), so it may hold a space, or else the
+# word without spaces
+function HookPath([string]$c) {
+  if ($c -match '"([^"]*safety-guard\.(ps1|sh))"') { return $Matches[1] }
+  if ($c -match "'([^']*safety-guard\.(ps1|sh))'") { return $Matches[1] }
+  if ($c -match '([^"\s]*safety-guard\.(ps1|sh))') { return $Matches[1] }
+  return ''
 }
-$hook = ''
-if ($hookCmd -match '"([^"]*safety-guard\.(ps1|sh))"') { $hook = $Matches[1] }
-elseif ($hookCmd -match '(\S*safety-guard\.(ps1|sh))') { $hook = $Matches[1] }
+# every guard path in the file must exist; the self-test runs the PreToolUse hook itself
+$cmds = @($cfg.hooks.PSObject.Properties | ForEach-Object { $_.Value } | ForEach-Object { $_.hooks } | ForEach-Object { $_.command } |
+  Where-Object { $_ -match 'safety-guard\.(ps1|sh)' })
+foreach ($c in $cmds) {
+  $p = HookPath $c
+  if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { Fail "safety settings: hook not found at '$p' (use an absolute path; quote a path with a space)" }
+}
+$hook = HookPath $hookCmd
 if ($hookCmd -match '\\') { Fail 'safety settings: write the hook path with forward slashes (C:/...): hooks run through Git Bash on Windows, which drops backslashes, and a hook that fails to run blocks nothing' }
 # a PowerShell shell around the hook turns its exit 2 (block) into 1 (a non-blocking error), unless the
 # command passes the code through
@@ -152,17 +169,17 @@ if (Test-Path -LiteralPath $wt) {
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
   $ok = & {
     $ErrorActionPreference = 'Continue'
-    $top = git -C $wt rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $top) { return $false }
-    if ((Resolve-Path -LiteralPath $top).Path.TrimEnd('\', '/') -ne (Resolve-Path -LiteralPath $wt).Path.TrimEnd('\', '/')) { return $false }
+    # the folder is the worktree's top when git sees no prefix there (a symlink in the path does not
+    # matter: git reports the real path, Resolve-Path keeps the link)
+    $prefix = git -C $wt rev-parse --show-prefix 2>$null
+    if ($LASTEXITCODE -ne 0 -or $prefix) { return $false }
     "$(git -C $wt rev-parse --path-format=absolute --git-common-dir)" -eq "$(git -C $root rev-parse --path-format=absolute --git-common-dir)"
   }
   if (-not $ok) { Fail "$wt exists but is not a worktree of ${root}: remove or rename it first" }
   "reusing worktree $wt"
 }
 else {
-  git -C $root show-ref -q --verify "refs/heads/$Branch"
-  if ($LASTEXITCODE -eq 0) { Run git @('-C', $root, 'worktree', 'add', $wt, $Branch) }
+  if ($hasBranch) { Run git @('-C', $root, 'worktree', 'add', $wt, $Branch) }
   else { Run git @('-C', $root, 'worktree', 'add', '--no-track', '-b', $Branch, $wt, $start) }
 }
 
@@ -212,8 +229,10 @@ try { & $claude.Source --bg --name $Name --model $Model --permission-mode $Mode 
 finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
+# the listing is JSON: a backslash or a double quote in the name is escaped there
+$jname = $Name.Replace('\', '\\').Replace('"', '\"')
 for ($i = 0; $i -lt 20; $i++) {
-  if ("$(& $claude.Source agents --json)".Contains('"' + $Name + '"')) { break }
+  if ("$(& $claude.Source agents --json)".Contains('"' + $jname + '"')) { break }
   Start-Sleep -Seconds 1
 }
 if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the subscribe fails, retry it in a few seconds') }

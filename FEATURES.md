@@ -309,15 +309,15 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-01 start-worker
 - defined: scripts/start-worker.sh, scripts/start-worker.ps1, TOOLKIT.md
 - entry: scripts/start-worker.sh, scripts/start-worker.ps1
-- promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); a stale folder at the worktree path is refused, a relative `--worktree-root` is taken from the current folder, a flag in place of a value is refused; the role file (from `#<task> <role>: …`) heads the brief once; `--dry-run` changes nothing
+- promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); a stale folder at the worktree path is refused, a worktree reached through a symlinked `--worktree-root` is reused, a relative `--worktree-root` is taken from the current folder, a flag in place of a value is refused; on a case-insensitive file system (Windows, macOS) a branch that differs from an existing one only in letter case is refused; the role file (from `#<task> <role>: …`) heads the brief once; `--dry-run` changes nothing
 - tested by: tests/workers/run.sh, CI step "start-worker and cleanup-worker against temporary repositories" (bash, PowerShell 7, Windows PowerShell 5.1)
 - not covered: none known
 
 ### F-WORKERS-02 Worker safety settings checked
 - defined: scripts/start-worker.sh, TOOLKIT.md
 - entry: `--safety` / `-Safety`
-- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's); a missing PreToolUse guard or a silent self-test is refused with a message
-- tested by: tests/workers/run.sh (backslash path, PowerShell shell anywhere in the hook object, a wrong PreToolUse path, no PreToolUse guard, a silent self-test)
+- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message
+- tested by: tests/workers/run.sh (backslash path, PowerShell shell anywhere in the hook object, a wrong PreToolUse path, no PreToolUse guard, a silent self-test, a quoted and an unquoted path with a space)
 - not covered: other wrappers that could swallow the exit code
 
 ### F-WORKERS-03 Start from a trusted folder
@@ -330,8 +330,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-04 Report address and subscription
 - defined: scripts/start-worker.sh, CORE.md §4, TOOLKIT.md
 - entry: `--report-to`
-- promises: start-worker refuses to start without a report address; the address heads the brief; the subscribe line is printed only after the session is listed (up to about 20 seconds); one subscription per expected report
-- tested by: tests/workers/run.sh (no report address, the subscribe line)
+- promises: start-worker refuses to start without a report address; the address heads the brief; the subscribe line is printed only after the session is listed (up to about 20 seconds; a name with a quote or a backslash is found as the JSON listing escapes it); one subscription per expected report
+- tested by: tests/workers/run.sh (no report address, the subscribe line, names the listing escapes)
 - not covered: a session waiting on a permission prompt sends no idle notice
 
 ### F-WORKERS-05 Worktrees kept out of git
@@ -344,8 +344,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-06 cleanup-worker
 - defined: scripts/cleanup-worker.sh, scripts/cleanup-worker.ps1, CORE.md §8
 - entry: scripts/cleanup-worker.sh, scripts/cleanup-worker.ps1
-- promises: removes a worktree and session only if the worktree is clean, every commit is on the remote and a merged PR has the pushed head (or a head that contains it, after a server-side commit); a remote branch deleted and pruned after the merge is accepted through the merged PR's head; a reused branch name with newer commits is refused; a branch pushed without `-u` is found by its `origin/<branch>`; exit 3 changes nothing
-- tested by: tests/workers/run.sh (twelve cleanup cases)
+- promises: removes a worktree and session only if the worktree is clean, every commit is on the remote and a merged PR has the pushed head (or a head that contains it, after a server-side commit); a remote branch deleted and pruned after the merge is accepted through the merged PR's head; a reused branch name with newer commits is refused; a branch pushed without `-u` is found by its `origin/<branch>`; a flag in place of a value (`--session --dry-run`) is a usage error; exit 3 changes nothing
+- tested by: tests/workers/run.sh (thirteen cleanup cases)
 - not covered: none known
 
 ### F-WORKERS-07 Permission modes
