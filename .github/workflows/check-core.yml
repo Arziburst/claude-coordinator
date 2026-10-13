@@ -134,44 +134,16 @@ jobs:
         run: bash tests/check-contract/run.sh ps powershell
       - name: session-tokens counts the fixture exactly (bash)
         if: runner.os != 'Windows'
-        run: |
-          export CLAUDE_CONFIG_DIR="$PWD/tests/session-tokens/claude"
-          bash scripts/session-tokens.sh s1 | diff - tests/session-tokens/expected.txt
-          bash scripts/session-tokens.sh s2 | diff - tests/session-tokens/expected-s2.txt
-          bash scripts/session-tokens.sh x | diff - tests/session-tokens/expected-agent.txt
-          if bash scripts/session-tokens.sh s 2>/dev/null; then echo "an ambiguous prefix must fail"; exit 1; fi
-          bash scripts/session-tokens.sh --since 2026-10-05T17:00:00Z | diff - tests/session-tokens/expected-since.txt
-          t="$RUNNER_TEMP/prune"; mkdir -p "$t/coordinator/sessions"
-          touch -t 202001010000 "$t/coordinator/sessions/old.json"; touch "$t/coordinator/sessions/new.json"
-          CLAUDE_CONFIG_DIR="$t" bash scripts/session-tokens.sh --prune >/dev/null
-          [ "$(ls "$t/coordinator/sessions")" = "new.json" ] || { echo "--prune kept or deleted the wrong files"; exit 1; }
+        run: bash tests/session-tokens/run.sh sh
+      - name: session-tokens counts the fixture exactly (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/session-tokens/run.sh ps pwsh
       - name: session-tokens counts the fixture exactly (PowerShell)
         if: runner.os == 'Windows'
-        shell: powershell
         run: |
-          $env:CLAUDE_CONFIG_DIR = "$PWD\tests\session-tokens\claude"
-          foreach ($c in @(@('s1', 'expected.txt'), @('s2', 'expected-s2.txt'), @('x', 'expected-agent.txt'))) {
-            $got = (.\scripts\session-tokens.ps1 $c[0]) -join "`n"
-            $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\$($c[1])") -replace "`r", '').TrimEnd("`n")
-            if ($got -ne $want) { "got:`n$got`nwant:`n$want"; exit 1 }
-          }
-          $p = Start-Process powershell -ArgumentList '-NoProfile', '-File', '.\scripts\session-tokens.ps1', 's' -Wait -PassThru -NoNewWindow -RedirectStandardError "$env:RUNNER_TEMP\err.txt"
-          if ($p.ExitCode -ne 1) { "an ambiguous prefix must fail"; exit 1 }
-          $got = (.\scripts\session-tokens.ps1 -Since 2026-10-05T17:00:00Z) -join "`n"
-          $want = ([IO.File]::ReadAllText("$PWD\tests\session-tokens\expected-since.txt") -replace "`r", '').TrimEnd("`n")
-          if ($got -ne $want) { "since got:`n$got`nwant:`n$want"; exit 1 }
-          # -Prune through -File, as the docs give it, in both PowerShells
-          foreach ($shell in @('powershell', 'pwsh')) {
-            $t = Join-Path $env:RUNNER_TEMP "prune-$shell"; $d = Join-Path $t 'coordinator\sessions'
-            New-Item -ItemType Directory -Force -Path $d | Out-Null
-            Set-Content -Path "$d\old.json" -Value '{}'; Set-Content -Path "$d\new.json" -Value '{}'
-            (Get-Item "$d\old.json").LastWriteTime = (Get-Date).AddDays(-30)
-            $env:CLAUDE_CONFIG_DIR = $t
-            & $shell -NoProfile -File .\scripts\session-tokens.ps1 -Prune | Out-Null
-            $left = (Get-ChildItem $d | ForEach-Object Name) -join ','
-            if ($left -ne 'new.json') { "-Prune under ${shell}: left $left"; exit 1 }
-          }
-          exit 0
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/session-tokens/run.sh ps powershell
+          bash tests/session-tokens/run.sh ps pwsh
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: runner.os != 'Windows'
         run: |
@@ -336,6 +308,14 @@ jobs:
           for id in s1 s2 x; do
             diff <(bash scripts/session-tokens.sh $id) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done
-          # a non-UTC zone: PowerShell 7 parses the timestamps into dates
-          diff <(bash scripts/session-tokens.sh --since 2026-10-05T17:00:00Z) \
-               <(TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since 2026-10-05T17:00:00Z)
+          for id in t1 t6; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge bash scripts/session-tokens.sh $id) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
+          done
+          # a non-UTC zone: Unix seconds and the transcripts' timestamps stay UTC
+          for since in 2026-10-05T17:00:00Z 1791219600; do
+            diff <(bash scripts/session-tokens.sh --since $since) \
+                 <(TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since $since)
+            diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/order bash scripts/session-tokens.sh --since $since) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-tokens/order TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since $since)
+          done

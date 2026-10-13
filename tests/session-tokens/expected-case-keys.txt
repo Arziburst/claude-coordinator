@@ -1,0 +1,2 @@
+claude-haiku-5-5	72	in=6 out>=6 cache_read=60 cache_write=0
+total	72	in=6 out>=6 cache_read=60 cache_write=0
