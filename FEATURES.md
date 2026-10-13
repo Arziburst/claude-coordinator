@@ -87,7 +87,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-04 | session-tokens | tokens, cost and time of one session from its transcript | SPEND |
 | F-SPEND-05 | Subagent cost | a subagent is read by its agentId and counted once | SPEND |
 | F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
-| F-SPEND-07 | Status files pruned | per-session status files older than 7 days are deleted | SPEND |
+| F-SPEND-07 | Status files pruned | status files older than 7×24 hours and statusline temp files older than 1 hour are deleted | SPEND |
 | F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
 | F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast against the limits, analysis after | SPEND |
 | F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
@@ -568,7 +568,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-07 Status files pruned
 - defined: scripts/session-tokens.sh, TOOLKIT.md
 - entry: `session-tokens --prune` at every session start
-- promises: only status files older than 7 days are deleted
+- promises: status files older than 7×24 hours and statusline temp files older than 1 hour are deleted; nothing else
 - tested by: tests/session-tokens/run.sh, the prune cases (files aged 30 and 7.5 days deleted, 6.5 days and new kept; the status line's `statusline.*.tmp` aged 2 hours deleted, 30 minutes kept, the last session's status file kept; in bash and both PowerShells)
 - not covered: the boundary is to the minute in the .sh (`find -mmin`), to the tick in the .ps1
 
