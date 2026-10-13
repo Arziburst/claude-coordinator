@@ -353,6 +353,17 @@ jobs:
         run: |
           bash tests/selftest/prepare.sh ps powershell
           bash tests/selftest/prepare.sh ps pwsh
+      - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/selftest/sandbox.sh sh
+      - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/selftest/sandbox.sh ps pwsh
+      - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Windows PowerShell 5.1 and pwsh)
+        if: runner.os == 'Windows'
+        run: |
+          bash tests/selftest/sandbox.sh ps powershell
+          bash tests/selftest/sandbox.sh ps pwsh
       - name: The checks on a project's cloned core copy (bash)
         if: runner.os != 'Windows'
         run: bash tests/selftest/core-copy.sh sh

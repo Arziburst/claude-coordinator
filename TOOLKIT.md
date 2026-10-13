@@ -304,7 +304,8 @@ BOM, models priced apart),
   none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
   where it exists.
   `scripts/selftest.sh|.ps1 scripts|env|hooks|hookcheck|prepare|verify` (in a project: the state repository, evidence kept)
-  and `sandbox|clean` (the core itself) — the scripted steps of the self-test
+  and `sandbox|clean` (the core itself: a sandbox at a fixed path, which `clean --keep` resets to its
+  first commit and keeps, so the owner trusts its repo once; a full `clean` removes it) — the scripted steps of the self-test
   ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines, exit 1 on a FAIL. The
   `.ps1` runs the `.ps1` scripts under every PowerShell on the machine (5.1 and pwsh).
 

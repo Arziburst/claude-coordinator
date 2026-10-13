@@ -17,18 +17,20 @@
 #   scripts/selftest.sh hookcheck --session <id> [--expect edit]   a session told to push to main (with
 #                                                       edit: to Write into the protected root): its transcript
 #                                                       shows the block, not a non-blocking hook error
-# For the core itself (the maintainer, CI) - a throwaway sandbox:
-#   scripts/selftest.sh sandbox [--in <folder>]      3: a throwaway repository with a local bare origin,
+# For the core itself (the maintainer, CI) - a sandbox, kept between runs or removed:
+#   scripts/selftest.sh sandbox [--in <folder>]      3: a repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
-#                                                       path, so the owner trusts its repo once per machine
-#   scripts/selftest.sh clean --sandbox <dir> [--state-repo <owner/name>]
+#                                                       path, so the owner trusts its repo once per machine;
+#                                                       a sandbox kept by clean --keep is reused
+#   scripts/selftest.sh clean --sandbox <dir> [--keep] [--state-repo <owner/name>]
 #                                                    6: no worktree, branch, session or selftest/* branch
-#                                                       left; then the sandbox folder is removed
+#                                                       left; then the sandbox folder is removed - or, with
+#                                                       --keep, kept: only main, at the sandbox's first commit
 # Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`.
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,29s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,31s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -40,6 +42,29 @@ finish() { echo "selftest $step: $p pass, $f fail, $s skipped"; [ "$f" -eq 0 ] |
 check() { local what="$1"; shift 2; if "$@" >/dev/null 2>&1; then pass "$what"; else fail "$what"; fi; }
 g() { git -c user.email=selftest@localhost -c user.name=selftest "$@"; }
 marker=".coordinator-selftest"
+# the sandbox's first commit, which sandbox records in the marker as `initial <commit>` (outside the
+# repository, where no git command in the sandbox can move it); empty for a sandbox from an older core
+initial() { tr -d '\r' < "$1/$marker" 2>/dev/null | sed -n 's/^initial \([0-9a-f]\{40,\}\)$/\1/p' | head -n 1; }
+# the untracked and ignored files of a repository, except .claude/settings.local.json: the permissions
+# the owner gave its sessions there, kept with the sandbox like the trust
+untracked() { git -C "$1" status --porcelain --ignored --untracked-files=all | grep -v -x -e '?? .claude/settings.local.json' -e '!! .claude/settings.local.json'; }
+# kept_why <sandbox>: nothing when it is a kept sandbox ready for the next run (only main, at the first
+# commit, in the repo and in its origin; no worktree; nothing untracked), else why it is not
+kept_why() {
+  local d="$1" r="$1/repo" i
+  i="$(initial "$d")"
+  [ -n "$i" ] || { echo "no first commit recorded in its $marker"; return; }
+  [ "$(git -C "$r" rev-parse --git-dir 2>/dev/null)" = .git ] &&
+    [ "$(git -C "$d/remote.git" rev-parse --is-bare-repository 2>/dev/null)" = true ] ||
+    { echo "no repo and remote.git"; return; }
+  [ "$(git -C "$r" worktree list --porcelain | grep -c '^worktree ')" -le 1 ] || { echo "worktrees left"; return; }
+  [ "$(git -C "$r" for-each-ref --format='%(refname)' refs/heads)" = refs/heads/main ] &&
+    [ "$(git -C "$d/remote.git" for-each-ref --format='%(refname)' refs/heads)" = refs/heads/main ] ||
+    { echo "branches other than main"; return; }
+  [ "$(git -C "$r" symbolic-ref -q HEAD)" = refs/heads/main ] && [ "$(git -C "$r" rev-parse -q --verify refs/heads/main)" = "$i" ] &&
+    [ "$(git -C "$d/remote.git" rev-parse -q --verify refs/heads/main)" = "$i" ] || { echo "main is not at the first commit"; return; }
+  [ -z "$(untracked "$r")" ] || echo "changed or untracked files in the repo"
+}
 
 case "$step" in
 scripts)
@@ -92,32 +117,50 @@ sandbox)
   while [ $# -gt 0 ]; do case "$1" in --in) [ $# -ge 2 ] || usage; in="$2"; shift 2 ;; *) usage ;; esac; done
   [ -d "$in" ] || { fail "no folder $in"; finish; }
   d="${in%/}/coordinator-selftest"
-  [ -e "$d" ] && { fail "$d already exists: a previous run left it (selftest clean --sandbox $d)"; finish; }
-  mkdir "$d" || { fail "cannot create $d"; finish; }
-  : > "$d/$marker"
-  if git init -q --bare "$d/remote.git" && git -C "$d/remote.git" symbolic-ref HEAD refs/heads/main &&
-     git init -q "$d/repo" && git -C "$d/repo" symbolic-ref HEAD refs/heads/main &&
-     printf 'Coordinator self-test sandbox: throwaway, removed by `selftest clean`.\n' > "$d/repo/README.md" &&
-     git -C "$d/repo" add README.md && g -C "$d/repo" commit -q -m "selftest: sandbox" &&
-     git -C "$d/repo" remote add origin "$d/remote.git" && git -C "$d/repo" push -q -u origin main 2>/dev/null
-  then pass "repository with a local bare origin, branch main"
-  else fail "could not set up the repositories"; fi
+  if [ -e "$d" ]; then
+    # a sandbox kept by clean --keep is reused (its repo's path keeps the owner's trust); nothing else is
+    [ -f "$d/$marker" ] || { fail "$d already exists and is not a self-test sandbox (no $marker): nothing changed"; finish; }
+    why="$(kept_why "$d")"
+    [ -z "$why" ] || { fail "$d already exists and is not clean ($why): run selftest clean --sandbox $d [--keep] first"; finish; }
+    pass "reusing the kept sandbox $d"
+  else
+    mkdir "$d" || { fail "cannot create $d"; finish; }
+    : > "$d/$marker"
+    if git init -q --bare "$d/remote.git" && git -C "$d/remote.git" symbolic-ref HEAD refs/heads/main &&
+       git init -q "$d/repo" && git -C "$d/repo" symbolic-ref HEAD refs/heads/main &&
+       printf 'Coordinator self-test sandbox: reset or removed by `selftest clean`.\n' > "$d/repo/README.md" &&
+       git -C "$d/repo" add README.md && g -C "$d/repo" commit -q -m "selftest: sandbox" &&
+       git -C "$d/repo" remote add origin "$d/remote.git" && git -C "$d/repo" push -q -u origin main 2>/dev/null &&
+       printf 'initial %s\n' "$(git -C "$d/repo" rev-parse HEAD)" > "$d/$marker"
+    then pass "repository with a local bare origin, branch main"
+    else fail "could not set up the repositories"; fi
+  fi
   echo "sandbox: $d"
   echo "started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   finish ;;
 
 clean)
-  d="" state=""
+  d="" state="" keep=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --sandbox) [ $# -ge 2 ] || usage; d="$2"; shift 2 ;;
       --state-repo) [ $# -ge 2 ] || usage; state="$2"; shift 2 ;;
+      --keep) keep=1; shift ;;
       *) usage ;;
     esac
   done
   [ -n "$d" ] || usage
   [ -f "$d/$marker" ] || { fail "$d is not a self-test sandbox (no $marker): nothing removed"; finish; }
   r="$d/repo"
+  if [ -n "$keep" ]; then
+    # --keep resets the sandbox to its first commit (the marker records it), so it needs both repositories
+    i="$(initial "$d")"
+    [ -n "$i" ] || { fail "no first commit recorded in $d/$marker (a sandbox from an older core): run selftest clean --sandbox $d without --keep"; finish; }
+    [ "$(git -C "$r" rev-parse --git-dir 2>/dev/null)" = .git ] &&
+      [ "$(git -C "$d/remote.git" rev-parse --is-bare-repository 2>/dev/null)" = true ] &&
+      git -C "$r" cat-file -e "$i^{commit}" 2>/dev/null ||
+      { fail "$d has no repo and remote.git with its first commit $i: nothing changed"; finish; }
+  fi
   # worktrees (the first one listed is the repository itself): removed only when clean and merged into main
   git -C "$r" worktree list --porcelain | sed -n 's/^worktree //p' | tail -n +2 | while IFS= read -r w; do
     [ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ] &&
@@ -132,6 +175,16 @@ clean)
   done
   b="$(git -C "$r" for-each-ref --format='%(refname:short)' refs/heads | grep -v '^main$')"
   [ -z "$b" ] && pass "no branch left" || fail "branches not merged into main: $(echo $b)"
+  if [ -n "$keep" ]; then
+    # the origin's branches are deleted below, so each must be merged into the repo's main (the guard
+    # blocks pushing main: the origin's own main may lag behind)
+    b=""
+    for x in $(git -C "$d/remote.git" for-each-ref --format='%(refname:short)' refs/heads); do
+      [ "$x" = main ] && continue
+      git -C "$r" merge-base --is-ancestor "$(git -C "$d/remote.git" rev-parse "refs/heads/$x")" main 2>/dev/null || b="$b $x"
+    done
+    [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
+  fi
   if command -v claude >/dev/null 2>&1; then
     n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
     [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
@@ -142,9 +195,26 @@ clean)
       [ -z "$n" ] && pass "no selftest/* branch on $state" || fail "branches left on ${state}: $(echo $n)"
     else fail "cannot list the branches of $state"; fi
   else skip "state repository: not checked (no --state-repo)"; fi
-  if [ "$f" -eq 0 ]; then
+  if [ "$f" -ne 0 ]; then echo "sandbox kept for inspection: $d"
+  elif [ -n "$keep" ]; then
+    # the folder, its marker, the repo's path (Claude Code trusts a folder by its path) and the origin
+    # stay; every other branch goes, main of both goes back to the first commit, untracked files go
+    # (git clean on the repo only)
+    for x in $(git -C "$d/remote.git" for-each-ref --format='%(refname)' refs/heads); do
+      [ "$x" = refs/heads/main ] || git -C "$d/remote.git" update-ref -d "$x"
+    done
+    git -C "$d/remote.git" update-ref refs/heads/main "$i" && git -C "$d/remote.git" symbolic-ref HEAD refs/heads/main &&
+      git -C "$r" checkout -q -f main 2>/dev/null && git -C "$r" reset -q --hard "$i" &&
+      git -C "$r" fetch -q --prune origin 2>/dev/null && git -C "$r" worktree prune &&
+      git -C "$r" clean -q -ffdx -e .claude/settings.local.json
+    why="$(kept_why "$d")"
+    if [ -z "$why" ]; then
+      pass "only main, at the first commit $(git -C "$r" rev-parse --short "$i"), in the repo and its origin; nothing untracked"
+      echo "sandbox kept for the next run: $d"
+    else fail "could not reset $d: $why"; fi
+  else
     chmod -R u+w "$d" && rm -r "$d" && pass "sandbox removed" || fail "could not remove $d"
-  else echo "sandbox kept for inspection: $d"; fi
+  fi
   finish ;;
 
 hooks)

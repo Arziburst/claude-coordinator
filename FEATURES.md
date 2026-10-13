@@ -114,7 +114,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-FINDINGS-06 | Mistakes become rules | a lesson is written as a rule, never kept only in memory | FINDINGS |
 | F-SELFTEST-01 | The self-test | real cheap sessions prove the core in the project's state repository | SELFTEST |
 | F-SELFTEST-02 | Evidence branches kept | the self-test's branches and PR stay as proof of a version | SELFTEST |
-| F-SELFTEST-03 | The sandbox | the core itself is self-tested in a throwaway sandbox | SELFTEST |
+| F-SELFTEST-03 | The sandbox | the core itself is self-tested in a sandbox, kept between runs (its repo trusted once) or removed | SELFTEST |
 | F-SELFTEST-04 | check-core | links, section references and this map stay consistent | SELFTEST |
 | F-SELFTEST-05 | check-scripts | every script parses under the shells the machine has | SELFTEST |
 | F-SELFTEST-06 | check-contract | a contract with an ERROR never goes out | SELFTEST |
@@ -765,10 +765,10 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-SELFTEST-03 The sandbox
 - defined: procedures/SELFTEST.md, scripts/selftest.sh
-- entry: `selftest sandbox`, `selftest clean`
-- promises: the core itself is tested in a throwaway sandbox with a local bare origin; a sandbox that already exists is refused; clean refuses a folder without the sandbox marker and removes only worktrees that are clean and merged
-- tested by: CI steps "selftest - the scripted steps" (bash, Windows PowerShell 5.1: a sandbox with an unmerged branch fails clean and is kept, once merged it is removed; bash: a folder without the marker is refused)
-- not covered: a sandbox that already exists is refused by `selftest sandbox`, with no automated check
+- entry: `selftest sandbox`, `selftest clean --keep` (the core's default), `selftest clean`
+- promises: the core itself is tested in a sandbox with a local bare origin at a fixed path; `sandbox` records the sandbox's first commit in its marker; `clean --keep` resets it for the next run - every worktree and every branch but main gone (in the repo and in its origin), main of both back at the first commit, nothing untracked in the repo but `.claude/settings.local.json` - and keeps the folder, the marker, the repo's path and the origin, so the owner's trust of the repo (given once, on the first run) survives; `sandbox` reuses a kept sandbox and refuses one that is not clean ("run selftest clean ... first") or a folder that is not a sandbox; `clean`, with or without `--keep`, refuses a folder without the marker, and a worktree not clean or a branch not merged into main (with `--keep` also a branch on the origin) fails it and keeps the sandbox for inspection, nothing reset (only the clean, merged worktrees and branches go, as before); a full `clean` removes the folder
+- tested by: tests/selftest/sandbox.sh (bash, Windows PowerShell 5.1 and pwsh: a used sandbox reset by clean --keep and then reused; an unmerged branch in a worktree and one only on the origin refused, main, the origin and the untracked file kept; a not-clean kept sandbox, a marker without the first commit and a folder that is not a sandbox refused; a full clean removes the folder); CI steps "selftest - the scripted steps" (bash, Windows PowerShell 5.1: a sandbox with an unmerged branch fails clean and is kept, once merged it is removed; bash: a folder without the marker is refused)
+- not covered: that Claude Code really keeps the trust of the kept repo (no prompt on the second run) is seen by the owner on that run, not tested; a sandbox made by an older core (no first commit in its marker) needs one full `clean`
 
 ### F-SELFTEST-04 check-core
 - defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10

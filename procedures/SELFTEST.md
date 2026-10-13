@@ -142,9 +142,28 @@ the report notes the interruption and the resume time.
 ### The core itself — a sandbox (the maintainer, CI)
 
 Developing claude-coordinator there is no project and no state repository: `selftest sandbox [--in
-<folder>]` makes a throwaway repository with a local bare origin at `<folder>/coordinator-selftest`
-(default: home; a fixed path, so its `repo` is trusted once per machine), steps 4 and 6 run there with
-the sandbox's `main` as the base, and `selftest clean --sandbox <dir>` removes it all.
+<folder>]` makes a repository with a local bare origin at `<folder>/coordinator-selftest` (default:
+home; a fixed path, so its `repo` is trusted once per machine) and records its first commit in the
+sandbox's marker (`.coordinator-selftest`: `initial <commit>`, outside the repository); steps 4 and 6
+run there with the sandbox's `main` as the base.
+
+- **Step 6 keeps the sandbox by default:** `selftest clean --sandbox <dir> --keep`. It refuses as a
+  full clean does — a worktree not clean or a branch not merged into main (with `--keep` a branch on
+  the origin too: they are deleted), a self-test session still listed → FAIL, the sandbox kept for
+  inspection and nothing reset. Otherwise every worktree and every branch but `main` goes, in the repo
+  and in its origin; `main` of both goes back to the first commit; the repo's untracked files go
+  (`git clean` on the repo only; `.claude/settings.local.json`, the permissions the owner gave there,
+  stays); the folder, the marker, the repo's path and `remote.git` stay — "sandbox kept for the next
+  run".
+- The next `selftest sandbox` **reuses** a kept sandbox (`PASS sandbox: reusing the kept sandbox …`);
+  one left not clean is refused until `selftest clean --sandbox <dir> [--keep]` runs; any other
+  existing folder is refused.
+- A full `selftest clean --sandbox <dir>` (no `--keep`) removes the folder, when the owner wants it
+  gone; the next run then needs the trust again. A sandbox made by an older core (no first commit in
+  its marker) is removed this way once.
+- **Trust, on the first run only:** the owner opens `claude` once in `<dir>/repo` and accepts the trust
+  prompt (the owner's own step, TOOLKIT *Directory and trust*). The kept sandbox keeps that path, so
+  later runs do not ask again.
 
 ## A FAIL that comes from the core
 
