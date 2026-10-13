@@ -162,8 +162,9 @@ with the sandbox's `main` as the base.
   one left not clean is refused until `selftest clean --sandbox <dir> [--keep]` runs; any other
   existing folder is refused.
 - A full `selftest clean --sandbox <dir>` (no `--keep`) removes the folder, when the owner wants it
-  gone; the next run then needs the trust again. A sandbox made by an older core (no first commit in
-  its marker) is removed this way once.
+  gone; the next run then needs the trust again. A sandbox kept by an older core (no first commit in
+  its marker) is adopted by `clean --keep`: main's single root commit, on the origin too, is recorded
+  and the sandbox is reset and kept (two roots: refused, and only a full `clean` is left).
 - **Trust, on the first run only:** the owner opens `claude` once in `<dir>/repo` and accepts the trust
   prompt (the owner's own step, TOOLKIT *Directory and trust*). The kept sandbox keeps that path, so
   later runs do not ask again.

@@ -158,7 +158,19 @@ clean)
   if [ -n "$keep" ]; then
     # --keep resets the sandbox to its first commit (the marker records it), so it needs both repositories
     i="$(initial "$d")"
-    [ -n "$i" ] || { fail "no first commit recorded in $d/$marker (a sandbox from an older core): run selftest clean --sandbox $d without --keep"; finish; }
+    if [ -z "$i" ]; then
+      # a sandbox kept by an older core records no first commit: main's single root commit, when its
+      # origin has it too, is that commit - recorded now, so the sandbox is reset and kept, not removed
+      i="$(git -C "$r" rev-list --max-parents=0 main 2>/dev/null)"
+      if [ -n "$i" ] && [ "$(printf '%s\n' "$i" | wc -l | tr -d ' ')" = 1 ] &&
+         git -C "$d/remote.git" cat-file -e "$i^{commit}" 2>/dev/null; then
+        printf 'initial %s\n' "$i" > "$d/$marker" &&
+          pass "recorded the first commit $(git -C "$r" rev-parse --short "$i") of a sandbox from an older core" ||
+          { fail "cannot write $d/$marker"; finish; }
+      else
+        fail "no first commit recorded in $d/$marker and none found (a sandbox from an older core): run selftest clean --sandbox $d without --keep"; finish
+      fi
+    fi
     [ "$(git -C "$r" rev-parse --git-dir 2>/dev/null)" = .git ] &&
       [ "$(git -C "$d/remote.git" rev-parse --is-bare-repository 2>/dev/null)" = true ] &&
       git -C "$r" cat-file -e "$i^{commit}" 2>/dev/null ||
