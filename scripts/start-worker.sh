@@ -21,8 +21,8 @@
 # origin, or a --base not on origin yet (a lead's integration branch), starts the branch from the local --base.
 # The hook path in --safety uses forward slashes: on Windows hooks run through Git Bash, which drops
 # backslashes, and a hook that fails to run blocks nothing.
-# The worktrees' folder and a coordinator/ state repository at the root are kept out of the project's
-# git: one line each in its .git/info/exclude, never .gitignore.
+# The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
+# worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
@@ -140,6 +140,18 @@ if [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinat
     [ -s "$ex" ] && [ -n "$(tail -c 1 "$ex")" ] && printf '\n' >> "$ex"
     printf '/coordinator/\n' >> "$ex" &&
       echo "added /coordinator/ to the repository's .git/info/exclude"
+  fi
+fi
+# A lead keeps its sub-contracts, briefs and run notes in <its worktree>/.lead/ (roles/lead.md), never
+# committed: one line, which info/exclude applies to every worktree of the repository
+if ! git -C "$root" check-ignore -q .lead/x; then
+  if [ "$dry" = 1 ]; then echo "[dry-run] add /.lead/ to the repository's .git/info/exclude"
+  else
+    common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
+    ex="$common/info/exclude"; mkdir -p "$common/info"
+    [ -s "$ex" ] && [ -n "$(tail -c 1 "$ex")" ] && printf '\n' >> "$ex"
+    printf '/.lead/\n' >> "$ex" &&
+      echo "added /.lead/ to the repository's .git/info/exclude"
   fi
 fi
 
