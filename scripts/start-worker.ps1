@@ -21,8 +21,8 @@
 # origin, or a -Base not on origin yet (a lead's integration branch), starts the branch from the local -Base.
 # The hook path in -Safety uses forward slashes: hooks run through Git Bash on Windows, which drops
 # backslashes, and a hook that fails to run blocks nothing.
-# The worktrees' folder and a coordinator/ state repository at the root are kept out of the project's
-# git: one line each in its .git/info/exclude, never .gitignore.
+# The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
+# worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun)
@@ -150,6 +150,23 @@ if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
       [IO.File]::AppendAllText($ex, "$nl/coordinator/`n")
       "added /coordinator/ to the repository's .git/info/exclude"
     }
+  }
+}
+# A lead keeps its sub-contracts, briefs and run notes in <its worktree>/.lead/ (roles/lead.md), never
+# committed: one line, which info/exclude applies to every worktree of the repository
+$ign = & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q .lead/x 2>$null; $LASTEXITCODE }
+if ($ign -ne 0) {
+  if ($DryRun) { "[dry-run] add /.lead/ to the repository's .git/info/exclude" }
+  else {
+    $common = & { $ErrorActionPreference = 'Continue'; git -C $root rev-parse --path-format=absolute --git-common-dir }
+    New-Item -ItemType Directory -Force -Path (Join-Path $common 'info') | Out-Null
+    $ex = Join-Path $common 'info/exclude'
+    $nl = ''
+    if ((Test-Path -LiteralPath $ex) -and (Get-Item -LiteralPath $ex).Length -gt 0) {
+      $bytes = [IO.File]::ReadAllBytes($ex); if ($bytes[$bytes.Length - 1] -ne 10) { $nl = "`n" }
+    }
+    [IO.File]::AppendAllText($ex, "$nl/.lead/`n")
+    "added /.lead/ to the repository's .git/info/exclude"
   }
 }
 
