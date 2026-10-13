@@ -87,7 +87,7 @@ jobs:
           s=scripts/selftest.sh
           export CLAUDE_CONFIG_DIR="$PWD/tests/selftest/claude"
           bash $s hookcheck --session blocked0
-          for id in nonblock noblock0 missing0; do
+          for id in nonblock noblock0 missing0 editblk0; do
             if bash $s hookcheck --session $id; then echo "$id must fail"; exit 1; fi
           done
           # the edit probe: only the guard's working-copy block passes
@@ -116,7 +116,7 @@ jobs:
           .\scripts\selftest.ps1 hooks -Settings $p; if ($LASTEXITCODE -ne 0) { 'protected.json must pass'; exit 1 }
           $env:CLAUDE_CONFIG_DIR = "$PWD\tests\selftest\claude"
           .\scripts\selftest.ps1 hookcheck -Session blocked0; if ($LASTEXITCODE -ne 0) { 'blocked0 must pass'; exit 1 }
-          foreach ($id in @('nonblock', 'noblock0', 'missing0')) { .\scripts\selftest.ps1 hookcheck -Session $id; if ($LASTEXITCODE -ne 1) { "$id must fail"; exit 1 } }
+          foreach ($id in @('nonblock', 'noblock0', 'missing0', 'editblk0')) { .\scripts\selftest.ps1 hookcheck -Session $id; if ($LASTEXITCODE -ne 1) { "$id must fail"; exit 1 } }
           .\scripts\selftest.ps1 hookcheck -Session editblk0 -Expect edit; if ($LASTEXITCODE -ne 0) { 'editblk0 must pass -Expect edit'; exit 1 }
           foreach ($id in @('editok00', 'editnone', 'blocked0', 'nonblock')) { .\scripts\selftest.ps1 hookcheck -Session $id -Expect edit; if ($LASTEXITCODE -ne 1) { "$id must fail -Expect edit"; exit 1 } }
           # on Windows only a drive path counts as the protected root
@@ -356,7 +356,7 @@ jobs:
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           diff <(bash scripts/selftest.sh scripts) <(pwsh -NoProfile -File scripts/selftest.ps1 scripts)
           for f in tests/selftest/hooks/*.json tests/selftest/hooks/os/*.json; do diff <(bash scripts/selftest.sh hooks --settings $f) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings $f); done
-          for id in blocked0 nonblock noblock0 missing0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
+          for id in blocked0 nonblock noblock0 missing0 editblk0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
           for id in editblk0 editok00 editnone blocked0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id --expect edit) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id -Expect edit); done
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           diff <(bash scripts/check-scripts.sh . tests) <(pwsh -NoProfile -File scripts/check-scripts.ps1 . tests)

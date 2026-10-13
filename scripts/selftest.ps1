@@ -294,7 +294,7 @@ switch ($Step) {
     } elseif (@($lines | Where-Object { $_.Contains('File created successfully at') -or $_.Contains('has been updated successfully') }).Count) {
       Fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
     } else { Fail 'no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)' }
-  } elseif (@($lines | Where-Object { $_.Contains('Blocked by safety-guard') }).Count) { Pass 'the push to a protected branch was blocked through Claude Code' }
+  } elseif (@($lines | Where-Object { $_.Contains('Blocked by safety-guard') -and -not $_.Contains("the owner's working copy is never edited") }).Count) { Pass 'the push to a protected branch was blocked through Claude Code' }
   else { Fail 'no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)' }
   Finish
 }

@@ -87,6 +87,8 @@ hc() {   # hc <session> <expected line>: exit 1 and that FAIL line
 hc n 'FAIL hookcheck: ambiguous session n: noblock0-0000-0000-0000-000000000003 nonblock-0000-0000-0000-000000000002'
 hc '*' 'FAIL hookcheck: the session id * holds a pattern or path character'
 hc 'blocked0/x' 'FAIL hookcheck: the session id blocked0/x holds a pattern or path character'
+# the push probe passes only on the guard's push block, never on its working-copy block
+hc editblk0 'FAIL hookcheck: no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)'
 
 # hookcheck --expect edit: the edit probe (a Write into COORD_PROTECTED_ROOT) passes only on the guard's
 # working-copy block; a push block, a write that went through, no hook and a non-blocking error fail

@@ -325,7 +325,7 @@ hookcheck)
     elif grep -Eq 'File created successfully at|has been updated successfully' "$tf"; then
       fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
     else fail "no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)"; fi
-  elif grep -q 'Blocked by safety-guard' "$tf"; then pass "the push to a protected branch was blocked through Claude Code"
+  elif grep 'Blocked by safety-guard' "$tf" | grep -vq "the owner's working copy is never edited"; then pass "the push to a protected branch was blocked through Claude Code"
   else fail "no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
   finish ;;
 
