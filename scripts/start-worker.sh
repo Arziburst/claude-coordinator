@@ -65,13 +65,12 @@ wt="${wtroot:-$root/.claude/worktrees}/$branch"
 from="${from:-$root}"
 [ -d "$from" ] || { echo "no folder to launch from: $from" >&2; exit 1; }
 # the branch exactly as named: on a case-insensitive file system a branch that differs only in letter
-# case is the same branch file and the same worktree folder (show-ref and [ -d ] would say it exists)
+# case is the same branch file and the same worktree folder (show-ref and [ -d ] would say it exists);
+# with packed refs git lets both exist, so another one in another letter case is refused even then
 heads="$(git -C "$root" for-each-ref --format='%(refname)' refs/heads | sed 's#^refs/heads/##')"
 has_branch=0; printf '%s\n' "$heads" | grep -qxF -- "$branch" && has_branch=1
-if [ "$has_branch" = 0 ]; then
-  other="$(printf '%s\n' "$heads" | while IFS= read -r b; do [ -n "$b" ] && [ "$(fold "$b")" = "$(fold "$branch")" ] && printf '%s\n' "$b"; done | head -n 1 || true)"
-  [ -z "$other" ] || { echo "branch $branch differs only in letter case from the existing $other: on this file system they are one branch - pick another name" >&2; exit 1; }
-fi
+other="$(printf '%s\n' "$heads" | while IFS= read -r b; do [ -n "$b" ] && [ "$b" != "$branch" ] && [ "$(fold "$b")" = "$(fold "$branch")" ] && printf '%s\n' "$b"; done | head -n 1 || true)"
+[ -z "$other" ] || { echo "branch $branch differs only in letter case from the existing $other: on this file system they are one branch - pick another name" >&2; exit 1; }
 
 # Safety settings: the hook path inside the file must exist and pass its self-test.
 if grep 'safety-guard\.' "$safety" | sed 's/\\"//g' | grep -q '\\'; then
@@ -159,6 +158,9 @@ if [ -d "$wt" ]; then
   [ -n "$wtop" ] && [ "$(fold "$(cd "$wtop" && pwd -P)")" = "$(fold "$(cd "$wt" && pwd -P)")" ] &&
     [ "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)" = "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)" ] ||
     { echo "$wt exists but is not a worktree of $root: remove or rename it first" >&2; exit 1; }
+  # and only with this branch checked out (a folder in another letter case is the same folder)
+  cur="$(git -C "$wt" symbolic-ref --short -q HEAD || true)"
+  [ "$cur" = "$branch" ] || { echo "$wt has ${cur:-a detached HEAD} checked out, not $branch" >&2; exit 1; }
   echo "reusing worktree $wt"
 elif [ "$has_branch" = 1 ]; then
   run git -C "$root" worktree add "$wt" "$branch"

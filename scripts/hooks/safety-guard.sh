@@ -89,6 +89,7 @@ function val(path,    c, k) {
     k = str(); if (k == "\001") return 0
     if (path == SUBSEP "tool_input" SUBSEP "command") CMD = k
     else if (path == SUBSEP "cwd") CWD = k
+    else if (path == SUBSEP "tool_name") TOOL = k
     return 1
   }
   if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) { i += RLENGTH; return 1 }
@@ -96,18 +97,19 @@ function val(path,    c, k) {
 }
 { all = (NR > 1) ? all "\n" $0 : $0 }
 END {
-  s = all; n = length(s); i = 1; CMD = ""; CWD = ""
+  s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""
   ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
   ws(); if (i <= n) exit 3
-  emit(CWD); printf "\n"; emit(CMD); printf "."
+  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(CMD); printf "."
 }'
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$input" | jq -e 'type == "object"' >/dev/null 2>&1 || unreadable
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
+  tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)
 else
   both=$(printf '%s' "$input" | awk "$JSON_AWK") || unreadable
-  both="${both%.}"; cwd="${both%%$nl*}"; cmd="${both#*$nl}"
+  both="${both%.}"; cwd="${both%%$nl*}"; both="${both#*$nl}"; tool="${both%%$nl*}"; cmd="${both#*$nl}"
 fi
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 cmd="${cmd//$cr$nl/$nl}"; cmd="${cmd//\\$nl/}"; cmd="${cmd//\`$nl/ }"
@@ -137,11 +139,11 @@ function optarg(t) {
   if (t == "caffeinate") return "^-[tw]$"; if (t == "arch") return "^-(arch|e|d)$"; if (t == "script") return "^-[tTc]$"; return ""
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
-# and VAR=value assignments
+# and VAR=value assignments; a wrapper given as a path or with .exe (/usr/bin/env, timeout.exe) counts
 function cmdidx(toks, nt,    j, t, ao) {
   j = 1
   while (j <= nt) {
-    t = tolower(toks[j])
+    t = base(toks[j])
     if (t ~ /^g(env|timeout|nice|stdbuf)$/) t = substr(t, 2)   # Homebrew coreutils: gtimeout, gnice ...
     if (wrapper(t) || toks[j] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
     ao = optarg(t); if (ao == "") break
@@ -150,6 +152,7 @@ function cmdidx(toks, nt,    j, t, ao) {
   }
   return j
 }
+# a command word without its folder and .exe: /usr/bin/git, git.exe, C:\x\git.exe -> git
 function base(t,    b) { b = tolower(t); sub("^.*[/\\\\]", "", b); sub(/\.exe$/, "", b); return b }
 function closep(s, j,    n, dep, c, q, hd, k) {
   n = length(s); dep = 1; q = ""; hd = ""
@@ -281,8 +284,8 @@ RE_REDIR='^[0-9*]*&?[<>]'
 RE_REDIR_OP='^[0-9*]*&?[<>]+[&|]?$'
 RE_RMREC='^-[rRfFvViIdDpP]*[rR][rRfFvViIdDpP]*$'
 RE_PSREC='^-[rR]([eE]([cC]([uU]([rR]([sS][eE]?)?)?)?)?)?(:\$?[tT][rR][uU][eE])?$'
-RE_WT='(^|[/\\])\.claude[/\\]worktrees([/\\][^/\\]+)?$'
-RE_TILDE='^~[^/\\]+$'   # ~name: a user's home
+RE_WT='(^|[/\\])\.claude([/\\]worktrees([/\\][^/\\]+)?)?$'   # a worktree, the worktrees' folder, .claude
+RE_TILDE='^~[^/\\]+$'   # ~name: a user's home (bash only: PowerShell takes ~tmp for a folder's name)
 
 dir="${cwd:-${CLAUDE_PROJECT_DIR:-.}}"   # where the next command runs (follows cd / Set-Location)
 ov_dir=""; ov_branch=""                  # a checkout / switch earlier in this command: dir and branch
@@ -301,11 +304,25 @@ compose() {
     *) if [ "$1" = "?" ]; then printf '?'; else printf '%s/%s' "$1" "$p"; fi ;;
   esac
 }
-# A path in one form for comparing: / separators, none repeated or trailing, lower case, a drive as
-# c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
+# A path in one form for comparing: / separators, none repeated or trailing, lower case, . and x/..
+# taken out (by the text: /a/b/.. is /a; .. above the root stays at the root), a drive as c: (C:\x,
+# /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
 canon() {
-  printf '%s' "$1" | tr '\\A-Z' '/a-z' |
-    sed -E -e 's#//+#/#g' -e 's#/+$##' -e 's#^/(mnt/|cygdrive/)?([a-z])$#\2:#' -e 's#^/(mnt/|cygdrive/)?([a-z])/#\2:/#'
+  local x r="" s out="" n=0 IFS=/; local segs=()
+  [ -n "$1" ] || return 0   # / with its separator stripped
+  x=$(printf '%s' "$1" | tr '\\A-Z' '/a-z')
+  case "$x" in /*) r=/ ;; [a-z]:*) r="${x:0:2}/"; x="${x:2}" ;; esac
+  set -f; segs=($x); set +f   # split at / (no globbing: a * in the path stays a word)
+  for s in "${segs[@]}"; do
+    case "$s" in
+      ''|.) ;;
+      ..) if [ $n -gt 0 ] && [ "${out##*/}" != .. ]; then out="${out%/*}"; n=$((n - 1))
+          elif [ -z "$r" ]; then out="$out/.."; n=$((n + 1)); fi ;;
+      *) out="$out/$s"; n=$((n + 1)) ;;
+    esac
+  done
+  x="$r${out#/}"; [ -z "$x" ] && x=.
+  printf '%s' "$x" | sed -E -e 's#/+$##' -e 's#^/(mnt/|cygdrive/)?([a-z])$#\2:#' -e 's#^/(mnt/|cygdrive/)?([a-z])/#\2:/#'
 }
 branch_in() {
   if [ "$1" = "$ov_dir" ]; then printf '%s' "$ov_branch"; return; fi
@@ -440,26 +457,49 @@ strip_all() {   # x/* , x/** , x/. and trailing separators -> x
   while :; do case "$x" in */\*\*|*\\\*\*) x="${x%?}" ;; */\*|*\\\*|*/.|*\\.) x="${x%??}" ;; */|*\\) x="${x%?}" ;; *) break ;; esac; done
   printf '%s' "$x"
 }
-rm_target() {
-  local x full h
+# the project's folders, in canon form: CLAUDE_PROJECT_DIR, the top of the repository the session works
+# in and that repository's main checkout (from a worktree); read once, on the first removal
+roots=(); roots_read=0
+project_roots() {
+  local c out common
+  [ $roots_read = 1 ] && return; roots_read=1
+  [ -n "${CLAUDE_PROJECT_DIR:-}" ] && roots+=("$(canon "$CLAUDE_PROJECT_DIR")")
+  c="${cwd:-${CLAUDE_PROJECT_DIR:-}}"
+  [ -n "$c" ] || return 0
+  out=$(git -C "$c" rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>/dev/null) || return 0
+  roots+=("$(canon "${out%%$nl*}")")
+  common="${out#*$nl}"
+  case "$common" in */.git) roots+=("$(canon "${common%/.git}")") ;; esac
+}
+rm_target() {   # rm_target <path> <1: the project's folder and the folders holding it count too>
+  local x full h r
   x=$(strip_all "$1")
   [[ $x =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
   case "$x" in
     ''|'~'|'$HOME'|'${HOME}'|'$env:USERPROFILE'|'${env:USERPROFILE}'|'$env:HOME'|'$env:HOMEDRIVE'|'$env:SystemDrive'|'%USERPROFILE%'|'%HOMEDRIVE%'|'%SystemDrive%'|[A-Za-z]:)
       block "recursive removal of /, a drive or home" ;;
   esac
-  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**)
-  [[ $x =~ $RE_TILDE ]] && block "recursive removal of /, a drive or home"
-  # the full path: relative targets (., *, x) from the directory a cd led to; home given literally
-  # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c
+  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**) - in bash; the
+  # PowerShell tool does not expand it (Remove-Item ~tmp is a folder named ~tmp)
+  [ "$tool" != PowerShell ] && [[ $x =~ $RE_TILDE ]] && block "recursive removal of /, a drive or home"
+  # the full path: relative targets (., *, .., x) from the directory a cd led to; home given literally
+  # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c; . and x/.. taken out
   full=$(compose "$dir" "$1")
   [ "$full" = "?" ] && return
   full=$(canon "$(strip_all "$full")")
   case "$full" in ''|[a-z]:) block "recursive removal of /, a drive or home" ;; esac
-  # . or * inside a worktree (after a cd to it, or with it as the working folder)
+  # . or * inside a worktree (after a cd to it, or with it as the working folder), .. up to one
   [[ $full =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
+  # home or a folder that holds it
   for h in "$HOME" "${USERPROFILE:-}"; do
-    [ -n "$h" ] && [ "$full" = "$(canon "$h")" ] && block "recursive removal of /, a drive or home"
+    [ -n "$h" ] || continue
+    h=$(canon "$h"); case "$h/" in "$full/"*) block "recursive removal of /, a drive or home" ;; esac
+  done
+  [ "${2:-1}" = 1 ] || return 0
+  # the project's folder or a folder that holds it
+  project_roots
+  for r in "${roots[@]}"; do
+    case "$r/" in "$full/"*) block "recursive removal of the project or a folder that holds it" ;; esac
   done
 }
 rm_seg() {
@@ -480,7 +520,7 @@ rm_seg() {
   [ $rec = 1 ] || return
   # Get-ChildItem C:\ | Remove-Item -Recurse : the paths come through the pipe
   [ ${#tg[@]} = 0 ] && [ $piped = 1 ] && tg=("${prev_tg[@]}")
-  for t in "${tg[@]}"; do rm_target "$t"; done
+  for t in "${tg[@]}"; do rm_target "$t" 1; done
 }
 # the paths a listing (Get-ChildItem, ls, dir) hands on through a pipe; none: the current directory
 list_seg() {
@@ -488,14 +528,15 @@ list_seg() {
   for t in "$@"; do case "$t" in -*) ;; *) cur_tg+=("$t") ;; esac; done
   [ ${#cur_tg[@]} -gt 0 ] || cur_tg=(.)
 }
-# find <path> -delete: the paths before the first expression
+# find <path> -delete: the paths before the first expression; with a test (-name ...) it deletes what
+# matches, so the project's folder may be its path
 find_seg() {
-  local t del=0 on=1; local tg=()
+  local t del=0 on=1 all=1; local tg=()
   for t in "$@"; do
-    case "$t" in -delete) del=1 ;; -*|"!") on=0 ;; *) [ $on = 1 ] && tg+=("$t") ;; esac
+    case "$t" in -delete) del=1 ;; -depth) on=0 ;; -*|"!") on=0; all=0 ;; *) if [ $on = 1 ]; then tg+=("$t"); else all=0; fi ;; esac
   done
   [ $del = 1 ] || return
-  for t in "${tg[@]}"; do rm_target "$t"; done
+  for t in "${tg[@]}"; do rm_target "$t" $all; done
 }
 
 PIPE=$'\001|'; cur_tg=()
@@ -511,10 +552,12 @@ while IFS="$tab" read -r -a T; do
     A+=("$t")
   done
   # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
-  # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments
+  # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments; a wrapper given as a path
+  # or with .exe (/usr/bin/env, timeout.exe) counts
   i=0; n=${#A[@]}
   while [ $i -lt $n ]; do
-    t="${A[$i]}"
+    t="${A[$i]}"; [[ $t =~ $RE_ASSIGN ]] && { i=$((i + 1)); continue; }
+    t="${t##*/}"; t="${t##*\\}"; case "$t" in *.exe) t="${t%????}" ;; esac
     case "$t" in
       '{'|'}'|'!'|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs) i=$((i + 1)); continue ;;
       sudo) ao='^-[ugpcdrt]$' ;;
@@ -525,7 +568,7 @@ while IFS="$tab" read -r -a T; do
       caffeinate) ao='^-[tw]$' ;;            # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
       arch) ao='^-(arch|e|d)$' ;;
       script) ao='^-[tTc]$' ;;
-      *) if [[ $t =~ $RE_ASSIGN ]]; then i=$((i + 1)); continue; fi; break ;;
+      *) break ;;
     esac
     i=$((i + 1))
     while [ $i -lt $n ]; do
@@ -551,11 +594,17 @@ shopt -u nocasematch
 
 # --- project-specific patterns: one per line, trimmed; blank lines and # comments skipped ---
 deny_file="${CLAUDE_PROJECT_DIR:-.}/.claude/coordinator-deny.txt"
-# a deny file that is there but cannot be read (no read permission, a folder) blocks every call
-if [ -e "$deny_file" ] && { [ ! -f "$deny_file" ] || [ ! -r "$deny_file" ]; }; then
+# a deny file that is there but cannot be read (no read permission, a folder) blocks every call; it
+# is opened to find out ([ -r ] says yes in Git Bash when an NTFS permission denies the read)
+if [ -e "$deny_file" ] && { [ ! -f "$deny_file" ] || ! { : < "$deny_file"; } 2>/dev/null; }; then
   block "project rule file cannot be read: .claude/coordinator-deny.txt"
 fi
 if [ -f "$deny_file" ]; then
+  # UTF-16 (what Windows PowerShell 5.1's > writes: a FF FE or FE FF BOM, NUL bytes) is not read as
+  # nothing: it blocks every call until it is saved as UTF-8 (read -d '' finds a NUL byte)
+  IFS= read -r pattern < "$deny_file"
+  if IFS= read -r -d '' _ < "$deny_file"; then utf16=1; else case "$pattern" in $'\377\376'*|$'\376\377'*) utf16=1 ;; *) utf16=0 ;; esac; fi
+  [ $utf16 = 1 ] && block "project rule file cannot be read: .claude/coordinator-deny.txt (not UTF-8: re-save it as UTF-8)"
   bom=$'\357\273\277'; first=1
   while IFS= read -r pattern || [ -n "$pattern" ]; do
     [ $first = 1 ] && pattern="${pattern#"$bom"}"; first=0   # a file saved with a UTF-8 BOM

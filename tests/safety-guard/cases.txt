@@ -1,9 +1,12 @@
 # Safety-guard verdicts shared by safety-guard.sh and safety-guard.ps1.
 # <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work;
-# crlf, blank and bad are on work with another deny file: tests/safety-guard/run.sh says which).
+# crlf, blank and bad are on work with another deny file: tests/safety-guard/run.sh says which), or a
+# folder inside one (work/.claude/worktrees/12-fix/src: the cwd; the project is still work); a ps: prefix
+# makes it a PowerShell tool call (Bash otherwise).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
-# (all three the plain home where there is no Git Bash), so no case names a machine's own paths.
+# (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
+# Bash), so no case names a machine's own paths.
 block	work	git push --force origin main
 block	work	git push origin main
 block	work	git push -f origin master
@@ -285,8 +288,8 @@ block	work	cd && rm -rf *
 block	work	cd / && rm -rf *
 block	work	cd C:\ ; Remove-Item * -Recurse -Force
 allow	work	cd build && rm -rf *
-allow	work	rm -rf *
-allow	work	rm -rf .
+allow	work/.claude/worktrees/12-fix/src	rm -rf *
+allow	work/.claude/worktrees/12-fix/src	rm -rf .
 allow	work	cd ~/projects/app && rm -rf ./build
 # --- a listing piped into a recursive removal ---
 block	work	Get-ChildItem C:\ | Remove-Item -Recurse -Force
@@ -326,3 +329,90 @@ allow	work	caffeinate -i git push origin 12-fix
 # a deny file saved with a UTF-8 BOM keeps its first pattern
 block	bom	terraform destroy
 allow	bom	ls
+# --- findings of re-proving on Windows: .. in a path, the project's folder, ~name in PowerShell, wrappers as paths ---
+# .. is taken out of the path (with the cwd and any cd) before the checks: from a folder in a worktree up
+# to the worktree, the worktrees' folder, .claude, the project, the folder that holds it
+block	work/.claude/worktrees/12-fix/src	rm -rf ..
+block	work/.claude/worktrees/12-fix/src	rm -rf ../
+block	work/.claude/worktrees/12-fix/src	rm -rf ../..
+block	work/.claude/worktrees/12-fix/src	rm -rf ../../..
+block	work/.claude/worktrees/12-fix/src	rm -rf ../../../..
+block	work/.claude/worktrees/12-fix/src	rm -rf ../../../../..
+block	work/.claude/worktrees/12-fix/src	rm -rf ../../../../*
+block	work/.claude/worktrees/12-fix/src	cd ../../../.. && rm -rf .
+block	work/.claude/worktrees/12-fix/src	find ../../../.. -delete
+allow	work/.claude/worktrees/12-fix/src	rm -rf ../build
+allow	work/.claude/worktrees/12-fix/src	find ../../../.. -name "*.tmp" -delete
+block	ps:work/.claude/worktrees/12-fix/src	Remove-Item -Recurse -Force ..
+block	ps:work/.claude/worktrees/12-fix/src	Remove-Item -Recurse -Force ..\..\..\..
+block	ps:work/.claude/worktrees/12-fix/src	Remove-Item -Recurse -Force ..\..\..\..\..
+allow	ps:work/.claude/worktrees/12-fix/src	Remove-Item -Recurse -Force ..\build
+block	work	rm -rf .claude/worktrees/12-fix/src/..
+block	work	rm -rf .claude/worktrees/12-fix/build/../..
+block	work	rm -rf ./.claude/worktrees/x/../12-fix
+block	work	cd .claude/worktrees/12-fix/src && rm -rf ..
+block	work	rm -rf .claude
+block	work	rm -rf ./.claude/
+# the project's folder (the cwd, written out, or reached by ..) and the folders that hold it
+block	work	rm -rf .
+block	work	rm -rf *
+block	work	rm -rf ./
+block	work	rm -rf build/..
+block	work	rm -rf ..
+block	work	rm -rf ../
+block	work	rm -rf ../*
+block	work	cd .. && rm -rf work
+block	work	rm -rf @PROJECT@
+block	work	rm -rf @PROJECT@/
+block	work	rm -rf @PROJECT@/..
+block	work	rm -rf @PROJECT@/build/..
+block	work	find . -delete
+block	work	Get-ChildItem | Remove-Item -Recurse -Force
+block	ps:work	Remove-Item -Recurse -Force .
+block	ps:work	Remove-Item -Recurse -Force ..
+block	ps:work	Remove-Item -Recurse -Force ..\
+block	ps:work	Remove-Item -Recurse -Force @PROJECT@\..
+allow	work	rm -rf @PROJECT@/build
+allow	work	rm -rf build/../dist
+allow	work	rm -rf ../main/build
+allow	ps:work	Remove-Item -Recurse -Force .\build\..\dist
+# home and the folders that hold it, / and a drive reached by ..
+block	work	rm -rf ~/..
+block	work	rm -rf ~/x/../
+block	work	rm -rf @HOME@/..
+block	work	cd ~ && rm -rf ..
+block	work	rm -rf /tmp/..
+block	work	rm -rf /c/x/../..
+block	ps:work	Remove-Item -Recurse -Force @HOME_W@\..
+block	ps:work	Remove-Item -Recurse -Force C:\x\..
+allow	work	rm -rf ~/x/../y
+# ~name is a user's home in bash only: for the PowerShell tool ~tmp is a folder's name; ~ and ~\ stay home
+block	work	rm -rf ~tmp
+block	work	Remove-Item -Recurse -Force ~tmp
+allow	ps:work	Remove-Item -Recurse -Force ~tmp
+allow	ps:work	Remove-Item -Recurse -Force ~tmp\*
+block	ps:work	Remove-Item -Recurse -Force ~
+block	ps:work	Remove-Item -Recurse -Force ~\
+block	ps:work	Remove-Item -Recurse -Force ~/
+block	ps:work	Remove-Item -Recurse -Force ~/*
+# a wrapper or the command given as a path or with .exe
+block	work	timeout.exe 5 git push origin main
+block	work	env.exe git push origin main
+block	work	nohup.exe git push origin main
+block	work	nice.exe -n 5 git push origin main
+block	work	sudo.exe git push origin main
+block	work	/usr/bin/timeout 5 git push origin main
+block	work	/usr/bin/env git push origin main
+block	work	/usr/bin/nohup git push origin main
+block	work	/usr/bin/sudo -u root git push origin main
+block	work	TIMEOUT.EXE 5 git push origin main
+block	work	/usr/bin/env /usr/bin/git push origin main
+block	work	timeout.exe 5 git.exe push origin main
+block	work	/usr/bin/env bash -c "git push origin main"
+block	work	/usr/bin/env rm -rf /
+block	work	X=/usr/bin/x /usr/bin/timeout 5 git push origin main
+allow	work	/usr/bin/timeout 5 git push origin 12-fix
+allow	work	env.exe git push origin 12-fix
+# deny files in UTF-16 block every call (tests/safety-guard/run.sh also checks the message)
+block	utf16	ls
+block	utf16nul	ls

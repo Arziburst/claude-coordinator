@@ -33,6 +33,7 @@ if ($t.StartsWith('{') -and $t.EndsWith('}')) { try { $d = $raw | ConvertFrom-Js
 if (-not $d) { [Console]::Error.WriteLine('Blocked by safety-guard: the tool call could not be read (not a JSON object). If this is a false positive, ask the owner.'); exit 2 }
 $cmd = [string]$d.tool_input.command
 $cwd = [string]$d.cwd
+$tool = [string]$d.tool_name
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 $cmd = $cmd.Replace("`r`n", "`n").Replace("\`n", '').Replace('`' + "`n", ' ')
 # Comment lines (a "#" at the start of a line) do not count for the project patterns.
@@ -64,11 +65,11 @@ function OptArg([string]$t) {
     'caffeinate' { '^-[tw]$' } 'arch' { '^-(arch|e|d)$' } 'script' { '^-[tTc]$' } default { '' } }
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
-# and VAR=value assignments
+# and VAR=value assignments; a wrapper given as a path or with .exe (/usr/bin/env, timeout.exe) counts
 function CmdIdx($toks) {
   $j = 0
   while ($j -lt $toks.Count) {
-    $t = $toks[$j].ToLowerInvariant()
+    $t = BaseName $toks[$j]
     if ($t -match '^g(env|timeout|nice|stdbuf)$') { $t = $t.Substring(1) }   # Homebrew coreutils: gtimeout, gnice ...
     if ($t -match $WRAP -or $toks[$j] -match $ASSIGN) { $j++; continue }
     $ao = OptArg $t; if (-not $ao) { break }
@@ -78,6 +79,7 @@ function CmdIdx($toks) {
   $j
 }
 $SHELLS = '^(bash|sh|zsh|dash|ksh|pwsh|powershell)$'
+# a command word without its folder and .exe: /usr/bin/git, git.exe, C:\x\git.exe -> git
 function BaseName([string]$t) { $b = ($t.ToLowerInvariant() -split '[/\\]')[-1]; if ($b.EndsWith('.exe')) { $b = $b.Substring(0, $b.Length - 4) }; $b }
 # characters that end a run of ordinary text: in single quotes, in double quotes, unquoted, in ClosePar
 $RUN_SQ = [char[]]@([char]39)
@@ -205,7 +207,7 @@ $REDIR = '^[0-9*]*&?[<>]'
 $REDIR_OP = '^[0-9*]*&?[<>]+[&|]?$'
 $RMREC = '^-[rfvidp]*r[rfvidp]*$'
 $PSREC = '^-r(e(c(u(r(se?)?)?)?)?)?(:\$?true)?$'
-$WT = '(^|[/\\])\.claude[/\\]worktrees([/\\][^/\\]+)?$'
+$WT = '(^|[/\\])\.claude([/\\]worktrees([/\\][^/\\]+)?)?$'   # a worktree, the worktrees' folder, .claude
 
 $script:dir = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
 $script:ovDir = ''; $script:ovBranch = ''   # a checkout / switch earlier in this command: dir and branch
@@ -222,10 +224,24 @@ function Compose([string]$b, [string]$p) {
   if ($b -eq '?') { return '?' }
   "$b/$p"
 }
-# A path in one form for comparing: / separators, none repeated or trailing, lower case, a drive as
-# c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
+# A path in one form for comparing: / separators, none repeated or trailing, lower case, . and x/..
+# taken out (by the text: /a/b/.. is /a; .. above the root stays at the root), a drive as c: (C:\x,
+# /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
 function Canon([string]$x) {
-  $x = (($x.Replace('\', '/').ToLowerInvariant()) -replace '//+', '/') -replace '/+$', ''
+  if (-not $x) { return '' }   # / with its separator stripped
+  $x = $x.Replace('\', '/').ToLowerInvariant(); $r = ''
+  if ($x.StartsWith('/')) { $r = '/' } elseif ($x -match '^[a-z]:') { $r = $x.Substring(0, 2) + '/'; $x = $x.Substring(2) }
+  $out = New-Object System.Collections.Generic.List[string]
+  foreach ($s in $x.Split('/')) {
+    if ($s -eq '' -or $s -eq '.') { continue }
+    if ($s -eq '..') {
+      if ($out.Count -gt 0 -and $out[$out.Count - 1] -ne '..') { $out.RemoveAt($out.Count - 1) } elseif (-not $r) { $out.Add('..') }
+      continue
+    }
+    $out.Add($s)
+  }
+  $x = $r + ($out -join '/'); if (-not $x) { $x = '.' }
+  $x = $x -replace '/+$', ''
   ($x -replace '^/(mnt/|cygdrive/)?([a-z])$', '$2:') -replace '^/(mnt/|cygdrive/)?([a-z])/', '$2:/'
 }
 function BranchIn([string]$dd) {
@@ -358,25 +374,47 @@ function StripAll([string]$x) {   # x/* , x/** , x/. and trailing separators -> 
   }
   $x
 }
-function RmTarget([string]$t) {
+# the project's folders, in canon form: CLAUDE_PROJECT_DIR, the top of the repository the session works
+# in and that repository's main checkout (from a worktree); read once, on the first removal
+$script:roots = $null
+function ProjectRoots {
+  if ($null -ne $script:roots) { return }
+  $script:roots = @()
+  if ($env:CLAUDE_PROJECT_DIR) { $script:roots += Canon $env:CLAUDE_PROJECT_DIR }
+  $c = if ($cwd) { $cwd } else { $env:CLAUDE_PROJECT_DIR }
+  if (-not $c) { return }
+  $out = @(git -C $c rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $out.Count -lt 2) { return }
+  $script:roots += Canon $out[0]
+  if ($out[1] -match '/\.git$') { $script:roots += Canon $out[1].Substring(0, $out[1].Length - 5) }
+}
+# a path and the folders that hold it: is $full one of them
+function Holds([string]$full, [string]$p) { "$p/".StartsWith("$full/", [StringComparison]::Ordinal) }
+function RmTarget([string]$t, [bool]$proj = $true) {
   $x = StripAll $t
   if ($x -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
   if ($x -match '^(|~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$\{env:USERPROFILE\}|\$env:HOME|\$env:HOMEDRIVE|\$env:SystemDrive|%USERPROFILE%|%HOMEDRIVE%|%SystemDrive%|[A-Za-z]:)$') {
     Block 'recursive removal of /, a drive or home'
   }
-  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**)
-  if ($x -match '^~[^/\\]+$') { Block 'recursive removal of /, a drive or home' }
-  # the full path: relative targets (., *, x) from the directory a cd led to; home given literally
-  # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c
+  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**) - in bash; the
+  # PowerShell tool does not expand it (Remove-Item ~tmp is a folder named ~tmp)
+  if ($tool -cne 'PowerShell' -and $x -match '^~[^/\\]+$') { Block 'recursive removal of /, a drive or home' }
+  # the full path: relative targets (., *, .., x) from the directory a cd led to; home given literally
+  # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c; . and x/.. taken out
   $full = Compose $script:dir $t
   if ($full -eq '?') { return }
   $full = Canon (StripAll $full)
   if ($full -match '^([a-z]:)?$') { Block 'recursive removal of /, a drive or home' }
-  # . or * inside a worktree (after a cd to it, or with it as the working folder)
+  # . or * inside a worktree (after a cd to it, or with it as the working folder), .. up to one
   if ($full -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
+  # home or a folder that holds it
   foreach ($h in @($HOME, $env:USERPROFILE, $env:HOME)) {
-    if ($h -and $full -ceq (Canon $h)) { Block 'recursive removal of /, a drive or home' }
+    if ($h -and (Holds $full (Canon $h))) { Block 'recursive removal of /, a drive or home' }
   }
+  if (-not $proj) { return }
+  # the project's folder or a folder that holds it
+  ProjectRoots
+  foreach ($r in $script:roots) { if (Holds $full $r) { Block 'recursive removal of the project or a folder that holds it' } }
 }
 function RmSeg([string]$b, [string[]]$a) {
   $rec = $false; $dd = $false; $tg = @()
@@ -402,12 +440,16 @@ function ListSeg([string[]]$a) {
   if ($l.Count -eq 0) { $l = @('.') }
   $script:curTg = $l
 }
-# find <path> -delete: the paths before the first expression
+# find <path> -delete: the paths before the first expression; with a test (-name ...) it deletes what
+# matches, so the project's folder may be its path
 function FindSeg([string[]]$a) {
-  $del = $false; $on = $true; $tg = @()
-  foreach ($t in $a) { if ($t -eq '-delete') { $del = $true } elseif ($t.StartsWith('-') -or $t -eq '!') { $on = $false } elseif ($on) { $tg += $t } }
+  $del = $false; $on = $true; $all = $true; $tg = @()
+  foreach ($t in $a) {
+    if ($t -eq '-delete') { $del = $true } elseif ($t -eq '-depth') { $on = $false }
+    elseif ($t.StartsWith('-') -or $t -eq '!') { $on = $false; $all = $false } elseif ($on) { $tg += $t } else { $all = $false }
+  }
   if (-not $del) { return }
-  foreach ($t in $tg) { RmTarget $t }
+  foreach ($t in $tg) { RmTarget $t $all }
 }
 
 $script:curTg = @()
@@ -443,11 +485,20 @@ $proj = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
 $denyFile = Join-Path $proj '.claude/coordinator-deny.txt'
 if (Test-Path -LiteralPath $denyFile) {
   # a deny file that is there but cannot be read (no read permission, a folder) blocks every call
-  $denyLines = $null
+  $denyBytes = $null
   try {
     if (-not (Test-Path -LiteralPath $denyFile -PathType Leaf)) { throw 'not a file' }
-    $denyLines = [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $denyFile).Path)
+    $denyBytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $denyFile).Path)
   } catch { Block 'project rule file cannot be read: .claude/coordinator-deny.txt' }
+  # UTF-16 (what Windows PowerShell 5.1's > writes: a FF FE or FE FF BOM, NUL bytes) blocks every call
+  # until it is saved as UTF-8, as in safety-guard.sh, which cannot read it
+  if (($denyBytes.Length -ge 2 -and (($denyBytes[0] -eq 0xFF -and $denyBytes[1] -eq 0xFE) -or ($denyBytes[0] -eq 0xFE -and $denyBytes[1] -eq 0xFF))) -or
+      [Array]::IndexOf($denyBytes, [byte]0) -ge 0) {
+    Block 'project rule file cannot be read: .claude/coordinator-deny.txt (not UTF-8: re-save it as UTF-8)'
+  }
+  $denyText = (New-Object System.Text.UTF8Encoding $false).GetString($denyBytes)
+  if ($denyText.StartsWith([string][char]0xFEFF)) { $denyText = $denyText.Substring(1) }   # a UTF-8 BOM
+  $denyLines = $denyText -split "`r?`n"
   foreach ($line in $denyLines) {
     $p = $line.Trim()
     if (-not $p -or $p.StartsWith('#')) { continue }
