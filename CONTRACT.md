@@ -40,7 +40,7 @@ do_not_decide:                     # raised as questions, never decided by the w
 budget:
   model: opus                      # per CORE §7: rendering and input are "hard or risky"
   effort: high
-  escalate_to: fable               # model for a retry after a failed review or a stuck worker
+  escalate_to: fable               # model for one retry after a failed review
   cost: 16                         # USD at list price: the whole task, its tests and review (CORE §7a)
 depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
@@ -58,9 +58,11 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`cost`**: the coordinator's estimate in dollars at list price (CORE §7a) — cost, not tokens: most
   tokens are cheap cache reads, so a token count measures context times turns, not spend. A lead fits
   its sub-contracts inside it and stops to ask when a run goes over twice its own estimate.
-- **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, or the
-  worker is stuck, the coordinator restarts the contract on this model with the failed report attached
-  (CORE §7) — once; a second failure goes to the owner, not to another restart.
+- **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, the
+  coordinator restarts the contract on this model with the failed report attached (CORE §7) — once; a
+  second failure goes to the owner, not to another restart. A stuck worker (a `blocked` report) is
+  helped or split (CORE §4), which spends no escalation. A model that is not stronger than `model`
+  gives no second chance: check-contract warns.
 
 ## The report
 

@@ -21,7 +21,9 @@ resources and launch/test limits, and the phrase that ends your report.
    Merge main when the coordinator says another PR landed. Secrets are used, never copied; customer
    data never leaves production; production actions only as the brief allows (CORE §1.4, §1.13).
 4. **Prove each criterion yourself.** For `check: oracle`, run the named test or command and keep its
-   output or CI link. What you could not run is a known gap, never a pass.
+   output or CI link. A check the brief says the verifier cannot repeat (a shared device, a lock, a
+   cost): attach its raw output where the criterion's `how` says, with the commit it ran on. What you
+   could not run is a known gap, never a pass.
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is this project;
    neither → put the whole report in your final output with "NOT DELIVERED: <the address tried>".

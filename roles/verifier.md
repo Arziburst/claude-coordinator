@@ -32,8 +32,9 @@ Inputs: the contract, the worker's report and the change (a PR, a branch or a di
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
 
 Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
-criterion or a business decision), each with its evidence class: `oracle` (you saw the check run or
-its output yourself), `review` (you read the change and it holds), `claim` (only the report says so).
+criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
+reviewed commit, or read a CI run on that commit), `oracle (worker's run, <commit>)` (above), `review`
+(you read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner).
 Each finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
 touch**. Severity: **Blocker / Major / Minor / Nit**. No patches: the author fixes.
 List the tools you used and skipped, and every known gap. A rule, script or check of the coordinator
@@ -43,7 +44,9 @@ Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherw
 changes**. The verdict holds for that commit only: anything pushed after it is reviewed again — only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria,
 the findings and every criterion whose files changed since the reviewed commit; the others stay
-confirmed, with their evidence and the commit they were confirmed on.
+confirmed, with their evidence and the commit they were confirmed on — a CI oracle only from the CI
+run on the new head, else it stands as `review`.
 
-**Run as a session** (not a subagent): deliver the verdict with SendMessage to the session your brief names
-as the report address, with the fallback of roles/worker.md step 5 — never leave it undelivered.
+**Delivery.** As a subagent: the verdict is your final answer to the session that started you. As a
+session: deliver it with SendMessage to the session your brief names as the report address, with the
+fallback of roles/worker.md step 5 — never leave it undelivered.

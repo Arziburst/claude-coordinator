@@ -78,6 +78,14 @@ foreach ($f in $Files) {
   $b = "`n" + $txt['budget']
   if ($b -cnotmatch '\n[ \t]+model:[ \t]*[^ \t\n]') { $out.Add("WARN  budget.model missing (CORE ${sect}7)"); $nw++ }
   if ($b -cnotmatch '\n[ \t]+escalate_to:[ \t]*[^ \t\n]') { $out.Add('WARN  budget.escalate_to missing (no stronger model to retry on)'); $nw++ }
+  else {
+    # the fixed model names in order of strength (0: a name not on this list)
+    $rank = { param($m) $m = "$m".ToLower(); if ($m -match 'fable') { 4 } elseif ($m -match 'opus') { 3 } elseif ($m -match 'sonnet') { 2 } elseif ($m -match 'haiku') { 1 } else { 0 } }
+    $bm = if ($b -cmatch '\n[ \t]+model:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }
+    $be = if ($b -cmatch '\n[ \t]+escalate_to:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }
+    $rm = & $rank $bm; $re = & $rank $be
+    if ($rm -and $re -and $re -le $rm) { $out.Add("WARN  budget.escalate_to ($be) is not stronger than budget.model ($bm): its one retry gains nothing"); $nw++ }
+  }
   if ($b -cnotmatch '\n[ \t]+cost:[ \t]*[0-9]') {
     if ($b -cmatch '\n[ \t]+tokens:[ \t]*[0-9]') { $out.Add("WARN  budget.tokens is now budget.cost, in USD at list price (CORE ${sect}7a)") }
     else { $out.Add("WARN  budget.cost missing (no spend forecast, CORE ${sect}7a)") }
