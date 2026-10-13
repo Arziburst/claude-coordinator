@@ -226,6 +226,9 @@ case "$LAST" in *"/coordinator/"*) echo "FAIL: /coordinator/ added a second time
 git init -q -b main "$tmp/repo4" && g -C "$tmp/repo4" commit -q --allow-empty -m init && git -C "$tmp/repo4" remote add origin "$mtmp/no-such-remote.git"
 check 1 "start: an unreachable origin" -- start --repo "$tmp/repo4" --name "#38 worker: a" --branch 38-a "${W[@]}" --safety "$tmp/safety.json" --dry-run
 expect_in "cannot reach origin"
+# ... retried once, and git's own error is in the message (a transient DNS error is told apart)
+expect_in "retrying once"
+expect_in "does not appear to be a git repository"
 # the role file heads the brief of a session, once
 : > "$STUB_LOG"
 check 0 "start: the role heads the brief" -- start --repo "$tmp/repo" --name "#39 worker: a" --branch 39-a "${W[@]}" --safety "$tmp/safety.json"
