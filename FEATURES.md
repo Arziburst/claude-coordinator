@@ -10,6 +10,9 @@ says what is already tested (`tested by`) and what is known to be open (`not cov
 starts where the core is weakest. The rules themselves live in the files a block names; this map only
 points to them and never replaces them.
 
+**Testing it:** [tests/FEATURE-TEST.md](tests/FEATURE-TEST.md) is the prompt for a tester session — one group or
+feature per session, a fixed report.
+
 **Kept in sync:** `scripts/check-core` fails when a file a block names does not exist, when a script,
 procedure, role or one-time step is in no feature, when an ID repeats, when a block lacks one of its
 five fields, or when the table and the blocks disagree.
