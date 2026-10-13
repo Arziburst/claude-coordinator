@@ -116,9 +116,9 @@ sandbox)
   in="$HOME"
   while [ $# -gt 0 ]; do case "$1" in --in) [ $# -ge 2 ] || usage; in="$2"; shift 2 ;; *) usage ;; esac; done
   [ -d "$in" ] || { fail "no folder $in"; finish; }
-  # an absolute path: the repo's origin URL is stored from it, and a relative one breaks every git
-  # command run from another folder (a reused sandbox's fetch)
-  in="$(cd "$in" && pwd)" || { fail "cannot enter $in"; finish; }
+  # a relative --in made absolute: the repo's origin URL is stored from it, and a relative one breaks
+  # every git command run from another folder (a reused sandbox's fetch); an absolute one is kept as given
+  case "$in" in /*|[A-Za-z]:[/\\]*) ;; *) in="$(cd "$in" && pwd)" || { fail "cannot enter $in"; finish; } ;; esac
   d="${in%/}/coordinator-selftest"
   if [ -e "$d" ]; then
     # a sandbox kept by clean --keep is reused (its repo's path keeps the owner's trust); nothing else is

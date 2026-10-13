@@ -153,10 +153,19 @@ expect "clean --keep on another folder" 1 "FAIL clean: $(P "$b") is not a self-t
 is "another folder untouched" [ -z "$(ls -A "$b")" ]
 
 # a relative --in becomes an absolute path (the origin URL is stored from it): from another folder the
-# kept sandbox still fetches, is reset and is reused
+# kept sandbox still fetches, is reset and is reused. The path printed is checked as the same folder,
+# not as the same text: the .ps1 on Windows prints the long form of a temp folder named in 8.3 form
+# (RUNNER~1 on GitHub's runner)
 mkdir "$tmp/c"; e="$tmp/c/coordinator-selftest"; cd "$tmp" || exit 1
+isdir() {   # isdir <case> <exit code> <line prefix>: that exit code, and the line's path is $e, absolute
+  local x
+  n=$((n + 1))
+  x="$(printf '%s\n' "$LAST" | sed -n "s/^$3//p" | head -n 1)"
+  { [ "$RC" = "$2" ] && case "$x" in /*|[A-Za-z]:/*) true ;; *) false ;; esac && [ "$x" -ef "$e" ]; } ||
+    { echo "FAIL ($1): expected exit $2 and the line '$3$e' (an absolute path), got exit $RC:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
 st sandbox --in c
-expect "sandbox with a relative --in" 0 "sandbox: $(P "$e")"
+isdir "sandbox with a relative --in" 0 "sandbox: "
 u="$(git -C "$e/repo" config remote.origin.url)"
 n=$((n + 1)); case "$u" in /*|[A-Za-z]:*) ;; *) echo "FAIL (a relative --in): the origin URL is not absolute: $u"; fail=1 ;; esac
 cd "$tmp/bin" || exit 1
@@ -166,7 +175,7 @@ st clean --sandbox "$(P "$e")" --keep
 expect "a relative --in: clean --keep from another folder" 0 "sandbox kept for the next run: $(P "$e")"
 cd "$tmp" || exit 1
 st sandbox --in c
-expect "a relative --in: reused" 0 "PASS sandbox: reusing the kept sandbox $(P "$e")"
+isdir "a relative --in: reused" 0 "PASS sandbox: reusing the kept sandbox "
 cd "$here" || exit 1
 
 # --keep belongs to clean only

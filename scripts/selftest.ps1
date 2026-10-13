@@ -158,9 +158,10 @@ switch ($Step) {
 'sandbox' {
   Only @('In')
   if ($In -and -not (Test-Path -LiteralPath $In -PathType Container)) { Fail "no folder $In"; Finish }
-  # an absolute path: the repo's origin URL is stored from it, and a relative one breaks every git
-  # command run from another folder (a reused sandbox's fetch)
-  $d = Join-Path $(if ($In) { (Resolve-Path -LiteralPath $In).ProviderPath } else { $HOME }) 'coordinator-selftest'
+  # a relative -In made absolute: the repo's origin URL is stored from it, and a relative one breaks
+  # every git command run from another folder (a reused sandbox's fetch); an absolute one is kept as given
+  if ($In -and -not ($In -match '^(/|\\|[A-Za-z]:[/\\])')) { $In = (Resolve-Path -LiteralPath $In).ProviderPath }
+  $d = Join-Path $(if ($In) { $In } else { $HOME }) 'coordinator-selftest'
   if (Test-Path -LiteralPath $d) {
     # a sandbox kept by clean -Keep is reused (its repo's path keeps the owner's trust); nothing else is
     if (-not (Test-Path -LiteralPath (Join-Path $d $marker) -PathType Leaf)) { Fail "$d already exists and is not a self-test sandbox (no $marker): nothing changed"; Finish }
