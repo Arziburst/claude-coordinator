@@ -238,7 +238,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 `tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
 and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
 values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
-CRLF with a BOM, a missing file),
+CRLF with a BOM, a missing file; `--limits` on `tests/run-stats/limits/`: trusted, guessed and previous
+ratios, a block that fits and one that does not, a window that has reset, no `rate_limits`, CRLF with a
+BOM, models priced apart),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
@@ -336,8 +338,10 @@ CRLF with a BOM, a missing file),
   `session-tokens.ps1 -Since <UTC time>` — the same per-model lines over every transcript on the
   machine, each message once, counted by its own timestamp (a session that crosses the reset is
   split). The limits are per account, so other projects' and ad-hoc sessions' spend counts too. The
-  reset time is the status line's `resets_at`, Unix seconds: pass it as it is (`--since 1791219600`),
-  or as `YYYY-MM-DDTHH:MM:SSZ`; a time with another offset (`+02:00`) is refused, not read as UTC.
+  status line's `resets_at` is the window's **next** reset (Unix seconds), so the window began at
+  `resets_at` minus its length — 5 hours for `five_hour`, 7 days for `seven_day`; `run-stats --limits`
+  prints that start as `since`. Pass it as `YYYY-MM-DDTHH:MM:SSZ` or as Unix seconds (`--since 1791219600`);
+  a time with another offset (`+02:00`) is refused, not read as UTC.
   An ambiguous prefix (of a transcript or a status file) fails and lists session ids only, never
   project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
@@ -358,6 +362,31 @@ CRLF with a BOM, a missing file),
   `--per-run` (`-PerRun`) groups single rows by kind, role and model instead, for diagnosis.
   Columns are read by the header line (first field `date`), else in CORE §7's order. Exit 1 when the
   file cannot be read, 2 on a usage error.
+- **Limits: percent per dollar and the block's fit** (CORE §7a): `scripts/run-stats.sh --limits`
+  (`run-stats.ps1 -Limits`, the options in each shell's form: `-Spend5h`, `-CapWeek`, …) does the
+  limit arithmetic, never by hand. Inputs, all optional: `--status <file>` (default
+  `<config>/coordinator/statusline.json`, `<config>` = `$CLAUDE_CONFIG_DIR` or `~/.claude`);
+  `--spend-5h` / `--spend-week <file>` — what `session-tokens --since <since>` printed for that window
+  (`-` reads stdin, for one of them; Windows PowerShell 5.1 takes it only as `-Spend5h:-`); `--prices
+  <file>`, needed with a spend — the ladder's list prices from BINDINGS *Models*, one model per line,
+  `<model id> <input> <output> <cache read> <cache write>` in USD per million tokens (cache write at the
+  1-hour price; `$` and ` / ` allowed, `#` comments; e.g. `claude-opus-5-5 $5 / $25 / $0.50 / $10`), then
+  `not-weekly` for a model with its own limit whose spend does not count toward the weekly one; a spend
+  model takes its own id's line, else the longest id it starts with, else exit 1; `--prev-5h` /
+  `--prev-week <% per $>` (the last window's ratio); `--cap-5h` / `--cap-week <%>` (the project's caps,
+  §9); `--block <USD>` (the block's estimate). Two steps: first without a spend, for each window's
+  `since`; then `session-tokens --since <since>` per window into a file, and again with the spends. It
+  prints a header and a tab-separated line per window, `window used since resets cost ratio basis left
+  left_cap block fit`: used percent (one decimal); the window's start and its reset (UTC); the account's
+  list-price cost since the start (to the cent; `seven_day` without `not-weekly` models); the ratio in
+  percent per dollar (four decimals) and its basis — `trusted` (the window has risen ≥ 10 points: used
+  over cost), `previous` (under 10, `--prev-*` given), `guess` (under 10: used over cost), `-` (none); the
+  dollars left before 100% and before the cap (rounded down); the block's percent and `fits` / `does
+  not fit` within the cap (100% without one). Fixed-point arithmetic, so the `.sh` and the `.ps1` print
+  the same. A window missing from the JSON prints `-`; a `resets_at` already passed means the window has
+  reset (used 0, no cost, the ratio only from `--prev-*`). Exit 1 when a file cannot be read, the JSON has
+  no `rate_limits` (an API key, an older Claude Code: budget by cost), a price line is malformed or a
+  spend model has no price; 2 on a usage error.
 - Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)

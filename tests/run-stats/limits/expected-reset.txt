@@ -1,0 +1,3 @@
+window	used	since	resets	cost	ratio	basis	left	left_cap	block	fit
+five_hour	0.0	-	-	-	0.7000	previous	142.85	135.71	14.0	fits
+seven_day	-	-	-	-	-	-	-	-	-	-

@@ -1,0 +1,17 @@
+{
+  "session_id": "s1",
+  "model": {
+    "id": "claude-opus-5-5",
+    "display_name": "Opus 5.5"
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 36.0,
+      "resets_at": 1791880800
+    },
+    "seven_day": {
+      "used_percentage": 32,
+      "resets_at": 1792429200
+    }
+  }
+}
