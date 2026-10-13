@@ -2,18 +2,28 @@
 # same checks, same output).
 #   pwsh -File scripts/check-contract.ps1 <contract.md|contract.yaml> ...      (or: powershell -File ...)
 # The contract is the YAML header between `---` lines, or a top-level `contract:` block.
-# ERROR (exit 1): a required key missing, intent empty, a criterion without a valid check, an oracle
-# without `how`, non_goals without the two default lines. WARN: budget.model, .escalate_to, .cost or
-# touches missing; no oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout.
+# ERROR (exit 1): a required key missing, id / title / intent empty, an acceptance item not led by `criterion:`,
+# a criterion without a valid check, an oracle without `how`, non_goals without the two default lines; a file
+# that cannot be read (`<file>: cannot read`). WARN: budget.model, .escalate_to, .cost or touches missing; no
+# oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 7 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 8 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
-function Val([string]$s) { ($s -creplace '[ \t]+#.*$', '').Trim() }
+# a value without its comment, blanks and surrounding quotes (double or single)
+function Val([string]$s) {
+  $s = ($s -creplace '[ \t]+#.*$', '').Trim(' ', "`t")
+  if ($s.Length -ge 2 -and ($s[0] -eq '"' -or $s[0] -eq "'") -and $s[$s.Length - 1] -eq $s[0]) { $s = $s.Substring(1, $s.Length - 2) }
+  $s
+}
+# a top-level value that holds nothing: comments, block markers, blanks or empty quotes only
+function Blank([string]$t) { $t = $t -creplace '#[^\n]*', '' -creplace '[>|\n \t]', ''; $t -eq '' -or $t -eq '""' -or $t -eq "''" }
 
 $failed = 0
 foreach ($f in $Files) {
-  $L = @([IO.File]::ReadAllLines((Resolve-Path -LiteralPath $f).Path))
+  $L = $null
+  try { if (Test-Path -LiteralPath $f -PathType Leaf) { $L = @([IO.File]::ReadAllLines((Resolve-Path -LiteralPath $f).Path)) } } catch { }
+  if ($null -eq $L) { "${f}: cannot read"; $failed = 1; continue }
   $ne = 0; $nw = 0
   $out = New-Object System.Collections.Generic.List[string]
   # the contract block: front matter, or the body of a top-level "contract:", else the whole file
@@ -43,23 +53,32 @@ foreach ($f in $Files) {
   foreach ($k in 'id', 'title', 'intent', 'acceptance', 'non_goals', 'do_not_decide') {
     if (-not $txt.ContainsKey($k)) { $out.Add("ERROR missing ``$k``"); $ne++ }
   }
-  if ($txt.ContainsKey('intent') -and (($txt['intent'] -creplace '#[^\n]*', '' -creplace '[>|\n \t]', '') -eq '')) {
-    $out.Add('ERROR `intent` is empty'); $ne++
+  foreach ($k in 'id', 'title', 'intent') {
+    if ($txt.ContainsKey($k) -and (Blank $txt[$k])) { $out.Add("ERROR ``$k`` is empty"); $ne++ }
   }
 
-  # acceptance criteria
+  # acceptance criteria; each item starts with `- criterion:` (the first `-` line sets the items indent)
   if ($txt.ContainsKey('acceptance')) {
-    $crit = @(); $chk = @(); $how = @()
+    $crit = @(); $chk = @(); $how = @(); $ii = -1; $mis = $false
     foreach ($line in ($txt['acceptance'] -split "`n")) {
+      if ($line -cmatch '^([ \t]*)-([ \t]|$)') {
+        $w = $Matches[1].Length; if ($ii -lt 0) { $ii = $w }
+        if ($w -eq $ii -and $line -cnotmatch '^[ \t]*-[ \t]*[{]?[ \t]*criterion:') { $mis = $true }
+      }
+      if ($line -cmatch '^[ \t]*criterion:') { $mis = $true }
       if ($line -cmatch '^[ \t]*-[ \t]*[{]?[ \t]*criterion:[ \t]*(.*)$') {
         $crit += $Matches[1]; $c = ''; $h = ''
-        if ($line -cmatch 'check:[ \t]*([a-z]+)') { $c = $Matches[1] }
-        if ($line -cmatch 'how:[ \t]*[^ \t,}]') { $h = 'y' }
+        # check: and how: on the same line only in a flow item - { criterion: ..., check: ..., how: ... }
+        if ($line -cmatch '^[ \t]*-[ \t]*[{]') {
+          if ($line -cmatch 'check:[ \t]*([^ \t,}]+)') { $c = Val $Matches[1] }
+          if ($line -cmatch 'how:([^,}]*)') { if ((Val $Matches[1]) -ne '') { $h = 'y' } }
+        }
         $chk += $c; $how += $h
       } elseif ($crit.Count -and $line -cmatch '^[ \t]+check:(.*)$') { $chk[$crit.Count - 1] = Val $Matches[1] }
       elseif ($crit.Count -and $line -cmatch '^[ \t]+how:(.*)$') { if ((Val $Matches[1]) -ne '') { $how[$crit.Count - 1] = 'y' } }
     }
-    if (-not $crit.Count) { $out.Add('ERROR `acceptance` has no criteria'); $ne++ }
+    if ($mis) { $out.Add('ERROR criterion must be the first key of each acceptance item'); $ne++ }
+    elseif (-not $crit.Count) { $out.Add('ERROR `acceptance` has no criteria'); $ne++ }
     $oracle = $false
     for ($i = 0; $i -lt $crit.Count; $i++) {
       $n = $i + 1; $short = if ($crit[$i].Length -gt 60) { $crit[$i].Substring(0, 60) } else { $crit[$i] }

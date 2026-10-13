@@ -224,7 +224,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: CONTRACT.md, CORE.md §4
 - entry: every delegation; scripts/check-contract.sh, scripts/check-contract.ps1
 - promises: each criterion names its check (oracle / review / owner) and an oracle names how; non-goals keep the two default lines; a contract with an ERROR is not delegated
-- tested by: tests/selftest/contract.md, CI step "the example contract passes the contract check" (bash, PowerShell)
+- tested by: tests/selftest/contract.md, tests/check-contract/run.sh, CI step "the example contract passes the contract check" (bash, PowerShell)
 - not covered: whether a contract's intent is good is a review matter
 
 ### F-WORK-05 Delegation and naming
@@ -338,7 +338,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/start-worker.sh, procedures/INIT.md
 - entry: every real start
 - promises: `/.claude/worktrees/` is written once to the project's `.git/info/exclude`, never to `.gitignore`, even after a last line without a newline; a dry run writes nothing
-- tested by: tests/workers/run.sh (one exclude line however many starts; the dry run writes none)
+- tested by: tests/workers/run.sh (one exclude line however many starts; the dry run writes none; a coordinator/ state repository kept out too)
 - not covered: none known
 
 ### F-WORKERS-06 cleanup-worker
@@ -656,7 +656,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: CORE.md §2, procedures/INIT.md
 - entry: every start
 - promises: the core is a copy of the whole repository except `.git/`, `.github/` and `CLAUDE.md`, pinned at a recorded commit; a newer upstream is one line to the owner, nothing applied; the rules followed are the copy's
-- tested by: selftest scripts step (no CLAUDE file in a local copy)
+- tested by: selftest scripts step (no CLAUDE file in a local copy), tests/selftest/core-copy.sh (a copy made by git clone)
 - not covered: none known
 
 ### F-UPDATE-02 Update with an impact report
@@ -693,7 +693,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: procedures/CORE-FINDINGS.md, CORE-FINDINGS.template.md, CORE.md §10
 - entry: a core rule that cannot be followed, a core script that misbehaves, a safeguard that silently fails, a missing step, a role that cannot do its job; one-time step `core-findings`
 - promises: a row is written the moment it happens, with re-checkable evidence and before any workaround; roles report suspected faults in `core_findings`; the core-or-project test decides
-- tested by: selftest prepare (the file's header and statuses), CI step "selftest - prepare and verify in a project's state repository"
+- tested by: selftest prepare (the file's header and statuses), tests/selftest/prepare.sh (an empty or capitalised status, UTF-16, a BOM with CRLF), CI step "selftest - prepare and verify in a project's state repository"
 - not covered: a fault worked around without noticing is lost
 
 ### F-FINDINGS-02 Core reports as issues
@@ -758,21 +758,21 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
 - entry: before every core pull request; CI
 - promises: a broken relative link, a missing section, a §1.N past the last hard rule, or a feature map out of sync fails; the `.sh` and `.ps1` print the same
-- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux)
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted)
 - not covered: none known
 
 ### F-SELFTEST-05 check-scripts
 - defined: scripts/check-scripts.sh, scripts/check-scripts.ps1, TOOLKIT.md
 - entry: before every pull request; the dry run; "update the core"
 - promises: every `.sh` and `.ps1` parses; a language with no shell on the machine is listed as skipped, never passed; a `#Requires -Version 7` file is parsed with pwsh
-- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, CI steps "every script parses, and a broken one is reported"
+- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, tests/selftest/core-copy.sh (a whole core copy passes), CI steps "every script parses, and a broken one is reported"
 - not covered: none known
 
 ### F-SELFTEST-06 check-contract
 - defined: scripts/check-contract.sh, scripts/check-contract.ps1, CONTRACT.md
 - entry: before every delegation
 - promises: a missing field, a criterion without a check, an oracle without how, or non-goals without the default lines is an ERROR and blocks delegation; a missing budget or footprint is a WARN explained in the brief
-- tested by: tests/selftest/contract.md, CI steps "the example contract passes the contract check"
+- tested by: tests/selftest/contract.md, tests/check-contract/run.sh (a BOM, quoted values, "how:" in a criterion's text, an empty id or title, a misplaced criterion, a missing file), CI steps "the example contract passes the contract check"
 - not covered: none known
 
 ### F-SELFTEST-07 Script pairs

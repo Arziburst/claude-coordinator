@@ -209,6 +209,19 @@ printf 'coordinator/' > "$tmp/repo3/.git/info/exclude"
 check 0 "start: an exclude file without a final newline" -- start --repo "$tmp/repo3" --name "#37 worker: a" --branch 37-a "${W[@]}" --safety "$tmp/safety.json"
 grep -qx 'coordinator/' "$tmp/repo3/.git/info/exclude" && grep -qx '/.claude/worktrees/' "$tmp/repo3/.git/info/exclude" &&
   [ -z "$(git -C "$tmp/repo3" status --porcelain)" ] || { echo "FAIL: the exclude file was corrupted:"; sed 's/^/    /' "$tmp/repo3/.git/info/exclude"; fail=1; }
+# a coordinator/ state repository in a project that got `git init` after it: kept out of the project's
+# git with one info/exclude line (the common dir's), written by a real start only
+git init -q -b main "$tmp/repo5" && g -C "$tmp/repo5" commit -q --allow-empty -m init
+git init -q -b state "$tmp/repo5/coordinator" && echo x > "$tmp/repo5/coordinator/PROJECT.md"
+check 0 "start: a dry run, coordinator/ not ignored" -- start --repo "$tmp/repo5" --name "#42 worker: a" --branch 42-a "${W[@]}" --safety "$tmp/safety.json" --dry-run
+expect_in "[dry-run] add /coordinator/ to the repository's .git/info/exclude"
+grep -q 'coordinator' "$tmp/repo5/.git/info/exclude" && { echo "FAIL: the dry run wrote /coordinator/ to info/exclude"; fail=1; }
+check 0 "start: coordinator/ not ignored" -- start --repo "$tmp/repo5" --name "#42 worker: a" --branch 42-a "${W[@]}" --safety "$tmp/safety.json"
+expect_in "added /coordinator/ to the repository's .git/info/exclude"
+check 0 "start: coordinator/ ignored already" -- start --repo "$tmp/repo5" --name "#43 worker: a" --branch 43-a "${W[@]}" --safety "$tmp/safety.json"
+case "$LAST" in *"/coordinator/"*) echo "FAIL: /coordinator/ added a second time"; fail=1 ;; esac
+[ "$(grep -c '^/coordinator/$' "$tmp/repo5/.git/info/exclude")" = 1 ] && [ -z "$(git -C "$tmp/repo5" status --porcelain)" ] ||
+  { echo "FAIL: the project's git sees coordinator/:"; git -C "$tmp/repo5" status --short | sed 's/^/    /'; sed 's/^/    /' "$tmp/repo5/.git/info/exclude"; fail=1; }
 # an unreachable origin: the script's own message (Windows PowerShell 5.1 included)
 git init -q -b main "$tmp/repo4" && g -C "$tmp/repo4" commit -q --allow-empty -m init && git -C "$tmp/repo4" remote add origin "$mtmp/no-such-remote.git"
 check 1 "start: an unreachable origin" -- start --repo "$tmp/repo4" --name "#38 worker: a" --branch 38-a "${W[@]}" --safety "$tmp/safety.json" --dry-run

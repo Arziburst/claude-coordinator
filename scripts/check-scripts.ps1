@@ -25,14 +25,21 @@ $here = Split-Path -Parent $PSCommandPath
 if (-not $Folders) { $Folders = @($here) }
 foreach ($d in $Folders) { if (-not (Test-Path -LiteralPath $d -PathType Container)) { [Console]::Error.WriteLine("not a folder: $d"); exit 2 } }
 
-# every file as <folder>/<path below it>, sorted the same way on every system
+# every file as <folder>/<path below it>, sorted the same way on every system. The core's deliberately
+# broken fixtures (tests/check-scripts/broken/) are left out unless the folder given is that folder or
+# inside it: a whole core copy passes, and their own check still sees them fail.
 function List([string]$ext) {
+  $p = '/tests/check-scripts/broken/'
   foreach ($d in $Folders) {
     $shown = $d.TrimEnd('/', '\').Replace('\', '/')
-    $root = (Resolve-Path -LiteralPath $d).Path.TrimEnd('/', '\')
+    # Get-Item's FullName is in the form the listing's FullNames take (a root given as C:\Users\RUNNER~1\...
+    # comes back long), so the relative paths are cut at the right place
+    $root = (Get-Item -LiteralPath $d -Force).FullName.TrimEnd('/', '\')
+    $a = $root.Replace('\', '/') + '/'
     $rel = [string[]]@(Get-ChildItem -LiteralPath $root -Recurse -File -Filter "*.$ext" |
       Where-Object { $_.Extension -eq ".$ext" } |
-      ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\', '/') })
+      ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\', '/') } |
+      Where-Object { $a.Contains($p) -or -not ($a + $_).Contains($p) })
     [Array]::Sort($rel, [StringComparer]::Ordinal)   # as LC_ALL=C sort
     foreach ($r in $rel) { if ($r) { [pscustomobject]@{ Show = "$shown/$r"; Path = (Join-Path $root $r) } } }
   }

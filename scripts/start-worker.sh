@@ -20,6 +20,8 @@
 # origin, or a --base not on origin yet (a lead's integration branch), starts the branch from the local --base.
 # The hook path in --safety uses forward slashes: on Windows hooks run through Git Bash, which drops
 # backslashes, and a hook that fails to run blocks nothing.
+# The worktrees' folder and a coordinator/ state repository at the root are kept out of the project's
+# git: one line each in its .git/info/exclude, never .gitignore.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
@@ -105,6 +107,18 @@ else
     [ -s "$ex" ] && [ -n "$(tail -c 1 "$ex")" ] && printf '\n' >> "$ex"
     printf '/%s\n' "$prefix" >> "$ex" &&
       echo "added /$prefix to the repository's .git/info/exclude"
+  fi
+fi
+# The coordinator's own state repository (<root>/coordinator, INIT 3.4) never shows in the project's git
+# either: a project that got `git init` after coordinator/ existed has no line for it yet
+if [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinator/; then
+  if [ "$dry" = 1 ]; then echo "[dry-run] add /coordinator/ to the repository's .git/info/exclude"
+  else
+    common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
+    ex="$common/info/exclude"; mkdir -p "$common/info"
+    [ -s "$ex" ] && [ -n "$(tail -c 1 "$ex")" ] && printf '\n' >> "$ex"
+    printf '/coordinator/\n' >> "$ex" &&
+      echo "added /coordinator/ to the repository's .git/info/exclude"
   fi
 fi
 

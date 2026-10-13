@@ -49,7 +49,8 @@ while IFS= read -r f; do
         print NR, "S", sec, subn
       }
     }' "$f")
-done < <(find . -name '*.md' -not -path './.git/*' | LC_ALL=C sort)
+done < <(find . \( -name .git -o -name .claude \) -prune -o -type d ! -path . -exec test -e {}/.git \; -prune -o -name '*.md' -print | LC_ALL=C sort)
+# (not .git, not .claude/ - agent worktrees of a checkout - and not a nested repository or worktree)
 
 # FEATURES.md, the feature map: every file a block names exists; every script, procedure, role and
 # one-time step is in some feature; IDs are unique; every block has its five fields; the summary table

@@ -53,9 +53,10 @@ switch ($Step) {
   }
   if ($shells.Count -eq 0) { $shells = @(, @((Get-Process -Id $PID).Path, '')) }
   $want = ([IO.File]::ReadAllText((Join-Path $coreDir 'tests/session-tokens/expected.txt')) -replace "`r", '').TrimEnd("`n")
-  # a local copy (no .git) must not hold the core's CLAUDE.md: Claude Code loads it into every session
-  # that reads the copy's files, telling workers they are the coordinator
-  if ((Test-Path -LiteralPath (Join-Path $coreDir 'CLAUDE.md')) -and -not (Test-Path -LiteralPath (Join-Path $coreDir '.git'))) {
+  # a local copy must not hold the core's CLAUDE.md: Claude Code loads it into every session that reads
+  # the copy's files, telling workers they are the coordinator. Only the maintainer's own checkout has
+  # .github/ (a project's copy leaves it out), so a copy made by git clone (with .git) counts too
+  if ((Test-Path -LiteralPath (Join-Path $coreDir 'CLAUDE.md') -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $coreDir '.github') -PathType Container)) {
     Fail 'the local core copy holds CLAUDE.md: remove it (it tells every worker it is the coordinator)'
   } else { Pass 'no CLAUDE.md in a local core copy' }
   $old = $env:CLAUDE_CONFIG_DIR
@@ -248,12 +249,20 @@ switch ($Step) {
     $fnd = Join-Path $State 'CORE-FINDINGS.md'
     if (-not (Test-Path -LiteralPath $fnd -PathType Leaf)) { Fail 'no CORE-FINDINGS.md in the state repository (INIT 3.4, CORE-FINDINGS.template.md)' }
     else {
-      $fl = @([IO.File]::ReadAllLines($fnd) | ForEach-Object { $_.TrimEnd("`r") })
-      if ($fl -notcontains '| id | date | core | trigger | what happened (evidence) | workaround | status |') { Fail "CORE-FINDINGS.md lacks the template's table header" }
-      else {
-        $bad = @($fl | Where-Object { $_.StartsWith('|') -and -not $_.StartsWith('| id |') -and -not $_.StartsWith('|---') } | ForEach-Object {
-          $c = $_.Split('|'); $c[$c.Count - 2].Trim() } | Where-Object { $_ -notmatch '^(new|discussed|sent|fixed|dropped|not core)' })
-        if ($bad.Count -eq 0) { Pass "CORE-FINDINGS.md in the template's format" } else { Fail "CORE-FINDINGS.md: unknown status '$($bad[0])'" }
+      # a UTF-8 BOM and CRLF are fine; UTF-16 (Windows PowerShell 5.1's Out-File) is not read as text at all
+      $fb = [IO.File]::ReadAllBytes($fnd)
+      if ($fb.Length -ge 2 -and (($fb[0] -eq 0xFF -and $fb[1] -eq 0xFE) -or ($fb[0] -eq 0xFE -and $fb[1] -eq 0xFF))) {
+        Fail 'CORE-FINDINGS.md is not UTF-8 (re-save it as UTF-8)'
+      } else {
+        $fl = @([IO.File]::ReadAllLines($fnd, (New-Object System.Text.UTF8Encoding $false)) | ForEach-Object { $_.TrimEnd("`r") })
+        if ($fl -cnotcontains '| id | date | core | trigger | what happened (evidence) | workaround | status |') { Fail "CORE-FINDINGS.md lacks the template's table header" }
+        else {
+          # the status cell, case-sensitive; an empty one is unknown too
+          $bad = @($fl | Where-Object { $_.StartsWith('|') -and -not $_.StartsWith('| id |') -and -not $_.StartsWith('|---') } | ForEach-Object {
+            $c = $_.Split('|'); $c[$c.Count - 2].Trim(' ', "`t") } | Where-Object { $_ -cnotmatch '^(new|discussed|sent|fixed|dropped|not core)' } |
+            ForEach-Object { if ($_ -eq '') { '<empty>' } else { $_ } })
+          if ($bad.Count -eq 0) { Pass "CORE-FINDINGS.md in the template's format" } else { Fail "CORE-FINDINGS.md: unknown status '$($bad[0])'" }
+        }
       }
     }
     & git -C $State show-ref -q --verify "refs/heads/$base"
