@@ -163,8 +163,8 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Question | This project | Default to offer |
 |---|---|---|
 | Leads (CORE §4, roles/lead.md) | `<fill>` | for tasks whose pieces must land together (3+ sub-contracts, more than one worker's context); up to 3 workers per lead, within the preset's parallel workers |
-| Spend forecast and report (CORE §7a) | `<fill>` | the block's estimate in cost and limit percent in the plan; forecast vs actual in the block report |
-| Time estimates | `<fill>` | strict: optimistic / realistic / pessimistic per task; aim for realistic, warn before pessimistic · swarm, standard: none |
+| Spend forecast and report (CORE §7a) | `<fill>` | the block's estimate in cost, limit percent and time in the plan; forecast vs actual in the block report |
+| Time estimates | `<fill>` | strict: optimistic / realistic / pessimistic per task (the low end, median and top of `budget.time`, CORE §7a); aim for realistic, warn before pessimistic · swarm, standard: none |
 | Time tracking | `<fill>` | strict: a timesheet draft shown to the owner before it is written · swarm, standard: none |
 
 ## Client dependencies

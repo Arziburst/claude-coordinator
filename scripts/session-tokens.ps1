@@ -5,6 +5,10 @@
 # One line per model and a "total" line, summed from the transcripts and their subagents, each message
 # once (output is a LOWER BOUND); for one session (not a subagent) a "cost" line from ~/.claude/coordinator/sessions/<id>.json
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
+# Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC>" from the records' timestamps
+# (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes, but a gap inside a tool call
+# is work up to 30 minutes and one inside only a question to a person, a tool named *AskUserQuestion, is idle at any
+# length; minutes rounded, a half up).
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
 param([string]$Session, [string]$Since, [switch]$Prune)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
@@ -14,7 +18,7 @@ param([string]$Session, [string]$Since, [switch]$Prune)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 8 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 12 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -57,6 +61,95 @@ $reId = [regex]'"id":[ \t]*"(msg_[^"]*)"'
 $reModel = [regex]'"model":[ \t]*"([^"]*)"'
 $reNum = @('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens') |
   ForEach-Object { [regex]('"' + $_ + '":[ \t]*([0-9]+)') }
+# the record's own timestamp, outside "message": the first on the line when it comes before "message"
+# (Claude Code 2.1.296 writes it there), else the last; a tool input inside the message may carry
+# others. $null when the line has none. The compact form is read with plain searches, any other with
+# the regex, which gives the .sh's answer either way.
+function RecTime([string]$line) {
+  $i = $line.IndexOf('"timestamp":', $O); if ($i -lt 0) { return $null }
+  $p = $line.IndexOf('"message":', $O)
+  if ($p -ge 0) {
+    $fi = -1; $fv = $null; $e = if ($line.Length -gt $i + 12 -and $line[$i + 12] -eq '"') { $line.IndexOf('"', $i + 13) } else { -1 }
+    if ($e -ge 0) { $fi = $i; $fv = $line.Substring($i + 13, $e - $i - 13) }
+    else { $f = $reTime.Match($line); if ($f.Success) { $fi = $f.Index; $fv = $f.Groups[1].Value } }
+    if ($fi -ge 0 -and $fi -lt $p) { return $fv }
+  }
+  $a = $line.LastIndexOf('"timestamp":"', $O); $e = if ($a -ge 0) { $line.IndexOf('"', $a + 13) } else { -1 }
+  if ($a -ge 0 -and $e -ge 0 -and $line.LastIndexOf('"timestamp":', $O) -eq $a) { return $line.Substring($a + 13, $e - $a - 13) }
+  $all = $reTime.Matches($line); if ($all.Count) { return $all[$all.Count - 1].Groups[1].Value }
+  $null
+}
+# days since 1970-01-01 of a date (the civil calendar), the .sh's arithmetic
+function Days([long]$y, [long]$m, [long]$d) {
+  if ($m -le 2) { $y-- }
+  $e = [Math]::Floor($y / 400); $yoe = $y - $e * 400
+  $mp = if ($m -gt 2) { $m - 3 } else { $m + 9 }
+  [long]($e * 146097 + $yoe * 365 + [Math]::Floor($yoe / 4) - [Math]::Floor($yoe / 100) + [Math]::Floor((153 * $mp + 2) / 5) + $d - 1 - 719468)
+}
+# the time line: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff], read as UTC) in milliseconds,
+# over every file as one set, sorted; wall = last - first, active = wall minus the idle gaps: a gap
+# inside a tool call (from a tool_use to its own tool_result, matched by id: the id's first tool_use
+# record to its last record naming it in tool_use_id) is work up to 30 minutes, the rest idle; a gap
+# inside only a call of a tool that asks a person (a name ending in AskUserQuestion) is idle at any
+# length; any other gap over 5 minutes is idle. Minutes rounded to the nearest, a half up; nothing when
+# no record has a timestamp
+$reStamp = [regex]'^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?'
+$reUse = [regex]'"type":[ \t]*"tool_use",[ \t]*"id":[ \t]*("[^"]*")(,[ \t]*"name":[ \t]*"[^"]*AskUserQuestion")?'
+$reResult = [regex]'"tool_use_id":[ \t]*("[^"]*")'
+function Span([string[]]$Files) {
+  $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''
+  $use = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
+  $res = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
+  $ask = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($file in $Files) {
+    foreach ($line in [IO.File]::ReadLines($file)) {
+      if (-not $line) { continue }
+      $ts = RecTime $line; if (-not $ts) { continue }
+      $m = $reStamp.Match($ts); if (-not $m.Success) { continue }
+      $n = $m.Groups
+      $ms = ((((Days $n[1].Value $n[2].Value $n[3].Value) * 24 + [long]$n[4].Value) * 60 + [long]$n[5].Value) * 60 + [long]$n[6].Value) * 1000 + [long](($n[7].Value + '000').Substring(0, 3))
+      $t.Add($ms)
+      if ($ms -lt $first) { $first = $ms; $start = $ts.Substring(0, 19) }
+      if ($ms -gt $last) { $last = $ms; $end = $ts.Substring(0, 19) }
+      # the tool calls this record starts (parallel ones too) and the results it carries
+      if ($line.Contains('"tool_use"')) {
+        foreach ($u in $reUse.Matches($line)) {
+          $id = $u.Groups[1].Value; if (-not $use.ContainsKey($id) -or $ms -lt $use[$id]) { $use[$id] = $ms }
+          if ($u.Groups[2].Success) { [void]$ask.Add($id) }   # a tool that asks a person
+        }
+      }
+      if ($line.Contains('"tool_use_id"')) {
+        foreach ($u in $reResult.Matches($line)) { $id = $u.Groups[1].Value; if (-not $res.ContainsKey($id) -or $ms -gt $res[$id]) { $res[$id] = $ms } }
+      }
+    }
+  }
+  if (-not $t.Count) { return }
+  # the calls' starts and ends, each sorted, work ($cs, $ce) and questions to a person ($qs, $qe) apart;
+  # a gap from $t[k-1] to $t[k] is inside a call when more of them started than ended at or before
+  # $t[k-1] (every start and end is itself a record's time)
+  $cs = New-Object 'System.Collections.Generic.List[long]'; $ce = New-Object 'System.Collections.Generic.List[long]'
+  $qs = New-Object 'System.Collections.Generic.List[long]'; $qe = New-Object 'System.Collections.Generic.List[long]'
+  foreach ($id in $use.Keys) {
+    if ($res.ContainsKey($id) -and $res[$id] -gt $use[$id]) {
+      if ($ask.Contains($id)) { $qs.Add($use[$id]); $qe.Add($res[$id]) } else { $cs.Add($use[$id]); $ce.Add($res[$id]) }
+    }
+  }
+  $cs.Sort(); $ce.Sort(); $qs.Sort(); $qe.Sort(); $si = 0; $ei = 0; $qi = 0; $qj = 0
+  $t.Sort(); $idle = [long]0
+  for ($k = 1; $k -lt $t.Count; $k++) {
+    $p = $t[$k - 1]
+    while ($si -lt $cs.Count -and $cs[$si] -le $p) { $si++ }
+    while ($ei -lt $ce.Count -and $ce[$ei] -le $p) { $ei++ }
+    while ($qi -lt $qs.Count -and $qs[$qi] -le $p) { $qi++ }
+    while ($qj -lt $qe.Count -and $qe[$qj] -le $p) { $qj++ }
+    $gap = $t[$k] - $p
+    if ($si -gt $ei) { if ($gap -gt 1800000) { $idle += $gap - 1800000 } }   # a tool call: work, up to 30 minutes a gap
+    elseif ($qi -gt $qj) { $idle += $gap }                                   # waiting for the owner, at any length
+    elseif ($gap -gt 300000) { $idle += $gap }                               # over 5 minutes, no call: nobody worked
+  }
+  $wall = $last - $first
+  "time`twall={0}m active={1}m start={2}Z end={3}Z" -f [long][Math]::Floor(($wall + 30000) / 60000), [long][Math]::Floor(($wall - $idle + 30000) / 60000), $start, $end
+}
 function CountUsage([string[]]$Files) {
   $best = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
   foreach ($file in $Files) {
@@ -68,17 +161,8 @@ function CountUsage([string[]]$Files) {
       if ($line.LastIndexOf('"usage":', $O) -ne $iu) { $all = $reUsage.Matches($line); $iu = if ($all.Count) { $all[$all.Count - 1].Index } else { -1 } }
       if ($iu -lt 0) { continue }
       if ($cut) {
-        # the record timestamp, outside "message": the first on the line when it comes before
-        # "message" (Claude Code 2.1.296 writes it there), else the last; a tool input inside the
-        # message may carry others
-        $f = $reTime.Match($line)
-        if (-not $f.Success) { continue }
-        $p = $line.IndexOf('"message":', $O)
-        if ($p -ge 0 -and $f.Index -lt $p) { $ts = $f.Groups[1].Value } else {
-          $a = $line.LastIndexOf('"timestamp":"', $O); $e = if ($a -ge 0) { $line.IndexOf('"', $a + 13) } else { -1 }
-          if ($a -ge 0 -and $e -ge 0 -and $line.LastIndexOf('"timestamp":', $O) -eq $a) { $ts = $line.Substring($a + 13, $e - $a - 13) }
-          else { $all = $reTime.Matches($line); $ts = $all[$all.Count - 1].Groups[1].Value }
-        }
+        $ts = RecTime $line
+        if ($null -eq $ts) { continue }
         if ($ts.Length -gt 19) { $ts = $ts.Substring(0, 19) }
         if ([string]::CompareOrdinal($ts, $cut) -lt 0) { continue }
       }
@@ -157,4 +241,5 @@ if (Test-Path -LiteralPath $status) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
   if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
 }
+if ($main) { Span $files }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

@@ -1,0 +1,2 @@
+claude-sonnet-5-5	2	in=1 out>=1 cache_read=0 cache_write=0
+total	2	in=1 out>=1 cache_read=0 cache_write=0
