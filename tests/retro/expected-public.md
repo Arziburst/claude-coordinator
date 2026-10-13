@@ -28,7 +28,7 @@
 | predictability | cost_forecasts | 6 | 2 |
 | predictability | cost_logged | 4 | 2 |
 | predictability | cost_rebuilt | 2 | 0 |
-| predictability | cost_in_range | 67% | — |
+| predictability | cost_in_range | 50% | — |
 | predictability | cost_ratio_median | 111% | — |
 | predictability | work_forecasts | 5 | 2 |
 | predictability | work_logged | 3 | 0 |

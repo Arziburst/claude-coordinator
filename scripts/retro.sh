@@ -32,7 +32,7 @@
 #   predictability  per measure cost / work / ready: _forecasts (tasks with a forecast), for cost and work
 #                   _logged (the estimate the task's lead row, else first worker row logged: estimate for cost,
 #                   estimate_time for work; lo-hi: in range inside it, its midpoint for the ratio; one number n:
-#                   in range from n/2 to 2n) and _rebuilt (no logged estimate: 3 or more earlier tasks of the
+#                   in range from 2n/3 to 3n/2) and _rebuilt (no logged estimate: 3 or more earlier tasks of the
 #                   kind and model, the last 10 before the task's first row, their 25th-75th percentile, min-max
 #                   under 4, as run-stats), _in_range, _ratio_median (actual / the forecast's midpoint, percent)
 #   stability       failed_runs (rows with result failed), guard_blocks, deny_rule_blocks, guard_around (blocks
@@ -326,8 +326,8 @@ report() {
   function dec1(x) { return sprintf("%d.%d", idiv(x, 10), x % 10) }        # tenths as d.d
   function pct(a, b) { return idiv(200 * a + b, 2 * b) "%" }
   # the forecast of task t for a measure (c cost, a work, r ready): the estimate logged in its run log row (cost:
-  # estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from n/2
-  # to 2n) where there is one, else rebuilt from the earlier tasks of its kind and model as run-stats gave it before
+  # estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from 2n/3
+  # to 3n/2, 3 val >= 2 n and 2 val <= 3 n) where there is one, else rebuilt from the earlier tasks of its kind and model as run-stats gave it before
   # the task: 3 or more of them, the last 10, by their last row before t s first row
   function fcast(t, w, ms,   i, u, n, v, val, o, j, k, s, m2, lo, hi, a, x) {
     if (ms == "c") { if (!(t in hc)) return; val = tc[t] }
@@ -335,7 +335,7 @@ report() {
     else { if (!(t in tr) || trw[t] < 0) return; val = trw[t] }
     if (ms != "r" && est(ms == "c" ? te[t] : tt[t])) {
       FC[w, ms]++; LG[w, ms]++
-      if (ESGL ? (2 * val >= ELO && val <= 2 * ELO) : (val >= ELO && val <= EHI)) IN[w, ms]++
+      if (ESGL ? (3 * val >= 2 * ELO && 2 * val <= 3 * ELO) : (val >= ELO && val <= EHI)) IN[w, ms]++
       m2 = ESGL ? 2 * ELO : ELO + EHI; add(w ms "q", idiv(400 * val + m2, 2 * m2)); return }
     n = 0
     for (i = 1; i <= nt; i++) { u = T[i]; if (u == t) continue

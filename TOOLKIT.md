@@ -470,8 +470,8 @@ BOM, models priced apart),
   *predictability*: per cost and work `_forecasts _logged _rebuilt _in_range _ratio_median`, per ready
   `_forecasts _in_range _ratio_median` — a task's forecast is the estimate its run log row logged
   (`estimate` for cost, `estimate_time` for work, from its lead row, else its first worker row: a range
-  `lo-hi`, in range inside it and its midpoint for the ratio; one number `n`, in range from `n/2` to
-  `2n`), else rebuilt: 3 or more earlier tasks of the kind and model, the last 10 before the task's first
+  `lo-hi`, in range inside it and its midpoint for the ratio; one number `n`, in range from `2n/3` to
+  `3n/2`), else rebuilt: 3 or more earlier tasks of the kind and model, the last 10 before the task's first
   row, its range run-stats' 25th–75th percentile, min–max under 4; *stability*: `failed_runs guard_blocks deny_rule_blocks
   guard_around guard_false_positives guard_errors refusals tool_errors tool_calls tool_error_rate
   cache_rewrites cache_rewrites_per_task waiting_minutes rereads` — then `kind name tasks rework escalated

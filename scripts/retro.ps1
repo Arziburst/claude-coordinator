@@ -405,7 +405,7 @@ function Dec1([long]$n) { '{0}.{1}' -f (IDiv $n 10), ($n % 10) }        # tenths
 function Pct([long]$a, [long]$b) { "$(IDiv (200 * $a + $b) (2 * $b))%" }
 $Forecasts = NewMap; $InRange = NewMap; $Logged = NewMap; $Rebuilt = NewMap
 # the forecast of a task for a measure (c cost, a work, r ready): the estimate logged in its run log row (cost:
-# estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from n/2 to 2n)
+# estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from 2n/3 to 3n/2)
 # where there is one, else rebuilt from the earlier tasks of its kind and model as run-stats gave it before the task:
 # 3 or more of them, the last 10, by their last row before the task's first row
 function Fcast([string]$tid, [string]$wk, [string]$ms) {
@@ -416,7 +416,7 @@ function Fcast([string]$tid, [string]$wk, [string]$ms) {
     $e1 = Est $(if ($ms -eq 'c') { $me.te } else { $me.tt })
     if ($null -ne $e1) {
       Inc $Forecasts "$wk$ms" 1; Inc $Logged "$wk$ms" 1
-      $in1 = if ($e1.one) { 2 * $val -ge $e1.lo -and $val -le 2 * $e1.lo } else { $val -ge $e1.lo -and $val -le $e1.hi }
+      $in1 = if ($e1.one) { 3 * $val -ge 2 * $e1.lo -and 2 * $val -le 3 * $e1.lo } else { $val -ge $e1.lo -and $val -le $e1.hi }
       if ($in1) { Inc $InRange "$wk$ms" 1 }
       $m2 = if ($e1.one) { 2 * $e1.lo } else { $e1.lo + $e1.hi }; Add "$wk${ms}q" (IDiv (400 * $val + $m2) (2 * $m2)); return
     }

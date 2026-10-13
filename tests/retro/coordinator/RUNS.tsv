@@ -17,7 +17,8 @@ date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	w
 2026-10-01	7	worker	ordinary	sonnet	medium	1	100	2.50	rework 1	2026-10-01T08:00:00Z	40	30
 2026-10-01	7	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T08:00:00Z	60	30	120
 2026-10-02	-	coordinator	-	opus	high	-	1000	3.00	-
-# the week: ordinary tasks with a forecast - logged (a cost estimate, an estimate_time as a range and as one number)
+# the week: ordinary tasks with a forecast - logged (a cost estimate, an estimate_time as a range and as one number;
+# one number n is met from 2n/3 to 3n/2: task 14's cost 4.70 against 8 is out, task 9's work 22 against 15 just in)
 # or rebuilt; one reworked, one escalated, one with a failed run -, a hard task without history, a project-specific
 # kind (other in the public body), a lead with sub-runs and a subagent row, and a project kind the ROUTING.md map
 # names (mechanical -> trivial) with a cost cell read by its leading number, done, pass and an unknown result

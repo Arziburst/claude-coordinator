@@ -42,7 +42,7 @@ proposals, and — as the owner chose at init — sends an anonymous summary to 
    - *predictability*: per measure (cost, work, time to ready) how many tasks had a forecast, the share
      inside its range and the median of actual over forecast. The forecast is the estimate the run log
      logged at the start (`estimate` for cost, `estimate_time` for work, CORE §7: a range `lo-hi`, its
-     midpoint for the ratio; one number `n`, in range from `n/2` to `2n`), counted as `_logged`; else it
+     midpoint for the ratio; one number `n`, in range from `2n/3` to `3n/2` — symmetric on a log scale and close to a range's 25th–75th band), counted as `_logged`; else it
      is rebuilt as `run-stats` gave it before the task (the 25th–75th percentile, CORE §7a), counted as
      `_rebuilt`; time to ready is always rebuilt;
    - *stability*: failed runs, guard blocks and deny rules, blocks worked around, guard false positives

@@ -546,7 +546,11 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 - **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)) measures the coordinator on cost, speed,
   quality, predictability and stability, week against week, from the run log and the project's transcripts
   (`scripts/retro`, its input `scripts/session-insights`, TOOLKIT *Usage*), writes at most three proposals
-  for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init.
+  for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init. Its
+  predictability judges a task by the estimate logged at the start where there is one (§7: `estimate`,
+  `estimate_time`) — a range met inside it, one number `n` met from `2n/3` to `3n/2` (symmetric on a log
+  scale, about as wide as a range's 25th–75th band, so a single number never looks more predictable than
+  a range) — else by the forecast rebuilt from the run log as above.
 
 ## 8. Resources, parallel work and cleanup
 
