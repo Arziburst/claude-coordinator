@@ -225,7 +225,7 @@ git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/39-a"; git -C "$
 # the same root in another letter case is the root (Windows: case-insensitive paths)
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
   : > "$STUB_LOG"
-  check 0 "start: --launch-from the root in another letter case" -- start --repo "$tmp/repo" --name "#41 worker: a" --branch 41-a "${W[@]}" --safety "$tmp/safety.json" --launch-from "$(printf '%s' "$mtmp/repo" | tr '[:lower:]' '[:upper:]')"
+  check 0 "start: --launch-from the root in another letter case" -- start --repo "$tmp/repo" --name "#41 worker: a" --branch 41-a "${W[@]}" --safety "$tmp/safety.json" --launch-from "$(git -C "$tmp/repo" rev-parse --show-toplevel | tr '[:lower:]' '[:upper:]')"
   grep -q "EnterWorktree tool with path" "$STUB_LOG" || { echo "FAIL: the root in another case was taken for another folder"; fail=1; }
   git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/41-a" ;;
 esac
