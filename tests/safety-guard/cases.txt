@@ -296,3 +296,33 @@ block	work	cd ~; Get-ChildItem | Remove-Item -Recurse -Force
 allow	work	Get-ChildItem build | Remove-Item -Recurse -Force
 allow	work	Get-ChildItem C:\ | Select-Object Name
 allow	work	Get-ChildItem C:\ | Remove-Item -WhatIf
+# --- findings of a macOS tester session (group SAFE) ---
+# . or * inside a worktree: after a cd to it, or with it as the working folder (branch column: a cwd under work)
+block	work	cd .claude/worktrees/12-fix && rm -rf .
+block	work	cd .claude/worktrees/12-fix && rm -rf *
+block	work	cd .claude/worktrees/12-fix && Remove-Item -Recurse -Force .
+allow	work	cd .claude/worktrees/12-fix && rm -rf build
+block	work/.claude/worktrees/12-fix	rm -rf .
+block	work/.claude/worktrees/12-fix	rm -rf *
+allow	work/.claude/worktrees/12-fix	rm -rf build
+# home as ~/** (zsh's recursive glob; * in bash without globstar), $HOME/** and ~name
+block	work	rm -rf ~/**
+block	work	rm -rf ~/**/
+block	work	rm -rf $HOME/**
+block	work	rm -rf ~someone
+block	work	rm -rf ~someone/*
+allow	work	rm -rf ~/x/**
+# macOS wrappers and the Homebrew coreutils names
+block	work	caffeinate -i git push origin main
+block	work	caffeinate -t 5 git push origin main
+block	work	arch -arm64 git push origin main
+block	work	arch -arch arm64 git push origin main
+block	work	script -q /dev/null git push origin main
+block	work	gtimeout 30 git push origin main
+block	work	gnice -n 5 git push origin main
+block	work	gstdbuf -oL git push origin main
+block	work	genv -i git push origin main
+allow	work	caffeinate -i git push origin 12-fix
+# a deny file saved with a UTF-8 BOM keeps its first pattern
+block	bom	terraform destroy
+allow	bom	ls

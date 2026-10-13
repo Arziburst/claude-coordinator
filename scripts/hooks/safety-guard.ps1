@@ -59,7 +59,9 @@ $WRAP = '^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builti
 $ASSIGN = '^[A-Za-z_][A-Za-z0-9_]*='
 # wrappers with options of their own: the options that take a value
 function OptArg([string]$t) {
-  switch ($t) { 'sudo' { '^-[ugpcdrt]$' } 'env' { '^-[usc]$' } 'timeout' { '^-[sk]$' } 'nice' { '^-n$' } 'stdbuf' { '^-[ioe]$' } default { '' } }
+  switch ($t) { 'sudo' { '^-[ugpcdrt]$' } 'env' { '^-[usc]$' } 'timeout' { '^-[sk]$' } 'nice' { '^-n$' } 'stdbuf' { '^-[ioe]$' }
+    # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
+    'caffeinate' { '^-[tw]$' } 'arch' { '^-(arch|e|d)$' } 'script' { '^-[tTc]$' } default { '' } }
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
 # and VAR=value assignments
@@ -67,10 +69,11 @@ function CmdIdx($toks) {
   $j = 0
   while ($j -lt $toks.Count) {
     $t = $toks[$j].ToLowerInvariant()
+    if ($t -match '^g(env|timeout|nice|stdbuf)$') { $t = $t.Substring(1) }   # Homebrew coreutils: gtimeout, gnice ...
     if ($t -match $WRAP -or $toks[$j] -match $ASSIGN) { $j++; continue }
     $ao = OptArg $t; if (-not $ao) { break }
     for ($j++; $j -lt $toks.Count -and $toks[$j].StartsWith('-'); $j++) { if ($toks[$j] -eq '--') { $j++; break }; if ($toks[$j] -match $ao) { $j++ } }
-    if ($t -eq 'timeout' -and $j -lt $toks.Count) { $j++ }   # the duration
+    if (($t -eq 'timeout' -or $t -eq 'script') -and $j -lt $toks.Count) { $j++ }   # the duration, or the typescript file of script
   }
   $j
 }
@@ -346,9 +349,10 @@ function CdSeg([string[]]$a) {
   $script:dir = Compose $script:dir $x
 }
 # --- irreversible removals: / , a drive, home, or a worktree by hand ---
-function StripAll([string]$x) {   # x/* , x/. and trailing separators -> x
+function StripAll([string]$x) {   # x/* , x/** , x/. and trailing separators -> x
   while ($true) {
-    if ($x -match '[/\\][*.]$') { $x = $x.Substring(0, $x.Length - 2) }
+    if ($x -match '[/\\]\*\*$') { $x = $x.Substring(0, $x.Length - 1) }
+    elseif ($x -match '[/\\][*.]$') { $x = $x.Substring(0, $x.Length - 2) }
     elseif ($x -match '[/\\]$') { $x = $x.Substring(0, $x.Length - 1) }
     else { break }
   }
@@ -360,12 +364,16 @@ function RmTarget([string]$t) {
   if ($x -match '^(|~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$\{env:USERPROFILE\}|\$env:HOME|\$env:HOMEDRIVE|\$env:SystemDrive|%USERPROFILE%|%HOMEDRIVE%|%SystemDrive%|[A-Za-z]:)$') {
     Block 'recursive removal of /, a drive or home'
   }
+  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**)
+  if ($x -match '^~[^/\\]+$') { Block 'recursive removal of /, a drive or home' }
   # the full path: relative targets (., *, x) from the directory a cd led to; home given literally
   # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c
   $full = Compose $script:dir $t
   if ($full -eq '?') { return }
   $full = Canon (StripAll $full)
   if ($full -match '^([a-z]:)?$') { Block 'recursive removal of /, a drive or home' }
+  # . or * inside a worktree (after a cd to it, or with it as the working folder)
+  if ($full -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
   foreach ($h in @($HOME, $env:USERPROFILE, $env:HOME)) {
     if ($h -and $full -ceq (Canon $h)) { Block 'recursive removal of /, a drive or home' }
   }
@@ -434,7 +442,13 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
 $proj = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
 $denyFile = Join-Path $proj '.claude/coordinator-deny.txt'
 if (Test-Path -LiteralPath $denyFile) {
-  foreach ($line in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $denyFile).Path)) {
+  # a deny file that is there but cannot be read (no read permission, a folder) blocks every call
+  $denyLines = $null
+  try {
+    if (-not (Test-Path -LiteralPath $denyFile -PathType Leaf)) { throw 'not a file' }
+    $denyLines = [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $denyFile).Path)
+  } catch { Block 'project rule file cannot be read: .claude/coordinator-deny.txt' }
+  foreach ($line in $denyLines) {
     $p = $line.Trim()
     if (-not $p -or $p.StartsWith('#')) { continue }
     $re = $p.Replace('[:space:]', '\s').Replace('[:alnum:]', 'A-Za-z0-9').Replace('[:alpha:]', 'A-Za-z').Replace('[:digit:]', '0-9')

@@ -10,8 +10,9 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -"$1" "$2"; else printf '%s' "$2"; fi; }   # Git Bash -> C:/... or C:\...
 # The cwd repositories: main and work (that branch checked out; in each, the branch before it is the
 # other kind: 12-fix before main, main before work, for git checkout -), and on work with other deny
-# files: crlf (saved with CRLF), blank (blank and whitespace-only lines), bad (a pattern that cannot be read).
-for b in main work crlf blank bad; do
+# files: crlf (saved with CRLF), blank (blank and whitespace-only lines), bad (a pattern that cannot be read),
+# bom (saved with a UTF-8 BOM).
+for b in main work crlf blank bad bom; do
   r="$tmp/$b"; br=$b; [ "$b" = main ] || br=work
   git init -q -b "$br" "$r" && git -C "$r" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
   before=main; [ "$br" = main ] && before=12-fix
@@ -21,9 +22,12 @@ for b in main work crlf blank bad; do
     crlf) printf '# a project rule\r\nterraform[[:space:]]+destroy\r\n' ;;
     blank) printf '# a project rule\n\n \n\t\n  # an indented comment\nterraform[[:space:]]+destroy\n' ;;
     bad) printf '# a project rule\nterraform(\n' ;;
+    bom) printf '\357\273\277terraform[[:space:]]+destroy\n# a project rule\n' ;;
     *) printf '# a project rule\nterraform[[:space:]]+destroy\n' ;;
   esac > "$r/.claude/coordinator-deny.txt"
 done
+# a working folder inside a worktree of work (the cases name it in the branch column)
+mkdir -p "$tmp/work/.claude/worktrees/12-fix"
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath)
 export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "$HOME")"
@@ -64,6 +68,25 @@ raw block "a command key after tool_input" '{"tool_input":{"command":"git push o
 raw block "a nested command key inside tool_input" '{"tool_input":{"command":"git push origin main","x":{"command":"ls"}}}'
 raw allow "a push to main under another key" '{"tool_input":{"command":"ls"},"tool_response":{"command":"git push origin main"}}'
 raw allow "JSON with numbers, arrays and escapes" '{"a":[1,-2.5e3,true,null,{}],"tool_input":{"command":"echo \\"x\\" \\u0041","n":0}}'
+
+# A deny file that is there but cannot be read blocks every call: a folder in its place, and (where
+# permissions apply: not Git Bash, not root) a file without read permission.
+denied() {   # denied <what> <project folder>
+  local rc got d; n=$((n + 1)); d="$(winpath m "$2")"
+  printf '{"tool_input":{"command":"ls"},"cwd":"%s"}' "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" >/dev/null 2>&1; rc=$?
+  got=allow; [ "$rc" = 2 ] && got=block
+  [ "$got" = block ] || { echo "FAIL (deny file) expected block, got $got (exit $rc): $1"; fail=1; }
+}
+mkdir -p "$tmp/denydir/.claude/coordinator-deny.txt"
+denied "a folder in place of the deny file" "$tmp/denydir"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
+  if [ "$(id -u)" != 0 ]; then
+    mkdir -p "$tmp/denyperm/.claude" && printf 'terraform\n' > "$tmp/denyperm/.claude/coordinator-deny.txt"
+    chmod 000 "$tmp/denyperm/.claude/coordinator-deny.txt"
+    denied "a deny file without read permission" "$tmp/denyperm"
+    chmod 644 "$tmp/denyperm/.claude/coordinator-deny.txt"
+  fi ;;
+esac
 
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
 for a in "$@"; do guard="$a"; done
