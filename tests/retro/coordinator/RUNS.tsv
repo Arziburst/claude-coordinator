@@ -1,4 +1,4 @@
-date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	wait
+date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	wait	estimate_time
 # history: five ordinary tasks on sonnet in September - the forecast the weeks' tasks were estimated from
 2026-09-01	1	worker	ordinary	sonnet	medium	1	100	1.00	approved	2026-09-01T08:00:00Z	15	10
 2026-09-01	1	task	ordinary	sonnet	-	-	-	-	merged	2026-09-01T08:00:00Z	20	10	30
@@ -17,30 +17,36 @@ date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	w
 2026-10-01	7	worker	ordinary	sonnet	medium	1	100	2.50	rework 1	2026-10-01T08:00:00Z	40	30
 2026-10-01	7	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T08:00:00Z	60	30	120
 2026-10-02	-	coordinator	-	opus	high	-	1000	3.00	-
-# the week: ordinary tasks with a forecast - one reworked, one escalated, one with a failed run -, a hard task
-# without history, a project-specific kind (other in the public body), a lead with sub-runs and a subagent row
-2026-10-05	8	worker	ordinary	sonnet	medium	1	100	1.05	approved	2026-10-05T08:00:00Z	15	10
+# the week: ordinary tasks with a forecast - logged (a cost estimate, an estimate_time as a range and as one number)
+# or rebuilt; one reworked, one escalated, one with a failed run -, a hard task without history, a project-specific
+# kind (other in the public body), a lead with sub-runs and a subagent row, and a project kind the ROUTING.md map
+# names (mechanical -> trivial) with a cost cell read by its leading number, done, pass and an unknown result
+2026-10-05	8	worker	ordinary	sonnet	medium	-	100	1.05	approved	2026-10-05T08:00:00Z	15	10		10-20
 2026-10-05	8	verifier	review	haiku	low	-	50	0.10	approved	2026-10-05T08:20:00Z	5	4
 2026-10-05	8	task	ordinary	sonnet	-	-	-	-	merged	2026-10-05T08:00:00Z	21	14	30
-2026-10-06	9	worker	ordinary	sonnet	medium	1	100	1.30	rework 1	2026-10-06T08:00:00Z	25	18
+2026-10-06	9	worker	ordinary	sonnet	medium	1.2	100	1.30	rework 1	2026-10-06T08:00:00Z	25	18		15
 2026-10-06	9	verifier	review	haiku	low	-	50	0.10	approved	2026-10-06T08:30:00Z	5	4
 2026-10-06	9	task	ordinary	sonnet	-	-	-	-	merged	2026-10-06T08:00:00Z	45	22	10
 2026-10-06	-	coordinator	-	opus	high	-	1000	4.00	-
 2026-10-07	10	worker	ordinary	sonnet	medium	1	100	2.00	escalated	2026-10-07T08:00:00Z	30	25
 2026-10-07	10	worker	ordinary	opus	high	1	100	3.00	approved	2026-10-07T09:00:00Z	25	20
 2026-10-07	10	task	ordinary	sonnet	-	-	-	-	merged	2026-10-07T08:00:00Z	70	45	0
-2026-10-08	11	worker	ordinary	sonnet	medium	1	100	0.95	failed	2026-10-08T08:00:00Z	6	5
+2026-10-08	11	worker	ordinary	sonnet	medium	-	100	0.95	failed	2026-10-08T08:00:00Z	6	5		-
 2026-10-08	11	worker	ordinary	sonnet	medium	1	100	1.00	approved	2026-10-08T08:10:00Z	12	9
 2026-10-08	11	task	ordinary	sonnet	-	-	-	-	merged	2026-10-08T08:00:00Z	25	14	45
-2026-10-08	12	worker	hard	opus	high	6	100	6.00	approved	2026-10-08T10:00:00Z	60	50
+2026-10-08	12	worker	hard	opus	high	6	100	6.00	approved	2026-10-08T10:00:00Z	60	50		40-60
 2026-10-08	12	task	hard	opus	-	-	-	-	merged	2026-10-08T10:00:00Z	80	50	240
-2026-10-09	13	worker	acme-shop-checkout	sonnet	medium	1	100	1.40	approved	2026-10-09T08:00:00Z	15	12
+2026-10-09	13	worker	acme-shop-checkout	sonnet	medium	-	100	1.40	approved	2026-10-09T08:00:00Z	15	12
 2026-10-09	13	task	acme-shop-checkout	sonnet	-	-	-	-	ready	2026-10-09T08:00:00Z	30	12	5+
 2026-10-09	14	lead	hard	opus	high	8	100	2.00	ready	2026-10-09T10:00:00Z	90	20
 2026-10-09	14.1	worker	hard	sonnet	medium	2	100	1.50	approved	2026-10-09T10:10:00Z	20	15
 2026-10-10	14.2	worker	hard	sonnet	medium	2	100	1.20	rework 2	2026-10-10T08:00:00Z	25	18
 2026-10-10	14.2	verifier	review	haiku	low	-	50	in 14	approved	2026-10-10T08:30:00Z	3	3
 2026-10-10	14	task	hard	opus	-	-	-	-	merged	2026-10-09T10:00:00Z	95	53	20
+2026-10-10	16	worker	mechanical	sonnet	medium	-	27087	0.0648 prices	superseded by #17	2026-10-10T08:00:00Z	5	4
+2026-10-10	16	worker	mechanical	sonnet	medium	-	27087	0.0700 prices	done	2026-10-10T09:00:00Z	6	5
+2026-10-10	16	verifier	verifier	sonnet	medium	-	1000	$0.05 status	pass	2026-10-10T09:10:00Z	3	2
+2026-10-10	16	task	mechanical	sonnet	-	-	-	-	merged	2026-10-10T08:00:00Z	75	11	5
 # the self-test and a probe: left out
 2026-10-07	st1	lead	selftest	sonnet	low	0.1	100	0.50	ready	2026-10-07T09:00:00Z	10	8
 2026-10-07	st1.1	worker	selftest	haiku	low	0.1	100	0.10	approved	2026-10-07T09:02:00Z	3	2

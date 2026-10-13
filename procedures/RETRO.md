@@ -26,9 +26,12 @@ proposals, and — as the owner chose at init — sends an anonymous summary to 
 
 1. **Run** `scripts/retro.sh coordinator/RUNS.tsv` from the core copy (Windows: `powershell
    -NoProfile -ExecutionPolicy Bypass -File coordinator/core/scripts/retro.ps1 coordinator/RUNS.tsv`;
-   TOOLKIT *Usage*). It reads the run log, `LOG.md` and `ESCAPES.tsv` next to it, and the project's
-   transcripts of both weeks through `session-insights --skip-tests --project <root>`; it prints the
-   local report and sends nothing.
+   TOOLKIT *Usage*). It reads the run log, `LOG.md`, `ESCAPES.tsv`, `ROUTING.md` (its `## Kinds` map) and
+   `PROJECT.md` (its *Worktree roots*) next to it, and the project's transcripts of both weeks through
+   `session-insights --skip-tests --project <root>|<worktree roots>|<root>/.claude/worktrees`; it prints
+   the local report and sends nothing. A real run log is read as it is written: a cost cell by its
+   leading number (`0.0648 prices`), a result by its first word (`done`, `pass` = approved); a result no
+   word explains is listed as `unknown result: <value> ×<n>` — fix the log or the habit behind it.
 2. **Read the report** — five axes, this week and the previous one:
    - *cost*: tasks, merged tasks, the median cost per task, the total (the tasks' and the coordinator's
      own lines), the cost per merged task;
@@ -37,8 +40,11 @@ proposals, and — as the owner chose at init — sends an anonymous summary to 
    - *quality*: the rework, escalation and failure rates (of the tasks with runs), escaped bugs and per
      10 merged tasks (CORE §12), and the same rates per kind;
    - *predictability*: per measure (cost, work, time to ready) how many tasks had a forecast, the share
-     inside its range (the 25th–75th percentile as `run-stats` gave it before the task, CORE §7a) and the
-     median of actual over forecast;
+     inside its range and the median of actual over forecast. The forecast is the estimate the run log
+     logged at the start (`estimate` for cost, `estimate_time` for work, CORE §7: a range `lo-hi`, its
+     midpoint for the ratio; one number `n`, in range from `n/2` to `2n`), counted as `_logged`; else it
+     is rebuilt as `run-stats` gave it before the task (the 25th–75th percentile, CORE §7a), counted as
+     `_rebuilt`; time to ready is always rebuilt;
    - *stability*: failed runs, guard blocks and deny rules, blocks worked around, guard false positives
      (§5), guard errors (the guard's own hook failing or timing out instead of blocking), other
      refusals, tool errors and their rate, cache rewrites per task, minutes waited on a person, rereads.
@@ -134,7 +140,8 @@ suspects is not one.
 ## 6. What leaves the machine
 
 Only what the script's template holds: aggregate numbers; the core's own kinds (`trivial`,
-`ordinary`, `hard`, `hardest` — CORE §7's table — any other kind as `other`); the guard's reasons and the
+`ordinary`, `hard`, `hardest` — CORE §7's table; a project's own kind by its `ROUTING.md` `## Kinds` map,
+one-time step `kinds-map`; an unmapped kind as `other`); the guard's reasons and the
 refusal sources as fixed keys; the anonymous id; the week's dates. Never a project name, file name,
 path, branch, task text, code, commit message, session name, model or tool name. It is enforced by the
 script — a fixed template and a check that fails on any line outside it, any cell outside the allowlist,

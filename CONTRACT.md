@@ -95,8 +95,8 @@ line's cost; `prices` — the transcript's tokens per model times the ladder's l
 
 ```yaml
 runs:
-  - {task: 37.1, role: worker, model: sonnet, effort: medium, estimate: 2.5, cost: 3.1, tokens: 5200000, source: status, result: approved, start: 2026-10-05T09:12:40Z, wall: 48, active: 31}
-  - {task: 37, role: lead, model: opus, effort: medium, estimate: 12, cost: 9.4, tokens: 19800000, source: prices, result: ready, start: n/a, wall: n/a, active: n/a}
+  - {task: 37.1, role: worker, model: sonnet, effort: medium, estimate: 2.5, cost: 3.1, tokens: 5200000, source: status, result: approved, start: 2026-10-05T09:12:40Z, wall: 48, active: 31, estimate_time: 25-40}
+  - {task: 37, role: lead, model: opus, effort: medium, estimate: 12, cost: 9.4, tokens: 19800000, source: prices, result: ready, start: n/a, wall: n/a, active: n/a, estimate_time: 60-90}
 ```
 
 **Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a log,

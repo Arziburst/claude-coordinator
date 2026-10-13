@@ -63,22 +63,34 @@ expect "the public body: the template, numbers and the allowlist only" 0 "$t/exp
 cp "$tmp/out" "$tmp/public.md"
 # the project's folder name and its own kind never leave: not in the public body, in any case
 if grep -qi 'acme' "$tmp/public.md"; then bad "the public body names the project"; else echo "ok   the public body holds neither the folder's name nor the project's own kind"; fi; n=$((n + 1))
+# the real run log's parts: the kinds map, an unknown result, logged and rebuilt forecasts, a sibling worktree root
+n=$((n + 1)); if grep -q '^| trivial | 1 |' "$tmp/public.md" && grep -q '^| other | 1 |' "$tmp/public.md"; then echo "ok   ROUTING.md's map: mechanical counts as trivial, an unmapped kind as other"; else bad "the kinds map in the public body"; fi
+n=$((n + 1)); if grep -q 'superseded' "$tmp/public.md"; then bad "an unknown result in the public body"; else echo "ok   an unknown result stays out of the public body"; fi
+n=$((n + 1)); if grep -q '^| predictability | cost_logged | 4 | 2 |' "$tmp/public.md" && grep -q '^| predictability | work_rebuilt | 2 | 2 |' "$tmp/public.md"; then echo "ok   logged and rebuilt forecasts counted apart"; else bad "the logged and rebuilt counts"; fi
+expect "the local report keeps the project's kinds and lists an unknown result" 0 any - -- "$runs" --week 2026-10-07 --project "$P"
+grep -q '^kind	mechanical	1	' "$tmp/out" && grep -q '^unknown result: superseded by #17 ×1$' "$tmp/out" && grep -q '^block	deleting a protected branch	' "$tmp/out" ||
+  bad "the local report: its own kind mechanical, the unknown result and the sibling worktree's block"
 # a week with too little data, no transcripts, no journal and no escapes file (a run log alone in its folder)
 mkdir -p "$tmp/bare/coordinator" && cp "$here/coordinator/RUNS.tsv" "$tmp/bare/coordinator/"
 expect "a week with too little data; no transcripts, journal or escapes" 0 "$t/expected-thin.txt" - -- "$(winpath "$tmp/bare/coordinator/RUNS.tsv")" --week 2026-09-28 --project "$P" --no-insights
 expect "the same as a public body" 0 "$t/expected-thin-public.md" - -- "$(winpath "$tmp/bare/coordinator/RUNS.tsv")" --week 2026-09-28 --project "$P" --no-insights --public --id "$ID"
+# no PROJECT.md and no ROUTING.md: the sibling worktree root is not the project's, and mechanical is other
+expect "no PROJECT.md: only the root and its .claude/worktrees" 0 any - -- "$(winpath "$tmp/bare/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P"
+! grep -q 'deleting a protected branch' "$tmp/out" || bad "a session under a worktree root no PROJECT.md names was counted"
+expect "no ROUTING.md: a project kind is other in the public body" 0 any - -- "$(winpath "$tmp/bare/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P" --public --id "$ID"
+grep -q '^| other | 2 |' "$tmp/out" || bad "without a kinds map mechanical and the project's kind are other"
 # the run log, journal and escapes with CRLF line ends and a UTF-8 BOM (saved by a Windows editor)
 mkdir -p "$tmp/crlf/coordinator"
-for f in RUNS.tsv LOG.md ESCAPES.tsv; do
+for f in RUNS.tsv LOG.md ESCAPES.tsv ROUTING.md PROJECT.md; do
   { printf '\357\273\277'; awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$here/coordinator/$f"; } > "$tmp/crlf/coordinator/$f"
 done
-expect "CRLF line ends and a BOM in the run log, the journal and the escapes" 0 "$t/expected-local.txt" - -- "$(winpath "$tmp/crlf/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P"
+expect "CRLF line ends and a BOM in the run log, the journal, the escapes, ROUTING.md and PROJECT.md" 0 "$t/expected-local.txt" - -- "$(winpath "$tmp/crlf/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P"
 expect "the default week (the last complete one) and the default project" 0 any - -- "$runs"
 head -n 1 "$tmp/out" | grep -q '^retro	week of [0-9-]*	previous week of [0-9-]*$' || bad "the default week's header line"
 # the allowlist self-check on the public body, then on bodies with something injected
 expect "--check-public passes the body" 0 - - -- --check-public "$(winpath "$tmp/public.md")" --project "$P"
 { cat "$tmp/public.md"; echo '| cost | src/cart.ts | 1 | 2 |'; } > "$tmp/inj-path.md"
-expect "--check-public fails on an injected path" 1 - "retro: the summary body fails its check: line 72: a path separator" -- --check-public "$(winpath "$tmp/inj-path.md")"
+expect "--check-public fails on an injected path" 1 - "retro: the summary body fails its check: line 78: a path separator" -- --check-public "$(winpath "$tmp/inj-path.md")"
 { cat "$tmp/public.md"; echo 'See C:\work\acme-shop for the details'; } > "$tmp/inj-win.md"
 expect "--check-public fails on an injected Windows path" 1 - "~a path separator" -- --check-public "$(winpath "$tmp/inj-win.md")"
 { cat "$tmp/public.md"; echo '| other | 1 | acme-shop | 0 | 0 |'; } > "$tmp/inj-name.md"

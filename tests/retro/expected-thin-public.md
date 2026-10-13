@@ -26,9 +26,13 @@
 | quality | escapes | — | — |
 | quality | escapes_per_10_merged | — | — |
 | predictability | cost_forecasts | 2 | 0 |
+| predictability | cost_logged | 2 | 0 |
+| predictability | cost_rebuilt | 0 | 0 |
 | predictability | cost_in_range | — | — |
 | predictability | cost_ratio_median | — | — |
 | predictability | work_forecasts | 2 | 0 |
+| predictability | work_logged | 0 | 0 |
+| predictability | work_rebuilt | 2 | 0 |
 | predictability | work_in_range | — | — |
 | predictability | work_ratio_median | — | — |
 | predictability | ready_forecasts | 2 | 0 |

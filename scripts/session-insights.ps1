@@ -3,7 +3,8 @@
 #   powershell -File scripts/session-insights.ps1 <session-id | id prefix | a subagent's agentId | transcript.jsonl> [-Detail]   (or: pwsh -File ...)
 #   powershell -File scripts/session-insights.ps1 -Since 2026-10-05T17:00:00Z [-Detail]   every transcript from then on (UTC; or Unix seconds)
 #     [-Until <UTC time>] [-SkipTests] [-Project <folder>]   the retro's filters: records before -Until only; no probe or
-#     self-test sessions; only sessions whose first cwd is the folder or inside it (the rules: session-insights.sh's top comment)
+#     self-test sessions; only sessions whose first cwd is the folder or inside it, several joined by | (the rules:
+#     session-insights.sh's top comment)
 # Tab-separated lines, no header, nothing for a session without messages: "block <reason> count= changed= retried= around= stopped="
 # per safety-guard reason and "deny rule", "refusal <source>" the same for other refusals (what the next tool call did);
 # "tool_error <tool> count= repeated= exit_only=" (exit_only: errors that are only "Exit code <n>", left out of count);
@@ -18,7 +19,7 @@ param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if ((-not $Session -and -not $Since) -or ($Session -and $Since) -or (-not $Since -and ($Until -or $SkipTests -or $Project))) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 15 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -378,7 +379,8 @@ function Tested([string]$n) {
   $reSt.IsMatch($v) -or (PWord $h 'probe') -or (PWord $h 'selftest') -or (PWord $h 'self-test')
 }
 function Pick([string[]]$files, [string[]]$keys) {
-  $R = if ($Project) { PNorm $Project } else { $null }
+  # the folders of -Project, joined by |
+  $R = @(if ($Project) { foreach ($p1 in $Project.Split('|')) { if ($p1) { PNorm $p1 } } })
   $cwd = NewMap; $nm = NewMap; $listed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
   for ($k = 0; $k -lt $files.Count; $k++) {
     [void]$listed.Add($keys[$k]); $c = $null; $n = $null
@@ -396,11 +398,12 @@ function Pick([string[]]$files, [string[]]$keys) {
     $cq = if ($cwd.ContainsKey($q)) { $cwd[$q] } else { '' }; $cp = if ($cwd.ContainsKey($p)) { $cwd[$p] } else { '' }
     $nq = if ($nm.ContainsKey($q)) { $nm[$q] } else { '' }
     if ($SkipTests -and ((Tested $nq) -or $reSandbox.IsMatch((PNorm $cq)) -or $reSandbox.IsMatch((PNorm $cp)))) { continue }
-    if ($null -ne $R) {
+    if ($R.Count) {
       $c = if ($cq) { $cq } else { $cp }
       if (-not $c) { continue }
-      $c = PNorm $c
-      if (-not ($c -ceq $R -or $c.StartsWith($R + '/', $ORD))) { continue }
+      $c = PNorm $c; $in = $false
+      foreach ($r1 in $R) { if ($c -ceq $r1 -or $c.StartsWith($r1 + '/', $ORD)) { $in = $true; break } }
+      if (-not $in) { continue }
     }
     $kept.Add($files[$k])
   }

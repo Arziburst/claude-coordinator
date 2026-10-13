@@ -467,8 +467,14 @@ jobs:
           # session-insights' retro filters, and the retro's report and public body: the same under another
           # time zone and a German locale
           r=tests/retro
-          diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/session-insights.sh --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project C:/work/acme-shop) \
-               <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 -Since 2026-10-05T00:00:00Z -Until 2026-10-12T00:00:00Z -SkipTests -Project C:/work/acme-shop)
+          for p in C:/work/acme-shop 'C:/work/acme-shop|C:/work/acme-shop-wt'; do
+            diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/session-insights.sh --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project "$p") \
+                 <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 -Since 2026-10-05T00:00:00Z -Until 2026-10-12T00:00:00Z -SkipTests -Project "$p")
+          done
+          # run-stats --task on a real run log (a verifier's pass and Done): the same row
+          for n in 50 53; do
+            diff <(bash scripts/run-stats.sh tests/run-stats/real.tsv --task $n) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 tests/run-stats/real.tsv -Task $n)
+          done
           for w in 2026-10-07 2026-09-30; do
             diff <(CLAUDE_CONFIG_DIR=$r/claude bash scripts/retro.sh $r/coordinator/RUNS.tsv --week $w --project C:/work/acme-shop) \
                  <(CLAUDE_CONFIG_DIR=$r/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/retro.ps1 $r/coordinator/RUNS.tsv -Week $w -Project C:/work/acme-shop)

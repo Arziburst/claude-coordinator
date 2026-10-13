@@ -82,6 +82,7 @@ expect "a config path with [ ], --since" 0 "$t/expected-all.txt" - -- "$tmp/cfg[
 rd="$here/../retro/claude"
 expect "--until, --skip-tests and --project together (the retro's week)" 0 "$t/expected-filter-both.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project C:/work/acme-shop
 expect "--project in another spelling: backslashes, capitals, a trailing separator" 0 "$t/expected-filter-both.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project 'C:\WORK\Acme-Shop\'
+expect "--project with a worktree root beside the project (root|root-wt)" 0 "$t/expected-filter-wt.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests --project 'C:/work/acme-shop|C:/work/acme-shop-wt'
 expect "--skip-tests alone: every project, no probe or self-test session" 0 "$t/expected-filter-tests.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --skip-tests
 expect "--project alone: the probe and the self-test lead with its subagent stay" 0 "$t/expected-filter-project.txt" - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00Z --project C:/work/acme-shop
 expect "the previous week (--until in Unix seconds)" 0 "$t/expected-filter-prev.txt" - -- "$rd" --since 2026-09-28T00:00:00Z --until 1791158400 --skip-tests --project C:/work/acme-shop

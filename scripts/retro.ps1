@@ -8,13 +8,15 @@
 #   ... -CheckProposal <file> [-Project <folder>]                         a proposal body against its template
 #   ... -NewId                                                            a new random anonymous id (12 hex)
 # The week: Monday to Sunday UTC holding -Week (default: the last complete week); the transcripts through
-# session-insights -Since <week> -Until <week end> -SkipTests -Project <folder>; an em dash where the data is too little.
+# session-insights -Since <week> -Until <week end> -SkipTests -Project <root>|<worktree roots of PROJECT.md>|<root>/.claude/
+# worktrees; ROUTING.md's "## Kinds" map for the public kinds; logged estimates (estimate, estimate_time) else rebuilt
+# forecasts; an em dash where the data is too little.
 # Exit 1 when a file cannot be read or a check fails, 2 on a usage error.
 param([string]$RunLog, [string]$Week, [string]$Project, [string]$Journal, [string]$Escapes, [switch]$NoInsights,
   [switch]$Public, [string]$Id, [string]$CheckPublic, [string]$CheckProposal, [switch]$NewId)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 12 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 $ErrorActionPreference = 'Stop'
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 $ORD = [StringComparison]::Ordinal
@@ -34,8 +36,8 @@ $FL = @('<!-- self-improvement summary, format 1 -->',
 $AXES = 'cost speed quality predictability stability'.Split(' ')
 $MEAS = ('cost:tasks cost:merged cost:median_per_task cost:total cost:coordinator cost:per_merged_task speed:ready_median ' +
   'speed:work_median speed:owner_wait_median speed:owner_wait_open quality:rework_rate quality:escalated_rate quality:failed_rate ' +
-  'quality:escapes quality:escapes_per_10_merged predictability:cost_forecasts predictability:cost_in_range ' +
-  'predictability:cost_ratio_median predictability:work_forecasts predictability:work_in_range predictability:work_ratio_median ' +
+  'quality:escapes quality:escapes_per_10_merged predictability:cost_forecasts predictability:cost_logged predictability:cost_rebuilt predictability:cost_in_range ' +
+  'predictability:cost_ratio_median predictability:work_forecasts predictability:work_logged predictability:work_rebuilt predictability:work_in_range predictability:work_ratio_median ' +
   'predictability:ready_forecasts predictability:ready_in_range predictability:ready_ratio_median stability:failed_runs ' +
   'stability:guard_blocks stability:deny_rule_blocks stability:guard_around stability:guard_false_positives stability:guard_errors ' +
   'stability:refusals stability:tool_errors stability:tool_calls stability:tool_error_rate stability:cache_rewrites ' +
@@ -196,12 +198,52 @@ function InWeek([string]$d) {
   ''
 }
 
+# the project's own kinds mapped to the core's: ROUTING.md next to the run log, its section "## Kinds", one
+# `<kind> -> <core kind>` per line (the public body only; the local report keeps the project's kinds)
+$KM = @{}
+$routing = Join-Path $dir 'ROUTING.md'
+if (Test-Path -LiteralPath $routing -PathType Leaf) {
+  $on = $false
+  foreach ($line in (Read-Lines $routing)) {
+    if ($line.StartsWith('#')) { $on = (Lower $line) -cmatch '^##[ \t]+kinds[ \t]*\z'; continue }
+    if (-not $on) { continue }
+    $l2 = ((Lower $line).Replace('`', '') -creplace '^[ \t]*[-*][ \t]*', '') -creplace '[ \t]+\z', ''
+    if ($l2 -cmatch '^([a-z0-9_.-]+)[ \t]*->[ \t]*(trivial|ordinary|hard|hardest)\z') { $KM[$Matches[1]] = $Matches[2] }
+  }
+}
+# the folders whose sessions are the project's: the root, the worktree roots PROJECT.md names next to the run log
+# (its Settings row "Worktree roots": paths split by , or ;, relative to the root), and <root>/.claude/worktrees
+$base = $Project.Replace('\', '/').TrimEnd('/')
+$Roots = $base
+$pmd = Join-Path $dir 'PROJECT.md'
+if (Test-Path -LiteralPath $pmd -PathType Leaf) {
+  foreach ($line in (Read-Lines $pmd)) {
+    $cells = $line.Split('|'); if ($cells.Count -lt 3 -or $cells[1] -cnotmatch '^[ \t]*[*]*Worktree roots[*]*[ \t]*\z') { continue }
+    foreach ($x0 in $cells[2].Replace('`', '').Split([char[]]@(',', ';'))) {
+      $x0 = $x0.Trim(' ', "`t"); $y0 = Lower $x0
+      if (-not $x0 -or $x0 -eq '-' -or $y0 -ceq 'none' -or $y0 -ceq 'n/a' -or $x0 -cmatch '^<.*>\z') { continue }
+      $w0 = $x0.Replace('\', '/')
+      if (-not ($w0.StartsWith('/') -or $w0 -cmatch '^[A-Za-z]:')) {
+        $b0 = $base
+        while ($true) {
+          if ($w0.StartsWith('../')) { $b0 = $b0.Substring(0, [Math]::Max(0, $b0.LastIndexOf('/'))); $w0 = $w0.Substring(3) }
+          elseif ($w0.StartsWith('./')) { $w0 = $w0.Substring(2) }
+          elseif ($w0 -ceq '..') { $b0 = $b0.Substring(0, [Math]::Max(0, $b0.LastIndexOf('/'))); $w0 = '' }
+          else { break }
+        }
+        $w0 = if ($w0) { "$b0/$w0" } else { $b0 }
+      }
+      $Roots += "|$w0"
+    }
+  }
+}
+$Roots += "|$base/.claude/worktrees"
 # the transcripts of each week: session-insights in its own process, as the .sh runs it; none when it fails
 $Ins = @{}
 if (-not $NoInsights) {
   $exe = (Get-Process -Id $PID).Path; $si = Join-Path $PSScriptRoot 'session-insights.ps1'
   foreach ($span in @(@('W', $WS, $WN), @('P', $PS0, $WS))) {
-    $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "$($span[1])T00:00:00Z" -Until "$($span[2])T00:00:00Z" -SkipTests -Project $Project 2>$null })
+    $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "$($span[1])T00:00:00Z" -Until "$($span[2])T00:00:00Z" -SkipTests -Project $Roots 2>$null })
     if ($LASTEXITCODE -eq 0) { $Ins[$span[0]] = $got }
   }
 }
@@ -225,12 +267,24 @@ if ($Escapes) {
   }
 }
 
-# a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number (as run-stats)
+# a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number (as run-stats: a cost is its
+# cell's leading number, `0.0648 prices` 0.0648; minutes the whole value, a trailing m allowed)
 function Units([string]$v, [string]$unit) {
   $v = $v.Trim(' ', "`t")
-  if ($unit -ceq '$') { $v = $v -creplace '^[$]', '' } else { $v = $v -creplace 'm$', '' }
-  if ($v -cmatch '^([0-9]+)(?:[.]([0-9]+))?\z') { return [long]$Matches[1] * 10000 + [long](($Matches[2] + '0000').Substring(0, 4)) }
+  if ($unit -ceq '$') { $v = $v -creplace '^[$]', ''; $re = '^([0-9]+)(?:[.]([0-9]+))?' } else { $v = $v -creplace 'm$', ''; $re = '^([0-9]+)(?:[.]([0-9]+))?\z' }
+  if ($v -cmatch $re) { return [long]$Matches[1] * 10000 + [long](($Matches[2] + '0000').Substring(0, 4)) }
   [long]-1
+}
+# a logged estimate (estimate: budget.cost; estimate_time: budget.time): a number or a range lo-hi at the cell's start
+# (`$` allowed, the rest ignored); $null when none, else @{ lo; hi; one } in units
+function Est([string]$v) {
+  $v = $v.TrimStart(' ', "`t") -creplace '^[$]', ''
+  $m1 = [regex]::Match($v, '^[0-9]+(?:[.][0-9]+)?'); if (-not $m1.Success) { return $null }
+  $lo = Units $m1.Value '$'; $hi = $lo; $one = $true
+  $m2 = [regex]::Match($v.Substring($m1.Length), '^[ \t]*-[ \t]*([0-9]+(?:[.][0-9]+)?)')
+  if ($m2.Success) { $hi = Units $m2.Groups[1].Value '$'; $one = $false; if ($hi -lt $lo) { return $null } }
+  if ($lo + $hi -le 0) { return $null }
+  @{ lo = $lo; hi = $hi; one = $one }
 }
 function Kv([string]$s, [string]$k) { $mt = [regex]::Match($s, '(^| )' + $k + '=([0-9]+)'); if ($mt.Success) { [long]$mt.Groups[2].Value } else { [long]0 } }
 # the guard reasons and refusal sources as the fixed keys of the public body
@@ -262,7 +316,8 @@ function RKey([string]$s) {
   if ($s -ceq 'safety check') { return 'safety-check' }
   'other'
 }
-function PKind([string]$k) { $k = Lower $k; if ($k -ceq 'trivial' -or $k -ceq 'ordinary' -or $k -ceq 'hard' -or $k -ceq 'hardest') { $k } else { 'other' } }
+# the public kind: a core kind as it is, a project's kind by its map (ROUTING.md *Kinds*), else other
+function PKind([string]$k) { $k = Lower $k; if ($k -ceq 'trivial' -or $k -ceq 'ordinary' -or $k -ceq 'hard' -or $k -ceq 'hardest') { $k } elseif ($KM.ContainsKey($k)) { $KM[$k] } else { 'other' } }
 function NewMap { New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal) }
 function Get0($map, [string]$k) { if ($map.ContainsKey($k)) { $map[$k] } else { [long]0 } }
 function Inc($map, [string]$k, [long]$n) { if ($map.ContainsKey($k)) { $map[$k] += $n } else { $map[$k] = $n } }
@@ -295,8 +350,9 @@ foreach ($wk in 'W', 'P') {
 }
 
 # the run log: columns by its header, else in CORE 7's order (0-based)
-$cd = 0; $ct = 1; $cr = 2; $ck = 3; $cm = 4; $cc = 8; $cs = 9; $cw = 11; $ca = 12; $cx = 13
+$cd = 0; $ct = 1; $cr = 2; $ck = 3; $cm = 4; $ce = 6; $cc = 8; $cs = 9; $cw = 11; $ca = 12; $cx = 13; $cy = 14
 $Order = New-Object 'System.Collections.Generic.List[string]'; $Tasks = NewMap   # the tasks in order; per task its record
+$Unk = NewMap   # the results no first word explains, this week
 $coord = @{ W = [long]0; P = [long]0 }; $frun = @{ W = [long]0; P = [long]0 }
 $row = 0
 foreach ($line in $RunLines) {
@@ -306,6 +362,7 @@ foreach ($line in $RunLines) {
     $cd = [Array]::IndexOf($fs, 'date'); $ct = [Array]::IndexOf($fs, 'task'); $cr = [Array]::IndexOf($fs, 'role'); $ck = [Array]::IndexOf($fs, 'kind')
     $cm = [Array]::IndexOf($fs, 'model'); $cc = [Array]::IndexOf($fs, 'cost'); $cs = [Array]::IndexOf($fs, 'result'); $cw = [Array]::IndexOf($fs, 'wall')
     $ca = [Array]::IndexOf($fs, 'active'); $cx = [Array]::IndexOf($fs, 'wait')
+    $ce = [Array]::IndexOf($fs, 'estimate'); $cy = [Array]::IndexOf($fs, 'estimate_time')
     continue
   }
   $row++
@@ -318,7 +375,7 @@ foreach ($line in $RunLines) {
   if ($tid -eq '' -or $tid -eq '-') { if ($wk -and $cost -ge 0) { $coord[$wk] += $cost }; continue }   # the coordinator's own line
   if (-not $Tasks.ContainsKey($tid)) {
     $Tasks[$tid] = @{ fa = $row; md = ''; tr = -1; lr = -1; nrun = 0; hc = $false; tc = [long]0; ha = $false; ta = [long]0; p = 0; tk = ''; tm = ''
-      trk = ''; trm = ''; trw = [long]-1; trx = ''; trs = ''; rw = $false; es = $false; fl = $false }
+      trk = ''; trm = ''; trw = [long]-1; trx = ''; trs = ''; rw = $false; es = $false; fl = $false; te = ''; tt = '' }
     $Order.Add($tid)
   }
   $rec = $Tasks[$tid]
@@ -328,7 +385,10 @@ foreach ($line in $RunLines) {
   if ($cost -ge 0) { $rec.tc += $cost; $rec.hc = $true }
   $act = Units (& $col $ca) 'm'; if ($act -ge 0 -and $cv -cnotmatch '^[ \t]*in[ \t]') { $rec.ta += $act; $rec.ha = $true }   # a subagent: in its parent
   $pri = if ($role -ceq 'lead') { 3 } elseif ($role -ceq 'worker') { 2 } else { 1 }
-  if ($pri -gt $rec.p) { $rec.p = $pri; $rec.tk = $kind; $rec.tm = $model }
+  if ($pri -gt $rec.p) { $rec.p = $pri; $rec.tk = $kind; $rec.tm = $model; $rec.te = & $col $ce; $rec.tt = & $col $cy }
+  # a result is read by its first word; done and pass are approvals; any other word, in this week, is listed
+  $u0 = (& $col $cs).Trim(' ', "`t")
+  if ($wk -eq 'W' -and $u0 -and $u0 -ne '-' -and (Lower $u0) -cnotmatch '^(approved|done|pass|rework|escalated|failed|ready|merged)([^a-z]|\z)') { Inc $Unk $u0 1 }
   $res = (Lower (& $col $cs)).TrimStart(' ', "`t")
   if ($res.StartsWith('rework', $ORD)) { $rec.rw = $true }; if ($res.StartsWith('escalated', $ORD)) { $rec.es = $true }
   if ($res.StartsWith('failed', $ORD)) { $rec.fl = $true; if ($wk) { $frun[$wk] += 1 } }
@@ -343,13 +403,24 @@ function Med2([string]$k) { $a = [long[]]$Lists[$k].ToArray(); [Array]::Sort($a)
 function Cents([long]$c) { '{0}.{1:00}' -f (IDiv $c 100), ($c % 100) }   # hundredths as d.dd
 function Dec1([long]$n) { '{0}.{1}' -f (IDiv $n 10), ($n % 10) }        # tenths as d.d
 function Pct([long]$a, [long]$b) { "$(IDiv (200 * $a + $b) (2 * $b))%" }
-$Forecasts = NewMap; $InRange = NewMap
-# the forecast of a task for a measure (c cost, a work, r ready) from the earlier tasks of its kind and model, as
-# run-stats gave it before the task: 3 or more of them, the last 10, by their last row before the task's first row
+$Forecasts = NewMap; $InRange = NewMap; $Logged = NewMap; $Rebuilt = NewMap
+# the forecast of a task for a measure (c cost, a work, r ready): the estimate logged in its run log row (cost:
+# estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from n/2 to 2n)
+# where there is one, else rebuilt from the earlier tasks of its kind and model as run-stats gave it before the task:
+# 3 or more of them, the last 10, by their last row before the task's first row
 function Fcast([string]$tid, [string]$wk, [string]$ms) {
   $me = $Tasks[$tid]
   if ($ms -eq 'c') { if (-not $me.hc) { return }; $val = $me.tc } elseif ($ms -eq 'a') { if (-not $me.ha) { return }; $val = $me.ta }
   else { if ($me.tr -lt 0 -or $me.trw -lt 0) { return }; $val = $me.trw }
+  if ($ms -ne 'r') {
+    $e1 = Est $(if ($ms -eq 'c') { $me.te } else { $me.tt })
+    if ($null -ne $e1) {
+      Inc $Forecasts "$wk$ms" 1; Inc $Logged "$wk$ms" 1
+      $in1 = if ($e1.one) { 2 * $val -ge $e1.lo -and $val -le 2 * $e1.lo } else { $val -ge $e1.lo -and $val -le $e1.hi }
+      if ($in1) { Inc $InRange "$wk$ms" 1 }
+      $m2 = if ($e1.one) { 2 * $e1.lo } else { $e1.lo + $e1.hi }; Add "$wk${ms}q" (IDiv (400 * $val + $m2) (2 * $m2)); return
+    }
+  }
   $keys = New-Object 'System.Collections.Generic.List[long]'; $vals = New-Object 'System.Collections.Generic.List[long]'
   foreach ($u in $Order) {
     if ($u -ceq $tid) { continue }; $y = $Tasks[$u]
@@ -364,7 +435,7 @@ function Fcast([string]$tid, [string]$wk, [string]$ms) {
   $st = [Math]::Max(0, $ov.Count - 10); $a = [long[]]@($ov[$st..($ov.Count - 1)]); [Array]::Sort($a); $k = $a.Count
   $m2 = if ($k % 2) { 2 * $a[($k - 1) / 2] } else { $a[$k / 2 - 1] + $a[$k / 2] }
   $lo = if ($k -lt 4) { $a[0] } else { $a[(Rank 25 $k) - 1] }; $hi = if ($k -lt 4) { $a[$k - 1] } else { $a[(Rank 75 $k) - 1] }
-  Inc $Forecasts "$wk$ms" 1; if ($val -ge $lo -and $val -le $hi) { Inc $InRange "$wk$ms" 1 }
+  Inc $Forecasts "$wk$ms" 1; Inc $Rebuilt "$wk$ms" 1; if ($val -ge $lo -and $val -le $hi) { Inc $InRange "$wk$ms" 1 }
   if ($m2 -gt 0) { Add "$wk${ms}q" (IDiv (400 * $val + $m2) (2 * $m2)) }
 }
 $NT = @{ W = 0; P = 0 }; $MG = @{ W = 0; P = 0 }; $TOT = @{ W = [long]0; P = [long]0 }; $OPEN = @{ W = 0; P = 0 }
@@ -408,6 +479,7 @@ foreach ($wk in 'W', 'P') {
   foreach ($j in @(@('c', 'cost'), @('a', 'work'), @('r', 'ready'))) {
     $ms = $j[0]; $mn = $j[1]; $nfc = Get0 $Forecasts "$wk$ms"
     $cell["${mn}_forecasts"] = "$nfc"
+    if ($ms -ne 'r') { $cell["${mn}_logged"] = "$(Get0 $Logged "$wk$ms")"; $cell["${mn}_rebuilt"] = "$(Get0 $Rebuilt "$wk$ms")" }
     $cell["${mn}_in_range"] = if ($nfc -ge 3) { Pct (Get0 $InRange "$wk$ms") $nfc } else { $DASH }
     $cell["${mn}_ratio_median"] = if ((LN "$wk${ms}q") -ge 3) { "$(IDiv ((Med2 "$wk${ms}q") + 1) 2)%" } else { $DASH }
   }
@@ -433,6 +505,7 @@ if (-not $Public) {
   $out.Add("kind`tname`ttasks`trework`tescalated`tfailed")
   $kl = [string[]]@(foreach ($kk in $KN.Keys) { $q3 = Rates $KN[$kk]; "kind`t$kk`t$($KN[$kk].n)`t$($q3[0])`t$($q3[1])`t$($q3[2])" })
   [Array]::Sort($kl, [StringComparer]::Ordinal); foreach ($l1 in $kl) { $out.Add($l1) }
+  $ul = [string[]]@(foreach ($kk in $Unk.Keys) { "unknown result: $kk $([char]0x00D7)$($Unk[$kk])" }); [Array]::Sort($ul, [StringComparer]::Ordinal); foreach ($l1 in $ul) { $out.Add($l1) }
   foreach ($l1 in $LOC) { $out.Add($l1) }
   $out.Add("note`t$DASH too little data: under 3 tasks, merged tasks or forecasts, under 100 tool calls, or no transcripts, journal or escapes file")
   $out

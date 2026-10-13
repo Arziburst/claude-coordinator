@@ -12,7 +12,8 @@
 #                               ..., selftest), a task #st<n> (#st1 lead: selftest), or a cwd inside a
 #                               coordinator-selftest folder; a product task about a self-test stays (its
 #                               title, after the colon, only names it); --project keeps the sessions whose
-#                               first cwd is the folder or inside it (\ read as /, case ignored, C:/x as /c/x)
+#                               first cwd is the folder or inside it (\ read as /, case ignored, C:/x as /c/x);
+#                               several folders joined by | (the root and its worktree roots: root|root-wt)
 # One session is its transcript and its subagents'; each transcript is read in order on its own. Lines,
 # tab-separated, one kind per line, no header (nothing at all for a session without messages):
 #   block  <reason>  count=<n> changed=<n> retried=<n> around=<n> stopped=<n>   — per safety-guard reason
@@ -44,7 +45,7 @@
 # A result whose call is not in the files read (or before --since) is skipped; so is a line that is no
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
-usage() { sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,46s/^# \{0,1\}//p' "$0"; exit 2; }
 arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -282,8 +283,12 @@ pick() {
     function tested(n,   v, i, h) { v = tolower(n); i = index(v, ":"); h = i ? substr(v, 1, i - 1) : v
       return v ~ /^#st[0-9]/ || word(h, "probe") || word(h, "selftest") || word(h, "self-test") }
     function sandbox(c) { return norm(c) ~ /\/coordinator-selftest(\/|$)/ }
-    function inside(c) { if (c == "") return 0; c = norm(c); return c == R || substr(c, 1, length(R) + 1) == R "/" }
-    BEGIN { skip = ENVIRON["SKIP"] + 0; R = ENVIRON["PROJ"]; if (R != "") R = norm(R) }
+    function inside(c,   i) { if (c == "") return 0; c = norm(c)
+      for (i = 1; i <= nr; i++) if (c == R[i] || substr(c, 1, length(R[i]) + 1) == R[i] "/") return 1
+      return 0 }
+    # the folders of --project, joined by |
+    BEGIN { skip = ENVIRON["SKIP"] + 0; m = split(ENVIRON["PROJ"], PL, "|"); nr = 0
+      for (i = 1; i <= m; i++) if (PL[i] != "") R[++nr] = norm(PL[i]) }
     $1 == "F" { f[++n] = substr($0, 3); listed[f[n]] = 1; next }
     $1 == "M" { s = substr($0, 3); i = index(s, ".jsonl:\""); if (!i) next
       p = substr(s, 1, i + 5); m = substr(s, i + 7)
@@ -294,7 +299,7 @@ pick() {
         if (match(p, /\/subagents\/[^\/]*\.jsonl$/) && (substr(p, 1, RSTART - 1) ".jsonl") in listed) q = substr(p, 1, RSTART - 1) ".jsonl"
         cq = (q in cwd) ? cwd[q] : ""; cp = (p in cwd) ? cwd[p] : ""; nq = (q in nm) ? nm[q] : ""
         if (skip && (tested(nq) || sandbox(cq) || sandbox(cp))) continue
-        if (R != "" && !inside(cq != "" ? cq : cp)) continue
+        if (nr && !inside(cq != "" ? cq : cp)) continue
         print p } }'
 }
 # a --since / --until value as YYYY-MM-DDTHH:MM:SS[...] in UTC (the awk reads its first 19 characters)

@@ -11,12 +11,17 @@
 # The week: Monday 00:00 to Sunday 24:00 UTC, the one holding --week (default: the last complete week, the one
 # holding today minus 7 days); the previous week is the 7 days before it. --project: the project root (default:
 # the folder above the run log's folder); --journal / --escapes: default LOG.md / ESCAPES.tsv next to the run log.
+# Next to the run log too: ROUTING.md (its "## Kinds" section, `<own kind> -> <core kind>` per line: the public
+# body's kinds) and PROJECT.md (its Settings row "Worktree roots": folders, relative to the root, whose sessions
+# are the project's as well as <root>/.claude/worktrees).
 # The run log (CORE 7, columns by its header, else in CORE 7's order): a task is its rows before the first dot
 # (37, 37.1, 37.2), as run-stats; it belongs to the week of its latest row date. Left out: rows of a probe or a
 # self-test (task st<n> or 0, or a kind or role naming probe / selftest / self-test); a task-less row (- or empty)
-# is the coordinator's own spend. Results read by their first word: rework / escalated / failed.
-# The transcripts: session-insights --since <week> --until <week end> --skip-tests --project <folder> for each
-# week (no probe or self-test session, only this project's; its rules: session-insights.sh's top comment).
+# is the coordinator's own spend. A cost cell counts by its leading number (`0.0648 prices` is 0.0648). Results
+# read by their first word: rework / escalated / failed; done and pass are approved; another word in the week is
+# listed as "unknown result: <value> ×<n>" (local only).
+# The transcripts: session-insights --since <week> --until <week end> --skip-tests --project <root>|<worktree
+# roots>|<root>/.claude/worktrees for each week (no probe or self-test session, only this project's).
 # Prints tab-separated: "retro", the weeks; "axis measure week previous" and a line per measure:
 #   cost            tasks, merged, median_per_task (USD), total (the tasks' cost and the coordinator's own),
 #                   coordinator, per_merged_task (total / merged)
@@ -24,27 +29,30 @@
 #                   is shown apart, never in the others), owner_wait_open (tasks ready, not merged)
 #   quality         rework_rate, escalated_rate, failed_rate (of the tasks with runs), escapes (ESCAPES.tsv rows
 #                   dated in the week), escapes_per_10_merged
-#   predictability  per measure cost / work / ready: _forecasts (tasks with a forecast: 3 or more earlier tasks of
-#                   the kind and model, the last 10 of them, before the task's first row), _in_range (actual
-#                   within the forecast's 25th-75th percentile, min-max under 4, as run-stats), _ratio_median
-#                   (actual / the forecast's median, percent)
+#   predictability  per measure cost / work / ready: _forecasts (tasks with a forecast), for cost and work
+#                   _logged (the estimate the task's lead row, else first worker row logged: estimate for cost,
+#                   estimate_time for work; lo-hi: in range inside it, its midpoint for the ratio; one number n:
+#                   in range from n/2 to 2n) and _rebuilt (no logged estimate: 3 or more earlier tasks of the
+#                   kind and model, the last 10 before the task's first row, their 25th-75th percentile, min-max
+#                   under 4, as run-stats), _in_range, _ratio_median (actual / the forecast's midpoint, percent)
 #   stability       failed_runs (rows with result failed), guard_blocks, deny_rule_blocks, guard_around (blocks
 #                   whose next call named the same target - worth a look, not a finding), guard_false_positives
 #                   (journal lines "guard false positive: <reason>", dated by their own date, else the last one
 #                   above), guard_errors (refusals by the guard's own hook: an error or a timeout, no block),
 #                   refusals (all other), tool_errors, tool_calls, tool_error_rate, cache_rewrites,
 #                   cache_rewrites_per_task, waiting_minutes, rereads
-# then "kind name tasks rework escalated failed" per kind of the week, and the week's block and refusal lines.
+# then "kind name tasks rework escalated failed" per kind of the week (the project's own kinds), the unknown
+# results, and the week's block and refusal lines.
 # Too little data: "—" instead of a number - under 3 values (tasks, merged tasks, forecasts) for a median, a
 # rate or a ratio, under 100 tool calls for the error rate, no transcripts or no journal / escapes file.
 # --public prints instead a Markdown body built only from a fixed template, numbers and the allowlist: the core's
-# kinds (trivial, ordinary, hard, hardest; any other is "other"), the guard's reasons and the refusal sources as
+# kinds (trivial, ordinary, hard, hardest; a project's own kind by ROUTING.md's map, else "other"), the guard's reasons and the refusal sources as
 # fixed keys, the anonymous id and the dates; it is checked before it is printed (as --check-public): any line
 # outside the template, a cell outside the allowlist, a / or \, or the project folder's name fails it (exit 1,
 # nothing printed).
 # Exit 1 when a file cannot be read or a check fails, 2 on a usage error.
 set -u
-usage() { sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"
 B="$(printf '\357\273\277')"           # a UTF-8 BOM, read as nothing
 DASH="$(printf '\342\200\224')"        # the em dash: too little data
@@ -66,7 +74,7 @@ Data for proposals, not a bug report: the maintainer acts on it only after the o
 **Coordinator self-improvement: proposal** from one project's weekly numbers, in the core's own terms: no code, file names, paths, branches, task text or names of the project.
 A proposal, not a bug report: the maintainer acts on it only after the owner's discussion and yes."
 AXES="cost speed quality predictability stability"
-MEAS="cost:tasks cost:merged cost:median_per_task cost:total cost:coordinator cost:per_merged_task speed:ready_median speed:work_median speed:owner_wait_median speed:owner_wait_open quality:rework_rate quality:escalated_rate quality:failed_rate quality:escapes quality:escapes_per_10_merged predictability:cost_forecasts predictability:cost_in_range predictability:cost_ratio_median predictability:work_forecasts predictability:work_in_range predictability:work_ratio_median predictability:ready_forecasts predictability:ready_in_range predictability:ready_ratio_median stability:failed_runs stability:guard_blocks stability:deny_rule_blocks stability:guard_around stability:guard_false_positives stability:guard_errors stability:refusals stability:tool_errors stability:tool_calls stability:tool_error_rate stability:cache_rewrites stability:cache_rewrites_per_task stability:waiting_minutes stability:rereads"
+MEAS="cost:tasks cost:merged cost:median_per_task cost:total cost:coordinator cost:per_merged_task speed:ready_median speed:work_median speed:owner_wait_median speed:owner_wait_open quality:rework_rate quality:escalated_rate quality:failed_rate quality:escapes quality:escapes_per_10_merged predictability:cost_forecasts predictability:cost_logged predictability:cost_rebuilt predictability:cost_in_range predictability:cost_ratio_median predictability:work_forecasts predictability:work_logged predictability:work_rebuilt predictability:work_in_range predictability:work_ratio_median predictability:ready_forecasts predictability:ready_in_range predictability:ready_ratio_median stability:failed_runs stability:guard_blocks stability:deny_rule_blocks stability:guard_around stability:guard_false_positives stability:guard_errors stability:refusals stability:tool_errors stability:tool_calls stability:tool_error_rate stability:cache_rewrites stability:cache_rewrites_per_task stability:waiting_minutes stability:rereads"
 KINDS="trivial ordinary hard hardest other"
 GUARD="unreadable-call owner-copy-edit mirror-push push-all-branches push-matching push-protected push-while-on-protected delete-protected worktree-force worktree-by-hand remove-root remove-project project-rules-unreadable project-rule-unreadable project-rule deny-rule other"
 REFUSAL="guard-error other-hook classifier safety-check user other"
@@ -166,6 +174,41 @@ case "$proj" in /* | [A-Za-z]:*) ;; *) proj="$(pwd)/$proj" ;; esac
 for x in "$journal" "$escapes"; do
   [ -z "$x" ] || { [ -f "$x" ] && [ -r "$x" ]; } || { echo "retro: cannot read $x" >&2; exit 1; }
 done
+# the project's own kinds mapped to the core's: ROUTING.md next to the run log, its section "## Kinds", one
+# `<kind> -> <core kind>` per line (the public body only; the local report keeps the project's kinds)
+KMAP=""
+if [ -f "$dir/ROUTING.md" ]; then
+  KMAP="$(LC_ALL=C awk '
+    { sub(/\r$/, "") }
+    /^#/ { on = tolower($0) ~ /^##[ \t]+kinds[ \t]*$/; next }
+    on { l = tolower($0); gsub(/`/, "", l); sub(/^[ \t]*[-*][ \t]*/, "", l); sub(/[ \t]+$/, "", l)
+      if (l ~ /^[a-z0-9_.-]+[ \t]*->[ \t]*(trivial|ordinary|hard|hardest)$/) {
+        k = l; sub(/[ \t]*->.*$/, "", k); c = l; sub(/^.*->[ \t]*/, "", c); print k "=" c } }' "$dir/ROUTING.md")"
+fi
+# the folders whose sessions are the project's: the root, the worktree roots PROJECT.md names next to the run log
+# (its Settings row "Worktree roots": paths split by , or ;, relative to the root; none / - / <fill> for none),
+# and <root>/.claude/worktrees - joined by | for session-insights --project
+base="$(printf '%s' "$proj" | tr '\\' '/')"; base="${base%/}"
+roots="$base"
+if [ -f "$dir/PROJECT.md" ]; then
+  while IFS= read -r w; do
+    [ -n "$w" ] || continue
+    w="$(printf '%s' "$w" | tr '\\' '/')"
+    case "$w" in
+      /* | [A-Za-z]:*) ;;
+      *) b="$base"
+         while :; do case "$w" in ../*) b="${b%/*}"; w="${w#../}" ;; ./*) w="${w#./}" ;; ..) b="${b%/*}"; w="" ;; *) break ;; esac; done
+         w="$b${w:+/$w}" ;;
+    esac
+    roots="$roots|$w"
+  done <<EOF
+$(LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
+  $2 ~ /^[ \t]*[*]*Worktree roots[*]*[ \t]*$/ { v = $3; gsub(/`/, "", v); n = split(v, a, /[,;]/)
+    for (i = 1; i <= n; i++) { x = a[i]; sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); y = tolower(x)
+      if (x != "" && x != "-" && y != "none" && y != "n/a" && x !~ /^<.*>$/) print x } }' "$dir/PROJECT.md")
+EOF
+fi
+roots="$roots|$base/.claude/worktrees"
 # the weeks: this one's Monday and Sunday, the previous one's, and the next Monday (the --until of this one)
 set -- $(D="${week:-$(date -u +%Y-%m-%d)}" DEF="$([ -z "$week" ] && echo 1)" LC_ALL=C awk "$common"'
   function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = idiv(y, 400); yoe = y - e * 400
@@ -183,8 +226,8 @@ WS="$1" WE="$2" PS="$3" PE="$4" WN="$5"
 # the transcripts of each week, or "none" (no insights asked, no transcripts on this machine)
 IW=none; IP=none
 if [ "$noins" = 0 ]; then
-  IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --until "${WN}T00:00:00Z" --skip-tests --project "$proj" 2>/dev/null)" || IW=none
-  IP="$(bash "$here/session-insights.sh" --since "${PS}T00:00:00Z" --until "${WS}T00:00:00Z" --skip-tests --project "$proj" 2>/dev/null)" || IP=none
+  IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --until "${WN}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
+  IP="$(bash "$here/session-insights.sh" --since "${PS}T00:00:00Z" --until "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IP=none
 fi
 # the journal's guard false positives and the escapes, per week ("-": no file)
 JC=-; EC=-
@@ -206,18 +249,29 @@ if [ -n "$escapes" ]; then
 fi
 
 report() {
-  WS="$WS" WE="$WE" PS="$PS" PE="$PE" IW="$IW" IP="$IP" JC="$JC" EC="$EC" PUB="$public" ID="$id" LC_ALL=C awk -F '\t' "$common"'
+  WS="$WS" WE="$WE" PS="$PS" PE="$PE" IW="$IW" IP="$IP" JC="$JC" EC="$EC" PUB="$public" ID="$id" KMAP="$KMAP" \
+  TIMES="$(printf '\303\227')" LC_ALL=C awk -F '\t' "$common"'
   BEGIN { vocab(); D = ENVIRON["DASH"]; WS = ENVIRON["WS"]; WE = ENVIRON["WE"]; PS = ENVIRON["PS"]; PE = ENVIRON["PE"]
-    cd = 1; ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cs = 10; cw = 12; ca = 13; cx = 14
+    cd = 1; ct = 2; cr = 3; ck = 4; cm = 5; ce = 7; cc = 9; cs = 10; cw = 12; ca = 13; cx = 14; cy = 15
+    kmn = split(ENVIRON["KMAP"], A, "\n"); for (i = 1; i <= kmn; i++) if (index(A[i], "=")) KM[substr(A[i], 1, index(A[i], "=") - 1)] = substr(A[i], index(A[i], "=") + 1)
     ins(ENVIRON["IW"], "W"); ins(ENVIRON["IP"], "P")
     split(ENVIRON["JC"] == "-" ? "-:-" : ENVIRON["JC"], JJ, ":"); JN["W"] = JJ[1]; JN["P"] = JJ[2]
     split(ENVIRON["EC"] == "-" ? "-:-" : ENVIRON["EC"], JJ, ":"); EN["W"] = JJ[1]; EN["P"] = JJ[2] }
-  # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number (as run-stats)
+  # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number (as run-stats: a cost is
+  # its cell s leading number, `0.0648 prices` 0.0648; minutes the whole value, a trailing m allowed)
   function units(v, unit,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
-    if (unit == "$") sub(/^[$]/, "", v); else sub(/m$/, "", v)
-    if (v !~ /^[0-9]+([.][0-9]+)?$/) return -1
+    if (unit == "$") { sub(/^[$]/, "", v); if (!match(v, /^[0-9]+([.][0-9]+)?/)) return -1; v = substr(v, 1, RLENGTH) }
+    else { sub(/m$/, "", v); if (v !~ /^[0-9]+([.][0-9]+)?$/) return -1 }
     i = v; d = ""; if (index(v, ".")) { i = substr(v, 1, index(v, ".") - 1); d = substr(v, index(v, ".") + 1) }
     return (i + 0) * 10000 + substr(d "0000", 1, 4) }
+  # a logged estimate (estimate: budget.cost; estimate_time: budget.time): a number or a range lo-hi at the cell s
+  # start (`$` allowed, the rest ignored); sets ELO and EHI in units, ESGL for a single number; 0 when none
+  function est(v,   a, b) { sub(/^[ \t]+/, "", v); sub(/^[$]/, "", v)
+    if (!match(v, /^[0-9]+([.][0-9]+)?/)) return 0
+    a = substr(v, 1, RLENGTH); v = substr(v, RLENGTH + 1); ELO = units(a, "$"); EHI = ELO; ESGL = 1
+    if (match(v, /^[ \t]*-[ \t]*[0-9]+([.][0-9]+)?/)) { b = substr(v, RSTART, RLENGTH); sub(/^[ \t]*-[ \t]*/, "", b)
+      EHI = units(b, "$"); ESGL = 0; if (EHI < ELO) return 0 }
+    return ELO + EHI > 0 }
   function col(c) { return c ? $c : "" }
   function wk(d) { return d == "" ? "" : (d >= WS && d <= WE) ? "W" : (d >= PS && d <= PE) ? "P" : "" }
   function add(k, v) { L[k, ++LN[k]] = v }
@@ -246,7 +300,8 @@ report() {
     if (s == "classifier" || s == "user") return s
     if (s == "safety check") return "safety-check"
     return "other" }
-  function pkind(k) { k = tolower(k); return (k == "trivial" || k == "ordinary" || k == "hard" || k == "hardest") ? k : "other" }
+  # the public kind: a core kind as it is, a project s kind by its map (ROUTING.md *Kinds*), else other
+  function pkind(k) { k = tolower(k); return (k == "trivial" || k == "ordinary" || k == "hard" || k == "hardest") ? k : (k in KM) ? KM[k] : "other" }
   # one week of session-insights lines; "none": no transcripts
   function ins(s, w,   n, i, A, f, c, g) { if (s == "none") return; has[w] = 1
     n = split(s, A, "\n")
@@ -270,12 +325,18 @@ report() {
   function cents(c) { return sprintf("%d.%02d", idiv(c, 100), c % 100) }   # hundredths as d.dd
   function dec1(x) { return sprintf("%d.%d", idiv(x, 10), x % 10) }        # tenths as d.d
   function pct(a, b) { return idiv(200 * a + b, 2 * b) "%" }
-  # the forecast of task t for a measure (c cost, a work, r ready) from the earlier tasks of its kind and model, as
-  # run-stats gave it before the task: 3 or more of them, the last 10, by their last row before t s first row
+  # the forecast of task t for a measure (c cost, a work, r ready): the estimate logged in its run log row (cost:
+  # estimate, work: estimate_time; a range lo-hi, its midpoint for the ratio; a single number n: in range from n/2
+  # to 2n) where there is one, else rebuilt from the earlier tasks of its kind and model as run-stats gave it before
+  # the task: 3 or more of them, the last 10, by their last row before t s first row
   function fcast(t, w, ms,   i, u, n, v, val, o, j, k, s, m2, lo, hi, a, x) {
     if (ms == "c") { if (!(t in hc)) return; val = tc[t] }
     else if (ms == "a") { if (!(t in ha)) return; val = ta[t] }
     else { if (!(t in tr) || trw[t] < 0) return; val = trw[t] }
+    if (ms != "r" && est(ms == "c" ? te[t] : tt[t])) {
+      FC[w, ms]++; LG[w, ms]++
+      if (ESGL ? (2 * val >= ELO && val <= 2 * ELO) : (val >= ELO && val <= EHI)) IN[w, ms]++
+      m2 = ESGL ? 2 * ELO : ELO + EHI; add(w ms "q", idiv(400 * val + m2, 2 * m2)); return }
     n = 0
     for (i = 1; i <= nt; i++) { u = T[i]; if (u == t) continue
       if (ms == "r") { if (!(u in tr) || trw[u] < 0 || trk[u] != trk[t] || trm[u] != trm[t] || tr[u] >= fa[t]) continue; o = tr[u]; v = trw[u] }
@@ -289,14 +350,14 @@ report() {
     for (i = s; i <= n; i++) { a[++k] = X[i]; for (j = k; j > 1 && a[j - 1] > a[j]; j--) { x = a[j]; a[j] = a[j - 1]; a[j - 1] = x } }
     m2 = k % 2 ? 2 * a[(k + 1) / 2] : a[k / 2] + a[k / 2 + 1]
     lo = k < 4 ? a[1] : a[rank(25, k)]; hi = k < 4 ? a[k] : a[rank(75, k)]
-    FC[w, ms]++; if (val >= lo && val <= hi) IN[w, ms]++
+    FC[w, ms]++; RB[w, ms]++; if (val >= lo && val <= hi) IN[w, ms]++
     if (m2 > 0) add(w ms "q", idiv(400 * val + m2, 2 * m2)) }
   { sub(/\r$/, ""); if (NR == 1 && index($0, ENVIRON["B"]) == 1) $0 = substr($0, length(ENVIRON["B"]) + 1) }
   /^[ \t]*$/ || /^#/ { next }
-  $1 == "date" { cd = ct = cr = ck = cm = cc = cs = cw = ca = cx = 0
+  $1 == "date" { cd = ct = cr = ck = cm = ce = cc = cs = cw = ca = cx = cy = 0
     for (i = NF; i >= 1; i--) { if ($i == "date") cd = i; if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
       if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "result") cs = i; if ($i == "wall") cw = i
-      if ($i == "active") ca = i; if ($i == "wait") cx = i }
+      if ($i == "active") ca = i; if ($i == "wait") cx = i; if ($i == "estimate") ce = i; if ($i == "estimate_time") cy = i }
     next }
   { row++; t = col(ct); sub(/[.].*$/, "", t); k = col(ck); m = col(cm); r = col(cr)
     x = tolower(t); y = tolower(k " " r)
@@ -311,7 +372,10 @@ report() {
     if (c >= 0) { tc[t] += c; hc[t] = 1 }
     a = units(col(ca), "m"); if (a >= 0 && col(cc) !~ /^[ \t]*in[ \t]/) { ta[t] += a; ha[t] = 1 }   # a subagent: in its parent
     p = (r == "lead") ? 3 : ((r == "worker") ? 2 : 1)
-    if (!(t in pr) || p > pr[t]) { pr[t] = p; tk[t] = k; tm[t] = m }
+    if (!(t in pr) || p > pr[t]) { pr[t] = p; tk[t] = k; tm[t] = m; te[t] = col(ce); tt[t] = col(cy) }
+    # a result is read by its first word; done and pass are approvals; any other word, in this week, is listed
+    u = col(cs); sub(/^[ \t]+/, "", u); sub(/[ \t]+$/, "", u)
+    if (w == "W" && u != "" && u != "-" && tolower(u) !~ /^(approved|done|pass|rework|escalated|failed|ready|merged)([^a-z]|$)/) UNK[u]++
     s = tolower(col(cs)); sub(/^[ \t]+/, "", s)
     if (s ~ /^rework/) rw[t] = 1; if (s ~ /^escalated/) es[t] = 1
     if (s ~ /^failed/) { fl[t] = 1; if (w != "") frun[w]++ } }
@@ -343,6 +407,7 @@ report() {
       V[w, "escapes_per_10_merged"] = (EN[w] == "-" || mg[w] < 3) ? D : dec1(idiv(200 * EN[w] + mg[w], 2 * mg[w]))
       for (j = 1; j <= 3; j++) { ms = substr("car", j, 1); mn = j == 1 ? "cost" : j == 2 ? "work" : "ready"
         V[w, mn "_forecasts"] = FC[w, ms] + 0
+        if (ms != "r") { V[w, mn "_logged"] = LG[w, ms] + 0; V[w, mn "_rebuilt"] = RB[w, ms] + 0 }
         V[w, mn "_in_range"] = FC[w, ms] >= 3 ? pct(IN[w, ms], FC[w, ms]) : D
         V[w, mn "_ratio_median"] = LN[w ms "q"] >= 3 ? idiv(med2(w ms "q") + 1, 2) "%" : D }
       V[w, "failed_runs"] = frun[w] + 0
@@ -363,6 +428,8 @@ report() {
       print ax "\t" me "\t" V["W", me] "\t" V["P", me] }
     print "kind\tname\ttasks\trework\tescalated\tfailed"
     for (k in KN) print "kind\t" k "\t" KN[k] "\t" (KN[k] >= 3 ? pct(KR[k], KN[k]) "\t" pct(KE[k], KN[k]) "\t" pct(KF[k], KN[k]) : D "\t" D "\t" D) | "LC_ALL=C sort"
+    close("LC_ALL=C sort")
+    for (u in UNK) print "unknown result: " u " " ENVIRON["TIMES"] UNK[u] | "LC_ALL=C sort"
     close("LC_ALL=C sort")
     for (i = 1; i <= nl; i++) print LOC[i]
     print "note\t" D " too little data: under 3 tasks, merged tasks or forecasts, under 100 tool calls, or no transcripts, journal or escapes file" }
