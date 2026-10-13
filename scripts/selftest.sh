@@ -116,6 +116,9 @@ sandbox)
   in="$HOME"
   while [ $# -gt 0 ]; do case "$1" in --in) [ $# -ge 2 ] || usage; in="$2"; shift 2 ;; *) usage ;; esac; done
   [ -d "$in" ] || { fail "no folder $in"; finish; }
+  # an absolute path: the repo's origin URL is stored from it, and a relative one breaks every git
+  # command run from another folder (a reused sandbox's fetch)
+  in="$(cd "$in" && pwd)" || { fail "cannot enter $in"; finish; }
   d="${in%/}/coordinator-selftest"
   if [ -e "$d" ]; then
     # a sandbox kept by clean --keep is reused (its repo's path keeps the owner's trust); nothing else is
@@ -175,16 +178,14 @@ clean)
   done
   b="$(git -C "$r" for-each-ref --format='%(refname:short)' refs/heads | grep -v '^main$')"
   [ -z "$b" ] && pass "no branch left" || fail "branches not merged into main: $(echo $b)"
-  if [ -n "$keep" ]; then
-    # the origin's branches are deleted below, so each must be merged into the repo's main (the guard
-    # blocks pushing main: the origin's own main may lag behind)
-    b=""
-    for x in $(git -C "$d/remote.git" for-each-ref --format='%(refname:short)' refs/heads); do
-      [ "$x" = main ] && continue
-      git -C "$r" merge-base --is-ancestor "$(git -C "$d/remote.git" rev-parse "refs/heads/$x")" main 2>/dev/null || b="$b $x"
-    done
-    [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
-  fi
+  # the origin's branches go too (deleted by --keep, removed with the folder otherwise), so each must be
+  # merged into the repo's main (the guard blocks pushing main: the origin's own main may lag behind)
+  b=""
+  [ -d "$d/remote.git" ] && for x in $(git -C "$d/remote.git" for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null); do
+    [ "$x" = main ] && continue
+    git -C "$r" merge-base --is-ancestor "$(git -C "$d/remote.git" rev-parse "refs/heads/$x")" main 2>/dev/null || b="$b $x"
+  done
+  [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
   if command -v claude >/dev/null 2>&1; then
     n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
     [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
@@ -203,11 +204,11 @@ clean)
     for x in $(git -C "$d/remote.git" for-each-ref --format='%(refname)' refs/heads); do
       [ "$x" = refs/heads/main ] || git -C "$d/remote.git" update-ref -d "$x"
     done
-    git -C "$d/remote.git" update-ref refs/heads/main "$i" && git -C "$d/remote.git" symbolic-ref HEAD refs/heads/main &&
+    ok=""; git -C "$d/remote.git" update-ref refs/heads/main "$i" && git -C "$d/remote.git" symbolic-ref HEAD refs/heads/main &&
       git -C "$r" checkout -q -f main 2>/dev/null && git -C "$r" reset -q --hard "$i" &&
       git -C "$r" fetch -q --prune origin 2>/dev/null && git -C "$r" worktree prune &&
-      git -C "$r" clean -q -ffdx -e .claude/settings.local.json
-    why="$(kept_why "$d")"
+      git -C "$r" clean -q -ffdx -e .claude/settings.local.json && ok=1
+    why="$(kept_why "$d")"; [ -n "$ok" ] || why="${why:-a git command failed}"
     if [ -z "$why" ]; then
       pass "only main, at the first commit $(git -C "$r" rev-parse --short "$i"), in the repo and its origin; nothing untracked"
       echo "sandbox kept for the next run: $d"

@@ -5,16 +5,18 @@
 #     main pushed ahead, an untracked file, the owner's .claude/settings.local.json): the folder, its
 #     marker, the repo's path and remote.git stay; only main, at the first commit, in both; no worktree;
 #     nothing untracked but settings.local.json - and sandbox --in then reuses it;
-#   - clean --keep refuses a branch not merged into main (in a worktree, or only on the origin) and
-#     keeps everything; it refuses a marker without the first commit (a sandbox from an older core);
+#   - clean (with or without --keep) refuses a branch not merged into main (in a worktree, or only on
+#     the origin) and keeps the sandbox, nothing reset; --keep refuses a marker without the first
+#     commit (a sandbox from an older core);
 #   - sandbox refuses a kept sandbox that is not clean, and a folder that is not a sandbox;
-#   - plain clean still removes the folder; sandbox --keep is a usage error.
+#   - plain clean still removes the folder; sandbox --keep is a usage error;
+#   - a relative --in is made absolute: from another folder the kept sandbox fetches, resets, is reused.
 # The sessions are checked with a stub claude that lists none (the real one is never called).
 #   tests/selftest/sandbox.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/sandbox.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -90,8 +92,20 @@ st sandbox --in "$(P "$a")"
 expect "sandbox on a used sandbox" 1 "FAIL sandbox: $(P "$d") already exists and is not clean (worktrees left): run selftest clean $SB $(P "$d") [$KP] first"
 is "sandbox on a used sandbox: nothing changed" [ "$(git -C "$r" rev-parse main)" = "$m" ]
 
+# t2 merged, t3 still only on the origin: a full clean refuses it too and keeps the folder (it removes
+# only the clean, merged worktree and branch, as before)
+g -C "$r" merge -q --no-edit t2; m="$(git -C "$r" rev-parse main)"
+st clean --sandbox "$(P "$d")"
+expect "clean, t3 only on the origin" 1 "FAIL clean: branches on the origin not merged into main: t3"
+expect "clean, t3 only on the origin" 1 "PASS clean: no branch left"
+expect "clean, refused" 1 "sandbox kept for inspection: $(P "$d")"
+is "clean refused: the folder kept" [ -f "$d/.coordinator-selftest" ]
+is "clean refused: the origin's t3 kept" [ "$(refs "$o" refs/heads)" = "refs/heads/main refs/heads/t1 refs/heads/t3" ]
+is "clean refused: main kept" [ "$(git -C "$r" rev-parse main)" = "$m" ]
+is "clean refused: the untracked file kept" [ -f "$r/junk.txt" ]
+
 # merged now: clean --keep resets the sandbox and keeps it
-g -C "$r" merge -q --no-edit t2; git -C "$r" fetch -q origin t3 2>/dev/null; g -C "$r" merge -q --no-edit FETCH_HEAD
+git -C "$r" fetch -q origin t3 2>/dev/null; g -C "$r" merge -q --no-edit FETCH_HEAD
 st clean --sandbox "$(P "$d")" --keep
 expect "clean --keep" 0 "PASS clean: no worktree left"
 expect "clean --keep" 0 "PASS clean: every branch on the origin is merged into main"
@@ -137,6 +151,23 @@ expect "sandbox on another folder" 1 "FAIL sandbox: $(P "$b") already exists and
 st clean --sandbox "$(P "$b")" --keep
 expect "clean --keep on another folder" 1 "FAIL clean: $(P "$b") is not a self-test sandbox (no .coordinator-selftest): nothing removed"
 is "another folder untouched" [ -z "$(ls -A "$b")" ]
+
+# a relative --in becomes an absolute path (the origin URL is stored from it): from another folder the
+# kept sandbox still fetches, is reset and is reused
+mkdir "$tmp/c"; e="$tmp/c/coordinator-selftest"; cd "$tmp" || exit 1
+st sandbox --in c
+expect "sandbox with a relative --in" 0 "sandbox: $(P "$e")"
+u="$(git -C "$e/repo" config remote.origin.url)"
+n=$((n + 1)); case "$u" in /*|[A-Za-z]:*) ;; *) echo "FAIL (a relative --in): the origin URL is not absolute: $u"; fail=1 ;; esac
+cd "$tmp/bin" || exit 1
+git -C "$e/repo" push -q origin main:t5 2>/dev/null
+is "a relative --in: the repo fetches from another folder" git -C "$e/repo" fetch -q origin
+st clean --sandbox "$(P "$e")" --keep
+expect "a relative --in: clean --keep from another folder" 0 "sandbox kept for the next run: $(P "$e")"
+cd "$tmp" || exit 1
+st sandbox --in c
+expect "a relative --in: reused" 0 "PASS sandbox: reusing the kept sandbox $(P "$e")"
+cd "$here" || exit 1
 
 # --keep belongs to clean only
 n=$((n + 1))

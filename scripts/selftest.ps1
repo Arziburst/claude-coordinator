@@ -158,7 +158,9 @@ switch ($Step) {
 'sandbox' {
   Only @('In')
   if ($In -and -not (Test-Path -LiteralPath $In -PathType Container)) { Fail "no folder $In"; Finish }
-  $d = Join-Path $(if ($In) { $In } else { $HOME }) 'coordinator-selftest'
+  # an absolute path: the repo's origin URL is stored from it, and a relative one breaks every git
+  # command run from another folder (a reused sandbox's fetch)
+  $d = Join-Path $(if ($In) { (Resolve-Path -LiteralPath $In).ProviderPath } else { $HOME }) 'coordinator-selftest'
   if (Test-Path -LiteralPath $d) {
     # a sandbox kept by clean -Keep is reused (its repo's path keeps the owner's trust); nothing else is
     if (-not (Test-Path -LiteralPath (Join-Path $d $marker) -PathType Leaf)) { Fail "$d already exists and is not a self-test sandbox (no $marker): nothing changed"; Finish }
@@ -223,18 +225,17 @@ switch ($Step) {
   }
   $b = @(& git -C $r for-each-ref --format='%(refname:short)' refs/heads | Where-Object { $_ -ne 'main' })
   if ($b.Count -eq 0) { Pass 'no branch left' } else { Fail "branches not merged into main: $($b -join ' ')" }
-  if ($Keep) {
-    # the origin's branches are deleted below, so each must be merged into the repo's main (the guard
-    # blocks pushing main: the origin's own main may lag behind)
-    $b = ''
-    foreach ($x in @(& git -C $o for-each-ref --format='%(refname:short)' refs/heads)) {
-      if ($x -ceq 'main') { continue }
-      $sha = "$(& git -C $o rev-parse "refs/heads/$x")"
-      & git -C $r merge-base --is-ancestor $sha main 2>$null
-      if ($LASTEXITCODE -ne 0) { $b += " $x" }
-    }
-    if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
+  # the origin's branches go too (deleted by -Keep, removed with the folder otherwise), so each must be
+  # merged into the repo's main (the guard blocks pushing main: the origin's own main may lag behind)
+  $b = ''
+  $heads = @(if (Test-Path -LiteralPath $o -PathType Container) { & git -C $o for-each-ref --format='%(refname:short)' refs/heads 2>$null })
+  foreach ($x in $heads) {
+    if ($x -ceq 'main') { continue }
+    $sha = "$(& git -C $o rev-parse "refs/heads/$x")"
+    & git -C $r merge-base --is-ancestor $sha main 2>$null
+    if ($LASTEXITCODE -ne 0) { $b += " $x" }
   }
+  if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
   if (Get-Command claude -ErrorAction SilentlyContinue) {
     $json = "$(& claude agents --json 2>$null)"
     $n = @([regex]::Matches($json, '"name":\s*"([^"]*selftest[^"]*)"') | ForEach-Object { $_.Groups[1].Value })
@@ -263,7 +264,7 @@ switch ($Step) {
         @('-C', $r, 'worktree', 'prune'), @('-C', $r, 'clean', '-q', '-ffdx', '-e', '.claude/settings.local.json'))) {
       if ($ok) { & git @a 2>$null; $ok = $LASTEXITCODE -eq 0 }
     }
-    $why = KeptWhy $d
+    $why = KeptWhy $d; if (-not $ok -and -not $why) { $why = 'a git command failed' }
     if (-not $why) {
       Pass "only main, at the first commit $(& git -C $r rev-parse --short $i), in the repo and its origin; nothing untracked"
       "sandbox kept for the next run: $d"
