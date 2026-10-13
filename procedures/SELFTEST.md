@@ -112,7 +112,9 @@ the report notes the interruption and the resume time.
      the coordinator posts that verdict as a PR comment.
    - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash`, never
      `--delete-branch`), checks `gh pr view --json state` → `MERGED`, and runs **cleanup-worker** on the
-     worker's worktree (it must report cleaned: a merged PR with the pushed head).
+     worker's worktree (it must report cleaned: a merged PR with the pushed head). A merge refused by
+     the auto mode's classifier goes to the owner as the exact `! gh pr merge …` command (TOOLKIT
+     *Modes*); the step continues once `state` is `MERGED`.
    - Nothing is pushed to or merged into the state branch.
 6. **Verify and clean up:** for every `selftest` session, in this order: read its cost with
    `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is retried once,

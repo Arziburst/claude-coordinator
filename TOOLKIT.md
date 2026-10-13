@@ -163,6 +163,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   preset (no permission prompts, the classifier and the hook as the net) or `acceptEdits` with the
   cautious override. `bypassPermissions` only by the owner's own explicit setup. The `auto` mode's
   classifier reviews actions rules don't settle and honors limits stated in the conversation.
+  **A refusal by the classifier** (e.g. `gh pr merge` as "Merge Without Review", even after an approved
+  verdict) is never retried in another form — that would work around the net: the session hands the
+  owner the exact command to run with the `!` prefix (`! gh pr merge <n> --squash --match-head-commit
+  <sha>`), waits for its result, and continues from there; a worker asks its coordinator, which asks
+  the owner.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
 ## Scripts

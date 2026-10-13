@@ -40,6 +40,8 @@ Core: <the local core commit> (upstream main <sha> when filed)
 Where: <core file, section or script; the role>
 Trigger: <1-5 above>
 Environment: <OS and version>, claude <v>, git <v>, gh <v>, PowerShell <v> / bash <v>
+Ran in: <the tool that ran it: Bash (Git Bash / bash / zsh <v>) or PowerShell <v>>; <CLI / desktop app / IDE>;
+        <the session's role, model and effort>
 What happened: <in the core's terms; no project names, paths, URLs, people or code>
 Evidence: <the core command, its exit code and its error lines; paths as <path>, the project as <project>>
 Expected: <what the core says should happen>
