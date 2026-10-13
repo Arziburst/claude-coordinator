@@ -111,14 +111,24 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   pushing, force-pushing or deleting the protected branches (main / master — in any refspec form:
   quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
   `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
-  following `git checkout` / `switch`, `cd` / `Set-Location` and `git -C` in the same command;
+  following `git checkout` / `switch` (with `--track origin/main` and `-` too; `git checkout main
+  <file>` restores a file and leaves the branch), `cd` / `Set-Location` and `git -C` in the same command;
   `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a
-  worktree by hand (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find … -delete`). It parses
+  worktree by hand (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find … -delete`, a
+  `Get-ChildItem` / `ls` piped into `Remove-Item -Recurse`, `git worktree remove --force`; a drive also
+  as `/c`, `/mnt/c`, `/cygdrive/c`, home also written out in its Windows or Git Bash form; `.`, `*` and
+  other relative targets count from the folder a `cd` led to). It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
-  message, a PR body) do not split, `$(…)`, `bash -c` / `pwsh -Command` and a heredoc fed to a shell
+  message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
+  wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf
+  -oL`, `builtin`, `noglob`, `time`, `nohup`, `exec`), `$(…)`, `bash -c` / `pwsh -Command` (or a prefix
+  such as `-Com`) and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
   reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
-  shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped.
+  shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
+  only `tool_input`'s own `command` is read. A project's own patterns (`.claude/coordinator-deny.txt`,
+  one regex per line, trimmed, CRLF or LF) block what they match; a pattern that cannot be read blocks
+  every call (`project rule cannot be read: <line>`) until the file is fixed.
   **A hook that fails to run does not block** — on Windows hook commands run through
   Git Bash, so a path with backslashes (`C:\x\y`) or a PowerShell variable (`$env:CLAUDE_PROJECT_DIR`, read
   as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`).
@@ -130,7 +140,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   new session. Checks: `selftest hooks --settings <file>` reads a settings file; `selftest hookcheck
   --session <id>` reads the transcript of a session told to push to `main` — the block, or the
   non-blocking error, or no hook at all. So the settings example runs the
-  hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`); a failure there means: fix before starting workers.
+  hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`: a
+  push to `main` must block and a work-branch push must pass, so a guard that blocks everything — a
+  syntax error does — fails too); a failure there means: fix before starting workers.
   That self-test calls the guard directly, never through Claude Code, so it cannot see a shell wrapper
   or a path the harness breaks — only `hookcheck` on a real session can.
   **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
@@ -192,7 +204,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
   `hooks/safety-guard.sh` uses `jq` when present and reads the JSON with `sed -E` and `awk` otherwise
   (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
-- **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts) and
+- **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts and the hook's self-test) and
   `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
   repositories with stub `claude` and `gh`; the real `claude` is never called).
 

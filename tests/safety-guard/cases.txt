@@ -1,6 +1,9 @@
 # Safety-guard verdicts shared by safety-guard.sh and safety-guard.ps1.
-# <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work)
+# <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work;
+# crlf, blank and bad are on work with another deny file: tests/safety-guard/run.sh says which).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
+# @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
+# (all three the plain home where there is no Git Bash), so no case names a machine's own paths.
 block	work	git push --force origin main
 block	work	git push origin main
 block	work	git push -f origin master
@@ -194,3 +197,102 @@ allow	work	find . -name "*.tmp" -delete
 # --- project patterns (.claude/coordinator-deny.txt) ---
 block	work	terraform  destroy -auto-approve
 allow	work	terraform plan
+# a deny file saved with CRLF still applies; blank and whitespace-only lines are skipped
+block	crlf	terraform destroy
+allow	crlf	terraform plan
+block	blank	terraform destroy
+allow	blank	git status
+allow	blank	git commit -m "a b"
+# a pattern that cannot be read blocks every call (the rule is not silently dropped)
+block	bad	git status
+# --- wrappers with options of their own (timeout, nice, stdbuf, sudo, env) and builtin / noglob ---
+block	work	timeout 30 git push origin main
+block	work	timeout -k 5 30s git push origin main
+block	work	timeout --signal=KILL 1m git push origin main
+block	work	nice -n 5 git push origin main
+block	work	nice -5 git push origin main
+block	work	stdbuf -oL git push origin main
+block	work	stdbuf -o L -e 0 git push origin main
+block	work	builtin cd ../main && git push
+block	work	noglob git push origin main
+block	work	sudo -E git push origin main
+block	work	sudo -u root git push origin main
+block	work	env -i git push origin main
+block	work	timeout 30 bash -c 'git push origin main'
+allow	work	timeout 30 git push origin 12-fix
+allow	work	nice -n 5 git push origin 12-fix
+allow	work	sudo -E git push origin 12-fix
+# --- -Command prefixes, -- after -c ---
+block	work	pwsh -Com "git push origin main"
+block	work	powershell -Comm 'git push origin main'
+block	work	bash -c -- 'git push origin main'
+allow	work	pwsh -Com "git push origin 12-fix"
+# --- PowerShell script blocks and { } groups ---
+block	work	& {git push origin main}
+block	work	1 | % { git push origin main }
+block	work	Get-Item . | ForEach-Object { git push origin main }
+block	work	Invoke-Command -ScriptBlock { git push origin main }
+block	work	Invoke-Command -ScriptBlock {git push origin main}
+allow	work	Invoke-Command -ScriptBlock { git push origin 12-fix }
+allow	work	git stash apply stash@{0}
+allow	work	git log --format=%H{x} origin/main..HEAD
+allow	work	echo ${HOME} && git push origin 12-fix
+# --- the branch after checkout --track / checkout - / a file restore; git -C . ---
+block	work	git checkout --track origin/main && git push
+block	work	git checkout -t origin/main && git push
+block	work	git switch --track origin/main; git push origin HEAD
+allow	work	git checkout --track origin/12-fix && git push
+block	work	git checkout - && git push
+block	work	git switch - && git push
+allow	main	git checkout - && git push
+allow	work	git checkout main README.md && git push
+allow	work	git checkout main src/a.txt src/b.txt; git push origin HEAD
+allow	main	git checkout -b 12-fix && git -C . push
+allow	main	git switch -c 12-fix; git -C ./ push origin HEAD
+block	work	git checkout main && git -C . push
+# --- a worktree removed by force (the lead's plain git worktree remove of a clean copy stays: roles/lead.md) ---
+block	work	git worktree remove --force .claude/worktrees/12-fix
+block	work	git worktree remove -f ../elsewhere
+block	work	git -C ../main worktree remove -f -f x
+allow	work	git worktree remove .claude/worktrees/12-fix
+allow	work	git worktree list
+allow	work	git worktree prune
+# --- worktree contents removed by hand ---
+block	work	rm -rf .claude/worktrees/12-fix/*
+block	work	rm -rf .claude/worktrees/12-fix/.
+block	work	Remove-Item -Recurse .claude\worktrees\12-fix\*
+allow	work	rm -rf .claude/worktrees/12-fix/build/*
+# --- home given literally, a drive in its Git Bash / WSL / Cygwin forms ---
+block	work	rm -rf @HOME@
+block	work	rm -rf @HOME@/
+block	work	rm -rf @HOME@/*
+block	work	rm -rf @HOME_M@
+block	work	Remove-Item -Recurse -Force @HOME_W@
+block	work	rm -rf /c
+block	work	rm -rf /c/
+block	work	rm -rf /C/*
+block	work	rm -rf /mnt/c
+block	work	rm -rf /cygdrive/c
+allow	work	rm -rf @HOME@/projects/app/build
+allow	work	Remove-Item -Recurse -Force @HOME_W@\projects\app\build
+allow	work	rm -rf /mnt/c/projects/app/build
+allow	work	rm -rf /c/projects/app/build
+# --- relative targets after a cd ---
+block	work	cd ~ && rm -rf .
+block	work	cd ~ && rm -rf *
+block	work	cd ~; rm -rf ./
+block	work	cd && rm -rf *
+block	work	cd / && rm -rf *
+block	work	cd C:\ ; Remove-Item * -Recurse -Force
+allow	work	cd build && rm -rf *
+allow	work	rm -rf *
+allow	work	rm -rf .
+allow	work	cd ~/projects/app && rm -rf ./build
+# --- a listing piped into a recursive removal ---
+block	work	Get-ChildItem C:\ | Remove-Item -Recurse -Force
+block	work	Get-ChildItem -Path $HOME -Recurse | Remove-Item -Force -Recurse
+block	work	gci ~ | ri -r -fo
+block	work	cd ~; Get-ChildItem | Remove-Item -Recurse -Force
+allow	work	Get-ChildItem build | Remove-Item -Recurse -Force
+allow	work	Get-ChildItem C:\ | Select-Object Name
+allow	work	Get-ChildItem C:\ | Remove-Item -WhatIf

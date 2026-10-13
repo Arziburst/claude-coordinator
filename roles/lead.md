@@ -43,7 +43,8 @@ worker (BINDINGS) and the phrase that ends your report.
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
    (`git merge-base --is-ancestor`), remove its worker — after reading its cost (step 6): `claude stop` and `claude rm` the session,
-   `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8).
+   `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8; never
+   `--force`, which the safety guard blocks).
 6. **Spend.** When each worker, tester or verifier run ends, in this order: **read** its tokens and
    cost — Windows `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/session-tokens.ps1
    <id>`, elsewhere `bash <core>/scripts/session-tokens.sh <id>` (never a worker's own count; a failed
