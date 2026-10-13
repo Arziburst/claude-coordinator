@@ -1,0 +1,8 @@
+# the journal's owner decisions for task 40: asked, answered (UTC)
+# one before the first start (left out), one across it (5 minutes count), two overlapping (20 minutes once),
+# one after ready (inside ready -> merge already)
+2026-10-06T07:00:00Z	2026-10-06T07:30:00Z
+2026-10-06T07:50:00Z 2026-10-06T08:05:00Z
+2026-10-06T08:20:00Z	2026-10-06T08:35:00Z
+2026-10-06T08:30:00.500Z	2026-10-06T08:40:00Z
+2026-10-06T10:00:00Z	2026-10-06T10:30:00Z

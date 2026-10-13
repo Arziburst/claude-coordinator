@@ -1,0 +1,5 @@
+date	role	task	note	kind	model	start	result	active	wall	wait	cost
+2026-10-06	worker	42.1	x	hard	sonnet	2026-10-06T07:35:00Z	approved	15	20		2.00
+2026-10-06	worker	42.2	x	hard	sonnet	2026-10-06T08:10:00Z	approved	-	12		1.50
+2026-10-06	tester	42.2	x	hard	haiku	2026-10-06T08:12:00Z	approved	2	3		in 42
+2026-10-06	lead	42	x	hard	opus	2026-10-06T07:30:00Z	approved	20	60		4.00

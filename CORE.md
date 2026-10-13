@@ -436,7 +436,14 @@ never assumed (below).
   per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
   `escalated` / `failed`) · start (UTC) · wall · active (minutes; the `time` line of
   `scripts/session-tokens`, from the transcript's timestamps, never a self-reported time, §7a; rows
-  written before these three columns leave them empty). The coordinator's own model and effort get a line per day.
+  written before these three columns leave them empty) · wait (task rows only, below). The coordinator's own model and effort get a line per day.
+  **A task row** per finished task (role `task`), appended when its PR merges — or when the block is
+  analysed with the task ready but unmerged — exactly as `scripts/run-stats <RUNS.tsv> --task <n>` prints it
+  (§7a): the task's kind and model, `start` = its first run's start, `wall` = time to ready, `active` = its
+  work, `wait` = the owner wait in minutes (`<m>+` while unmerged: still open), result `merged` / `ready`,
+  effort to cost `-`. A later task row of the same task replaces the earlier for the forecast (append, never
+  edit). It repeats its runs' work, so the forecast's cost and work skip it; a header without `wait` gets it
+  appended once, and older rows simply lack it.
 - **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
   under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
   this table, and every run uses it. It learns from the run log, balancing quality, price and limits:
@@ -477,45 +484,53 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   since then (`scripts/session-tokens --since <reset>`, priced per model, TOOLKIT *Usage*): the limits
   are per account, so the run log alone, one project's share, would overstate it — recomputed once a day, trusted once the window has risen
   10 points; until then the last window's ratio, or a `guess`. `scripts/run-stats --limits` does this
-  arithmetic from the status file, those spends and the ladder's prices, never by hand (TOOLKIT *Usage*). That limits follow list price across
+  arithmetic from the status file, those spends and the ladder's prices (`coordinator/prices.txt`,
+  one-time step `prices-file`), never by hand (TOOLKIT *Usage*). That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
   it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
   toward the weekly limit is asked once (the owner sees it in `/usage`) and kept in BINDINGS *Models*;
-  the account's cost is summed with or without that model accordingly.
+  the account's weekly cost is summed with or without that model accordingly. Assumed: every model, an
+  own-limit one too, spends the 5-hour window (not measured), so the 5-hour cost sums them all.
 - **Time is measured the same way, never self-reported:** a run's `start`, `wall` and `active` come
   from its transcript's timestamps (`scripts/session-tokens`, the `time` line; active leaves out every
   gap over 5 minutes between records — a limit, an answer, a sleeping machine — unless a tool call
   spans it, from its `tool_use` to its own `tool_result`: a running build is work, up to 30 minutes a
-  gap; a call that asks a person never is; a subagent working while its parent is quiet counts). Per task, derived from the run log and `gh`, no file of its own:
+  gap; a call that asks a person never is; a subagent working while its parent is quiet counts). Per task, derived from the run log and `gh`
+  by `scripts/run-stats <RUNS.tsv> --task <n> --pr-json <file> --waits <file>` — the PR's `gh pr view <PR>
+  --json statusCheckRollup,mergedAt,createdAt` and the task's owner waits (TOOLKIT *Usage*) — never by
+  hand, and kept as the task's row (§7):
   - **work** — the sum of `active` over the task's runs (worker, tester, reviewer, verifier, a lead
     and its sub-runs); a subagent's row (`in <parent>`) is already inside its parent's time, as its cost is;
   - **time to ready** — from the first run's `start` to the moment the task can merge: the later of the
     verifier's approval (its run's `start` + `wall`) and the PR's checks all green (the last
-    `completedAt` in `gh pr view <n> --json statusCheckRollup`), minus the intervals the task waited on
-    an owner decision. The coordinator journals them as they happen (§12): `asked the owner` and `the
-    owner answered`, each with the task and the UTC time;
+    `completedAt` of each check's latest run in `gh pr view <n> --json statusCheckRollup`: a green rerun
+    replaces a red run), minus the intervals the task waited on an owner decision. The coordinator journals
+    them as they happen (§12): `asked the owner` and `the owner answered`, each with the task and the UTC
+    time; for the script, one `<asked> <answered>` line per question in a scratch file;
   - **owner wait** — ready → merge (`gh pr view <n> --json mergedAt`) plus those mid-task intervals.
     Reported, **never part of a forecast**: five minutes of work merged by hand a week later is a
     five-minute task.
 - **Time estimate per contract** (`budget.time`, minutes of work): the median work of the kind's
   last 10 tasks on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max
   under 4 runs: "≈ 25 min (18–40), 8 runs" — from the same `scripts/run-stats` line as the cost
-  (its percentile and rounding rules are in its top comment). Time to ready is measured against it
-  and reported beside it. No history → seeded at init in the same pass as the cost seed (the
+  (its percentile and rounding rules are in its top comment). **Time to ready is forecast the same
+  way** from the task rows (the line's `ready_*` columns: the median of the kind's last 10 task rows on
+  the model, 25th–75th percentile), and the plan shows both: "work ~20 min (15–30), ready ~35 min
+  (25–50)"; owner waits are in neither. No history → seeded at init in the same pass as the cost seed (the
   median `active` of the project's existing sessions, per model — a session under the model with most
   of its cost — until the kind has its own runs), else the coordinator's own estimate; either is
-  marked `guess`.
+  marked `guess`; a kind with no task rows yet gets the coordinator's own ready estimate, marked `guess`.
 - **Block forecast:** the plan shows the block's estimate in cost and limit percent against
   what is left before the caps (§9), the 5-hour window included (`scripts/run-stats --limits --block
   <USD>` with the caps: per window its percent, the dollars left and whether it fits), and in time: the longest chain of
   its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
-  median, marked `rough`. It does not fit → a smaller block, or the owner decides (over a cap only
-  with permission).
+  median time to ready (a task waits for its dependency to be ready, not just worked), marked `rough`.
+  It does not fit → a smaller block, or the owner decides (over a cap only with permission).
 - **Analysis after the block:** one report line — forecast vs actual (cost, percent, time — work and
-  time to ready — per task and for the block, deviation), the
+  time to ready, each against its own forecast — per task and for the block, deviation), the
   worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate in cost or in time is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
-  A side line gives the average owner wait before merge — a hint where the pipeline stalls, never a
+  A side line gives the average owner wait (the task rows' `wait`) — a hint where the pipeline stalls, never a
   reproach. Estimates recalibrate by themselves through the medians; "spend report" shows the numbers
   behind them (`scripts/run-stats <RUNS.tsv>`: every kind and model).
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
@@ -594,9 +609,9 @@ change that affects them.
   returns, **start with them**, preferably as a quiz (multiple choice, recommended first).
 - **Journal** `LOG.md` next to `PROJECT.md`: one dated line per event that matters (started, merged,
   cleaned up, decided, verdicts, questions and answers — a question that holds a task up names the task
-  and the UTC time it was asked and answered, §7a). It survives compaction, restarts and moves; the
-  status page summarizes it. No customer data or secrets (§1.13); in a client's repository, written for
-  the client.
+  and the UTC time it was asked and answered — the `--waits` input of `run-stats --task`, §7a).
+  It survives compaction, restarts and moves; the status page summarizes it. No customer data or secrets
+  (§1.13); in a client's repository, written for the client.
 - **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
   owner's test, CI on the main line, another task, a user) gets one line in `coordinator/ESCAPES.tsv`
   (private, never in the client's tracker): date · the bug (issue or link) · the task that introduced

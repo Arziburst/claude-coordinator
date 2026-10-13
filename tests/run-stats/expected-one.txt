@@ -1,1 +1,1 @@
-ordinary	sonnet	10	6.75	4.00	9.00	4	28	25	31
+ordinary	sonnet	10	6.75	4.00	9.00	4	28	25	31	0	-	-	-

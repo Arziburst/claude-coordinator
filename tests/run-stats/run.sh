@@ -7,14 +7,17 @@
 # with a guess and with the previous ratio, a block that fits and one that does not, a window that has
 # reset and one absent, no rate_limits, a pretty-printed JSON with CRLF and a BOM, mixed models priced
 # apart with a dated id and a not-weekly one, a spend from stdin, the default status file, an unpriced
-# model, a malformed price line, missing files and usage errors).
+# model, a malformed price line, missing files and usage errors); the ready columns from task rows
+# (ready.tsv); --task on the fixtures in task/ (the checks green after the verifier and before it, a red run
+# then a green rerun, owner waits mid-task, an unmerged PR, no checks, no PR, a lead, no header and another
+# order, CRLF and a BOM, stdin, not ready on a red or running check or an unapproved verifier, errors).
 #   tests/run-stats/run.sh sh              # scripts/run-stats.sh, with the bash running this file
 #   tests/run-stats/run.sh ps pwsh         # scripts/run-stats.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -28,6 +31,12 @@ cp "$here"/limits/*.json "$here"/limits/*.txt "$tmp/"
 { printf '\357\273\277'; awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$here/limits/status-pretty.json"; } > "$tmp/status-crlf.json"
 { printf '\357\273\277'; awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$here/limits/spend-week.txt"; } > "$tmp/spend-week-crlf.txt"
 mkdir -p "$tmp/cfg/coordinator" && cp "$here/limits/status-trusted.json" "$tmp/cfg/coordinator/statusline.json"
+# the --task fixtures (the task's runs.tsv replaces nothing: copied under its own names), and CRLF + BOM copies
+cp "$here"/task/pr-*.json "$here"/task/waits*.txt "$tmp/" && cp "$here/task/runs.tsv" "$tmp/task-runs.tsv"
+cp "$here/task/noheader.tsv" "$tmp/noheader-task.tsv" && cp "$here/task/reordered.tsv" "$tmp/reordered-task.tsv"
+for x in task/runs.tsv:runs-crlf.tsv task/pr-rerun.json:pr-rerun-crlf.json task/waits.txt:waits-crlf.txt; do
+  { printf '\357\273\277'; awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$here/${x%%:*}"; } > "$tmp/${x#*:}"
+done
 cd "$tmp" || exit 1
 
 # runs the script under test in $tmp; stdout to out, stderr to err, \r removed; stdin from $IN (none: empty)
@@ -38,8 +47,9 @@ run() {
       --limits) a+=(-Limits) ;; --status) a+=(-Status) ;; --spend-5h) a+=(-Spend5h) ;; --spend-week) a+=(-SpendWeek) ;;
       --prices) a+=(-Prices) ;; --prev-5h) a+=(-Prev5h) ;; --prev-week) a+=(-PrevWeek) ;; --cap-5h) a+=(-Cap5h) ;;
       --cap-week) a+=(-CapWeek) ;; --block) a+=(-Block) ;; --now) a+=(-Now) ;;
+      --task) a+=(-Task) ;; --pr-json) a+=(-PrJson) ;; --waits) a+=(-Waits) ;;
       # stdin: 5.1 takes a bare - after a parameter through -File for a parameter name and fails, so -Spend5h:-
-      -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
+      -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek | -PrJson | -Waits) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
       *) a+=("$x") ;; esac; done
     "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/run-stats.ps1")" ${a[@]+"${a[@]}"} < "${IN:-/dev/null}" > out.raw 2> err.raw
   else
@@ -110,5 +120,46 @@ expect "limits: a spend without prices is a usage error" 2 '*' - -- --limits --s
 expect "limits: two spends from stdin is a usage error" 2 '*' - -- --limits --spend-5h - --spend-week - --prices prices.txt
 expect "limits: a cap that is no number is a usage error" 2 '*' - -- --limits --cap-5h 9x
 expect "limits: a run log with --limits is a usage error" 2 '*' - -- --limits runs.tsv
+
+# the ready columns: task rows (role task) in the forecast, never in cost or time, the last one of a task
+expect "ready: task rows give ready, the last 10, the last row of a task, never cost or time" 0 "$t/expected-ready.txt" - -- ready.tsv
+expect "ready: --per-run leaves task rows out" 0 "$t/expected-ready-per-run.txt" - -- ready.tsv --per-run
+expect "ready: one kind and model" 0 "$t/expected-ready-one.txt" - -- ready.tsv --kind ordinary --model sonnet
+
+# --task: one task's row from its runs, the PR's gh JSON and the journal's owner waits (fixtures in task/)
+k="$here/task"
+expect "task: checks green after the verifier, merged" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json pr-late.json
+expect "task: the verifier after the checks (a neutral check, a status context), merged a day later" 0 "$k/expected-early.txt" - -- \
+  task-runs.tsv --task 40 --pr-json pr-early.json
+expect "task: a red run then a green rerun - the last green counts (pretty-printed JSON)" 0 "$k/expected-rerun.txt" - -- \
+  task-runs.tsv --task 40 --pr-json pr-rerun.json
+expect "task: owner questions mid-task subtracted (across the start, overlapping, after ready)" 0 "$k/expected-waits.txt" - -- \
+  task-runs.tsv --task 40 --pr-json pr-late.json --waits waits.txt
+expect "task: ready, not merged - the owner wait open" 0 "$k/expected-open.txt" - -- task-runs.tsv --task 40 --pr-json pr-open.json --waits waits.txt
+expect "task: a PR without checks - the verifier alone" 0 "$k/expected-nochecks.txt" - -- task-runs.tsv --task 40 --pr-json pr-nochecks.json
+expect "task: no PR - the verifier alone, not merged" 0 "$k/expected-nopr.txt" - -- task-runs.tsv --task 40
+expect "task: a lead and its sub-runs, no verifier row - the checks alone" 0 "$k/expected-lead.txt" - -- task-runs.tsv --task 42 --pr-json pr-late.json
+expect "task: no header - CORE 7's order and wait" 0 "$k/expected-lead.txt" - -- noheader-task.tsv --task 42 --pr-json pr-late.json
+expect "task: a header in another order, with wait and a column of its own" 0 "$k/expected-reordered.txt" - -- \
+  reordered-task.tsv --task 42 --pr-json pr-late.json
+expect "task: CRLF line ends and a BOM in every input" 0 "$k/expected-crlf.txt" - -- \
+  runs-crlf.tsv --task 40 --pr-json pr-rerun-crlf.json --waits waits-crlf.txt
+IN=pr-late.json expect "task: the PR's JSON from stdin" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json -
+expect "task: the last run of a check red - not ready" 1 - "run-stats: task 40: not ready - the check checks (windows-latest) is FAILURE" -- \
+  task-runs.tsv --task 40 --pr-json pr-red.json
+expect "task: a check still running - not ready" 1 - "run-stats: task 40: not ready - the check checks (macos-latest) is IN_PROGRESS" -- \
+  task-runs.tsv --task 40 --pr-json pr-pending.json
+expect "task: no verifier run approved it - not ready" 1 - "run-stats: task 41: not ready - no verifier run approved it" -- \
+  task-runs.tsv --task 41 --pr-json pr-late.json
+expect "task: no verifier and no PR - not ready" 1 - "run-stats: task 42: not ready - no approved verifier run and no green checks" -- task-runs.tsv --task 42
+expect "task: no run with a start" 1 - "run-stats: task 43: no run has a start" -- task-runs.tsv --task 43
+expect "task: a task with no rows" 1 - "run-stats: task 99: no rows in task-runs.tsv" -- task-runs.tsv --task 99
+expect "task: a malformed wait line" 1 - "run-stats: waits-bad.txt:2: not an owner wait (<asked UTC> <answered UTC>)" -- \
+  task-runs.tsv --task 40 --pr-json pr-late.json --waits waits-bad.txt
+expect "task: a missing PR file" 1 - "run-stats: cannot read missing.json" -- task-runs.tsv --task 40 --pr-json missing.json
+expect "task: --pr-json without --task is a usage error" 2 '*' - -- task-runs.tsv --pr-json pr-late.json
+expect "task: --task with --per-run is a usage error" 2 '*' - -- task-runs.tsv --task 40 --per-run
+expect "task: the waits from stdin is a usage error" 2 '*' - -- task-runs.tsv --task 40 --waits -
+expect "task: --task with a kind is a usage error" 2 '*' - -- task-runs.tsv --task 40 --kind ordinary
 [ "$fail" = 0 ] && echo "run-stats: $n cases passed" || echo "run-stats: failures above ($n cases)"
 exit "$fail"
