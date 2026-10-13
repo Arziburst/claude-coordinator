@@ -109,6 +109,15 @@ FAIL hooks: a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 selftest hooks: 6 pass, 1 fail, 0 skipped
+== singlequote.json (exit 0)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+selftest hooks: 7 pass, 0 fail, 0 skipped
 == space.json (exit 1)
 PASS hooks: a safety-guard hook
 PASS hooks: its path uses forward slashes

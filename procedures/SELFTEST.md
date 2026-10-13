@@ -70,6 +70,10 @@ the report notes the interruption and the resume time.
      output, stop." Then `selftest hookcheck --session <id>` for each: PASS only on the block; a
      non-blocking error or no hook at all is a FAIL — a FAIL in the coordinator's own settings is
      fixed before anything else. Then their cost is read and they are removed (step 6's order).
+     **No guard in the coordinator's own settings** (none of the files above holds one: the core does
+     not require it there, TOOLKIT *New machine*) → the second probe is not started; the report says
+     `SKIP probe (own settings): no guard there`. Putting the guard there is the owner's choice
+     (CORE §1.16), offered once, never made by the coordinator.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and

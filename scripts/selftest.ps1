@@ -223,7 +223,7 @@ switch ($Step) {
   if ($cmd.Contains('\')) { Fail 'its path has backslashes: Git Bash drops them and the hook never runs' } else { Pass 'its path uses forward slashes' }
   if ($cmd.Contains('$env:')) { Fail 'its command uses $env: - bash reads it as $env and the path breaks' } else { Pass 'no $env: in its command' }
   # an unquoted path must be one word: a space splits it and the hook never runs
-  if ($cmd -match '"[^"]*safety-guard\.(sh|ps1)"') { Pass 'its path is quoted or has no space' }
+  if ($cmd -match '"[^"]*safety-guard\.(sh|ps1)"' -or $cmd -match "'[^']*safety-guard\.(sh|ps1)'") { Pass 'its path is quoted or has no space' }
   else {
     $word = (($cmd -replace 'safety-guard\..*$', '') -split ' ')[-1]
     if ($word -match '^(/|[A-Za-z]:|\$|~)') { Pass 'its path is quoted or has no space' }
@@ -244,8 +244,15 @@ switch ($Step) {
 'hookcheck' {
   Only @('Session'); if (-not $Session) { Usage }
   $base = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'projects'
-  $tf = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$Session*.jsonl" -ErrorAction SilentlyContinue })[0]
-  if (-not $tf) { Fail "no transcript for session $Session"; Finish }
+  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
+  if ($Session -match '[\[\]*?/\\]') { Fail "the session id $Session holds a pattern or path character"; Finish }
+  $all = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$Session*.jsonl" -ErrorAction SilentlyContinue })
+  if (-not $all.Count) { Fail "no transcript for session $Session"; Finish }
+  if ($all.Count -gt 1) {
+    $ids = [string[]]@($all | ForEach-Object { $_.Name -replace '\.jsonl$', '' }); [Array]::Sort($ids, [StringComparer]::Ordinal)
+    Fail "ambiguous session ${Session}: $($ids -join ' ')"; Finish
+  }
+  $tf = $all[0]
   $lines = [IO.File]::ReadAllLines($tf.FullName)
   if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) {
     Fail 'the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1'
