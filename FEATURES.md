@@ -90,7 +90,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
 | F-SPEND-07 | Status files pruned | per-session status files older than 7 days are deleted | SPEND |
 | F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
-| F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast, analysis after | SPEND |
+| F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast against the limits, analysis after | SPEND |
 | F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
 | F-SPEND-11 | A lead's cost order | read the cost, then delete the status file, then stop and remove | SPEND |
 | F-SPEND-12 | Task time | work, time to ready and owner wait from transcript timestamps; forecasts leave owner waits out | SPEND |
@@ -567,11 +567,11 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: none known
 
 ### F-SPEND-06 Account-wide spend and the ratio
-- defined: scripts/session-tokens.sh, CORE.md §7a
-- entry: `session-tokens --since <UTC time>`; one-time step `spend-ratio`
-- promises: every transcript on the machine counts, each message by its own timestamp; the ratio is trusted only once the window rose 10 points
-- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-since.txt from a UTC time, with milliseconds, without the Z and from Unix seconds; an offset other than Z and a date alone refused; tests/session-tokens/expected-order-since.txt: the record's own timestamp before or after "message" while a tool input carries another), parity under another time zone on Linux
-- not covered: transcripts on other machines of the same account are not seen
+- defined: scripts/session-tokens.sh, scripts/run-stats.sh, scripts/run-stats.ps1, CORE.md §7a, TOOLKIT.md
+- entry: `session-tokens --since <UTC time>`; `run-stats --limits`; one-time step `spend-ratio`
+- promises: every transcript on the machine counts, each message by its own timestamp; the window's start is `resets_at` minus 5 hours or 7 days, printed by `run-stats --limits` as `since`; the account's cost since then is its tokens per model at the ladder's list prices (a dated id takes its base id's price, a model without a price stops with exit 1, a `not-weekly` model is left out of the weekly sum); the ratio is used percent over that cost, `trusted` only once the window rose 10 points, else the previous ratio when given, else a `guess`; a `resets_at` already passed means the window has reset (used 0); the same numbers from the .sh and the .ps1 (fixed-point)
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-since.txt from a UTC time, with milliseconds, without the Z and from Unix seconds; an offset other than Z and a date alone refused; tests/session-tokens/expected-order-since.txt: the record's own timestamp before or after "message" while a tool input carries another), parity under another time zone on Linux; tests/run-stats/run.sh `--limits` (tests/run-stats/limits/expected-trusted.txt: four models priced apart, a dated id, a `not-weekly` one, also from a pretty-printed JSON and a spend with CRLF and a BOM; tests/run-stats/limits/expected-fresh.txt: a guess and the previous ratio under 10 points; tests/run-stats/limits/expected-reset.txt: a window reset and one absent; tests/run-stats/limits/expected-status.txt: the status alone and the default status file; tests/run-stats/limits/expected-stdin.txt: a spend from stdin; no `rate_limits`, an unpriced model, a malformed price line, missing files exit 1; usage errors exit 2), through CI steps "run-stats computes the forecast numbers of the fixture run logs" (bash on Linux and macOS, PowerShell 7 on Linux, Windows PowerShell 5.1 and PowerShell 7 on Windows) and the parity step under a German locale
+- not covered: transcripts on other machines of the same account are not seen, so their spend makes the ratio too high; a 5-hour window's start is taken as `resets_at` minus 5 hours (a reset rounded to the hour counts a little before the first message); whether a `not-weekly` model's spend counts toward the 5-hour window is not known (it is counted there); the once-a-day recompute rests on the coordinator; PowerShell refuses an option without its value or an unknown one with its own error (exit 1), not the usage text
 
 ### F-SPEND-07 Status files pruned
 - defined: scripts/session-tokens.sh, TOOLKIT.md
@@ -591,8 +591,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: CORE.md §7a, scripts/run-stats.sh, scripts/run-stats.ps1
 - entry: every contract; every block
 - promises: an estimate is the median cost of the kind's last runs, else a seed marked `guess`; a block that does not fit the caps is cut or decided by the owner; a task over twice its estimate (cost or time, F-SPEND-12) is looked at
-- tested by: tests/run-stats/run.sh (the medians and ranges a contract's estimate is taken from; see F-SPEND-12)
-- not covered: the seed, the block forecast against the caps and the analysis after it have no automated check — they rest on the sessions following the rule
+- tested by: tests/run-stats/run.sh (the medians and ranges a contract's estimate is taken from; see F-SPEND-12; the block against the caps with `--limits --block`: tests/run-stats/limits/expected-trusted.txt fits both windows, tests/run-stats/limits/expected-nofit.txt does not fit the 5-hour cap; the dollars left before 100% and before the cap, rounded down; see F-SPEND-06)
+- not covered: the seed and the analysis after the block have no automated check — they rest on the sessions following the rule; the block's cost estimate itself (the sum of its contracts' medians) and its time chain are summed by the coordinator; a block larger than one 5-hour window shows `does not fit` there, and spreading it over windows is the coordinator's plan
 
 ### F-SPEND-10 Caps and autopilot budget
 - defined: CORE.md §9, procedures/INIT.md, TOOLKIT.md

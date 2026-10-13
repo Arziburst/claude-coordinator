@@ -1,0 +1,5 @@
+claude-fable-1	21210000	in=10000 out>=200000 cache_read=20000000 cache_write=1000000
+claude-haiku-5-5-20261001	52400000	in=100000 out>=300000 cache_read=50000000 cache_write=2000000
+claude-opus-5-5	411020000	in=20000 out>=1000000 cache_read=400000000 cache_write=10000000
+claude-sonnet-5-5	105550000	in=50000 out>=500000 cache_read=100000000 cache_write=5000000
+total	590180000	in=180000 out>=2000000 cache_read=570000000 cache_write=18000000

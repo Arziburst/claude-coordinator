@@ -476,7 +476,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   enough to read. The ratio is the limit's rise since its reset over the **account's** list-price cost
   since then (`scripts/session-tokens --since <reset>`, priced per model, TOOLKIT *Usage*): the limits
   are per account, so the run log alone, one project's share, would overstate it — recomputed once a day, trusted once the window has risen
-  10 points; until then the last window's ratio, or a `guess`. That limits follow list price across
+  10 points; until then the last window's ratio, or a `guess`. `scripts/run-stats --limits` does this
+  arithmetic from the status file, those spends and the ladder's prices, never by hand (TOOLKIT *Usage*). That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
   it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
   toward the weekly limit is asked once (the owner sees it in `/usage`) and kept in BINDINGS *Models*;
@@ -505,7 +506,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   of its cost — until the kind has its own runs), else the coordinator's own estimate; either is
   marked `guess`.
 - **Block forecast:** the plan shows the block's estimate in cost and limit percent against
-  what is left before the caps (§9), the 5-hour window included, and in time: the longest chain of
+  what is left before the caps (§9), the 5-hour window included (`scripts/run-stats --limits --block
+  <USD>` with the caps: per window its percent, the dollars left and whether it fits), and in time: the longest chain of
   its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
   median, marked `rough`. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).

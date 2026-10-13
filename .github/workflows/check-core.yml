@@ -384,6 +384,12 @@ jobs:
             diff <(bash scripts/run-stats.sh $f --kind ordinary --model sonnet) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f -Kind ordinary -Model sonnet)
             diff <(bash scripts/run-stats.sh $f --per-run) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f -PerRun)
           done
+          # run-stats --limits: the same lines under a decimal comma and another time zone
+          l=tests/run-stats/limits
+          for s in status-trusted status-fresh status-reset status-pretty; do
+            diff <(bash scripts/run-stats.sh --limits --status $l/$s.json --spend-5h $l/spend-5h.txt --spend-week $l/spend-week.txt --prices $l/prices.txt --prev-5h 0.7 --cap-5h 95 --cap-week 90 --block 80 --now 1791872400) \
+                 <(TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 -Limits -Status $l/$s.json -Spend5h $l/spend-5h.txt -SpendWeek $l/spend-week.txt -Prices $l/prices.txt -Prev5h 0.7 -Cap5h 95 -CapWeek 90 -Block 80 -Now 1791872400)
+          done
           # the time line: the transcripts' timestamps stay UTC in any zone and locale
           for id in g1 g2 g2t g3 g4 g5 g6; do
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/time bash scripts/session-tokens.sh $id) \
