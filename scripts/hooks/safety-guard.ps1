@@ -3,16 +3,22 @@
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only - the real enforcement is branch protection on the code host (CORE section 2);
 # deliberate obfuscation (iex, cmd /c, quoting tricks ...) is out of scope (TOOLKIT.md *Safety*).
-# Extra project patterns (one regular expression per line, '#' comments): .claude/coordinator-deny.txt
+# Extra project patterns (one regular expression per line, '#' comments; a pattern that cannot be read
+# blocks every call): .claude/coordinator-deny.txt
 # Self-test: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\hooks\safety-guard.ps1 -SelfTest
 # Windows PowerShell 5.1 or PowerShell 7; nothing to install.
 param([switch]$SelfTest)
 
 if ($SelfTest) {
+  # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
+  # everything is not working either
   $exe = (Get-Process -Id $PID).Path
   '{"tool_input":{"command":"git push --force origin main"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
-  if ($LASTEXITCODE -eq 2) { 'safety-guard: OK'; exit 0 }
+  $blocked = $LASTEXITCODE
+  '{"tool_input":{"command":"git push origin 12-fix"}}' |
+    & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
+  if ($blocked -eq 2 -and $LASTEXITCODE -eq 0) { 'safety-guard: OK'; exit 0 }
   'safety-guard: NOT WORKING - STOP: do not start workers until it is fixed (TOOLKIT.md).'
   exit 0   # stdout reaches the session's context; a non-zero exit would only show it to the user
 }
@@ -41,20 +47,39 @@ function Block([string]$why) {
 function Has([string]$re) { foreach ($l in $lines) { if ($l -match $re) { return $true } }; $false }
 
 # --- split the command into simple commands, each a list of words ---
-# Quote-aware: separators (newline ; | & && || ( )) inside quotes do not split, quotes are removed.
+# Quote-aware: separators (newline ; | & && || ( ) and { } around words) inside quotes do not split,
+# quotes are removed.
 # $(...) and `...` leave a "$SUBST" marker in the word and become commands of their own; so do the
 # inner command of bash -c / pwsh -Command and a heredoc fed to a shell (other heredoc bodies are data).
 # An unbalanced quote makes the whole command split again with quotes ignored (stricter, never looser).
 $script:segs = New-Object System.Collections.Generic.List[object]
+$script:pipes = New-Object System.Collections.Generic.List[bool]   # the command reads the previous one through |
 $script:fail = $false
-$WRAP = '^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|sudo|env|xargs)$'
+$WRAP = '^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs)$'
 $ASSIGN = '^[A-Za-z_][A-Za-z0-9_]*='
+# wrappers with options of their own: the options that take a value
+function OptArg([string]$t) {
+  switch ($t) { 'sudo' { '^-[ugpcdrt]$' } 'env' { '^-[usc]$' } 'timeout' { '^-[sk]$' } 'nice' { '^-n$' } 'stdbuf' { '^-[ioe]$' } default { '' } }
+}
+# the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
+# and VAR=value assignments
+function CmdIdx($toks) {
+  $j = 0
+  while ($j -lt $toks.Count) {
+    $t = $toks[$j].ToLowerInvariant()
+    if ($t -match $WRAP -or $toks[$j] -match $ASSIGN) { $j++; continue }
+    $ao = OptArg $t; if (-not $ao) { break }
+    for ($j++; $j -lt $toks.Count -and $toks[$j].StartsWith('-'); $j++) { if ($toks[$j] -eq '--') { $j++; break }; if ($toks[$j] -match $ao) { $j++ } }
+    if ($t -eq 'timeout' -and $j -lt $toks.Count) { $j++ }   # the duration
+  }
+  $j
+}
 $SHELLS = '^(bash|sh|zsh|dash|ksh|pwsh|powershell)$'
 function BaseName([string]$t) { $b = ($t.ToLowerInvariant() -split '[/\\]')[-1]; if ($b.EndsWith('.exe')) { $b = $b.Substring(0, $b.Length - 4) }; $b }
 # characters that end a run of ordinary text: in single quotes, in double quotes, unquoted, in ClosePar
 $RUN_SQ = [char[]]@([char]39)
 $RUN_DQ = [char[]]@([char]34, [char]92, [char]36, [char]96)
-$RUN_UQ = [char[]]@(32, 9, 13, 10, 59, 124, 38, 40, 41, 60, 62, 39, 34, 92, 36, 96, 35)
+$RUN_UQ = [char[]]@(32, 9, 13, 10, 59, 124, 38, 40, 41, 60, 62, 39, 34, 92, 36, 96, 35, 123, 125)
 $RUN_CP = [char[]]@(39, 34, 40, 41, 60, 10)
 # the number of ordinary characters from i
 function RunTo([string]$s, [int]$i, [char[]]$set) { $k = $s.IndexOfAny($set, $i); if ($k -lt 0) { $k = $s.Length }; $k - $i }
@@ -103,25 +128,25 @@ function HereEnd([string]$s, [int]$j, [string]$delim, [bool]$dash) {
   $script:hdBody = $s.Substring([Math]::Min($st, $s.Length)); $s.Length - 1
 }
 function IsShell($toks) {
-  $j = 0
-  while ($j -lt $toks.Count -and ($toks[$j].ToLowerInvariant() -match $WRAP -or $toks[$j] -match $ASSIGN)) { $j++ }
+  $j = CmdIdx $toks
   $script:shJ = $j
   ($j -lt $toks.Count) -and ((BaseName $toks[$j]) -match $SHELLS)
 }
-function Seg($list, [int]$depth, [bool]$qm) {
+function Seg($list, [int]$depth, [bool]$qm, [bool]$pp) {
   $toks = @($list)
   if ($toks.Count -eq 0) { return }
   $clean = New-Object string[] $toks.Count
   for ($j = 0; $j -lt $toks.Count; $j++) { $clean[$j] = $toks[$j] -replace '[\t\r\n]', ' ' }
-  $script:segs.Add($clean)
+  $script:segs.Add($clean); $script:pipes.Add($pp)
   if (-not (IsShell $toks)) { return }
-  for ($k = $script:shJ + 1; $k -lt $toks.Count; $k++) { $lt = $toks[$k].ToLowerInvariant(); if ($lt -match '^-[a-z]*c$' -or $lt -eq '-command') { break } }
+  for ($k = $script:shJ + 1; $k -lt $toks.Count; $k++) { $lt = $toks[$k].ToLowerInvariant(); if ($lt -match '^-[a-z]*c$' -or $lt -match '^-com(m(a(n(d)?)?)?)?$') { break } }
+  if ($k -lt $toks.Count - 1 -and $toks[$k + 1] -eq '--') { $k++ }
   if ($k -ge $toks.Count - 1) { return }
   Scan ($toks[($k + 1)..($toks.Count - 1)] -join ' ') ($depth + 1) $qm
 }
 function Scan([string]$s, [int]$depth, [bool]$qm) {
   if ($depth -gt 8) { return }
-  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false
+  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $pp = $false
   $toks = New-Object System.Collections.Generic.List[string]
   for ($i = 0; $i -lt $n; $i++) {
     $set = if ($q -eq "'") { $RUN_SQ } elseif ($q) { $RUN_DQ } else { $RUN_UQ }
@@ -140,20 +165,25 @@ function Scan([string]$s, [int]$depth, [bool]$qm) {
     if ($c -eq "'" -or $c -eq '"') { if ($qm) { $q = $c; $st = $true }; continue }
     if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
     if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
-    if ($c -eq ' ' -or $c -eq "`t" -or $c -eq "`r") { if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; continue }
+    if ($c -eq ' ' -or $c -eq "`t" -or $c -eq "`r") { if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; continue }
     if ($c -eq '#' -and -not $tok -and -not $st) { while ($i -lt $n - 1 -and (Ch $s ($i + 1)) -ne "`n") { $i++ }; continue }
     if ($c -eq '<' -and $d -eq '<' -and (Ch $s ($i + 2)) -ne '<') {
-      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false
+      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0
       $hdsh = IsShell $toks; $hd = HereWord $s ($i + 2); $hdd = $script:hdDash; $i = $script:hdJ; continue
     }
     if ($c -eq '>' -or $c -eq '<') {
-      if ($tok -and $tok -notmatch '^[0-9]+$' -and $tok -ne '&' -and $tok -ne '*' -and $tok -notmatch '[<>]$') { $toks.Add($tok); $tok = '' }
+      if ($tok -and $tok -notmatch '^[0-9]+$' -and $tok -ne '&' -and $tok -ne '*' -and $tok -notmatch '[<>]$') { $toks.Add($tok); $tok = ''; $bd = 0 }
       $tok += $c; $st = $true; continue
     }
     if ($c -eq '&' -and ($p -eq '>' -or $p -eq '<' -or $d -eq '>')) { $tok += $c; $st = $true; continue }
-    if ($c -eq "`n" -or $c -eq ';' -or $c -eq '|' -or $c -eq '&' -or $c -eq '(' -or $c -eq ')') {
-      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false
-      Seg $toks $depth $qm; $toks = New-Object System.Collections.Generic.List[string]
+    # { and } around words are groups and script blocks (& {git push}, % { ... }); inside a word they
+    # are data (${HOME}, @{0}, refs/heads/main^{})
+    if ($c -eq '{' -and $tok) { $bd++; $tok += $c; continue }
+    if ($c -eq '}' -and $bd -gt 0) { $bd--; $tok += $c; continue }
+    if ($c -eq "`n" -or $c -eq ';' -or $c -eq '|' -or $c -eq '&' -or $c -eq '(' -or $c -eq ')' -or $c -eq '{' -or $c -eq '}') {
+      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $e = ($toks.Count -eq 0)
+      Seg $toks $depth $qm $pp; $toks = New-Object System.Collections.Generic.List[string]
+      $pp = ($c -eq '|' -and $d -ne '|' -and $p -ne '|') -or ($e -and $pp)
       if ($c -eq "`n" -and $hd) { $k = HereEnd $s ($i + 1) $hd $hdd; $body = $script:hdBody; $hd = ''; if ($hdsh) { Scan $body ($depth + 1) $false }; $i = $k }
       continue
     }
@@ -161,11 +191,11 @@ function Scan([string]$s, [int]$depth, [bool]$qm) {
   }
   if ($q) { $script:fail = $true }
   if ($tok) { $toks.Add($tok) }
-  Seg $toks $depth $qm
+  Seg $toks $depth $qm $pp
 }
 $joined = $cmd
 Scan $joined 0 $true
-if ($script:fail) { $script:segs.Clear(); Scan $joined 0 $false }
+if ($script:fail) { $script:segs.Clear(); $script:pipes.Clear(); Scan $joined 0 $false }
 
 # --- helpers (case-insensitive matching: GIT PUSH ORIGIN MAIN counts) ---
 $REDIR = '^[0-9*]*&?[<>]'
@@ -178,14 +208,22 @@ $script:dir = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_
 $script:ovDir = ''; $script:ovBranch = ''   # a checkout / switch earlier in this command: dir and branch
 
 function IsProtected([string]$x) { $x -match '^(main|master)$' }
-# A path relative to a base; "?" when it cannot be known (variables).
+# A path relative to a base; "?" when it cannot be known (variables). . and ./ are the base itself.
 function Compose([string]$b, [string]$p) {
+  while ($p.StartsWith('./') -or $p.StartsWith('.\')) { $p = $p.Substring(2) }
+  if ($p -eq '.') { $p = '' }
   if (-not $p) { return $b }
   if ($p.Contains('$') -or $p.Contains('%')) { return '?' }
   if ($p -eq '~' -or $p.StartsWith('~/') -or $p.StartsWith('~\')) { return $HOME + $p.Substring(1) }
   if ($p -match '^([/\\]|[A-Za-z]:)') { return $p }
   if ($b -eq '?') { return '?' }
   "$b/$p"
+}
+# A path in one form for comparing: / separators, none repeated or trailing, lower case, a drive as
+# c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
+function Canon([string]$x) {
+  $x = (($x.Replace('\', '/').ToLowerInvariant()) -replace '//+', '/') -replace '/+$', ''
+  ($x -replace '^/(mnt/|cygdrive/)?([a-z])$', '$2:') -replace '^/(mnt/|cygdrive/)?([a-z])/', '$2:/'
 }
 function BranchIn([string]$dd) {
   if ($dd -ceq $script:ovDir) { return $script:ovBranch }
@@ -246,17 +284,31 @@ function UpdRefSeg([string[]]$a) {
 }
 # git checkout / switch: a later bare push in the same directory pushes that branch.
 function CheckoutSeg([string]$dd, [string[]]$a) {
-  $newb = ''; $first = ''; $nx = $false
+  $newb = ''; $first = ''; $nx = $false; $track = $false; $nargs = 0
   foreach ($t in $a) {
     if ($nx) { $newb = $t; $nx = $false; continue }
     if ($t -eq '--') { return }
     if ($t -eq '-b' -or $t -eq '-c' -or $t -eq '--create' -or $t -eq '--force-create' -or $t -eq '--orphan') { $nx = $true }
     elseif ($t -eq '--detach') { $newb = '(detached)' }
+    elseif ($t -eq '-t' -or $t -eq '--track' -or $t -like '--track=*') { $track = $true }
+    elseif ($t -eq '-') { $nargs++; if (-not $first) { $first = '-' } }
     elseif ($t.StartsWith('-')) { }
-    elseif (-not $first) { $first = $t }
+    else { $nargs++; if (-not $first) { $first = $t } }
   }
   if ($newb) { $script:ovDir = $dd; $script:ovBranch = $newb; return }
   if (-not $first) { return }
+  if ($nargs -gt 1) { return }   # git checkout <branch> <file>: restores a file, the branch stays
+  # git checkout - : the previous branch (after a checkout earlier in this command: the current one)
+  if ($first -eq '-') {
+    if ($dd -eq '?') { return }
+    if ($dd -ceq $script:ovDir) { $prev = git -C $dd symbolic-ref --short -q HEAD 2>$null }
+    else { $prev = git -C $dd rev-parse --abbrev-ref '@{-1}' 2>$null }
+    $prev = "$prev".Trim()
+    if ($LASTEXITCODE -eq 0 -and $prev) { $script:ovDir = $dd; $script:ovBranch = $prev }
+    return
+  }
+  # --track origin/main creates and checks out main
+  if ($track -and $first.Contains('/')) { $script:ovDir = $dd; $script:ovBranch = $first.Substring($first.IndexOf('/') + 1); return }
   $known = IsProtected (NormRef $first)
   if (-not $known -and $dd -ne '?') { git -C $dd show-ref -q --verify "refs/heads/$first" 2>$null | Out-Null; $known = ($LASTEXITCODE -eq 0) }
   if ($known) { $script:ovDir = $dd; $script:ovBranch = $first }
@@ -278,7 +330,13 @@ function GitSeg([string[]]$a) {
     'update-ref' { UpdRefSeg $rest }
     'checkout' { CheckoutSeg $eff $rest }
     'switch' { CheckoutSeg $eff $rest }
+    'worktree' { WorktreeSeg $rest }
   }
+}
+# git worktree remove --force throws away what the worktree holds: the cleanup script checks first
+function WorktreeSeg([string[]]$a) {
+  if ($a.Count -eq 0 -or $a[0] -ne 'remove') { return }
+  foreach ($t in $a) { if ($t -match '^(--force|-f|-ff)$') { Block 'removing a worktree by force (use the cleanup script)' } }
 }
 function CdSeg([string[]]$a) {
   $x = ''
@@ -288,16 +346,28 @@ function CdSeg([string[]]$a) {
   $script:dir = Compose $script:dir $x
 }
 # --- irreversible removals: / , a drive, home, or a worktree by hand ---
-function RmTarget([string]$x) {
-  $y = $x -replace '[/\\]+$', ''
-  if ($y -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
+function StripAll([string]$x) {   # x/* , x/. and trailing separators -> x
   while ($true) {
     if ($x -match '[/\\][*.]$') { $x = $x.Substring(0, $x.Length - 2) }
     elseif ($x -match '[/\\]$') { $x = $x.Substring(0, $x.Length - 1) }
     else { break }
   }
+  $x
+}
+function RmTarget([string]$t) {
+  $x = StripAll $t
+  if ($x -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
   if ($x -match '^(|~|\$HOME|\$\{HOME\}|\$env:USERPROFILE|\$\{env:USERPROFILE\}|\$env:HOME|\$env:HOMEDRIVE|\$env:SystemDrive|%USERPROFILE%|%HOMEDRIVE%|%SystemDrive%|[A-Za-z]:)$') {
     Block 'recursive removal of /, a drive or home'
+  }
+  # the full path: relative targets (., *, x) from the directory a cd led to; home given literally
+  # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c
+  $full = Compose $script:dir $t
+  if ($full -eq '?') { return }
+  $full = Canon (StripAll $full)
+  if ($full -match '^([a-z]:)?$') { Block 'recursive removal of /, a drive or home' }
+  foreach ($h in @($HOME, $env:USERPROFILE, $env:HOME)) {
+    if ($h -and $full -ceq (Canon $h)) { Block 'recursive removal of /, a drive or home' }
   }
 }
 function RmSeg([string]$b, [string[]]$a) {
@@ -314,7 +384,15 @@ function RmSeg([string]$b, [string[]]$a) {
     $tg += $t
   }
   if (-not $rec) { return }
+  # Get-ChildItem C:\ | Remove-Item -Recurse : the paths come through the pipe
+  if ($tg.Count -eq 0 -and $script:piped) { $tg = @($script:prevTg) }
   foreach ($t in $tg) { RmTarget $t }
+}
+# the paths a listing (Get-ChildItem, ls, dir) hands on through a pipe; none: the current directory
+function ListSeg([string[]]$a) {
+  $l = @(); foreach ($t in $a) { if (-not $t.StartsWith('-')) { $l += $t } }
+  if ($l.Count -eq 0) { $l = @('.') }
+  $script:curTg = $l
 }
 # find <path> -delete: the paths before the first expression
 function FindSeg([string[]]$a) {
@@ -324,7 +402,11 @@ function FindSeg([string[]]$a) {
   foreach ($t in $tg) { RmTarget $t }
 }
 
-foreach ($segT in $script:segs) {
+$script:curTg = @()
+for ($si = 0; $si -lt $script:segs.Count; $si++) {
+  $segT = $script:segs[$si]
+  $script:prevTg = $script:curTg; $script:curTg = @()
+  $script:piped = $script:pipes[$si]
   # redirections (2>&1, > out.txt) are not arguments
   $words = @(); $skip = $false
   foreach ($t in $segT) {
@@ -332,9 +414,9 @@ foreach ($segT in $script:segs) {
     if ($t -match $REDIR) { if ($t -match $REDIR_OP) { $skip = $true }; continue }
     $words += $t
   }
-  # the command word: after wrappers ({ ( ! then do sudo env ...) and VAR=value assignments
-  $i = 0
-  while ($i -lt $words.Count -and ($words[$i] -match $WRAP -or $words[$i] -match $ASSIGN)) { $i++ }
+  # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
+  # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments
+  $i = CmdIdx $words
   if ($i -ge $words.Count) { continue }
   $cw = BaseName $words[$i]
   $rest = @(if ($i + 1 -lt $words.Count) { $words[($i + 1)..($words.Count - 1)] })
@@ -343,16 +425,20 @@ foreach ($segT in $script:segs) {
     '^(cd|pushd|chdir|set-location|sl|push-location)$' { CdSeg $rest }
     '^(rm|remove-item|ri|del|erase|rd|rmdir)$' { RmSeg $cw $rest }
     '^find$' { FindSeg $rest }
+    '^(get-childitem|gci|ls|dir|get-item|gi)$' { ListSeg $rest }
   }
 }
 
-# --- project-specific patterns (POSIX classes such as [[:space:]] work in both scripts) ---
+# --- project-specific patterns: one per line, trimmed; blank lines and # comments skipped ---
+# (POSIX classes such as [[:space:]] work in both scripts)
 $proj = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
 $denyFile = Join-Path $proj '.claude/coordinator-deny.txt'
 if (Test-Path -LiteralPath $denyFile) {
-  foreach ($p in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $denyFile).Path)) {
+  foreach ($line in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $denyFile).Path)) {
+    $p = $line.Trim()
     if (-not $p -or $p.StartsWith('#')) { continue }
     $re = $p.Replace('[:space:]', '\s').Replace('[:alnum:]', 'A-Za-z0-9').Replace('[:alpha:]', 'A-Za-z').Replace('[:digit:]', '0-9')
+    try { [void][regex]::new($re) } catch { Block "project rule cannot be read: $p" }
     if (Has $re) { Block "project rule: $p" }
   }
 }
