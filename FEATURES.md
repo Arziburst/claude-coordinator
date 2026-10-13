@@ -584,7 +584,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/statusline.sh, scripts/statusline.ps1, TOOLKIT.md
 - entry: INIT question 9; one-time step `statusline-verified`
 - promises: installed only on the owner's yes and only where no status line exists; it saves the status JSON per session for the coordinator and prints model, context and limits
-- tested by: selftest scripts step (the status line on a fixture); tests/statusline/run.sh (the line, the last session's status file and the session's copy saved and no `statusline.*.tmp` left: on the fixture, a config path with [ ], 20 runs at once, and in PowerShell the status file held open by a reader; in bash and both PowerShells)
+- tested by: selftest scripts step (the status line on a fixture); tests/statusline/run.sh (the line, the last session's status file and the session's copy saved whole and no `statusline.*.tmp` left: on the fixture, a config path with [ ], 20 runs at once (each file written through a temp file and a move: the session copy was left empty by a write that lost the race, about 1 round in 10 on Windows PowerShell 5.1), and in PowerShell the status file held open by a reader; in bash and both PowerShells)
 - not covered: only the owner sees the drawn line
 
 ### F-SPEND-09 Estimates and forecasts

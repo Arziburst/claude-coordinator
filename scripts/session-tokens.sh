@@ -118,7 +118,7 @@ case "$arg" in
     [ $# -eq 1 ] || exit 2
     # older than 7 x 24 hours to the minute (-mtime +7 would keep a file up to 8 days old)
     [ -d "$dir" ] && find "$dir" -maxdepth 1 -type f -name '*.json' -mmin +10080 -print -delete
-    # the Windows status line's temp file, left when it was killed between writing and moving it
+    # the status line's temp file, left when it was killed between writing and moving it
     [ -d "$cfg/coordinator" ] && find "$cfg/coordinator" -maxdepth 1 -type f -name 'statusline.*.tmp' -mmin +60 -print -delete
     exit 0 ;;
   --since)

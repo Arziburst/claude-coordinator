@@ -6,11 +6,17 @@
 input="$(cat)"
 case "$input" in '{'*) ;; *'{'*) input="{${input#*\{}" ;; esac   # a BOM before the JSON breaks it
 dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator"
-mkdir -p "$dir" 2>/dev/null && printf '%s' "$input" > "$dir/statusline.json"
+# Each file is written to a temp file and renamed over (mv in one folder tree: atomic), so a reader -
+# or another status line drawn at the same moment - never sees half a file or an empty one; the temp
+# file is removed whatever happened (one left by a kill mid-write is deleted by session-tokens --prune
+# after an hour).
+tmp="$dir/statusline.$$.tmp"
+save() { printf '%s' "$input" > "$tmp" && mv -f "$tmp" "$1" 2>/dev/null; rm -f "$tmp"; }
+mkdir -p "$dir" 2>/dev/null && save "$dir/statusline.json"
 # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
 # session to draw its status line, whichever that was).
 sid="$(printf '%s' "$input" | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -n 1)"
-[ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && printf '%s' "$input" > "$dir/sessions/$sid.json"
+[ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && save "$dir/sessions/$sid.json"
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$input" | jq -r '
     def tok: if . >= 1000000 then "\((. / 100000 | floor) / 10)M"
