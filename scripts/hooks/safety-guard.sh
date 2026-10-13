@@ -132,7 +132,9 @@ function wrapper(t) { return t ~ /^([{}!]|then|do|else|elif|if|while|until|time|
 # wrappers with options of their own: the options that take a value
 function optarg(t) {
   if (t == "sudo") return "^-[ugpcdrt]$"; if (t == "env") return "^-[usc]$"; if (t == "timeout") return "^-[sk]$"
-  if (t == "nice") return "^-n$"; if (t == "stdbuf") return "^-[ioe]$"; return ""
+  if (t == "nice") return "^-n$"; if (t == "stdbuf") return "^-[ioe]$"
+  # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
+  if (t == "caffeinate") return "^-[tw]$"; if (t == "arch") return "^-(arch|e|d)$"; if (t == "script") return "^-[tTc]$"; return ""
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
 # and VAR=value assignments
@@ -140,10 +142,11 @@ function cmdidx(toks, nt,    j, t, ao) {
   j = 1
   while (j <= nt) {
     t = tolower(toks[j])
+    if (t ~ /^g(env|timeout|nice|stdbuf)$/) t = substr(t, 2)   # Homebrew coreutils: gtimeout, gnice ...
     if (wrapper(t) || toks[j] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { j++; continue }
     ao = optarg(t); if (ao == "") break
     for (j++; j <= nt && toks[j] ~ /^-/; j++) { if (toks[j] == "--") { j++; break }; if (tolower(toks[j]) ~ ao) j++ }
-    if (t == "timeout" && j <= nt) j++   # the duration
+    if ((t == "timeout" || t == "script") && j <= nt) j++   # the duration, or the typescript file of script
   }
   return j
 }
@@ -279,6 +282,7 @@ RE_REDIR_OP='^[0-9*]*&?[<>]+[&|]?$'
 RE_RMREC='^-[rRfFvViIdDpP]*[rR][rRfFvViIdDpP]*$'
 RE_PSREC='^-[rR]([eE]([cC]([uU]([rR]([sS][eE]?)?)?)?)?)?(:\$?[tT][rR][uU][eE])?$'
 RE_WT='(^|[/\\])\.claude[/\\]worktrees([/\\][^/\\]+)?$'
+RE_TILDE='^~[^/\\]+$'   # ~name: a user's home
 
 dir="${cwd:-${CLAUDE_PROJECT_DIR:-.}}"   # where the next command runs (follows cd / Set-Location)
 ov_dir=""; ov_branch=""                  # a checkout / switch earlier in this command: dir and branch
@@ -431,9 +435,9 @@ cd_seg() {
   dir=$(compose "$dir" "$x")
 }
 # --- irreversible removals: / , a drive, home, or a worktree by hand ---
-strip_all() {   # x/* , x/. and trailing separators -> x
+strip_all() {   # x/* , x/** , x/. and trailing separators -> x
   local x="$1"
-  while :; do case "$x" in */\*|*\\\*|*/.|*\\.) x="${x%??}" ;; */|*\\) x="${x%?}" ;; *) break ;; esac; done
+  while :; do case "$x" in */\*\*|*\\\*\*) x="${x%?}" ;; */\*|*\\\*|*/.|*\\.) x="${x%??}" ;; */|*\\) x="${x%?}" ;; *) break ;; esac; done
   printf '%s' "$x"
 }
 rm_target() {
@@ -444,12 +448,16 @@ rm_target() {
     ''|'~'|'$HOME'|'${HOME}'|'$env:USERPROFILE'|'${env:USERPROFILE}'|'$env:HOME'|'$env:HOMEDRIVE'|'$env:SystemDrive'|'%USERPROFILE%'|'%HOMEDRIVE%'|'%SystemDrive%'|[A-Za-z]:)
       block "recursive removal of /, a drive or home" ;;
   esac
+  # ~name: a user's home (~ followed by a name, nothing after it but /, /* or /**)
+  [[ $x =~ $RE_TILDE ]] && block "recursive removal of /, a drive or home"
   # the full path: relative targets (., *, x) from the directory a cd led to; home given literally
   # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c
   full=$(compose "$dir" "$1")
   [ "$full" = "?" ] && return
   full=$(canon "$(strip_all "$full")")
   case "$full" in ''|[a-z]:) block "recursive removal of /, a drive or home" ;; esac
+  # . or * inside a worktree (after a cd to it, or with it as the working folder)
+  [[ $full =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
   for h in "$HOME" "${USERPROFILE:-}"; do
     [ -n "$h" ] && [ "$full" = "$(canon "$h")" ] && block "recursive removal of /, a drive or home"
   done
@@ -510,10 +518,13 @@ while IFS="$tab" read -r -a T; do
     case "$t" in
       '{'|'}'|'!'|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs) i=$((i + 1)); continue ;;
       sudo) ao='^-[ugpcdrt]$' ;;
-      env) ao='^-[usc]$' ;;
-      timeout) ao='^-[sk]$' ;;
-      nice) ao='^-n$' ;;
-      stdbuf) ao='^-[ioe]$' ;;
+      env|genv) ao='^-[usc]$' ;;
+      timeout|gtimeout) ao='^-[sk]$' ;;
+      nice|gnice) ao='^-n$' ;;
+      stdbuf|gstdbuf) ao='^-[ioe]$' ;;
+      caffeinate) ao='^-[tw]$' ;;            # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
+      arch) ao='^-(arch|e|d)$' ;;
+      script) ao='^-[tTc]$' ;;
       *) if [[ $t =~ $RE_ASSIGN ]]; then i=$((i + 1)); continue; fi; break ;;
     esac
     i=$((i + 1))
@@ -522,7 +533,7 @@ while IFS="$tab" read -r -a T; do
       [[ ${A[$i]} =~ $ao ]] && i=$((i + 1))
       i=$((i + 1))
     done
-    case "$t" in timeout) [ $i -lt $n ] && i=$((i + 1)) ;; esac   # the duration
+    case "$t" in timeout|gtimeout|script) [ $i -lt $n ] && i=$((i + 1)) ;; esac   # the duration, or the typescript file of script
   done
   [ $i -lt $n ] || continue
   w="${A[$i]}"; w="${w##*/}"; w="${w##*\\}"; case "$w" in *.exe) w="${w%????}" ;; esac
@@ -540,8 +551,14 @@ shopt -u nocasematch
 
 # --- project-specific patterns: one per line, trimmed; blank lines and # comments skipped ---
 deny_file="${CLAUDE_PROJECT_DIR:-.}/.claude/coordinator-deny.txt"
+# a deny file that is there but cannot be read (no read permission, a folder) blocks every call
+if [ -e "$deny_file" ] && { [ ! -f "$deny_file" ] || [ ! -r "$deny_file" ]; }; then
+  block "project rule file cannot be read: .claude/coordinator-deny.txt"
+fi
 if [ -f "$deny_file" ]; then
+  bom=$'\357\273\277'; first=1
   while IFS= read -r pattern || [ -n "$pattern" ]; do
+    [ $first = 1 ] && pattern="${pattern#"$bom"}"; first=0   # a file saved with a UTF-8 BOM
     pattern="${pattern%$cr}"   # a file saved with CRLF
     pattern="${pattern#"${pattern%%[![:space:]]*}"}"; pattern="${pattern%"${pattern##*[![:space:]]}"}"
     case "$pattern" in ''|'#'*) continue ;; esac
