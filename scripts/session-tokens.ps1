@@ -5,6 +5,8 @@
 # One line per model and a "total" line, summed from the transcripts and their subagents, each message
 # once (output is a LOWER BOUND); for one session (not a subagent) a "cost" line from ~/.claude/coordinator/sessions/<id>.json
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
+# Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC>" from the records' timestamps
+# (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes; minutes rounded, a half up).
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
 param([string]$Session, [string]$Since, [switch]$Prune)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
@@ -14,7 +16,7 @@ param([string]$Session, [string]$Since, [switch]$Prune)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 8 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 10 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -57,6 +59,55 @@ $reId = [regex]'"id":[ \t]*"(msg_[^"]*)"'
 $reModel = [regex]'"model":[ \t]*"([^"]*)"'
 $reNum = @('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens') |
   ForEach-Object { [regex]('"' + $_ + '":[ \t]*([0-9]+)') }
+# the record's own timestamp, outside "message": the first on the line when it comes before "message"
+# (Claude Code 2.1.296 writes it there), else the last; a tool input inside the message may carry
+# others. $null when the line has none. The compact form is read with plain searches, any other with
+# the regex, which gives the .sh's answer either way.
+function RecTime([string]$line) {
+  $i = $line.IndexOf('"timestamp":', $O); if ($i -lt 0) { return $null }
+  $p = $line.IndexOf('"message":', $O)
+  if ($p -ge 0) {
+    $fi = -1; $fv = $null; $e = if ($line.Length -gt $i + 12 -and $line[$i + 12] -eq '"') { $line.IndexOf('"', $i + 13) } else { -1 }
+    if ($e -ge 0) { $fi = $i; $fv = $line.Substring($i + 13, $e - $i - 13) }
+    else { $f = $reTime.Match($line); if ($f.Success) { $fi = $f.Index; $fv = $f.Groups[1].Value } }
+    if ($fi -ge 0 -and $fi -lt $p) { return $fv }
+  }
+  $a = $line.LastIndexOf('"timestamp":"', $O); $e = if ($a -ge 0) { $line.IndexOf('"', $a + 13) } else { -1 }
+  if ($a -ge 0 -and $e -ge 0 -and $line.LastIndexOf('"timestamp":', $O) -eq $a) { return $line.Substring($a + 13, $e - $a - 13) }
+  $all = $reTime.Matches($line); if ($all.Count) { return $all[$all.Count - 1].Groups[1].Value }
+  $null
+}
+# days since 1970-01-01 of a date (the civil calendar), the .sh's arithmetic
+function Days([long]$y, [long]$m, [long]$d) {
+  if ($m -le 2) { $y-- }
+  $e = [Math]::Floor($y / 400); $yoe = $y - $e * 400
+  $mp = if ($m -gt 2) { $m - 3 } else { $m + 9 }
+  [long]($e * 146097 + $yoe * 365 + [Math]::Floor($yoe / 4) - [Math]::Floor($yoe / 100) + [Math]::Floor((153 * $mp + 2) / 5) + $d - 1 - 719468)
+}
+# the time line: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff], read as UTC) in milliseconds,
+# over every file as one set, sorted; wall = last - first, active = wall minus every gap over 5 minutes;
+# minutes rounded to the nearest, a half up; nothing when no record has a timestamp
+$reStamp = [regex]'^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?'
+function Span([string[]]$Files) {
+  $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''
+  foreach ($file in $Files) {
+    foreach ($line in [IO.File]::ReadLines($file)) {
+      if (-not $line) { continue }
+      $ts = RecTime $line; if (-not $ts) { continue }
+      $m = $reStamp.Match($ts); if (-not $m.Success) { continue }
+      $n = $m.Groups
+      $ms = ((((Days $n[1].Value $n[2].Value $n[3].Value) * 24 + [long]$n[4].Value) * 60 + [long]$n[5].Value) * 60 + [long]$n[6].Value) * 1000 + [long](($n[7].Value + '000').Substring(0, 3))
+      $t.Add($ms)
+      if ($ms -lt $first) { $first = $ms; $start = $ts.Substring(0, 19) }
+      if ($ms -gt $last) { $last = $ms; $end = $ts.Substring(0, 19) }
+    }
+  }
+  if (-not $t.Count) { return }
+  $t.Sort(); $idle = [long]0
+  for ($k = 1; $k -lt $t.Count; $k++) { $gap = $t[$k] - $t[$k - 1]; if ($gap -gt 300000) { $idle += $gap } }   # nobody worked
+  $wall = $last - $first
+  "time`twall={0}m active={1}m start={2}Z end={3}Z" -f [long][Math]::Floor(($wall + 30000) / 60000), [long][Math]::Floor(($wall - $idle + 30000) / 60000), $start, $end
+}
 function CountUsage([string[]]$Files) {
   $best = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
   foreach ($file in $Files) {
@@ -68,17 +119,8 @@ function CountUsage([string[]]$Files) {
       if ($line.LastIndexOf('"usage":', $O) -ne $iu) { $all = $reUsage.Matches($line); $iu = if ($all.Count) { $all[$all.Count - 1].Index } else { -1 } }
       if ($iu -lt 0) { continue }
       if ($cut) {
-        # the record timestamp, outside "message": the first on the line when it comes before
-        # "message" (Claude Code 2.1.296 writes it there), else the last; a tool input inside the
-        # message may carry others
-        $f = $reTime.Match($line)
-        if (-not $f.Success) { continue }
-        $p = $line.IndexOf('"message":', $O)
-        if ($p -ge 0 -and $f.Index -lt $p) { $ts = $f.Groups[1].Value } else {
-          $a = $line.LastIndexOf('"timestamp":"', $O); $e = if ($a -ge 0) { $line.IndexOf('"', $a + 13) } else { -1 }
-          if ($a -ge 0 -and $e -ge 0 -and $line.LastIndexOf('"timestamp":', $O) -eq $a) { $ts = $line.Substring($a + 13, $e - $a - 13) }
-          else { $all = $reTime.Matches($line); $ts = $all[$all.Count - 1].Groups[1].Value }
-        }
+        $ts = RecTime $line
+        if ($null -eq $ts) { continue }
         if ($ts.Length -gt 19) { $ts = $ts.Substring(0, 19) }
         if ([string]::CompareOrdinal($ts, $cut) -lt 0) { continue }
       }
@@ -157,4 +199,5 @@ if (Test-Path -LiteralPath $status) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
   if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
 }
+if ($main) { Span $files }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

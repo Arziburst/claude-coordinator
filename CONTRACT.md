@@ -42,6 +42,7 @@ budget:
   effort: high
   escalate_to: fable               # model for one retry after a failed review
   cost: 16                         # USD at list price: the whole task, its tests and review (CORE §7a)
+  time: 18-40                      # optional: minutes to ready, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
 ---
@@ -58,6 +59,9 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`cost`**: the coordinator's estimate in dollars at list price (CORE §7a) — cost, not tokens: most
   tokens are cheap cache reads, so a token count measures context times turns, not spend. A lead fits
   its sub-contracts inside it and stops to ask when a run goes over twice its own estimate.
+- **`time`** (optional): the forecast time to ready in minutes, a number or a range (`25`, `18-40`) —
+  measured from the transcripts, owner waits left out (CORE §7a). check-contract warns only when it is
+  there and is neither; a contract without it is fine.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, the
   coordinator restarts the contract on this model with the failed report attached (CORE §7) — once; a
   second failure goes to the owner, not to another restart. A stuck worker (a `blocked` report) is
@@ -84,15 +88,15 @@ core_findings: []                  # a suspected fault of the core itself, with 
 ---
 ```
 
-A **lead** (roles/lead.md) adds `runs` — one entry per run under it, its own session last; tokens and
-cost are read with `scripts/session-tokens`, never self-reported (`source`: `status` — the status
-line's cost; `prices` — the transcript's tokens per model times the ladder's list prices), and the
-coordinator copies them into the run log (CORE §7):
+A **lead** (roles/lead.md) adds `runs` — one entry per run under it, its own session last; tokens,
+cost and time are read with `scripts/session-tokens`, never self-reported (`source`: `status` — the status
+line's cost; `prices` — the transcript's tokens per model times the ladder's list prices; `start`,
+`wall`, `active` — its `time` line, minutes), and the coordinator copies them into the run log (CORE §7):
 
 ```yaml
 runs:
-  - {task: 37.1, role: worker, model: sonnet, effort: medium, estimate: 2.5, cost: 3.1, tokens: 5200000, source: status, result: approved}
-  - {task: 37, role: lead, model: opus, effort: medium, estimate: 12, cost: 9.4, tokens: 19800000, source: prices, result: ready}
+  - {task: 37.1, role: worker, model: sonnet, effort: medium, estimate: 2.5, cost: 3.1, tokens: 5200000, source: status, result: approved, start: 2026-10-05T09:12:40Z, wall: 48, active: 31}
+  - {task: 37, role: lead, model: opus, effort: medium, estimate: 12, cost: 9.4, tokens: 19800000, source: prices, result: ready, start: n/a, wall: n/a, active: n/a}
 ```
 
 **Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a log,

@@ -351,6 +351,11 @@ jobs:
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge bash scripts/session-tokens.sh $id) \
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done
+          # the time line: the transcripts' timestamps stay UTC in any zone and locale
+          for id in g1 g2 g2t g3 g4; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/time bash scripts/session-tokens.sh $id) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-tokens/time TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
+          done
           # a non-UTC zone: Unix seconds and the transcripts' timestamps stay UTC
           for since in 2026-10-05T17:00:00Z 1791219600; do
             diff <(bash scripts/session-tokens.sh --since $since) \

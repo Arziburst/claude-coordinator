@@ -1,0 +1,2 @@
+{"type":"custom-title","customTitle":"no record here has a timestamp","sessionId":"g4"}
+{"type":"assistant","message":{"id":"msg_K1","type":"message","role":"assistant","model":"claude-sonnet-5-5","content":[{"type":"text","text":"no timestamp"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}},"uuid":"k1","sessionId":"g4"}

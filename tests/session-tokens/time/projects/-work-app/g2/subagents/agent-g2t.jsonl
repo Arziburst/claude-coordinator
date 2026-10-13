@@ -1,0 +1,6 @@
+{"type":"user","message":{"role":"user","content":"write the failing tests"},"uuid":"t0","isSidechain":true,"timestamp":"2026-10-08T09:01:00.000Z"}
+{"type":"assistant","message":{"id":"msg_H2","type":"message","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"writing"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":0,"cache_read_input_tokens":40,"output_tokens":4}},"uuid":"t1","isSidechain":true,"timestamp":"2026-10-08T09:05:00.000Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_t1","content":"ok"}]},"uuid":"t2","isSidechain":true,"timestamp":"2026-10-08T09:09:00.000Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_t2","content":"ok"}]},"uuid":"t3","isSidechain":true,"timestamp":"2026-10-08T09:13:00.000Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_t3","content":"ok"}]},"uuid":"t4","isSidechain":true,"timestamp":"2026-10-08T09:17:00.000Z"}
+{"type":"assistant","message":{"id":"msg_H3","type":"message","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"done"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":20,"output_tokens":2}},"uuid":"t5","isSidechain":true,"timestamp":"2026-10-08T09:20:00.000Z"}

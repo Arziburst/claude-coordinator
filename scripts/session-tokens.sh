@@ -12,30 +12,37 @@
 #   cost     $<usd>   — one session only: the CLI's own cumulative cost at list price, from the status
 #            line's per-session file ~/.claude/coordinator/sessions/<id>.json; absent if never drawn,
 #            and for a subagent (its tokens are already counted in its parent session's lines)
+#   time     wall=<m>m active=<m>m start=<UTC> end=<UTC>   — one session or subagent only, the last line:
+#            the timestamps of every record in the files counted above (the transcript and its
+#            subagents', as one set; a subagent working while the transcript is quiet is active time);
+#            wall = the last minus the first; active = wall minus every gap over 5 minutes between two
+#            consecutive records (a limit, an answer, a sleeping machine); minutes rounded to the nearest,
+#            a half up; start and end to the second; absent when no record has a timestamp
 # The status file's token fields are the LAST request's usage, not the session's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text.
 set -eu
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,22s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 dir="$cfg/coordinator/sessions"
+# rects(line): the record's own timestamp, outside "message": the first on the line when it comes
+# before "message" (Claude Code 2.1.296 writes it there), else the last; a tool input inside the
+# message may carry others. "" when the line has none. Shared by count and span.
+rects='function rects(s,   p, ts, r) { p = index(s, "\"message\":"); ts = ""
+    if (match(s, /"timestamp":[ \t]*"[^"]*"/) && p > 0 && RSTART < p) ts = substr(s, RSTART, RLENGTH)
+    else { r = s; while (match(r, /"timestamp":[ \t]*"[^"]*"/)) { ts = substr(r, RSTART, RLENGTH); r = substr(r, RSTART + RLENGTH) } }
+    sub(/^"timestamp":[ \t]*"/, "", ts); sub(/"$/, "", ts); return ts }'
 # sums assistant messages from stdin per model, each message id once (its largest output count);
 # with SINCE set, only messages whose timestamp is at or after it (compared to the second, UTC)
 count() {
-  SINCE="${SINCE:-}" LC_ALL=C awk '
+  SINCE="${SINCE:-}" LC_ALL=C awk "$rects"'
     BEGIN { since = substr(ENVIRON["SINCE"], 1, 19) }
     function num(k,   t) { if (!match(u, "\"" k "\":[ \t]*[0-9]+")) return 0
                            t = substr(u, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); return t + 0 }
     /"type":[ \t]*"assistant"/ && /"usage":[ \t]*[{]/ {
       if (since != "") {
-        # the record timestamp, outside "message": the first on the line when it comes before
-        # "message" (Claude Code 2.1.296 writes it there), else the last; a tool input inside the
-        # message may carry others
-        p = index($0, "\"message\":"); ts = ""
-        if (match($0, /"timestamp":[ \t]*"[^"]*"/) && p > 0 && RSTART < p) ts = substr($0, RSTART, RLENGTH)
-        else { r = $0; while (match(r, /"timestamp":[ \t]*"[^"]*"/)) { ts = substr(r, RSTART, RLENGTH); r = substr(r, RSTART + RLENGTH) } }
+        ts = rects($0)
         if (ts == "") next
-        sub(/^"timestamp":[ \t]*"/, "", ts)
         if (substr(ts, 1, 19) < since) next
       }
       if (!match($0, /"id":[ \t]*"msg_[^"]*"/)) next
@@ -57,6 +64,27 @@ count() {
           for (m in seen) print line(m, MI[m], MO[m], MR[m], MW[m]) | "LC_ALL=C sort"
           close("LC_ALL=C sort")
           print line("total", I, O, R, W) }'
+}
+# the time line from the records on stdin: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff],
+# read as UTC) to milliseconds since 1970, sorted, then the span and its gaps over 5 minutes
+span() {
+  LC_ALL=C awk "$rects"'
+    # days since 1970-01-01 of a date (the civil calendar; no mktime in the BSD awk)
+    function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = int(y / 400); yoe = y - e * 400
+      doy = int((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1
+      return e * 146097 + yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy - 719468 }
+    { ts = rects($0)
+      if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) next
+      f = ""; if (substr(ts, 20, 1) == "." && match(substr(ts, 21), /^[0-9]+/)) f = substr(ts, 21, RLENGTH)
+      ms = ((days(substr(ts, 1, 4) + 0, substr(ts, 6, 2) + 0, substr(ts, 9, 2) + 0) * 24 + substr(ts, 12, 2)) * 60 + substr(ts, 15, 2)) * 60 + substr(ts, 18, 2)
+      printf "%.0f\t%s\n", ms * 1000 + substr(f "000", 1, 3), substr(ts, 1, 19) }' |
+  LC_ALL=C sort -n |
+  LC_ALL=C awk -F '\t' '
+    NR == 1 { first = $1; start = $2 }
+    NR > 1 && $1 - prev > 300000 { idle += $1 - prev }   # a gap over 5 minutes: nobody worked
+    { prev = $1; end = $2 }
+    # minutes, rounded to the nearest, a half up
+    END { if (NR) printf "time\twall=%.0fm active=%.0fm start=%sZ end=%sZ\n", int((prev - first + 30000) / 60000), int((prev - first - idle + 30000) / 60000), start, end }'
 }
 case "$arg" in
   --prune)
@@ -124,4 +152,7 @@ if [ -f "$status" ]; then
   awk '{ s = s $0 }
     END { if (match(s, /"total_cost_usd"[ \t]*:[ \t]*[0-9.eE+-]+/)) {
             t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t } }' "$status"
+fi
+if [ -n "$main" ] && [ -f "$main" ]; then
+  { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | span
 fi

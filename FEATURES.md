@@ -83,8 +83,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-REVIEW-09 | CI rules for projects | current-head runs, non-failing uploads, required checks without paths filters | REVIEW |
 | F-SPEND-01 | The model ladder | models detected per subscription, rungs not names | SPEND |
 | F-SPEND-02 | Automatic routing | per-kind model and effort learn from the run log | SPEND |
-| F-SPEND-03 | The run log | one line per finished run with tokens, cost and result | SPEND |
-| F-SPEND-04 | session-tokens | tokens and cost of one session from its transcript | SPEND |
+| F-SPEND-03 | The run log | one line per finished run with tokens, cost, result and time | SPEND |
+| F-SPEND-04 | session-tokens | tokens, cost and time of one session from its transcript | SPEND |
 | F-SPEND-05 | Subagent cost | a subagent is read by its agentId and counted once | SPEND |
 | F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
 | F-SPEND-07 | Status files pruned | per-session status files older than 7 days are deleted | SPEND |
@@ -92,6 +92,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast, analysis after | SPEND |
 | F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
 | F-SPEND-11 | A lead's cost order | read the cost, then delete the status file, then stop and remove | SPEND |
+| F-SPEND-12 | Task time | work, time to ready and owner wait from transcript timestamps; forecasts leave owner waits out | SPEND |
 | F-STATE-01 | The state repository | `coordinator/` is its own git, hidden from the project's | STATE |
 | F-STATE-02 | The state branch | one branch, `state`, also the remote's default | STATE |
 | F-STATE-03 | A private remote | the state remote is always private | STATE |
@@ -539,15 +540,15 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-03 The run log
 - defined: CORE.md §7, CORE.md §7a
 - entry: every finished worker, lead, tester, reviewer or researcher run
-- promises: one line per run with model, effort, estimate, tokens from the transcript (never the worker's own count), cost and result; only the coordinator writes it; leads and direct work stay apart
+- promises: one line per run with model, effort, estimate, tokens from the transcript (never the worker's own count), cost and result, then start, wall and active minutes from the transcript's timestamps (appended at the end; older rows keep them empty); only the coordinator writes it; leads and direct work stay apart
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
 ### F-SPEND-04 session-tokens
 - defined: scripts/session-tokens.sh, scripts/session-tokens.ps1, TOOLKIT.md
 - entry: `session-tokens <session id or prefix or transcript>`
-- promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; an ambiguous prefix fails and lists ids only, never project folders
-- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected.txt, tests/session-tokens/expected-s2.txt; a usage object in a tool input before the message's own, tests/session-tokens/expected-tool-usage.txt; a tool input with keys differing only by case, tests/session-tokens/expected-case-keys.txt; an ambiguous prefix of transcripts and of status files only; a status file without a projects folder; a config path with `[ ]`), CI step "session-tokens counts the fixture exactly" (bash, Windows PowerShell 5.1 and PowerShell 7, parity on Linux)
+- promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; for one session or subagent a last `time` line (F-SPEND-12); an ambiguous prefix fails and lists ids only, never project folders
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected.txt, tests/session-tokens/expected-s2.txt, each with its time line; a usage object in a tool input before the message's own, tests/session-tokens/expected-tool-usage.txt; a tool input with keys differing only by case, tests/session-tokens/expected-case-keys.txt; an ambiguous prefix of transcripts and of status files only; a status file without a projects folder; a config path with `[ ]`), CI step "session-tokens counts the fixture exactly" (bash, Windows PowerShell 5.1 and PowerShell 7, parity on Linux)
 - not covered: output tokens are a lower bound by design; the lines are read as text: a message's id and model are the first `"id":"msg_…"` and `"model"` on the line, which a tool input could hold first only if a message listed `content` before them (not seen in real transcripts)
 
 ### F-SPEND-05 Subagent cost
@@ -581,7 +582,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-09 Estimates and forecasts
 - defined: CORE.md §7a
 - entry: every contract; every block
-- promises: an estimate is the median cost of the kind's last runs, else a seed marked `guess`; a block that does not fit the caps is cut or decided by the owner; a task over twice its estimate is looked at
+- promises: an estimate is the median cost of the kind's last runs, else a seed marked `guess`; a block that does not fit the caps is cut or decided by the owner; a task over twice its estimate (cost or time, F-SPEND-12) is looked at
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -598,6 +599,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: the cost is read with the full command first (retried once, never `n/a`), then the status file is deleted, then the session stopped and removed
 - tested by: SELFTEST step 6
 - not covered: none known
+
+### F-SPEND-12 Task time
+- defined: CORE.md §7, CORE.md §7a, scripts/session-tokens.sh, scripts/session-tokens.ps1, CONTRACT.md, roles/lead.md, TOOLKIT.md
+- entry: `session-tokens <session id or agentId>` when a run ends; every contract (`budget.time`); every block
+- promises: a run's time comes from its transcript's timestamps, never a self-reported time: the `time` line gives wall (last record minus first) and active (wall minus every gap over 5 minutes between consecutive records, over the transcript and its subagents' as one set, so a subagent working while its parent is quiet counts), whole minutes rounded half up, the same from the .sh and the .ps1, only for one session; the run log gets start, wall and active as its last three columns; per task, work is the sum of its runs' active and time to ready runs from the first run's start to the later of the verifier's approval and the PR's checks all green, minus the owner-decision intervals journaled for the task; owner wait (ready to merge, plus those intervals) is reported and never enters a forecast; `budget.time` is the median of the kind's last 10 tasks on the model with its 25th–75th percentile range (min–max under 4), else an init seed or a guess marked `guess`; check-contract warns about `budget.time` only when it is present and neither minutes nor a range
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-time-gap.txt: a gap over 5 minutes left out, one of exactly 5 kept, a half minute rounded up, the record's own timestamp while a tool input carries another, also with CRLF line ends; tests/session-tokens/expected-time-subagent.txt: a subagent filling the transcript's gap; tests/session-tokens/expected-time-agent.txt: a subagent by its agentId; tests/session-tokens/expected-time-one.txt: one record, wall=0m; tests/session-tokens/expected-time-none.txt: no timestamp, no line), CI parity of the time fixtures under another time zone and locale, tests/check-contract/run.sh (tests/check-contract/budget-time.md warns, tests/check-contract/budget-time-ok.md and tests/check-contract/quoted.md pass)
+- not covered: a single tool call running over 5 minutes (a long build, a CI watch) writes no record meanwhile and counts as idle; the task numbers (work, time to ready, owner wait), the forecast and the block analysis have no automated check — they rest on the coordinator following the rule
 
 ## STATE
 

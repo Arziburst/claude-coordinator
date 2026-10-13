@@ -19,5 +19,6 @@ budget:
   model: haiku
   escalate_to: sonnet
   cost: 0.1
+  time: "18-40"                    # a quoted range of minutes is a range
 touches: [sort.sh]
 ---

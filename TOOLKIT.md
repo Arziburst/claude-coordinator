@@ -228,7 +228,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `sh|ps <powershell>`: `tests/check-contract/run.sh` (the fixture contracts against their expected
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
-  that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly),
+  that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
@@ -299,7 +299,15 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   its result gives (or a unique prefix) — session-tokens reads `<parent>/subagents/agent-<id>.jsonl`
   and prints its own tokens per model, never a `cost` line; its cost is those tokens at list price. It
   is already inside its parent session's lines and cost, so its run-log row says `in <parent>` and a
-  sum of the project's spend counts it once. **The order** when a run ends: read its cost (a failed read retried once with the full
+  sum of the project's spend counts it once. **Time per run** (CORE §7a): for one session or subagent
+  the last line is `time` and, after a tab, `wall=<m>m active=<m>m start=<UTC> end=<UTC>`, from the timestamps of every
+  record in the files it counts (the transcript and its subagents', as one set): wall = the last minus
+  the first; active = wall minus every gap over 5 minutes between two consecutive records (waiting for
+  a limit, for an answer, a sleeping machine), so a background subagent working while its parent is
+  quiet is active time; minutes rounded to the nearest, a half up; `start` and `end` to the second, UTC.
+  No line when no record has a timestamp, and none with `--since` or `--prune`. A single tool call that
+  runs over 5 minutes (a long build, `gh pr checks --watch`) writes no record meanwhile, so it counts
+  as a gap. **The order** when a run ends: read its cost (a failed read retried once with the full
   command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every

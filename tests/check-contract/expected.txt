@@ -19,5 +19,8 @@ commented-defaults.md: WARN  budget.escalate_to missing (no stronger model to re
 commented-defaults.md: WARN  budget.cost missing (no spend forecast, CORE §7a)
 commented-defaults.md: WARN  touches missing or empty (no conflict foresight, CORE §4a)
 commented-defaults.md: FAIL (2 errors, 4 warnings)
+budget-time.md: WARN  budget.time (about an hour) is not minutes or a range of minutes (25 or 18-40, CORE §7a)
+budget-time.md: OK (0 errors, 1 warnings)
+budget-time-ok.md: OK (0 errors, 0 warnings)
 bom.md: OK (0 errors, 0 warnings)
 missing.md: cannot read

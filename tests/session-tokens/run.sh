@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# The session-tokens cases: the fixtures against their expected lines, the error cases and their exit
-# codes, --prune on files with set ages, a missing projects folder, a config path with [ ] in it.
+# The session-tokens cases: the fixtures against their expected lines (the time line included), the
+# error cases and their exit codes, --prune on files with set ages, a missing projects folder, a config
+# path with [ ] in it.
 #   tests/session-tokens/run.sh sh              # scripts/session-tokens.sh, with the bash running this file
 #   tests/session-tokens/run.sh ps pwsh         # scripts/session-tokens.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,7s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,7s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -56,6 +57,18 @@ expect "a usage object in a tool input before the message's own" 0 "$t/expected-
 expect "a tool input with keys differing only by case" 0 "$t/expected-case-keys.txt" - -- "$here/edge" t6
 expect "--since: the record's own timestamp, before or after the message" 0 "$t/expected-order-since.txt" - -- "$here/order" --since 2026-10-05T17:00:00Z
 expect "an ambiguous prefix of status files only" 1 - "$(printf 'ambiguous id ab:\nab1\nab2')" -- "$here/edge" ab
+# the time line: a gap over 5 minutes left out of active, one of exactly 5 kept, a half minute rounded up,
+# the record's own timestamp while a tool input carries another, a line without one skipped
+tm="$here/time"
+expect "time: a gap over 5 minutes is not active" 0 "$t/expected-time-gap.txt" - -- "$tm" g1
+expect "time: a subagent working while the transcript is quiet is active" 0 "$t/expected-time-subagent.txt" - -- "$tm" g2
+expect "time: a subagent alone, by its agentId" 0 "$t/expected-time-agent.txt" - -- "$tm" g2t
+expect "time: a session with one record (wall=0m)" 0 "$t/expected-time-one.txt" - -- "$tm" g3
+expect "time: no record with a timestamp, no time line" 0 "$t/expected-time-none.txt" - -- "$tm" g4
+# the same transcript with CRLF line ends (a checkout on Windows, a copy through another tool)
+mkdir -p "$tmp/crlf/projects/-work-app"
+awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$tm/projects/-work-app/g1.jsonl" > "$tmp/crlf/projects/-work-app/g1.jsonl"
+expect "time: CRLF line ends" 0 "$t/expected-time-gap.txt" - -- "$tmp/crlf" g1
 printf 'cost\t$0.1000\n' > "$tmp/cost-ab1.txt"; printf 'cost\t$0.4182\n' > "$tmp/cost-s1.txt"
 expect "a status file only, by its full id" 0 "$tmp/cost-ab1.txt" - -- "$here/edge" ab1
 # no projects folder, the status file there: the cost line

@@ -434,7 +434,9 @@ never assumed (below).
   of the table) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
   the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
   per model times the ladder's list prices, §7a) · result (`approved` / `rework <n>` /
-  `escalated` / `failed`). The coordinator's own model and effort get a line per day.
+  `escalated` / `failed`) · start (UTC) · wall · active (minutes; the `time` line of
+  `scripts/session-tokens`, from the transcript's timestamps, never a self-reported time, §7a; rows
+  written before these three columns leave them empty). The coordinator's own model and effort get a line per day.
 - **Automatic routing — no question to the owner** (the coordinator's decision, §14; not a deviation
   under §1.11): `coordinator/ROUTING.md` holds, per kind, the model and effort in use, starting from
   this table, and every run uses it. It learns from the run log, balancing quality, price and limits:
@@ -478,13 +480,37 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
   toward the weekly limit is asked once (the owner sees it in `/usage`) and kept in BINDINGS *Models*;
   the account's cost is summed with or without that model accordingly.
+- **Time is measured the same way, never self-reported:** a run's `start`, `wall` and `active` come
+  from its transcript's timestamps (`scripts/session-tokens`, the `time` line; active leaves out every
+  gap over 5 minutes between records — a limit, an answer, a sleeping machine — and a subagent working
+  while its parent is quiet counts). Per task, derived from the run log and `gh`, no file of its own:
+  - **work** — the sum of `active` over the task's runs (worker, tester, reviewer, verifier, a lead
+    and its sub-runs); a subagent's row (`in <parent>`) is already inside its parent's time, as its cost is;
+  - **time to ready** — from the first run's `start` to the moment the task can merge: the later of the
+    verifier's approval (its run's `start` + `wall`) and the PR's checks all green (the last
+    `completedAt` in `gh pr view <n> --json statusCheckRollup`), minus the intervals the task waited on
+    an owner decision. The coordinator journals them as they happen (§12): `asked the owner` and `the
+    owner answered`, each with the task and the UTC time;
+  - **owner wait** — ready → merge (`gh pr view <n> --json mergedAt`) plus those mid-task intervals.
+    Reported, **never part of a forecast**: five minutes of work merged by hand a week later is a
+    five-minute task.
+- **Time estimate per contract** (`budget.time`, minutes): the median time to ready of the kind's last
+  10 tasks on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max under 4
+  tasks: "≈ 25 min (18–40), 8 runs". No history → seeded at init in the same pass as the cost seed (the
+  median `active` of the project's existing sessions, per model — a session under the model with most
+  of its cost — until the kind has its own runs), else the coordinator's own estimate; either is
+  marked `guess`.
 - **Block forecast:** the plan shows the block's estimate in cost and limit percent against
-  what is left before the caps (§9), the 5-hour window included. It does not fit → a smaller block, or the owner decides (over a cap only
+  what is left before the caps (§9), the 5-hour window included, and in time: the longest chain of
+  its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
+  median, marked `rough`. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).
-- **Analysis after the block:** one report line — forecast vs actual (cost, percent, deviation), the
-  worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate is looked at: a wrong
+- **Analysis after the block:** one report line — forecast vs actual (cost, percent, time to ready per
+  task and for the block, deviation), the
+  worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate in cost or in time is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
-  Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
+  A side line gives the average owner wait before merge — a hint where the pipeline stalls, never a
+  reproach. Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
 
@@ -515,7 +541,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   ("continue") resumes it — a session blocked by the limit itself is respawned first (TOOLKIT *Usage*), a
   stopped one resumed by its full id (TOOLKIT *Pause and resume*). Long-window cap → no new workers, running ones
   finish. Over a cap only with the owner's permission for that occasion.
-- **Time budgets (strict preset, or where `PROJECT.md` asks):** keep tasks near their realistic estimate; warn before the pessimistic.
+- **Time budgets (strict preset, or where `PROJECT.md` asks):** keep tasks near their realistic estimate (the median of
+  `budget.time`, §7a); warn before the pessimistic (the top of its range).
 - The periodic tick (~30 min) exists **only with autopilot on**; recreate it after a restart.
 - The coordinator is a big share of the spend: short turns, filtered output, no polling, no "are you
   done?" messages; update the status page (the owner's summary of `LOG.md`, linked in BINDINGS)
@@ -559,7 +586,8 @@ change that affects them.
 - **Open questions:** every unanswered question goes on the journal's open-questions list; when the owner
   returns, **start with them**, preferably as a quiz (multiple choice, recommended first).
 - **Journal** `LOG.md` next to `PROJECT.md`: one dated line per event that matters (started, merged,
-  cleaned up, decided, verdicts, questions and answers). It survives compaction, restarts and moves; the
+  cleaned up, decided, verdicts, questions and answers — a question that holds a task up names the task
+  and the UTC time it was asked and answered, §7a). It survives compaction, restarts and moves; the
   status page summarizes it. No customer data or secrets (§1.13); in a client's repository, written for
   the client.
 - **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
