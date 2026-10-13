@@ -388,21 +388,21 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-02 Destructive removals guarded
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: every Bash or PowerShell tool call
-- promises: recursive removal of `/`, a drive, home or a worktree by hand (`rm -rf`, `Remove-Item -Recurse`, `rd /s`, `find … -delete`, `Get-ChildItem … | Remove-Item -Recurse`, `git worktree remove --force`) is blocked — home also written out (`/c/Users/<user>`, `C:\Users\<user>`), a drive also as `/c`, `/mnt/c`, `/cygdrive/c`, a worktree's contents (`.claude/worktrees/x/*`) too, and `.` or `*` after a `cd` to one of them; removing a worktree goes through cleanup-worker
+- promises: recursive removal of `/`, a drive, home or a worktree by hand (`rm -rf`, `Remove-Item -Recurse`, `rd /s`, `find … -delete`, `Get-ChildItem … | Remove-Item -Recurse`, `git worktree remove --force`) is blocked — home also written out (`/c/Users/<user>`, `C:\Users\<user>`, `~<user>`, `~/**`), a drive also as `/c`, `/mnt/c`, `/cygdrive/c`, a worktree's contents (`.claude/worktrees/x/*`) too, and `.` or `*` after a `cd` to one of them or with one as the working folder; removing a worktree goes through cleanup-worker
 - tested by: tests/safety-guard/cases.txt
 - not covered: removal through a script written to a file and then run; `..` in a path is not resolved; a plain `git worktree remove` passes (git refuses a worktree with changes; a lead removes its sub-workers' copies that way, roles/lead.md)
 
 ### F-SAFE-03 The guard parses like a shell
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: every Bash or PowerShell tool call
-- promises: line continuations are joined; separators inside quotes do not split; `{ … }` groups and PowerShell script blocks (`& {…}`, `% {…}`, `Invoke-Command -ScriptBlock {…}`) split; wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf -oL`, `builtin`, `noglob`); `$(…)`, `bash -c` (also `-c --`), `pwsh -Command` (also a prefix such as `-Com`) and a heredoc fed to a shell are checked as commands of their own; `git -C`, `cd` and `checkout` in the same command are followed
+- promises: line continuations are joined; separators inside quotes do not split; `{ … }` groups and PowerShell script blocks (`& {…}`, `% {…}`, `Invoke-Command -ScriptBlock {…}`) split; wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf -oL`, `builtin`, `noglob`; on macOS `caffeinate -i`, `arch -arm64`, `script -q <file>` and the Homebrew `gtimeout`, `gnice`, `gstdbuf`, `genv`); `$(…)`, `bash -c` (also `-c --`), `pwsh -Command` (also a prefix such as `-Com`) and a heredoc fed to a shell are checked as commands of their own; `git -C`, `cd` and `checkout` in the same command are followed
 - tested by: tests/safety-guard/cases.txt
 - not covered: none known
 
 ### F-SAFE-04 Unreadable input blocks
 - defined: scripts/hooks/safety-guard.sh, TOOLKIT.md
 - entry: the hook's stdin
-- promises: input that is not a JSON object blocks (without jq too); a BOM or other bytes before the object are dropped; only `tool_input`'s own `command` is read; extra project patterns come from the project's own deny file (trimmed, CRLF or LF, blank lines skipped), and a pattern that cannot be read blocks every call
+- promises: input that is not a JSON object blocks (without jq too); a BOM or other bytes before the object are dropped; only `tool_input`'s own `command` is read; extra project patterns come from the project's own deny file (trimmed, CRLF or LF, a UTF-8 BOM dropped, blank lines skipped), and a pattern that cannot be read, or a deny file that cannot be read (no permission, a folder), blocks every call
 - tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt
 - not covered: none known
 
@@ -423,7 +423,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-07 Deny rules
 - defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
 - entry: the worker safety file; the strict preset; the cautious override
-- promises: the baseline denies protected-branch writes in shell and PowerShell forms and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
+- promises: the baseline denies protected-branch writes in shell and PowerShell forms (a push or a force push to main or master with further arguments too) and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
 - tested by: none
 - not covered: MCP tools are covered by deny rules only, not by the hook
 
