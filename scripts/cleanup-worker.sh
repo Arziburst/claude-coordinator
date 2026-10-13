@@ -10,7 +10,8 @@ set -euo pipefail
 
 session="" wt="" dry=0
 usage="usage: --worktree <path> [--session <id>] [--dry-run]"
-need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }; }
+need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }
+         case "$2" in -*) echo "missing value for $1 (got the flag $2); $usage" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --session) need "$@"; session="$2"; shift 2 ;;

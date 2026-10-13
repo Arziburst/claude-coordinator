@@ -64,6 +64,14 @@ root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a 
 wt="${wtroot:-$root/.claude/worktrees}/$branch"
 from="${from:-$root}"
 [ -d "$from" ] || { echo "no folder to launch from: $from" >&2; exit 1; }
+# the branch exactly as named: on a case-insensitive file system a branch that differs only in letter
+# case is the same branch file and the same worktree folder (show-ref and [ -d ] would say it exists)
+heads="$(git -C "$root" for-each-ref --format='%(refname)' refs/heads | sed 's#^refs/heads/##')"
+has_branch=0; printf '%s\n' "$heads" | grep -qxF -- "$branch" && has_branch=1
+if [ "$has_branch" = 0 ]; then
+  other="$(printf '%s\n' "$heads" | while IFS= read -r b; do [ -n "$b" ] && [ "$(fold "$b")" = "$(fold "$branch")" ] && printf '%s\n' "$b"; done | head -n 1 || true)"
+  [ -z "$other" ] || { echo "branch $branch differs only in letter case from the existing $other: on this file system they are one branch - pick another name" >&2; exit 1; }
+fi
 
 # Safety settings: the hook path inside the file must exist and pass its self-test.
 if grep 'safety-guard\.' "$safety" | sed 's/\\"//g' | grep -q '\\'; then
@@ -79,11 +87,24 @@ if awk -v n="$n" '{ l[NR] = $0 } END { s = n; while (s > 1 && l[s] !~ /[{]/) s--
    ! sed -n "${n}p" "$safety" | grep -q 'exit \$LASTEXITCODE'; then
   echo "safety settings: the hook runs under a PowerShell shell without \"; exit \$LASTEXITCODE\": its block (exit 2) would reach Claude Code as a non-blocking error (1)" >&2; exit 1
 fi
+# the guard's path in one line of the file: quoted ("..." is \"...\" inside the JSON string, or '...'),
+# so it may hold a space, or else the word without spaces
+hookpath() {
+  local p
+  p="$(printf '%s\n' "$1" | sed -nE 's/.*\\"([^"]*safety-guard\.(sh|ps1))\\".*/\1/p')"
+  [ -n "$p" ] || p="$(printf '%s\n' "$1" | sed -nE "s/.*'([^']*safety-guard\.(sh|ps1))'.*/\1/p")"
+  [ -n "$p" ] || p="$(printf '%s\n' "$1" | grep -oE '[^" ]*safety-guard\.(sh|ps1)' | head -n 1)"
+  printf '%s' "$p"
+}
 # every guard path in the file must exist; the self-test runs the PreToolUse hook itself
-for p in $(grep -oE '[^" ]*safety-guard\.(sh|ps1)' "$safety" | sort -u); do
-  [ -f "$p" ] || { echo "safety settings: hook not found at '$p' (use an absolute path)" >&2; exit 1; }
-done
-hook="$(sed -n "${n}p" "$safety" | grep -o '[^" ]*safety-guard\.sh' | head -n 1 || true)"
+while IFS= read -r l; do
+  p="$(hookpath "$l")"
+  [ -f "$p" ] || { echo "safety settings: hook not found at '$p' (use an absolute path; quote a path with a space)" >&2; exit 1; }
+done <<EOF
+$(grep 'safety-guard\.' "$safety")
+EOF
+hook="$(hookpath "$(sed -n "${n}p" "$safety")")"
+case "$hook" in *.sh) ;; *) hook="" ;; esac
 [ -n "$hook" ] || { echo "safety settings: the PreToolUse guard is not safety-guard.sh - start a PowerShell-hook file with start-worker.ps1" >&2; exit 1; }
 grep -q 'bgIsolation' "$safety" || { echo "safety settings: add \"worktree\": {\"bgIsolation\": \"none\"}" >&2; exit 1; }
 selftest=$(bash "$hook" --self-test || true)
@@ -139,7 +160,7 @@ if [ -d "$wt" ]; then
     [ "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)" = "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)" ] ||
     { echo "$wt exists but is not a worktree of $root: remove or rename it first" >&2; exit 1; }
   echo "reusing worktree $wt"
-elif git -C "$root" show-ref -q --verify "refs/heads/$branch"; then
+elif [ "$has_branch" = 1 ]; then
   run git -C "$root" worktree add "$wt" "$branch"
 else
   run git -C "$root" worktree add --no-track -b "$branch" "$wt" "$start"
@@ -174,8 +195,10 @@ ${roletext:+$roletext
 }$(cat "$brief")" )
   # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
   i=0
+  # the listing is JSON: a backslash or a double quote in the name is escaped there
+  jname="$(printf '%s' "$name" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   while [ "$i" -lt 20 ]; do
-    claude agents --json 2>/dev/null | grep -qF "\"$name\"" && break
+    claude agents --json 2>/dev/null | grep -qF "\"$jname\"" && break
     i=$((i + 1)); sleep 1
   done
   [ "$i" -lt 20 ] || echo "not listed after 20 s: if the subscribe fails, retry it in a few seconds" >&2
