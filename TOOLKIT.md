@@ -60,6 +60,19 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; idle sessions may exit — `respawn` them when their turn comes; remove a session with
   `claude rm` as its own command (some guards block compound removals).
+- **Pause and resume a session** (a core update, the owner's request, a cap — CORE §9; measured on
+  2.1.296): a session that only has to wait is told to finish its step, commit, push, report and go idle;
+  a SendMessage ("continue") wakes it. To stop it outright, first record its **full** session id
+  (`sessionId` in `claude agents --json` — a stopped session is no longer listed), then `claude stop <id>`.
+  Resume it with `claude --bg --resume <full session id> "<message>"`, from any folder: the same id,
+  worktree, name, model, permission mode, settings (the guard) and history — the subscription is renewed
+  (SendMessage `notify_when_idle`) and its cost read by the same id. Never a short id (it starts a
+  **copy** under a new id in the current folder, without the name: in the owner's working copy, that is a
+  session working there) and never `claude resume <id>` (no such command — the id becomes a new
+  session's prompt). After a pause over an hour the prompt cache is gone and the resumed session pays its
+  whole history again: for a long session a fresh worker on the pushed branch with a short note may cost
+  less. A lead pauses and resumes its own workers the same way. `claude respawn` is not a resume: it
+  restarts a running session on a new Claude binary (and a usage-limit block, *Usage*).
 
 ## Working copies
 - **The core's way:** `scripts/start-worker` creates `.claude/worktrees/<branch>` with `git worktree add`

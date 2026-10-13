@@ -33,6 +33,8 @@ worker (BINDINGS) and the phrase that ends your report.
    `SendMessage(to: <its name>, notify_when_idle: true)`; no notice or report when due → `ListAgents`,
    and a `waiting` worker (a permission prompt) is reported to the coordinator, never answered.
    Your own report goes to the address your brief names, with the fallback of roles/worker.md step 5.
+   Told to pause: your workers finish their step, push and go idle; one you must stop, you stop and
+   later resume by its **full** session id, recorded before the stop (TOOLKIT *Pause and resume*).
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
    sub-contract; findings go back to the same worker until there is no Blocker or Major. A failed

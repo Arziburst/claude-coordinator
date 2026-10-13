@@ -511,8 +511,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   quality, fewest tokens, no stretching work to a reset. Off: work on the owner's task or batch command and
   only **propose** new work (§1.11, §4b).
 - Short-window cap → pause workers until the reset: no new starts, and a running worker is told to
-  finish its current step, commit and push, report, and stop; after the reset `claude respawn <id>` and a
-  one-line SendMessage ("continue") resume it, as after a usage limit (TOOLKIT *Usage*). Long-window cap → no new workers, running ones
+  finish its current step, commit and push, report, and go idle; after the reset a one-line SendMessage
+  ("continue") resumes it — a session blocked by the limit itself is respawned first (TOOLKIT *Usage*), a
+  stopped one resumed by its full id (TOOLKIT *Pause and resume*). Long-window cap → no new workers, running ones
   finish. Over a cap only with the owner's permission for that occasion.
 - **Time budgets (strict preset, or where `PROJECT.md` asks):** keep tasks near their realistic estimate; warn before the pessimistic.
 - The periodic tick (~30 min) exists **only with autopilot on**; recreate it after a restart.

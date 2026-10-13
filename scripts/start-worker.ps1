@@ -155,15 +155,25 @@ if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
 # a base not on origin yet (a lead's integration branch before its first push): the local one too
 $origin = git -C $root config --get remote.origin.url
 if ($origin) {
-  # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read the code only
-  $rc = & { $ErrorActionPreference = 'Continue'; git -C $root ls-remote -q --exit-code --heads origin $Base *> $null; $LASTEXITCODE }
+  # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read it as records.
+  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
+  # once: a transient DNS or network error should not stop a start
+  $lsr = {
+    $ErrorActionPreference = 'Continue'
+    $out = @(git -C $root ls-remote -q --exit-code --heads origin $Base 2>&1)
+    $script:lsErr = @($out | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } |
+      ForEach-Object { "$_".Trim() } | Where-Object { $_ }) | Select-Object -First 1
+    $LASTEXITCODE
+  }
+  $rc = & $lsr
+  if ($rc -ne 0 -and $rc -ne 2) { "origin did not answer: retrying once in 3 s"; Start-Sleep -Seconds 3; $rc = & $lsr }
   if ($rc -eq 0) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" }
   else {
     git -C $root show-ref -q --verify "refs/heads/$Base" *> $null
     $local = ($LASTEXITCODE -eq 0)
     if ($rc -eq 2 -and $local) { "base $Base is not on origin yet: the branch starts from the local $Base"; $start = $Base }
     elseif ($rc -eq 2) { Fail "base ${Base}: not on origin and no local branch" }
-    else { Fail "cannot reach origin to read the base $Base" }
+    else { Fail "cannot reach origin to read the base ${Base}: $script:lsErr" }
   }
 } else { $start = $Base }
 if (Test-Path -LiteralPath $wt) {
