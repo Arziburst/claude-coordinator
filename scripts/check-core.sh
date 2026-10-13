@@ -6,7 +6,9 @@
 #   - a section reference (§4b, CORE §12a, §1.16) to a section that does not exist — sections are the
 #     `## <id>. ` headings of CORE.md and procedures/*.md, and §1.N must name an existing hard rule;
 #   - FEATURES.md out of sync: a file a block names is missing, a script, procedure, role or one-time
-#     step is in no feature, an ID repeats, a block lacks a field, the table and the blocks disagree.
+#     step is in no feature, an ID repeats, a block lacks a field, the table and the blocks disagree
+#     (a field's indented continuation lines are read as part of it);
+#   - a script under scripts/ without its other half: every script is a .sh + .ps1 pair.
 # Run in CI on every pull request and before proposing a core change (CORE §10).
 set -u
 root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -69,14 +71,23 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
   done < <(awk '
     function endblk(   k) {
       if (cur != "") for (k = 1; k <= 5; k++) if (!f[k]) print "E", curn, cur " lacks \"- " fname[k] ":\""
-      cur = ""; for (k = 1; k <= 5; k++) f[k] = 0
+      cur = ""; cont = 0; for (k = 1; k <= 5; k++) f[k] = 0
+    }
+    # the file paths a field names: words with a slash, or a file name with a known extension
+    function paths(s,   n, t, i, p) {
+      gsub(/[`,;()]/, " ", s); n = split(s, t, " ")
+      for (i = 1; i <= n; i++) {
+        p = t[i]; sub(/#.*$/, "", p); sub(/[.:]+$/, "", p); sub(/\/$/, "", p)
+        if (p !~ /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/) continue
+        if (p ~ /\// || (p ~ /\.(md|sh|ps1|json|yml|txt)$/ && p !~ /^\./)) print "P", NR, p
+      }
     }
     BEGIN { fname[1] = "defined"; fname[2] = "entry"; fname[3] = "promises"; fname[4] = "tested by"; fname[5] = "not covered" }
     { sub(/\r$/, "") }
-    /^[ \t]*```/ { code = !code; next }
+    /^[ \t]*```/ { code = !code; cont = 0; next }
     code { next }
     /^\| *F-[A-Z]+-[0-9]+ *\|/ { s = $0; sub(/^\| */, "", s); sub(/ *\|.*$/, "", s)
-      if (!(s in row)) { row[s] = NR; nr++; rord[nr] = s }; next }
+      if (!(s in row)) { row[s] = NR; nr++; rord[nr] = s }; cont = 0; next }
     /^### / { endblk()
       if ($2 ~ /^F-[A-Z]+-[0-9]+$/) { cur = $2; curn = NR
         if (cur in blk) print "E", NR, "duplicate feature id " cur
@@ -86,16 +97,13 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
     cur != "" && /^- [a-z ]+:/ {
       kk = 0
       for (k = 1; k <= 5; k++) if (index($0, "- " fname[k] ":") == 1) { f[k] = 1; kk = k }
-      if (kk == 1 || kk == 2 || kk == 4) {
-        s = $0; sub(/^- [a-z ]+:/, "", s); gsub(/[`,;()]/, " ", s)
-        n = split(s, t, " ")
-        for (i = 1; i <= n; i++) {
-          p = t[i]; sub(/#.*$/, "", p); sub(/[.:]+$/, "", p); sub(/\/$/, "", p)
-          if (p !~ /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/) continue
-          if (p ~ /\// || (p ~ /\.(md|sh|ps1|json|yml|txt)$/ && p !~ /^\./)) print "P", NR, p
-        }
-      }
+      cont = kk
+      if (kk == 1 || kk == 2 || kk == 4) { s = $0; sub(/^- [a-z ]+:/, "", s); paths(s) }
+      next
     }
+    # an indented line right after a field (or after another such line) continues it
+    cur != "" && cont && /^[ \t]+[^ \t]/ { if (cont == 1 || cont == 2 || cont == 4) paths($0); next }
+    { cont = 0 }
     END { endblk()
       for (i = 1; i <= nb; i++) if (!(bord[i] in row)) print "E", blk[bord[i]], bord[i] " is not in the summary table"
       for (i = 1; i <= nr; i++) if (!(rord[i] in blk)) print "E", row[rord[i]], rord[i] " has no block"
@@ -107,6 +115,12 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
     grep -qF "\`$id\`" FEATURES.md || { echo "FEATURES.md: one-time step $id is in no feature"; errors=$((errors + 1)); }
   done
 fi
+
+# every script under scripts/ is a .sh + .ps1 pair (TOOLKIT Scripts): a half without the other is an error
+while IFS= read -r f; do
+  case "$f" in *.sh) o="${f%.sh}.ps1" ;; *) o="${f%.ps1}.sh" ;; esac
+  [ -e "$o" ] || { echo "$f: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; errors=$((errors + 1)); }
+done < <([ -d scripts ] && find scripts -type f \( -name '*.sh' -o -name '*.ps1' \) | LC_ALL=C sort)
 
 nsec=$(echo $sections | wc -w | tr -d ' ')
 echo "check-core: $files files, $nsec sections, $rules hard rules, $nfeat features, $errors errors"

@@ -3,11 +3,15 @@
 #   pwsh -File scripts/check-contract.ps1 <contract.md|contract.yaml> ...      (or: powershell -File ...)
 # The contract is the YAML header between `---` lines, or a top-level `contract:` block.
 # ERROR (exit 1): a required key missing, id / title / intent empty, an acceptance item not led by `criterion:`,
-# a criterion without a valid check, an oracle without `how`, non_goals without the two default lines; a file
+# a criterion without a valid check, an oracle without `how` (empty, blank or null is none), non_goals without
+# the two default lines (a line commented out does not count); a file
 # that cannot be read (`<file>: cannot read`). WARN: budget.model, .escalate_to, .cost or touches missing; no
 # oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 8 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 9 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -16,6 +20,8 @@ function Val([string]$s) {
   if ($s.Length -ge 2 -and ($s[0] -eq '"' -or $s[0] -eq "'") -and $s[$s.Length - 1] -eq $s[0]) { $s = $s.Substring(1, $s.Length - 2) }
   $s
 }
+# a value that says something: not empty, not blanks inside quotes, not null (~)
+function Filled([string]$s) { $s = (Val $s).Trim(' ', "`t"); $s -ne '' -and $s -ne '~' -and $s.ToLower() -ne 'null' }
 # a top-level value that holds nothing: comments, block markers, blanks or empty quotes only
 function Blank([string]$t) { $t = $t -creplace '#[^\n]*', '' -creplace '[>|\n \t]', ''; $t -eq '' -or $t -eq '""' -or $t -eq "''" }
 
@@ -60,7 +66,9 @@ foreach ($f in $Files) {
   # acceptance criteria; each item starts with `- criterion:` (the first `-` line sets the items indent)
   if ($txt.ContainsKey('acceptance')) {
     $crit = @(); $chk = @(); $how = @(); $ii = -1; $mis = $false
-    foreach ($line in ($txt['acceptance'] -split "`n")) {
+    $AL = @($txt['acceptance'] -split "`n")
+    for ($li = 0; $li -lt $AL.Count; $li++) {
+      $line = $AL[$li]
       if ($line -cmatch '^([ \t]*)-([ \t]|$)') {
         $w = $Matches[1].Length; if ($ii -lt 0) { $ii = $w }
         if ($w -eq $ii -and $line -cnotmatch '^[ \t]*-[ \t]*[{]?[ \t]*criterion:') { $mis = $true }
@@ -68,14 +76,25 @@ foreach ($f in $Files) {
       if ($line -cmatch '^[ \t]*criterion:') { $mis = $true }
       if ($line -cmatch '^[ \t]*-[ \t]*[{]?[ \t]*criterion:[ \t]*(.*)$') {
         $crit += $Matches[1]; $c = ''; $h = ''
-        # check: and how: on the same line only in a flow item - { criterion: ..., check: ..., how: ... }
+        # check: and how: on the same line only in a flow item - { criterion: ..., check: ..., how: ... } -
+        # each key after the brace or a comma, so a criterion whose text holds "how:" names no how
         if ($line -cmatch '^[ \t]*-[ \t]*[{]') {
-          if ($line -cmatch 'check:[ \t]*([^ \t,}]+)') { $c = Val $Matches[1] }
-          if ($line -cmatch 'how:([^,}]*)') { if ((Val $Matches[1]) -ne '') { $h = 'y' } }
+          if ($line -cmatch '[{,][ \t]*check:[ \t]*([^ \t,}]+)') { $c = Val $Matches[1] }
+          if ($line -cmatch '[{,][ \t]*how:([^,}]*)') { if (Filled $Matches[1]) { $h = 'y' } }
         }
         $chk += $c; $how += $h
       } elseif ($crit.Count -and $line -cmatch '^[ \t]+check:(.*)$') { $chk[$crit.Count - 1] = Val $Matches[1] }
-      elseif ($crit.Count -and $line -cmatch '^[ \t]+how:(.*)$') { if ((Val $Matches[1]) -ne '') { $how[$crit.Count - 1] = 'y' } }
+      elseif ($crit.Count -and $line -cmatch '^([ \t]+)how:(.*)$') {
+        $hi = $Matches[1].Length; $raw = $Matches[2]
+        # a block scalar (how: > or how: |) holds the lines below that are indented deeper than the key
+        if ((Val $raw) -cmatch '^[>|][-+0-9]*$') {
+          for ($j = $li + 1; $j -lt $AL.Count; $j++) {
+            if ($AL[$j] -cmatch '^[ \t]*(#.*)?$') { continue }
+            if (([regex]::Match($AL[$j], '^[ \t]*')).Length -gt $hi) { $how[$crit.Count - 1] = 'y' }
+            break
+          }
+        } elseif (Filled $raw) { $how[$crit.Count - 1] = 'y' }
+      }
     }
     if ($mis) { $out.Add('ERROR criterion must be the first key of each acceptance item'); $ne++ }
     elseif (-not $crit.Count) { $out.Add('ERROR `acceptance` has no criteria'); $ne++ }
@@ -90,7 +109,8 @@ foreach ($f in $Files) {
     if ($crit.Count -and -not $oracle) { $out.Add('WARN  no criterion has an oracle check: everything rests on opinion'); $nw++ }
   }
   if ($txt.ContainsKey('non_goals')) {
-    $ng = $txt['non_goals'].ToLower()
+    # its text without comments: a default line commented out (# - no changes ...) is missing
+    $ng = (@($txt['non_goals'] -split "`n" | Where-Object { $_ -cnotmatch '^[ \t]*#' } | ForEach-Object { $_ -creplace '[ \t]+#.*$', '' }) -join "`n").ToLower()
     if (-not $ng.Contains('beyond the fix')) { $out.Add('ERROR non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)'); $ne++ }
     if (-not $ng.Contains('weaken')) { $out.Add('ERROR non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)'); $ne++ }
   }

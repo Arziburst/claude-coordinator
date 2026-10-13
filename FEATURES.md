@@ -417,7 +417,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, TOOLKIT.md
 - entry: `selftest hooks --settings <file>`, `selftest hookcheck --session <id>`; SELFTEST step 2a
 - promises: a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked
-- tested by: tests/selftest/hooks, tests/selftest/claude, CI step "selftest - the guard's settings and transcripts" (bash, Windows PowerShell 5.1, parity on Linux)
+- tested by: tests/selftest/hooks.sh (tests/selftest/hooks/expected.txt: every settings file in tests/selftest/hooks, among them a minified one, two PreToolUse entries, a matcher written after its hooks, a matcher `.*` and a trailing comma; read with jq and with the awk reader; a step given another step's parameter is a usage error), tests/selftest/claude, CI steps "selftest - the guard's settings" (bash with and without jq, Windows PowerShell 5.1 and pwsh, PowerShell 7 on Linux, parity on Linux)
 - not covered: hooks load at session start, so a fixed file is proven only in a new session
 
 ### F-SAFE-07 Deny rules
@@ -744,40 +744,40 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: procedures/SELFTEST.md, scripts/selftest.sh
 - entry: `selftest prepare`, `selftest verify`
 - promises: prepare refuses a core commit already tested here; its branches and PR are never deleted; verify fails on a worktree left behind or a branch not merged into the base
-- tested by: CI step "selftest - prepare and verify in a project's state repository" (bash, Windows PowerShell 5.1)
+- tested by: CI step "selftest - prepare and verify in a project's state repository" (bash; Windows PowerShell 5.1 with the console on code page 866 and the project under a non-ASCII folder), tests/selftest/prepare.sh (a base only on the remote of a fresh clone is refused; verify under a non-ASCII folder, the .ps1 on code page 866; the sessions left named the same in both versions)
 - not covered: none known
 
 ### F-SELFTEST-03 The sandbox
 - defined: procedures/SELFTEST.md, scripts/selftest.sh
 - entry: `selftest sandbox`, `selftest clean`
 - promises: the core itself is tested in a throwaway sandbox with a local bare origin; a sandbox that already exists is refused; clean refuses a folder without the sandbox marker and removes only worktrees that are clean and merged
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- tested by: CI steps "selftest - the scripted steps" (bash, Windows PowerShell 5.1: a sandbox with an unmerged branch fails clean and is kept, once merged it is removed; bash: a folder without the marker is refused)
+- not covered: a sandbox that already exists is refused by `selftest sandbox`, with no automated check
 
 ### F-SELFTEST-04 check-core
 - defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
 - entry: before every core pull request; CI
 - promises: a broken relative link, a missing section, a §1.N past the last hard rule, or a feature map out of sync fails; the `.sh` and `.ps1` print the same
-- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted)
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half)
 - not covered: none known
 
 ### F-SELFTEST-05 check-scripts
 - defined: scripts/check-scripts.sh, scripts/check-scripts.ps1, TOOLKIT.md
 - entry: before every pull request; the dry run; "update the core"
 - promises: every `.sh` and `.ps1` parses; a language with no shell on the machine is listed as skipped, never passed; a `#Requires -Version 7` file is parsed with pwsh
-- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, tests/selftest/core-copy.sh (a whole core copy passes), CI steps "every script parses, and a broken one is reported"
+- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, tests/selftest/core-copy.sh (a whole core copy passes), tests/check-scripts/run.sh (a folder named with `&` and `[x]`, extensions in capitals, `??` under the rules of Windows PowerShell 5.1 also from pwsh, a bash on PATH that checks nothing), CI steps "every script parses, and a broken one is reported"
 - not covered: none known
 
 ### F-SELFTEST-06 check-contract
 - defined: scripts/check-contract.sh, scripts/check-contract.ps1, CONTRACT.md
 - entry: before every delegation
 - promises: a missing field, a criterion without a check, an oracle without how, or non-goals without the default lines is an ERROR and blocks delegation; a missing budget or footprint is a WARN explained in the brief
-- tested by: tests/selftest/contract.md, tests/check-contract/run.sh (a BOM, quoted values, "how:" in a criterion's text, an empty id or title, a misplaced criterion, a missing file), CI steps "the example contract passes the contract check"
+- tested by: tests/selftest/contract.md, tests/check-contract/run.sh (a BOM, quoted values, "how:" in a criterion's text, an empty id or title, a misplaced criterion, an empty, blank, null or empty block `how`, the default non-goals commented out, a missing file; on Windows with the console on code page 866), CI steps "the example contract passes the contract check"
 - not covered: none known
 
 ### F-SELFTEST-07 Script pairs
 - defined: TOOLKIT.md, .github/workflows/check-core.yml
 - entry: every script change
 - promises: every script is a `.sh` + `.ps1` pair with the same arguments, messages and exit codes; `.sh` runs on bash 3.2 with BSD tools, `.ps1` on Windows PowerShell 5.1; nothing is installed; CI compares both outputs
-- tested by: CI steps "both variants print the same", macOS system bash 3.2
+- tested by: CI steps "both variants print the same", macOS system bash 3.2, check-core (a script without its other half: tests/check-core/run.sh)
 - not covered: none known

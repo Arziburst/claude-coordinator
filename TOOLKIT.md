@@ -211,7 +211,16 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
 - **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts and the hook's self-test) and
   `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
-  repositories with stub `claude` and `gh`; the real `claude` is never called).
+  repositories with stub `claude` and `gh`; the real `claude` is never called). The others take the same
+  `sh|ps <powershell>`: `tests/check-contract/run.sh` (the fixture contracts against their expected
+  output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
+  pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
+  that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly),
+  `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
+  errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
+  a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
+  Windows, the ones that read native output or print `§` run the `.ps1` with the console on code page 866,
+  as on a Russian Windows.
 
 ## CI
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so

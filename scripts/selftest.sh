@@ -131,8 +131,8 @@ clean)
   b="$(git -C "$r" for-each-ref --format='%(refname:short)' refs/heads | grep -v '^main$')"
   [ -z "$b" ] && pass "no branch left" || fail "branches not merged into main: $(echo $b)"
   if command -v claude >/dev/null 2>&1; then
-    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *//')"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(echo $n)"
+    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
+    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
   else skip "no claude: sessions not checked"; fi
   if [ -n "$state" ]; then
     if n="$(gh api "repos/$state/branches" --paginate --jq '.[].name' 2>/dev/null)"; then
@@ -150,44 +150,120 @@ hooks)
   while [ $# -gt 0 ]; do case "$1" in --settings) [ $# -ge 2 ] || usage; file="$2"; shift 2 ;; *) usage ;; esac; done
   [ -n "$file" ] || usage
   [ -f "$file" ] || { fail "no settings file $file"; finish; }
-  # only the PreToolUse array counts: from its key to the bracket that closes it
-  se="$(awk '!s && /"PreToolUse"[ \t]*:/ { s = NR }
-    s { t = $0; o = gsub(/\[/, "", t); c = gsub(/\]/, "", t); d += o - c; if (o) seen = 1; if (seen && d <= 0) { print s, NR; exit } }' "$file")"
-  ps="${se% *}"; pe="${se#* }"
-  # the guard's command there (its SessionStart self-test line carries -SelfTest / --self-test)
-  n=""
-  [ -n "$se" ] && n="$(awk -v s="$ps" -v e="$pe" 'NR >= s && NR <= e && /safety-guard\./ && !/-SelfTest/ && !/--self-test/ { print NR; exit }' "$file")"
-  [ -n "$n" ] || { fail "no safety-guard hook in the file"; finish; }
+  # The file is read as JSON, as Claude Code loads it (jq when present, else a small reader in awk, as in
+  # hooks/safety-guard.sh): a file that is not valid JSON is not loaded at all. Both print the guard's
+  # PreToolUse hook - the first hook whose command names safety-guard. and is not its self-test
+  # (-SelfTest / --self-test) - as four lines: its command (line breaks and tabs as spaces), its
+  # "shell", its "onFailure", and the "matcher" of its own entry (empty when there is none).
+  hook_jq='[ .hooks | objects | .PreToolUse | arrays | .[] | objects | . as $v | .hooks | arrays | .[] | objects
+    | select((.command | type) == "string") | select(.command | test("safety-guard\\."; "i"))
+    | select(.command | test("-selftest|--self-test"; "i") | not)
+    | [ (.command | gsub("[\n\r\t]"; " ")), (.shell | strings // ""), (.onFailure | strings // ""), ($v.matcher | strings // "") ] ]
+    | first // empty | .[]'
+  hook_awk='
+  function ws() { while (i <= n && index(" \t\r\n", substr(s, i, 1))) i++ }
+  # a string at i: moves i past it and returns its raw body (escapes kept), or "\001" when it is not one
+  function str(    r) {
+    r = substr(s, i)
+    if (!match(r, /^"([^"\\]|\\["\\\/bfnrt]|\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])*"/)) return "\001"
+    i += RLENGTH; return substr(r, 2, RLENGTH - 2)
+  }
+  # the decoded text of a raw string: line breaks and tabs as spaces, a \u escape past ASCII as "?"
+  function dec(x,    m, P, k, p, c, o, v, h, j) {
+    m = split(x, P, "\\"); o = P[1]
+    for (k = 2; k <= m; k++) {
+      p = P[k]
+      if (p == "") { o = o "\\"; k++; if (k <= m) o = o P[k]; continue }
+      c = substr(p, 1, 1); p = substr(p, 2)
+      if (c == "n" || c == "t" || c == "r" || c == "b" || c == "f") c = " "
+      else if (c == "u") {
+        v = 0; h = tolower(substr(p, 1, 4)); p = substr(p, 5)
+        for (j = 1; j <= 4; j++) v = v * 16 + index("0123456789abcdef", substr(h, j, 1)) - 1
+        c = (v >= 32 && v < 127) ? sprintf("%c", v) : (v == 9 || v == 10 || v == 13) ? " " : "?"
+      }
+      o = o c p
+    }
+    gsub(/[\t\r\n]/, " ", o); return o
+  }
+  # a string under hooks.PreToolUse[e]: the entry'"'"'s matcher, or a hook'"'"'s command, shell or onFailure
+  function keep(path, v,    m, e, h) {
+    m = split(path, P, SUBSEP)
+    if (m < 5 || P[2] != "hooks" || P[3] != "PreToolUse" || substr(P[4], 1, 1) != "\001") return
+    e = substr(P[4], 2) + 0
+    if (m == 5 && P[5] == "matcher") M[e] = v
+    else if (m == 7 && P[5] == "hooks" && substr(P[6], 1, 1) == "\001") {
+      h = substr(P[6], 2) + 0
+      if (P[7] == "command") {
+        C[e, h] = v
+        if (ge == "" && tolower(v) ~ /safety-guard\./ && tolower(v) !~ /-selftest|--self-test/) { ge = e; gh = h }
+      } else if (P[7] == "shell") S[e, h] = v
+      else if (P[7] == "onFailure") F[e, h] = v
+    }
+  }
+  # one JSON value at i; path: the keys and array indexes ("\001" n) leading to it. 0: not JSON
+  function val(path,    c, k, j) {
+    ws(); c = substr(s, i, 1)
+    if (c == "{" || c == "[") {
+      i++; ws()
+      if (substr(s, i, 1) == ((c == "{") ? "}" : "]")) { i++; return 1 }
+      j = 0
+      while (1) {
+        if (c == "{") {
+          ws(); if (substr(s, i, 1) != "\"") return 0
+          k = str(); if (k == "\001") return 0
+          ws(); if (substr(s, i, 1) != ":") return 0
+          i++; if (!val(path SUBSEP dec(k))) return 0
+        } else { if (!val(path SUBSEP "\001" j)) return 0; j++ }
+        ws(); k = substr(s, i, 1); i++
+        if (k == ((c == "{") ? "}" : "]")) return 1
+        if (k != ",") return 0
+      }
+    }
+    if (c == "\"") { k = str(); if (k == "\001") return 0; keep(path, dec(k)); return 1 }
+    if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) { i += RLENGTH; return 1 }
+    return 0
+  }
+  { all = (NR > 1) ? all "\n" $0 : $0 }
+  END {
+    s = all; n = length(s); i = 1; ge = ""
+    ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
+    ws(); if (i <= n) exit 3
+    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge] }
+  }'
+  # a UTF-8 BOM before the JSON is dropped
+  json="$(B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }' "$file")"
+  ok="" g=""
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "$json" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1 &&
+      g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1
+  else g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1; fi
+  [ -n "$ok" ] || { fail "the settings file is not valid JSON (Claude Code would not load it)"; finish; }
+  [ -n "$g" ] || { fail "no safety-guard hook in the file"; finish; }
   pass "a safety-guard hook"
-  line="$(sed -n "${n}p" "$file")"
-  # a backslash that is not the JSON escape of a quote (\") is a path separator
-  if printf '%s\n' "$line" | sed 's/\\"//g' | grep -q '[\]'; then
-    fail "its path has backslashes: Git Bash drops them and the hook never runs"
-  else pass "its path uses forward slashes"; fi
-  case "$line" in *'$env:'*) fail 'its command uses $env: - bash reads it as $env and the path breaks' ;;
+  cmd="$(printf '%s\n' "$g" | sed -n 1p)"; shell="$(printf '%s\n' "$g" | sed -n 2p)"
+  onfail="$(printf '%s\n' "$g" | sed -n 3p)"; m="$(printf '%s\n' "$g" | sed -n 4p)"
+  # after JSON decoding a path backslash is a single \ (an escaped quote is just ")
+  case "$cmd" in *\\*) fail "its path has backslashes: Git Bash drops them and the hook never runs" ;;
+    *) pass "its path uses forward slashes" ;; esac
+  case "$cmd" in *'$env:'*) fail 'its command uses $env: - bash reads it as $env and the path breaks' ;;
     *) pass 'no $env: in its command' ;; esac
-  # an unquoted path must be one word: a space splits it and the hook never runs
-  cmd="$(printf '%s\n' "$line" | sed 's/^[^:]*:[ \t]*"//; s/",*[ \t]*$//; s/\\"/"/g')"
-  if printf '%s\n' "$cmd" | grep -q '"[^"]*safety-guard\.\(sh\|ps1\)"'; then pass "its path is quoted or has no space"
+  # an unquoted path must be one word: a space splits it and the hook never runs (letter case as in the .ps1)
+  lc="$(printf '%s\n' "$cmd" | tr '[:upper:]' '[:lower:]')"
+  if printf '%s\n' "$lc" | grep -Eq '"[^"]*safety-guard\.(sh|ps1)"'; then pass "its path is quoted or has no space"
   else
-    word="$(printf '%s\n' "$cmd" | sed 's/safety-guard\..*//; s/.* //')"
-    case "$word" in /*|[A-Za-z]:*|'$'*|'~'*) pass "its path is quoted or has no space" ;;
+    word="$(printf '%s\n' "$lc" | sed 's/safety-guard\..*//; s/.* //')"
+    case "$word" in /*|[a-z]:*|'$'*|'~'*) pass "its path is quoted or has no space" ;;
       *) fail "its path has a space and is not quoted: the hook never runs" ;; esac
   fi
-  # the hook object's own fields sit between its braces
-  if awk -v n="$n" '{ l[NR] = $0 } END { a = n; while (a > 1 && l[a] !~ /[{]/) a--; b = n; while (b < NR && l[b] !~ /[}]/) b++
-       for (i = a; i <= b; i++) if (l[i] ~ /"shell"[ \t]*:[ \t]*"powershell"/) exit 0; exit 1 }' "$file"; then
-    case "$line" in *'exit $LASTEXITCODE'*) pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' ;;
+  if [ "$shell" = powershell ]; then
+    case "$cmd" in *'exit $LASTEXITCODE'*) pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' ;;
       *) fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' ;; esac
   else pass "no PowerShell shell around it"; fi
-  # its entry's matcher (none: every tool) must take in the PowerShell tool too
-  m="$(awk -v s="$ps" -v n="$n" 'NR >= s && NR <= n && /"matcher"[ \t]*:/ { m = $0 } END { print m }' "$file")"
-  case "$m" in ''|*PowerShell*|*'"*"'*) pass "its matcher covers the PowerShell tool" ;;
+  # its entry's matcher must take in the PowerShell tool too: none, "", "*" and ".*" match every tool
+  case "$m" in ''|'*'|'.*'|*PowerShell*) pass "its matcher covers the PowerShell tool" ;;
     *) fail "its matcher leaves out PowerShell: the PowerShell tool runs unguarded" ;; esac
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
-  if awk -v n="$n" '{ l[NR] = $0 } END { a = n; while (a > 1 && l[a] !~ /[{]/) a--; b = n; while (b < NR && l[b] !~ /[}]/) b++
-       for (i = a; i <= b; i++) if (l[i] ~ /"onFailure"[ \t]*:[ \t]*"block"/) exit 0; exit 1 }' "$file"; then
-    pass 'onFailure "block": a guard that fails to run blocks'
+  if [ "$onfail" = block ]; then pass 'onFailure "block": a guard that fails to run blocks'
   else fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)'; fi
   finish ;;
 
@@ -243,7 +319,15 @@ prepare|verify)
       bad="$(lines | awk -F'|' '/^\|/ && !/^\| id \|/ && !/^\|---/ { s = $(NF - 1); gsub(/^[ \t]+|[ \t]+$/, "", s); if (s !~ /^(new|discussed|sent|fixed|dropped|not core)/) print (s == "" ? "<empty>" : s) }' | head -n 1)"
       if [ -z "$bad" ]; then pass "CORE-FINDINGS.md in the template's format"; else fail "CORE-FINDINGS.md: unknown status '$bad'"; fi
     fi
-    if git -C "$state" show-ref -q --verify "refs/heads/$base"; then
+    tested=""
+    git -C "$state" show-ref -q --verify "refs/heads/$base" && tested=1
+    # a fresh clone of the state repository (another machine) has the base on the remote only
+    if [ -z "$tested" ] && [ -n "$(git -C "$state" config --get remote.origin.url)" ]; then
+      git -C "$state" fetch -q origin 2>/dev/null ||
+        { fail "could not fetch origin: cannot tell whether core $c was tested on another machine"; finish; }
+      git -C "$state" show-ref -q --verify "refs/remotes/origin/$base" && tested=1
+    fi
+    if [ -n "$tested" ]; then
       fail "$base exists: core $c was tested here already - its branches are the evidence, nothing is deleted"; finish
     fi
     from="$(git -C "$state" rev-parse --abbrev-ref HEAD)"
@@ -276,8 +360,8 @@ prepare|verify)
     [ -n "$n" ] && pass "PR #$n merged into $base" || fail "no merged PR from selftest/$c/task-1 into $base"
   else skip "PR flow: not checked (no --state-repo)"; fi
   if command -v claude >/dev/null 2>&1; then
-    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *//')"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(echo $n)"
+    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
+    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
   else skip "no claude: sessions not checked"; fi
   finish ;;
 

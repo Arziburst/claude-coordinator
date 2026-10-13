@@ -7,13 +7,14 @@
 #   - id, title, intent, acceptance, non_goals or do_not_decide missing; id, title or intent empty;
 #   - an acceptance item not led by `criterion:`; a criterion without `check`, with a check other than
 #     oracle / review / owner, or an `oracle` check without `how` (a criterion with no nameable check is
-#     a planning gap, CONTRACT.md);
-#   - non_goals without the two default lines (no changes beyond the fix …, do not weaken … tests …).
+#     a planning gap, CONTRACT.md); an empty, blank or null `how` is none;
+#   - non_goals without the two default lines (no changes beyond the fix …, do not weaken … tests …;
+#     a line commented out does not count).
 #   - a file that cannot be read: `<file>: cannot read`.
 # WARN — allowed, but say why in the brief:
 #   - budget.model, budget.escalate_to, budget.cost or touches missing; no criterion with an oracle check.
 # Reads the structure line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
-[ $# -gt 0 ] || { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
 failed=0
 for f in "$@"; do
   { [ -f "$f" ] && [ -r "$f" ]; } || { echo "$f: cannot read"; failed=1; continue; }
@@ -23,6 +24,8 @@ for f in "$@"; do
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
       if (length(s) >= 2 && (a == "\"" || a == q) && substr(s, length(s), 1) == a) s = substr(s, 2, length(s) - 2); return s }
+    # a value that says something: not empty, not blanks inside quotes, not null (~)
+    function filled(s) { s = val(s); gsub(/^[ \t]+|[ \t]+$/, "", s); return s != "" && s != "~" && tolower(s) != "null" }
     # a top-level value that holds nothing: comments, block markers, blanks or empty quotes only
     function blank(k,   t) { t = txt[k]; gsub(/#[^\n]*/, "", t); gsub(/[>|\n \t]/, "", t); return t == "" || t == "\"\"" || t == q q }
     function err(m) { print F ": ERROR " m; ne++ }
@@ -69,13 +72,23 @@ for f in "$@"; do
           if (line ~ /^[ \t]*criterion:/) mis = 1
           if (line ~ /^[ \t]*-[ \t]*[{]?[ \t]*criterion:/) {
             c++; crit[c] = line; sub(/^[ \t]*-[ \t]*[{]?[ \t]*criterion:[ \t]*/, "", crit[c]); chk[c] = ""; how[c] = ""
-            # check: and how: on the same line only in a flow item - { criterion: ..., check: ..., how: ... }
+            # check: and how: on the same line only in a flow item - { criterion: ..., check: ..., how: ... } -
+            # each key after the brace or a comma, so a criterion whose text holds "how:" names no how
             if (line ~ /^[ \t]*-[ \t]*[{]/) {
-              if (match(line, /check:[ \t]*[^ \t,}]+/)) { t = substr(line, RSTART, RLENGTH); sub(/check:[ \t]*/, "", t); chk[c] = val(t) }
-              if (match(line, /how:[^,}]*/)) { t = substr(line, RSTART + 4, RLENGTH - 4); if (val(t) != "") how[c] = "y" }
+              if (match(line, /[{,][ \t]*check:[ \t]*[^ \t,}]+/)) { t = substr(line, RSTART, RLENGTH); sub(/^[{,][ \t]*check:[ \t]*/, "", t); chk[c] = val(t) }
+              if (match(line, /[{,][ \t]*how:[^,}]*/)) { t = substr(line, RSTART, RLENGTH); sub(/^[{,][ \t]*how:/, "", t); if (filled(t)) how[c] = "y" }
             }
           } else if (c > 0 && match(line, /^[ \t]+check:/)) { chk[c] = val(substr(line, RLENGTH + 1)) }
-          else if (c > 0 && match(line, /^[ \t]+how:/)) { if (val(substr(line, RLENGTH + 1)) != "") how[c] = "y" }
+          else if (c > 0 && match(line, /^[ \t]+how:/)) {
+            hi = RLENGTH - 4; t = val(substr(line, RLENGTH + 1))
+            # a block scalar (how: > or how: |) holds the lines below that are indented deeper than the key
+            if (t ~ /^[>|][-+0-9]*$/) {
+              for (j = i + 1; j <= m; j++) {
+                if (A[j] ~ /^[ \t]*(#.*)?$/) continue
+                match(A[j], /^[ \t]*/); if (RLENGTH > hi) how[c] = "y"; break
+              }
+            } else if (filled(t)) how[c] = "y"
+          }
         }
         if (mis) err("criterion must be the first key of each acceptance item")
         else if (c == 0) err("`acceptance` has no criteria")
@@ -88,7 +101,10 @@ for f in "$@"; do
         if (c > 0 && !ok_oracle) warn("no criterion has an oracle check: everything rests on opinion")
       }
       if ("non_goals" in has) {
-        ng = tolower(txt["non_goals"])
+        # its text without comments: a default line commented out (# - no changes ...) is missing
+        ng = ""; gm = split(txt["non_goals"], G, "\n")
+        for (k = 1; k <= gm; k++) { t = G[k]; if (t ~ /^[ \t]*#/) continue; sub(/[ \t]+#.*$/, "", t); ng = ng "\n" t }
+        ng = tolower(ng)
         if (index(ng, "beyond the fix") == 0) err("non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)")
         if (index(ng, "weaken") == 0) err("non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)")
       }

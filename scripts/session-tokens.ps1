@@ -7,6 +7,9 @@
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
 param([string]$Session, [string]$Since, [switch]$Prune)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 if (-not $Session -and -not $Since -and -not $Prune) {
   Get-Content -LiteralPath $PSCommandPath -TotalCount 8 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }

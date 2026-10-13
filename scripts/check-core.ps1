@@ -2,8 +2,12 @@
 #   pwsh -File scripts/check-core.ps1 [repo-root]      (or: powershell -File ...)
 # Fails (exit 1) on a relative Markdown link to a missing file, or a section  reference to a section that does
 # not exist (the `## <id>. ` headings of CORE.md and procedures/*.md; section 1.N must be an existing hard rule),
-# or FEATURES.md out of sync with the files, the scripts, procedures, roles and one-time steps (check-core.sh).
+# or FEATURES.md out of sync with the files, the scripts, procedures, roles and one-time steps (check-core.sh;
+# a field's indented continuation lines are part of it), or a script under scripts/ without its other half.
 param([string]$Root = (Split-Path -Parent $PSScriptRoot))
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 $ErrorActionPreference = 'Stop'
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $Root = (Resolve-Path -LiteralPath $Root).Path
@@ -82,17 +86,25 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
     if ($script:cur) { for ($k = 0; $k -lt 5; $k++) { if (-not $script:have[$k]) { [void]$script:out.Add("E $($script:curn) $($script:cur) lacks `"- $($fnames[$k]):`"") } } }
     $script:cur = ''; $script:have = @($false, $false, $false, $false, $false)
   }
-  $code = $false; $n = 0
+  # the file paths a field names: words with a slash, or a file name with a known extension
+  function Paths([string]$s, [int]$ln) {
+    foreach ($p in (($s -replace '[`,;()]', ' ') -split ' ' | Where-Object { $_ })) {
+      $p = $p -replace '#.*$', '' -replace '[.:]+$', '' -replace '/$', ''
+      if ($p -cnotmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') { continue }
+      if ($p.Contains('/') -or ($p -cmatch '\.(md|sh|ps1|json|yml|txt)$' -and -not $p.StartsWith('.'))) { [void]$out.Add("P $ln $p") }
+    }
+  }
+  $code = $false; $n = 0; $cont = -1
   foreach ($line in [IO.File]::ReadAllLines($fm)) {
     $n++
     $line = $line.TrimEnd("`r")
-    if ($line -match '^[ \t]*```') { $code = -not $code; continue }
+    if ($line -match '^[ \t]*```') { $code = -not $code; $cont = -1; continue }
     if ($code) { continue }
     if ($line -match '^\| *(F-[A-Z]+-[0-9]+) *\|') {
-      $s = $Matches[1]; if (-not $row.ContainsKey($s)) { $row[$s] = $n; [void]$rord.Add($s) }; continue
+      $s = $Matches[1]; if (-not $row.ContainsKey($s)) { $row[$s] = $n; [void]$rord.Add($s) }; $cont = -1; continue
     }
     if ($line.StartsWith('### ')) {
-      & $endblk
+      & $endblk; $cont = -1
       $w = @($line -split ' +')
       if ($w.Count -gt 1 -and $w[1] -cmatch '^F-[A-Z]+-[0-9]+$') {
         $cur = $w[1]; $curn = $n
@@ -100,19 +112,20 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
       }
       continue
     }
-    if ($line.StartsWith('## ')) { & $endblk; continue }
+    if ($line.StartsWith('## ')) { & $endblk; $cont = -1; continue }
     if ($cur -and $line -cmatch '^- [a-z ]+:') {
       $kk = -1
       for ($k = 0; $k -lt 5; $k++) { if ($line.StartsWith("- $($fnames[$k]):")) { $have[$k] = $true; $kk = $k } }
-      if ($kk -eq 0 -or $kk -eq 1 -or $kk -eq 3) {
-        $s = $line -creplace '^- [a-z ]+:', '' -replace '[`,;()]', ' '
-        foreach ($p in ($s -split ' ' | Where-Object { $_ })) {
-          $p = $p -replace '#.*$', '' -replace '[.:]+$', '' -replace '/$', ''
-          if ($p -cnotmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') { continue }
-          if ($p.Contains('/') -or ($p -cmatch '\.(md|sh|ps1|json|yml|txt)$' -and -not $p.StartsWith('.'))) { [void]$out.Add("P $n $p") }
-        }
-      }
+      $cont = $kk
+      if ($kk -eq 0 -or $kk -eq 1 -or $kk -eq 3) { Paths ($line -creplace '^- [a-z ]+:', '') $n }
+      continue
     }
+    # an indented line right after a field (or after another such line) continues it
+    if ($cur -and $cont -ge 0 -and $line -cmatch '^[ \t]+[^ \t]') {
+      if ($cont -eq 0 -or $cont -eq 1 -or $cont -eq 3) { Paths $line $n }
+      continue
+    }
+    $cont = -1
   }
   & $endblk
   foreach ($b in $bord) { if (-not $row.ContainsKey($b)) { [void]$out.Add("E $($blk[$b]) $b is not in the summary table") } }
@@ -142,6 +155,22 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
       if (-not $text.Contains('`' + $id + '`')) { "FEATURES.md: one-time step $id is in no feature"; $errors++ }
     }
   }
+}
+# every script under scripts/ is a .sh + .ps1 pair (TOOLKIT Scripts): a half without the other is an error.
+# Names are built while walking (hidden ones too, as find lists them), in ordinal order as LC_ALL=C sort.
+$halves = New-Object System.Collections.ArrayList
+function ScriptFiles([string]$dir, [string]$rel) {
+  foreach ($x in @(Get-ChildItem -LiteralPath $dir -Force)) {
+    if ($x.PSIsContainer) { ScriptFiles $x.FullName "$rel$($x.Name)/" }
+    elseif ($x.Name -clike '*.sh' -or $x.Name -clike '*.ps1') { [void]$halves.Add("$rel$($x.Name)") }
+  }
+}
+if (Test-Path -LiteralPath (Join-Path $Root 'scripts') -PathType Container) { ScriptFiles (Join-Path $Root 'scripts') 'scripts/' }
+$halves = [string[]]@($halves)
+[Array]::Sort($halves, [StringComparer]::Ordinal)
+foreach ($f in $halves) {
+  $o = if ($f.EndsWith('.sh')) { $f -creplace '\.sh$', '.ps1' } else { $f -creplace '\.ps1$', '.sh' }
+  if (-not (Test-Path -LiteralPath (Join-Path $Root $o))) { "${f}: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; $errors++ }
 }
 "check-core: $files files, $($sections.Count) sections, $rules hard rules, $nfeat features, $errors errors"
 if ($errors) { exit 1 }

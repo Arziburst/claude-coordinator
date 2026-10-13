@@ -25,7 +25,11 @@
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
 # Exit 1 on any FAIL, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In,
-      [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session)
+      [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session,
+      [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 # Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
 # the caller set (GitHub's powershell shell runs with Stop)
 $ErrorActionPreference = 'Continue'
@@ -34,6 +38,10 @@ $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
+# a step takes only its own parameters: anything else (another step's, an unknown one, a stray word) is a
+# usage error, as in selftest.sh
+$given = @($PSBoundParameters.Keys | Where-Object { $_ -ne 'Step' -and $_ -ne 'Rest' })
+function Only([string[]]$ok) { if ($Rest) { Usage }; foreach ($k in $given) { if ($ok -notcontains $k) { Usage } } }
 $script:p = 0; $script:f = 0; $script:s = 0
 function Pass([string]$m) { "PASS ${Step}: $m"; $script:p++ }
 function Fail([string]$m) { "FAIL ${Step}: $m"; $script:f++ }
@@ -45,7 +53,7 @@ function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::Get
 
 switch ($Step) {
 'scripts' {
-  if ($Repo -or $Sandbox -or $StateRepo -or $In) { Usage }
+  Only @()
   $shells = @()
   foreach ($c in @(@('powershell', '5.1'), @('pwsh', '7'))) {
     $cmd = Get-Command $c[0] -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -95,7 +103,7 @@ switch ($Step) {
   Finish
 }
 'env' {
-  if ($Sandbox -or $StateRepo -or $In) { Usage }
+  Only @('Repo')
   foreach ($c in @('claude', 'git')) {
     $v = $null
     if (Get-Command $c -ErrorAction SilentlyContinue) { $v = @(& $c --version 2>$null)[0] }
@@ -113,7 +121,7 @@ switch ($Step) {
   Finish
 }
 'sandbox' {
-  if ($Repo -or $Sandbox -or $StateRepo) { Usage }
+  Only @('In')
   if ($In -and -not (Test-Path -LiteralPath $In -PathType Container)) { Fail "no folder $In"; Finish }
   $d = Join-Path $(if ($In) { $In } else { $HOME }) 'coordinator-selftest'
   if (Test-Path -LiteralPath $d) { Fail "$d already exists: a previous run left it (selftest clean -Sandbox $d)"; Finish }
@@ -139,7 +147,7 @@ switch ($Step) {
   Finish
 }
 'clean' {
-  if (-not $Sandbox -or $Repo -or $In) { Usage }
+  Only @('Sandbox', 'StateRepo'); if (-not $Sandbox) { Usage }
   $d = $Sandbox
   if (-not (Test-Path -LiteralPath (Join-Path $d $marker) -PathType Leaf)) { Fail "$d is not a self-test sandbox (no $marker): nothing removed"; Finish }
   $r = Join-Path $d 'repo'
@@ -180,18 +188,34 @@ switch ($Step) {
   Finish
 }
 'hooks' {
-  if (-not $Settings -or $Repo -or $Sandbox -or $StateRepo -or $In -or $Project -or $State -or $Core -or $Session) { Usage }
+  Only @('Settings'); if (-not $Settings) { Usage }
   if (-not (Test-Path -LiteralPath $Settings -PathType Leaf)) { Fail "no settings file $Settings"; Finish }
-  $cfg = $null; try { $cfg = Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json } catch { }
-  # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test)
-  $h = $null; $matcher = $null
-  foreach ($entry in @($cfg.hooks.PreToolUse)) {
-    $x = @($entry.hooks | Where-Object { $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
-    if ($x) { $h = $x; $matcher = $entry.matcher; break }
+  # Claude Code loads a settings file only when it is valid JSON. ConvertFrom-Json alone is not that test:
+  # PowerShell 7 takes a trailing comma, a comment or a single-quoted string that 5.1 and Claude Code
+  # refuse. So once its strings are blanked, the text must hold only JSON's punctuation, numbers, true,
+  # false and null, and no comma before a closing bracket or after an opening one or another comma.
+  $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Settings).Path)
+  $bare = [regex]::Replace($text, '"(?:[^"\\]|\\.)*"', '""')
+  $cfg = $null
+  if ($bare -cnotmatch ',[ \t\r\n]*[}\]]|[\[{,][ \t\r\n]*,' -and
+      ($bare -creplace '-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?|true|false|null', '') -cnotmatch '[^ \t\r\n{}\[\],:"]') {
+    try { $cfg = $text | ConvertFrom-Json -ErrorAction Stop } catch { $cfg = $null }
+  }
+  if ($cfg -isnot [Management.Automation.PSCustomObject]) { Fail 'the settings file is not valid JSON (Claude Code would not load it)'; Finish }
+  # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test), and
+  # the matcher of that hook's own entry (none, or not a string: every tool)
+  $h = $null; $matcher = ''
+  $entries = @(if ($cfg.hooks -is [Management.Automation.PSCustomObject] -and $cfg.hooks.PreToolUse -is [array]) { $cfg.hooks.PreToolUse })
+  foreach ($entry in $entries) {
+    if ($entry -isnot [Management.Automation.PSCustomObject] -or $entry.hooks -isnot [array]) { continue }
+    $x = @($entry.hooks | Where-Object { $_ -is [Management.Automation.PSCustomObject] -and $_.command -is [string] -and
+      $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+    if ($x) { $h = $x; if ($entry.matcher -is [string]) { $matcher = $entry.matcher }; break }
   }
   if (-not $h) { Fail 'no safety-guard hook in the file'; Finish }
   Pass 'a safety-guard hook'
-  $cmd = [string]$h.command
+  # one line, as selftest.sh reads it: line breaks and tabs count as spaces
+  $cmd = $h.command -replace '[\r\n\t]', ' '
   # after JSON decoding a path backslash is a single \ (an escaped quote is just ")
   if ($cmd.Contains('\')) { Fail 'its path has backslashes: Git Bash drops them and the hook never runs' } else { Pass 'its path uses forward slashes' }
   if ($cmd.Contains('$env:')) { Fail 'its command uses $env: - bash reads it as $env and the path breaks' } else { Pass 'no $env: in its command' }
@@ -202,20 +226,20 @@ switch ($Step) {
     if ($word -match '^(/|[A-Za-z]:|\$|~)') { Pass 'its path is quoted or has no space' }
     else { Fail 'its path has a space and is not quoted: the hook never runs' }
   }
-  if ($h.shell -eq 'powershell') {
+  if ($h.shell -is [string] -and $h.shell -ceq 'powershell') {
     if ($cmd.Contains('exit $LASTEXITCODE')) { Pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' }
     else { Fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' }
   } else { Pass 'no PowerShell shell around it' }
-  # its entry's matcher (none: every tool) must take in the PowerShell tool too
-  if (-not $matcher -or "$matcher".Contains('PowerShell') -or "$matcher" -eq '*') { Pass 'its matcher covers the PowerShell tool' }
+  # its entry's matcher must take in the PowerShell tool too: none, "", "*" and ".*" match every tool
+  if ($matcher -ceq '' -or $matcher -ceq '*' -or $matcher -ceq '.*' -or $matcher.Contains('PowerShell')) { Pass 'its matcher covers the PowerShell tool' }
   else { Fail 'its matcher leaves out PowerShell: the PowerShell tool runs unguarded' }
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
-  if ($h.onFailure -eq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
+  if ($h.onFailure -is [string] -and $h.onFailure -ceq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
   else { Fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)' }
   Finish
 }
 'hookcheck' {
-  if (-not $Session -or $Repo -or $Sandbox -or $StateRepo -or $In -or $Project -or $State -or $Core -or $Settings) { Usage }
+  Only @('Session'); if (-not $Session) { Usage }
   $base = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'projects'
   $tf = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$Session*.jsonl" -ErrorAction SilentlyContinue })[0]
   if (-not $tf) { Fail "no transcript for session $Session"; Finish }
@@ -227,7 +251,8 @@ switch ($Step) {
   Finish
 }
 { $_ -eq 'prepare' -or $_ -eq 'verify' } {
-  if (-not ($Project -and $State -and $Core) -or $Repo -or $Sandbox -or $In -or ($StateRepo -and $Step -eq 'prepare')) { Usage }
+  if ($Step -eq 'prepare') { Only @('Project', 'State', 'Core') } else { Only @('Project', 'State', 'Core', 'StateRepo') }
+  if (-not ($Project -and $State -and $Core)) { Usage }
   $null = & git -C $Project rev-parse --show-toplevel 2>$null
   if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Project"; Finish }
   $null = & git -C $State rev-parse --git-dir 2>$null
@@ -266,7 +291,15 @@ switch ($Step) {
       }
     }
     & git -C $State show-ref -q --verify "refs/heads/$base"
-    if ($LASTEXITCODE -eq 0) { Fail "$base exists: core $Core was tested here already - its branches are the evidence, nothing is deleted"; Finish }
+    $tested = $LASTEXITCODE -eq 0
+    # a fresh clone of the state repository (another machine) has the base on the remote only
+    if (-not $tested -and (& git -C $State config --get remote.origin.url)) {
+      & git -C $State fetch -q origin 2>$null
+      if ($LASTEXITCODE -ne 0) { Fail "could not fetch origin: cannot tell whether core $Core was tested on another machine"; Finish }
+      & git -C $State show-ref -q --verify "refs/remotes/origin/$base"
+      $tested = $LASTEXITCODE -eq 0
+    }
+    if ($tested) { Fail "$base exists: core $Core was tested here already - its branches are the evidence, nothing is deleted"; Finish }
     $from = & git -C $State rev-parse --abbrev-ref HEAD
     & git -C $State branch $base HEAD
     if ($LASTEXITCODE -eq 0) { Pass "branch $base from $from" } else { Fail "could not create $base" }

@@ -24,6 +24,9 @@
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 $ErrorActionPreference = 'Stop'
 function Fail([string]$m) { [Console]::Error.WriteLine($m); exit 1 }
 

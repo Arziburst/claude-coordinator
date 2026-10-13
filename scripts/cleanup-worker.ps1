@@ -6,6 +6,9 @@
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
 # 3 a check failed, nothing changed.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
+# native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 function StopHere([string]$m) { [Console]::Error.WriteLine("$m - left as is"); exit 3 }
 function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')"; $global:LASTEXITCODE = 0 } else { & $exe @a }
