@@ -48,7 +48,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
   project's `.claude/agents/` is never written this way — that would be a project change (CORE §1.1). A
-  subagent then starts as that role; a background session (a worker, usually) gets the file's body at the top of its brief and its
+  subagent then starts as that role; a background session (a worker, usually) gets the file's body at the top of its brief (start-worker puts
+  it there from the role in the session name, `#<task> <role>: …`, unless the brief already holds it) and its
   model from `--model`. `~/.claude/agents/` serves every project on the machine, so it holds the
   **upstream** roles only: a role this project edited in its local core is never installed (another
   project would overwrite it) — the coordinator starts that subagent as a general one with the local

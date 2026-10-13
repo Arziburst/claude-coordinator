@@ -28,7 +28,8 @@
 set -euo pipefail
 
 repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" dry=0
-need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }; }
+need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
+         case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) need "$@"; repo="$2"; shift 2 ;;
@@ -48,10 +49,14 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
-[ "$mode" = "bypassPermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
+[ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 # Absolute paths: both files are used after "cd" into the worktree.
 abs() { (cd "$(dirname "$1")" && printf '%s/%s' "$(pwd)" "$(basename "$1")"); }
 safety="$(abs "$safety")"; brief="$(abs "$brief")"
+# a relative --worktree-root is taken from the current folder (git would resolve it against the repository)
+case "$wtroot" in ""|/*|[A-Za-z]:[/\\]*) ;; *) wtroot="$(pwd)/$wtroot" ;; esac
+# the same folder in another letter case is the same folder on Windows and (by default) macOS
+fold() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$1" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$1" ;; esac; }
 
 root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git repository: $repo" >&2; exit 1; }
 wt="${wtroot:-$root/.claude/worktrees}/$branch"
@@ -62,17 +67,25 @@ from="${from:-$root}"
 if grep 'safety-guard\.' "$safety" | sed 's/\\"//g' | grep -q '\\'; then
   echo "safety settings: write the hook path with forward slashes (C:/...): hooks run through Git Bash on Windows, which drops backslashes, and a hook that fails to run blocks nothing" >&2; exit 1
 fi
+# the guard's PreToolUse line (the SessionStart self-test line carries --self-test / -SelfTest)
+n="$(grep -n 'safety-guard\.' "$safety" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1 || true)"
+[ -n "$n" ] || { echo "safety settings: no PreToolUse safety-guard hook in $safety" >&2; exit 1; }
 # a PowerShell shell around the hook turns its exit 2 (block) into 1 (a non-blocking error), unless the
-# command passes the code through; the hook object's fields sit next to its command line
-n="$(grep -n 'safety-guard\.' "$safety" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
-if [ -n "$n" ] && sed -n "$((n > 3 ? n - 3 : 1)),$((n + 3))p" "$safety" | grep -q '"shell"[[:space:]]*:[[:space:]]*"powershell"' &&
+# command passes the code through; the shell field sits in the same hook object, between its braces
+if awk -v n="$n" '{ l[NR] = $0 } END { s = n; while (s > 1 && l[s] !~ /[{]/) s--; e = n; while (e < NR && l[e] !~ /[}]/) e++
+       for (i = s; i <= e; i++) if (l[i] ~ /"shell"[ \t]*:[ \t]*"powershell"/) exit 0; exit 1 }' "$safety" &&
    ! sed -n "${n}p" "$safety" | grep -q 'exit \$LASTEXITCODE'; then
   echo "safety settings: the hook runs under a PowerShell shell without \"; exit \$LASTEXITCODE\": its block (exit 2) would reach Claude Code as a non-blocking error (1)" >&2; exit 1
 fi
-hook=$(grep -o '[^"]*safety-guard\.sh' "$safety" | head -1 | sed 's/^bash //' || true)
-[ -n "$hook" ] && [ -f "$hook" ] || { echo "safety settings: hook not found at '$hook' (use an absolute path)" >&2; exit 1; }
+# every guard path in the file must exist; the self-test runs the PreToolUse hook itself
+for p in $(grep -oE '[^" ]*safety-guard\.(sh|ps1)' "$safety" | sort -u); do
+  [ -f "$p" ] || { echo "safety settings: hook not found at '$p' (use an absolute path)" >&2; exit 1; }
+done
+hook="$(sed -n "${n}p" "$safety" | grep -o '[^" ]*safety-guard\.sh' | head -n 1 || true)"
+[ -n "$hook" ] || { echo "safety settings: the PreToolUse guard is not safety-guard.sh - start a PowerShell-hook file with start-worker.ps1" >&2; exit 1; }
 grep -q 'bgIsolation' "$safety" || { echo "safety settings: add \"worktree\": {\"bgIsolation\": \"none\"}" >&2; exit 1; }
-selftest=$(bash "$hook" --self-test)
+selftest=$(bash "$hook" --self-test || true)
+[ -n "$selftest" ] || { echo "safety settings: the hook's self-test printed nothing ($hook)" >&2; exit 1; }
 [ "$selftest" = "safety-guard: OK" ] || { echo "$selftest" >&2; exit 1; }
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
@@ -87,7 +100,10 @@ else
   if prefix="$(git -C "$wroot" rev-parse --show-prefix 2>/dev/null)" && [ -n "$prefix" ] &&
      ! git -C "$wroot" check-ignore -q x; then
     common="$(git -C "$wroot" rev-parse --path-format=absolute --git-common-dir)"
-    mkdir -p "$common/info" && printf '/%s\n' "$prefix" >> "$common/info/exclude" &&
+    ex="$common/info/exclude"; mkdir -p "$common/info"
+    # a file without a final newline would glue the new line to its last one (e.g. coordinator/)
+    [ -s "$ex" ] && [ -n "$(tail -c 1 "$ex")" ] && printf '\n' >> "$ex"
+    printf '/%s\n' "$prefix" >> "$ex" &&
       echo "added /$prefix to the repository's .git/info/exclude"
   fi
 fi
@@ -103,6 +119,11 @@ if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
   else echo "cannot reach origin to read the base $base" >&2; exit 1; fi
 else start="$base"; fi
 if [ -d "$wt" ]; then
+  # only a worktree of this repository is reused; a stale folder there is refused, never entered
+  wtop="$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -n "$wtop" ] && [ "$(fold "$(cd "$wtop" && pwd -P)")" = "$(fold "$(cd "$wt" && pwd -P)")" ] &&
+    [ "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)" = "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)" ] ||
+    { echo "$wt exists but is not a worktree of $root: remove or rename it first" >&2; exit 1; }
   echo "reusing worktree $wt"
 elif git -C "$root" show-ref -q --verify "refs/heads/$branch"; then
   run git -C "$root" worktree add "$wt" "$branch"
@@ -110,7 +131,7 @@ else
   run git -C "$root" worktree add --no-track -b "$branch" "$wt" "$start"
 fi
 
-if [ "$(cd "$from" && pwd -P)" = "$(cd "$root" && pwd -P)" ]; then
+if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
   first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
 else
   # launched outside the repository (its root not trusted): EnterWorktree into another repository's
@@ -119,12 +140,24 @@ else
 fi
 first="$first
 Report to: the session named \"$report\" (SendMessage) - your report and your questions."
+# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
+# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
+role="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
+rolef="$(dirname "$0")/../roles/$role.md" roletext=""
+if [ -n "$role" ] && [ -f "$rolef" ]; then
+  body="$(awk 'NR == 1 && /^---/ { f = 1; next } f && /^---/ { f = 0; next } !f' "$rolef")"
+  key="$(printf '%s\n' "$body" | grep -m 1 . || true)"
+  if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then echo "role $role: already in the brief"
+  else roletext="$body"; echo "role $role: roles/$role.md heads the brief"; fi
+fi
 if [ "$dry" = 1 ]; then
-  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", then the brief>)"
+  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
 else
   ( cd "$from" && claude --bg --name "$name" --model "$model" --permission-mode "$mode" --settings "$safety" "$first
 
-$(cat "$brief")" )
+${roletext:+$roletext
+
+}$(cat "$brief")" )
   # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
   i=0
   while [ "$i" -lt 20 ]; do

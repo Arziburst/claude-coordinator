@@ -165,6 +165,71 @@ sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/sa
 check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x
 expect_in "forward slashes"
 
+# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS) ---
+in_dir() { local d="$1"; shift; (cd "$d" && "$@"); }
+mtmp="$(cygpath -m "$tmp" 2>/dev/null || printf '%s' "$tmp")"
+W=(--model opus --brief-file "$tmp/brief.md" --report-to "Core lead")
+# the PreToolUse guard path must exist, not only the self-test's
+gl="$(grep -n 'safety-guard\.' "$tmp/safety.json" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
+sed "${gl}s#scripts/hooks/#WRONG/hooks/#" "$tmp/safety.json" > "$tmp/safety-wrong.json"
+check 1 "start: a wrong PreToolUse guard path" -- start --repo "$tmp/repo" --name "#30 worker: a" --branch 30-a "${W[@]}" --safety "$tmp/safety-wrong.json"
+expect_in "hook not found"
+# a "shell" field four lines above the command is in the same hook object
+awk -v n="$gl" 'NR == n { print "            \"shell\": \"powershell\","; print "            \"async\": false,"; print "            \"statusMessage\": \"guard\","; print "            \"x\": 1," } { print }' "$tmp/safety.json" > "$tmp/safety-shell4.json"
+check 1 "start: a PowerShell shell further up the hook object" -- start --repo "$tmp/repo" --name "#31 worker: a" --branch 31-a "${W[@]}" --safety "$tmp/safety-shell4.json"
+expect_in "PowerShell shell"
+# no PreToolUse guard at all, and a guard whose self-test prints nothing: a message, not silence
+sed "${gl}s#safety-guard\.#other-tool.#" "$tmp/safety.json" > "$tmp/safety-none.json"
+check 1 "start: no PreToolUse guard" -- start --repo "$tmp/repo" --name "#32 worker: a" --branch 32-a "${W[@]}" --safety "$tmp/safety-none.json"
+expect_in "no PreToolUse safety-guard hook"
+mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/safety-guard.sh"; printf 'exit 0\n' > "$tmp/silent/safety-guard.ps1"
+sed "s#$core/scripts/hooks/#$mtmp/silent/#g" "$tmp/safety.json" > "$tmp/safety-silent.json"
+check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/repo" --name "#33 worker: a" --branch 33-a "${W[@]}" --safety "$tmp/safety-silent.json"
+expect_in "printed nothing"
+# bypassPermissions in any letter case, and a flag where a value belongs
+check 1 "start: BypassPermissions" -- start "${S[@]}" --mode BypassPermissions --dry-run
+expect_in "refusing bypassPermissions"
+check 1 "start: --model followed by a flag" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a --model --dry-run --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
+expect_in "missing value for"
+git -C "$tmp/repo" show-ref -q --verify refs/heads/34-a && { echo "FAIL: --model --dry-run created a branch"; fail=1; }
+# a stale folder where the worktree goes is refused, never entered
+mkdir -p "$tmp/repo/.claude/worktrees/35-a" && echo junk > "$tmp/repo/.claude/worktrees/35-a/old.txt"
+check 1 "start: a stale folder at the worktree path" -- start --repo "$tmp/repo" --name "#35 worker: a" --branch 35-a "${W[@]}" --safety "$tmp/safety.json"
+expect_in "is not a worktree of"
+# a relative --worktree-root is taken from the current folder
+mkdir -p "$tmp/elsewhere"
+check 0 "start: a relative --worktree-root" -- in_dir "$tmp/elsewhere" start --repo "$tmp/repo" --name "#36 worker: a" --branch 36-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root wt
+[ "$(git -C "$tmp/elsewhere/wt/36-a" rev-parse --abbrev-ref HEAD 2>/dev/null)" = 36-a ] || { echo "FAIL: the worktree is not under the current folder"; fail=1; }
+[ -e "$tmp/repo/wt" ] && { echo "FAIL: the worktree went into the repository"; fail=1; }
+git -C "$tmp/repo" worktree remove "$tmp/elsewhere/wt/36-a" 2>/dev/null
+# an exclude file without a final newline: the new line is not glued to its last one
+git init -q -b main "$tmp/repo3" && g -C "$tmp/repo3" commit -q --allow-empty -m init
+mkdir -p "$tmp/repo3/coordinator" && echo x > "$tmp/repo3/coordinator/PROJECT.md"
+printf 'coordinator/' > "$tmp/repo3/.git/info/exclude"
+check 0 "start: an exclude file without a final newline" -- start --repo "$tmp/repo3" --name "#37 worker: a" --branch 37-a "${W[@]}" --safety "$tmp/safety.json"
+grep -qx 'coordinator/' "$tmp/repo3/.git/info/exclude" && grep -qx '/.claude/worktrees/' "$tmp/repo3/.git/info/exclude" &&
+  [ -z "$(git -C "$tmp/repo3" status --porcelain)" ] || { echo "FAIL: the exclude file was corrupted:"; sed 's/^/    /' "$tmp/repo3/.git/info/exclude"; fail=1; }
+# an unreachable origin: the script's own message (Windows PowerShell 5.1 included)
+git init -q -b main "$tmp/repo4" && g -C "$tmp/repo4" commit -q --allow-empty -m init && git -C "$tmp/repo4" remote add origin "$mtmp/no-such-remote.git"
+check 1 "start: an unreachable origin" -- start --repo "$tmp/repo4" --name "#38 worker: a" --branch 38-a "${W[@]}" --safety "$tmp/safety.json" --dry-run
+expect_in "cannot reach origin"
+# the role file heads the brief of a session, once
+: > "$STUB_LOG"
+check 0 "start: the role heads the brief" -- start --repo "$tmp/repo" --name "#39 worker: a" --branch 39-a "${W[@]}" --safety "$tmp/safety.json"
+expect_in "role worker: roles/worker.md heads the brief"
+grep -q "^You implement one contract" "$STUB_LOG" || { echo "FAIL: the worker role is not in the brief"; fail=1; }
+{ sed -n '/^You implement one contract/,$p' "$core/roles/worker.md"; cat "$tmp/brief.md"; } > "$tmp/brief-role.md"
+check 0 "start: the role already in the brief" -- start --repo "$tmp/repo" --name "#40 worker: a" --branch 40-a --model opus --brief-file "$tmp/brief-role.md" --report-to x --safety "$tmp/safety.json"
+expect_in "already in the brief"
+git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/39-a"; git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/40-a"
+# the same root in another letter case is the root (Windows: case-insensitive paths)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+  : > "$STUB_LOG"
+  check 0 "start: --launch-from the root in another letter case" -- start --repo "$tmp/repo" --name "#41 worker: a" --branch 41-a "${W[@]}" --safety "$tmp/safety.json" --launch-from "$(git -C "$tmp/repo" rev-parse --show-toplevel | tr '[:lower:]' '[:upper:]')"
+  grep -q "EnterWorktree tool with path" "$STUB_LOG" || { echo "FAIL: the root in another case was taken for another folder"; fail=1; }
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/41-a" ;;
+esac
+
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
 check 3 "cleanup: mistyped worktree path" -- cleanup --worktree "$tmp/repo/.claude/worktrees/12-fxi" --session s1
@@ -214,6 +279,19 @@ git -C "$tmp/remote.git" config uploadpack.allowAnySHA1InWant true
 STUB_HEADS="$prhead" check 0 "cleanup: a server-side commit on the merged PR's head" -- cleanup --worktree "$wt3" --session s3
 expect_in "cleaned: s3"
 expect_in "server-side commit"
+
+# fetch.prune: the merged branch's remote branch was deleted and the script's own fetch prunes
+# origin/<branch> - the merged PR's head still shows every commit is on the remote
+wt4="$tmp/repo/.claude/worktrees/16-fix"
+git -C "$tmp/repo" worktree add -q -b 16-fix "$wt4" main && g -C "$wt4" commit -q --allow-empty -m work4
+git -C "$wt4" push -q -u origin 16-fix 2>/dev/null
+h4="$(git -C "$wt4" rev-parse HEAD)"
+git -C "$wt4" push -q origin --delete 16-fix 2>/dev/null
+git -C "$tmp/repo" config fetch.prune true
+STUB_HEADS="$h4" check 0 "cleanup: the remote branch pruned after the merge" -- cleanup --worktree "$wt4" --session s4
+expect_in "cleaned: s4"
+expect_in "remote branch is gone"
+git -C "$tmp/repo" config --unset fetch.prune
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

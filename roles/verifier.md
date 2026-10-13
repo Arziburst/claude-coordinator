@@ -44,3 +44,6 @@ changes**. The verdict holds for that commit only: anything pushed after it is r
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria,
 the findings and every criterion whose files changed since the reviewed commit; the others stay
 confirmed, with their evidence and the commit they were confirmed on.
+
+**Run as a session** (not a subagent): deliver the verdict with SendMessage to the session your brief names
+as the report address, with the fallback of roles/worker.md step 5 — never leave it undelivered.
