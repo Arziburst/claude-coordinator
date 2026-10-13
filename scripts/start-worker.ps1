@@ -29,9 +29,16 @@ if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFi
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
+foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('BriefFile', $BriefFile),
+                  @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
+                  @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot))) {
+  if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
+}
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 # Absolute paths: both files are used from inside the worktree.
 $Safety = (Resolve-Path -LiteralPath $Safety).Path; $BriefFile = (Resolve-Path -LiteralPath $BriefFile).Path
+# a relative -WorktreeRoot is taken from the current folder (git would resolve it against the repository)
+if ($WorktreeRoot -and -not [IO.Path]::IsPathRooted($WorktreeRoot)) { $WorktreeRoot = Join-Path (Get-Location).Path $WorktreeRoot }
 
 $root = (git -C $Repo rev-parse --show-toplevel)
 if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Repo" }
@@ -44,6 +51,11 @@ $text = [IO.File]::ReadAllText($Safety)
 $cfg = $text | ConvertFrom-Json
 $hookCmd = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | ForEach-Object { $_.command } |
   Where-Object { $_ -match 'safety-guard\.(ps1|sh)' })[0]
+if (-not $hookCmd) { Fail "safety settings: no PreToolUse safety-guard hook in $Safety" }
+# every guard path in the file must exist; the self-test runs the PreToolUse hook itself
+foreach ($m in [regex]::Matches($text, '[^"\s]*safety-guard\.(ps1|sh)')) {
+  if (-not (Test-Path -LiteralPath $m.Value -PathType Leaf)) { Fail "safety settings: hook not found at '$($m.Value)' (use an absolute path)" }
+}
 $hook = ''
 if ($hookCmd -match '"([^"]*safety-guard\.(ps1|sh))"') { $hook = $Matches[1] }
 elseif ($hookCmd -match '(\S*safety-guard\.(ps1|sh))') { $hook = $Matches[1] }
@@ -59,6 +71,7 @@ if (-not $cfg.worktree.bgIsolation) { Fail 'safety settings: add "worktree": {"b
 if ($hook.EndsWith('.ps1')) {
   $selftest = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest
 } else { $selftest = bash $hook --self-test }
+if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test printed nothing ($hook)" }
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 
 function Run([string]$exe, [string[]]$a) {
@@ -81,7 +94,13 @@ else {
   }
   if ($r) {
     New-Item -ItemType Directory -Force -Path (Join-Path $r[1] 'info') | Out-Null
-    [IO.File]::AppendAllText((Join-Path $r[1] 'info/exclude'), "/$($r[0])`n")
+    $ex = Join-Path $r[1] 'info/exclude'
+    # a file without a final newline would glue the new line to its last one (e.g. coordinator/)
+    $nl = ''
+    if ((Test-Path -LiteralPath $ex) -and (Get-Item -LiteralPath $ex).Length -gt 0) {
+      $bytes = [IO.File]::ReadAllBytes($ex); if ($bytes[$bytes.Length - 1] -ne 10) { $nl = "`n" }
+    }
+    [IO.File]::AppendAllText($ex, "$nl/$($r[0])`n")
     "added /$($r[0]) to the repository's .git/info/exclude"
   }
 }
@@ -90,8 +109,8 @@ else {
 # a base not on origin yet (a lead's integration branch before its first push): the local one too
 $origin = git -C $root config --get remote.origin.url
 if ($origin) {
-  git -C $root ls-remote -q --exit-code --heads origin $Base *> $null
-  $rc = $LASTEXITCODE
+  # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read the code only
+  $rc = & { $ErrorActionPreference = 'Continue'; git -C $root ls-remote -q --exit-code --heads origin $Base *> $null; $LASTEXITCODE }
   if ($rc -eq 0) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" }
   else {
     git -C $root show-ref -q --verify "refs/heads/$Base" *> $null
@@ -101,7 +120,18 @@ if ($origin) {
     else { Fail "cannot reach origin to read the base $Base" }
   }
 } else { $start = $Base }
-if (Test-Path -LiteralPath $wt) { "reusing worktree $wt" }
+if (Test-Path -LiteralPath $wt) {
+  # only a worktree of this repository is reused; a stale folder there is refused, never entered
+  $ok = & {
+    $ErrorActionPreference = 'Continue'
+    $top = git -C $wt rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $top) { return $false }
+    if ((Resolve-Path -LiteralPath $top).Path.TrimEnd('\', '/') -ne (Resolve-Path -LiteralPath $wt).Path.TrimEnd('\', '/')) { return $false }
+    "$(git -C $wt rev-parse --path-format=absolute --git-common-dir)" -eq "$(git -C $root rev-parse --path-format=absolute --git-common-dir)"
+  }
+  if (-not $ok) { Fail "$wt exists but is not a worktree of ${root}: remove or rename it first" }
+  "reusing worktree $wt"
+}
 else {
   git -C $root show-ref -q --verify "refs/heads/$Branch"
   if ($LASTEXITCODE -eq 0) { Run git @('-C', $root, 'worktree', 'add', $wt, $Branch) }
@@ -119,9 +149,30 @@ if ($same) {
   $first = "YOUR WORKING COPY is $wtFwd, a worktree of $rootFwd. Work in it by absolute path (git -C $wtFwd ..., files under $wtFwd); do not use EnterWorktree; never change files outside it."
 }
 $first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions."
-$brief = $first + "`n`n" + [IO.File]::ReadAllText($BriefFile)
+# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
+# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
+$briefText = [IO.File]::ReadAllText($BriefFile)
+$roleText = ''
+if ($Name -cmatch '^(#\S* )?([a-z]+):') {
+  $role = $Matches[2]
+  $roleFile = Join-Path (Split-Path -Parent $PSScriptRoot) "roles/$role.md"
+  if (Test-Path -LiteralPath $roleFile -PathType Leaf) {
+    $lines = @([IO.File]::ReadAllLines($roleFile)); $body = @(); $front = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      if ($i -eq 0 -and $lines[$i] -match '^---') { $front = $true; continue }
+      if ($front -and $lines[$i] -match '^---') { $front = $false; continue }
+      if (-not $front) { $body += $lines[$i] }
+    }
+    # the body without its leading and trailing blank lines, as the shell's $(...) keeps it
+    $bodyText = ($body -join "`n").Trim("`n")
+    $key = @($body | Where-Object { $_ -ne '' })[0]
+    if ($key -and $briefText.Replace("`r", '').Contains($key)) { "role ${role}: already in the brief" }
+    else { $roleText = $bodyText; "role ${role}: roles/$role.md heads the brief" }
+  }
+}
+$brief = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
 $subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
-if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", then the brief>)"; $subscribe; exit 0 }
+if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.

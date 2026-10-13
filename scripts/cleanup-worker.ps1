@@ -23,15 +23,21 @@ if (git -C $Worktree status --porcelain) { StopHere "NOT CLEAN: $Worktree has un
 $branch = (git -C $Worktree rev-parse --abbrev-ref HEAD)
 git -C $Worktree fetch -q
 if ($LASTEXITCODE -ne 0) { StopHere "FETCH FAILED: cannot confirm $branch is on the remote" }
-# its remote branch: the upstream, or origin/<branch> when it was pushed without -u
+# its remote branch: the upstream, or origin/<branch> when it was pushed without -u; none when it was
+# deleted after the merge and a fetch pruned it (fetch.prune) - then only a merged PR's head can show
+# that every commit is on the remote
+$u = ''
 git -C $Worktree rev-parse -q --verify '@{u}' *> $null
 if ($LASTEXITCODE -eq 0) { $u = '@{u}' }
 else {
   git -C $Worktree rev-parse -q --verify "refs/remotes/origin/$branch" *> $null
-  if ($LASTEXITCODE -eq 0) { $u = "origin/$branch" } else { StopHere "NO UPSTREAM: $branch was never pushed" }
+  if ($LASTEXITCODE -eq 0) { $u = "origin/$branch" }
 }
-if (git -C $Worktree log --oneline "$u..") { StopHere "UNPUSHED: $branch has commits not on its remote" }
-$up = "$(git -C $Worktree rev-parse $u)".Trim()
+if ($u) {
+  if (git -C $Worktree log --oneline "$u..") { StopHere "UNPUSHED: $branch has commits not on its remote" }
+  $up = "$(git -C $Worktree rev-parse $u)".Trim()
+} else { $up = "$(git -C $Worktree rev-parse HEAD)".Trim() }
+$short = $up.Substring(0, [Math]::Min(7, $up.Length))
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { StopHere "NO gh: cannot verify the PR for $branch is merged" }
 Push-Location -LiteralPath $Worktree
 $heads = @(gh pr list --head $branch --state merged --json headRefOid --jq '.[].headRefOid' 2>$null)
@@ -39,7 +45,10 @@ $ghExit = $LASTEXITCODE
 Pop-Location
 if ($ghExit -ne 0) { StopHere "UNKNOWN: could not check the PR for $branch" }
 $heads = @($heads | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
-if (-not $heads.Count) { StopHere "NOT MERGED: no merged PR for $branch" }
+if (-not $heads.Count) {
+  if ($u) { StopHere "NOT MERGED: no merged PR for $branch" }
+  StopHere "NO UPSTREAM: $branch was never pushed"
+}
 if ($heads -notcontains $up) {
   # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
   # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
@@ -50,9 +59,13 @@ if ($heads -notcontains $up) {
     git -C $Worktree merge-base --is-ancestor $up $h *> $null
     if ($LASTEXITCODE -eq 0) { $found = $h; break }
   }
-  if (-not $found) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $($up.Substring(0, [Math]::Min(7, $up.Length))) (branch name reused?)" }
-  "merged as $($found.Substring(0, 7)): the PR's head has a server-side commit on top of the pushed head $($up.Substring(0, 7))"
+  if (-not $found) {
+    if ($u) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $short (branch name reused?)" }
+    StopHere "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head $short"
+  }
+  "merged as $($found.Substring(0, 7)): the PR's head has a server-side commit on top of the pushed head $short"
 }
+if (-not $u) { "its remote branch is gone (deleted after the merge): the merged PR's head contains $short" }
 
 if ($Session) {
   Run claude @('stop', $Session)

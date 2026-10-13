@@ -34,16 +34,23 @@ root="$(dirname "$common")"
 [ -n "$(git -C "$wt" status --porcelain)" ] && stop_here "NOT CLEAN: $wt has uncommitted changes"
 branch="$(git -C "$wt" rev-parse --abbrev-ref HEAD)"
 git -C "$wt" fetch -q || stop_here "FETCH FAILED: cannot confirm $branch is on the remote"
-# its remote branch: the upstream, or origin/<branch> when it was pushed without -u
+# its remote branch: the upstream, or origin/<branch> when it was pushed without -u; none when it was
+# deleted after the merge and a fetch pruned it (fetch.prune) - then only a merged PR's head can show
+# that every commit is on the remote
+u=""
 if git -C "$wt" rev-parse -q --verify '@{u}' >/dev/null; then u='@{u}'
-elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then u="origin/$branch"
-else stop_here "NO UPSTREAM: $branch was never pushed"; fi
-[ -n "$(git -C "$wt" log --oneline "$u..")" ] && stop_here "UNPUSHED: $branch has commits not on its remote"
-up="$(git -C "$wt" rev-parse "$u")"
+elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then u="origin/$branch"; fi
+if [ -n "$u" ]; then
+  [ -n "$(git -C "$wt" log --oneline "$u..")" ] && stop_here "UNPUSHED: $branch has commits not on its remote"
+  up="$(git -C "$wt" rev-parse "$u")"
+else up="$(git -C "$wt" rev-parse HEAD)"; fi
 command -v gh >/dev/null 2>&1 || stop_here "NO gh: cannot verify the PR for $branch is merged"
 heads="$(cd "$wt" && gh pr list --head "$branch" --state merged --json headRefOid --jq '.[].headRefOid' 2>/dev/null)" ||
   stop_here "UNKNOWN: could not check the PR for $branch"
-[ -n "$heads" ] || stop_here "NOT MERGED: no merged PR for $branch"
+if [ -z "$heads" ]; then
+  [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch"
+  stop_here "NO UPSTREAM: $branch was never pushed"
+fi
 if ! printf '%s\n' "$heads" | grep -qx "$up"; then
   # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
   # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
@@ -52,9 +59,13 @@ if ! printf '%s\n' "$heads" | grep -qx "$up"; then
     git -C "$wt" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$wt" fetch -q origin "$h" 2>/dev/null || true
     if git -C "$wt" merge-base --is-ancestor "$up" "$h" 2>/dev/null; then found="$h"; break; fi
   done
-  [ -n "$found" ] || stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
+  if [ -z "$found" ]; then
+    [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
+    stop_here "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head ${up:0:7}"
+  fi
   echo "merged as ${found:0:7}: the PR's head has a server-side commit on top of the pushed head ${up:0:7}"
 fi
+[ -n "$u" ] || echo "its remote branch is gone (deleted after the merge): the merged PR's head contains ${up:0:7}"
 
 if [ -n "$session" ]; then
   run claude stop "$session" || true
