@@ -32,7 +32,11 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
     which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
-    whose self-test must pass before any worker starts. `selftest hooks --settings <file>` passes on it
+    whose self-test must pass before any worker starts. Its `env` `COORD_PROTECTED_ROOT` is filled
+    with the project root (the owner's working copy, absolute, forward slashes): with the edit tools
+    in the hook's matcher, the guard then refuses a worker's `Edit` / `Write` / `MultiEdit` /
+    `NotebookEdit` there outside `.claude/worktrees/` (TOOLKIT *Safety*) — in this file only, never in
+    the coordinator's own settings. `selftest hooks --settings <file>` passes on it
     and on every settings file of the coordinator's own session that holds the guard (no `"shell":
     "powershell"` without `; exit $LASTEXITCODE`, forward slashes, no `$env:`; TOOLKIT *Safety*); the
     self-test proves both through Claude Code (SELFTEST step 2a). **Stack-specific denies are candidates, not impositions**: offer

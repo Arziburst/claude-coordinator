@@ -5,6 +5,7 @@
 # Exit 1 if any verdict differs from the expected one.
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
+unset COORD_PROTECTED_ROOT   # set per case (the 4th column of cases.txt); empty is the same as unset
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 acl=""   # a deny file whose read an NTFS permission denies (Git Bash): the permission is taken back first
@@ -37,25 +38,52 @@ mkdir -p "$tmp/work/.claude/worktrees/12-fix/src"
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath); @PROJECT@ the project's folder (C:/... in Git Bash)
 export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "$HOME")"
+# letter case in paths: ignored on Windows and macOS (the expectation "fold" is block there), kept on Linux
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block ;; *) fold=allow ;; esac
+# the cases' placeholders, replaced in the command and the COORD_PROTECTED_ROOT columns (after \n and \t
+# are read, so a \t in a Windows path stays a backslash and a t)
+SUBST_AWK='
+function rep(s, from, to,    k, o) { o = ""; while ((k = index(s, from)) > 0) { o = o substr(s, 1, k - 1) to; s = substr(s, k + length(from)) }; return o s }
+function subst(s) {
+  s = rep(s, "@HOME_M@", ENVIRON["SG_HOME_M"]); s = rep(s, "@HOME_W@", ENVIRON["SG_HOME_W"]); s = rep(s, "@HOME@", ENVIRON["SG_HOME"])
+  s = rep(s, "@PROJECT_W@", ENVIRON["SG_PROJECT_W"]); s = rep(s, "@PROJECT_UP@", ENVIRON["SG_PROJECT_UP"])
+  s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
+}'
 fail=0; n=0
-while IFS="$(printf '\t')" read -r expect branch cmd; do
+while IFS="$(printf '\t')" read -r expect branch cmd root; do
   case "$expect" in ''|'#'*) continue ;; esac
+  [ "$expect" = fold ] && expect=$fold
   n=$((n + 1))
-  # the branch column: [ps:]<cwd under the temporary folder>; ps: is a PowerShell tool call, the project
-  # (CLAUDE_PROJECT_DIR) is the cwd's first folder
-  tool=Bash; case "$branch" in ps:*) tool=PowerShell; branch="${branch#ps:}" ;; esac
+  # the branch column: [ps:|edit:|write:|multiedit:|notebook:]<cwd under the temporary folder>; ps: is a
+  # PowerShell tool call, the others an edit tool's call with the command column as its file path; the
+  # project (CLAUDE_PROJECT_DIR) is the cwd's first folder
+  tool=Bash
+  case "$branch" in
+    ps:*) tool=PowerShell ;; edit:*) tool=Edit ;; write:*) tool=Write ;; multiedit:*) tool=MultiEdit ;; notebook:*) tool=NotebookEdit ;;
+  esac
+  branch="${branch#*:}"
   dir="$(winpath m "$tmp/$branch")"; export SG_PROJECT="$(winpath m "$tmp/${branch%%/*}")"
-  json="$(printf '%s' "$cmd" | awk -v cwd="$dir" -v tool="$tool" '
-    function rep(s, from, to,    k, o) { o = ""; while ((k = index(s, from)) > 0) { o = o substr(s, 1, k - 1) to; s = substr(s, k + length(from)) }; return o s }
-    { gsub(/\\n/, "\001"); gsub(/\\t/, "\002")
-      $0 = rep($0, "@HOME_M@", ENVIRON["SG_HOME_M"]); $0 = rep($0, "@HOME_W@", ENVIRON["SG_HOME_W"]); $0 = rep($0, "@HOME@", ENVIRON["SG_HOME"])
-      $0 = rep($0, "@PROJECT@", ENVIRON["SG_PROJECT"])
+  export SG_PROJECT_W="$(winpath w "$tmp/${branch%%/*}")"
+  export SG_PROJECT_U="$(printf '%s' "$SG_PROJECT" | awk '/^[A-Za-z]:\// { $0 = "/" tolower(substr($0, 1, 1)) substr($0, 3) } { printf "%s", $0 }')"
+  export SG_PROJECT_UP="$(printf '%s' "$SG_PROJECT" | tr '[:lower:]' '[:upper:]')"
+  # the 4th column: COORD_PROTECTED_ROOT; for an edit tool @PROJECT@ when there is none, - for unset
+  case "$tool" in Bash|PowerShell) ;; *) [ -n "$root" ] || root=@PROJECT@ ;; esac
+  [ "$root" = - ] && root=""
+  root="$(printf '%s' "$root" | awk "$SUBST_AWK"'
+    { printf "%s", subst($0) }')"
+  json="$(printf '%s' "$cmd" | awk -v cwd="$dir" -v tool="$tool" "$SUBST_AWK"'
+    { gsub(/\\n/, "\001"); gsub(/\\t/, "\002"); $0 = subst($0)
       gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n"); gsub(/\002/, "\\t")
-      printf "{\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"%s\"},\"cwd\":\"%s\"}", tool, $0, cwd }')"
-  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$SG_PROJECT" "$@" >/dev/null 2>&1
+      if (tool == "Edit") ti = "{\"file_path\":\"" $0 "\",\"old_string\":\"a\",\"new_string\":\"b\"}"
+      else if (tool == "Write") ti = "{\"file_path\":\"" $0 "\",\"content\":\"x\"}"
+      else if (tool == "MultiEdit") ti = "{\"file_path\":\"" $0 "\",\"edits\":[{\"old_string\":\"a\",\"new_string\":\"b\"}]}"
+      else if (tool == "NotebookEdit") ti = "{\"notebook_path\":\"" $0 "\",\"new_source\":\"x\",\"cell_id\":\"c1\"}"
+      else ti = "{\"command\":\"" $0 "\"}"
+      printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
+  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$SG_PROJECT" COORD_PROTECTED_ROOT="$root" "$@" >/dev/null 2>&1
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
 
 # The input itself: a BOM before the JSON is read through; what is not a JSON object blocks.

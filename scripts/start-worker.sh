@@ -7,7 +7,8 @@
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
 #           with --settings, so workers are protected even when the coordinator's files live outside the
-#           repository. The hook's self-test must pass, or no worker starts.
+#           repository. The hook's self-test must pass, or no worker starts. Launched from the root
+#           without env COORD_PROTECTED_ROOT in it: a notice (edit tools can reach the working copy).
 # --model is required: the coordinator picks it per task (CORE §7).
 # Default mode auto (the autonomous level, CORE §3); acceptEdits for the cautious level;
 # bypassPermissions is refused by this script.
@@ -179,6 +180,10 @@ fi
 
 if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
   first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
+  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
+  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
+  grep -Eq '"COORD_PROTECTED_ROOT"[[:space:]]*:[[:space:]]*"[^"]' "$safety" ||
+    echo "notice: COORD_PROTECTED_ROOT is not set in $safety: edit tools can reach the working copy (TOOLKIT Safety)"
 else
   # launched outside the repository (its root not trusted): EnterWorktree into another repository's
   # worktree asks for permission and the session would wait, so it works there by absolute path

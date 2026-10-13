@@ -164,6 +164,21 @@ expect_in "PowerShell shell"
 sed 's#/scripts/hooks/#\\\\scripts\\\\hooks\\\\#g' "$tmp/safety.json" > "$tmp/safety-bs.json"
 check 1 "start: a hook path with backslashes" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety-bs.json" --report-to x
 expect_in "forward slashes"
+# launched from the working copy (EnterWorktree) with no COORD_PROTECTED_ROOT in the safety file's env:
+# a notice, not a failure; none with it set, and none when launched from another folder
+grep -v '"COORD_PROTECTED_ROOT"' "$tmp/safety.json" > "$tmp/safety-noprot.json"
+sed 's#"COORD_PROTECTED_ROOT": "[^"]*"#"COORD_PROTECTED_ROOT": ""#' "$tmp/safety.json" > "$tmp/safety-emptyprot.json"
+grep -q '"COORD_PROTECTED_ROOT": ""' "$tmp/safety-emptyprot.json" || { echo "FAIL: could not empty COORD_PROTECTED_ROOT"; fail=1; }
+P=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --report-to x --dry-run)
+check 0 "start: from the root, COORD_PROTECTED_ROOT set" -- start "${P[@]}" --safety "$tmp/safety.json"
+case "$LAST" in *"notice: COORD_PROTECTED_ROOT"*) echo "FAIL: a notice although COORD_PROTECTED_ROOT is set"; fail=1 ;; esac
+check 0 "start: from the root, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --safety "$tmp/safety-noprot.json"
+expect_in "notice: COORD_PROTECTED_ROOT is not set in "
+expect_in "safety-noprot.json: edit tools can reach the working copy (TOOLKIT Safety)"
+check 0 "start: from the root, COORD_PROTECTED_ROOT empty" -- start "${P[@]}" --safety "$tmp/safety-emptyprot.json"
+expect_in "notice: COORD_PROTECTED_ROOT is not set in "
+check 0 "start: from another folder, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --safety "$tmp/safety-noprot.json" --launch-from "$tmp/launch"
+case "$LAST" in *"notice: COORD_PROTECTED_ROOT"*) echo "FAIL: a notice although launched from another folder"; fail=1 ;; esac
 
 # --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS) ---
 in_dir() { local d="$1"; shift; (cd "$d" && "$@"); }

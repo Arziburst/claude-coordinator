@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse safety hook for coordinator projects (Bash / PowerShell tools).
+# PreToolUse safety hook for coordinator projects (Bash / PowerShell tools; with COORD_PROTECTED_ROOT
+# set, also Edit / Write / MultiEdit / NotebookEdit: no edit under that folder outside its
+# .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*).
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only — the real enforcement is branch protection on the code host (CORE §2); deliberate
 # obfuscation (eval, quoting tricks, aliases ...) is out of scope (TOOLKIT.md *Safety*).
@@ -90,6 +92,8 @@ function val(path,    c, k) {
     if (path == SUBSEP "tool_input" SUBSEP "command") CMD = k
     else if (path == SUBSEP "cwd") CWD = k
     else if (path == SUBSEP "tool_name") TOOL = k
+    else if (path == SUBSEP "tool_input" SUBSEP "file_path") FP = k
+    else if (path == SUBSEP "tool_input" SUBSEP "notebook_path") NP = k
     return 1
   }
   if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) { i += RLENGTH; return 1 }
@@ -97,11 +101,12 @@ function val(path,    c, k) {
 }
 { all = (NR > 1) ? all "\n" $0 : $0 }
 END {
-  s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""
+  s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""; FP = ""; NP = ""
   ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
   ws(); if (i <= n) exit 3
-  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(CMD); printf "."
+  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(FP); printf "\n"; emit(NP); printf "\n"; emit(CMD); printf "."
 }'
+fp="" np=""
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$input" | jq -e 'type == "object"' >/dev/null 2>&1 || unreadable
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -109,7 +114,55 @@ if command -v jq >/dev/null 2>&1; then
   tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)
 else
   both=$(printf '%s' "$input" | awk "$JSON_AWK") || unreadable
-  both="${both%.}"; cwd="${both%%$nl*}"; both="${both#*$nl}"; tool="${both%%$nl*}"; cmd="${both#*$nl}"
+  both="${both%.}"; cwd="${both%%$nl*}"; both="${both#*$nl}"; tool="${both%%$nl*}"; both="${both#*$nl}"
+  fp="${both%%$nl*}"; both="${both#*$nl}"; np="${both%%$nl*}"; cmd="${both#*$nl}"
+fi
+
+# A path in one form for comparing: / separators, none repeated or trailing, lower case (canon <path>
+# keep: the letter case kept), . and x/.. taken out (by the text: /a/b/.. is /a; .. above the root stays
+# at the root), a drive as c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
+canon() {
+  local x r="" s out="" n=0 IFS=/; local segs=()
+  [ -n "$1" ] || return 0   # / with its separator stripped
+  if [ "${2:-}" = keep ]; then x=$(printf '%s' "$1" | tr '\\' '/'); else x=$(printf '%s' "$1" | tr '\\A-Z' '/a-z'); fi
+  case "$x" in /*) r=/ ;; [A-Za-z]:*) r="${x:0:2}/"; x="${x:2}" ;; esac
+  set -f; segs=($x); set +f   # split at / (no globbing: a * in the path stays a word)
+  for s in "${segs[@]}"; do
+    case "$s" in
+      ''|.) ;;
+      ..) if [ $n -gt 0 ] && [ "${out##*/}" != .. ]; then out="${out%/*}"; n=$((n - 1))
+          elif [ -z "$r" ]; then out="$out/.."; n=$((n + 1)); fi ;;
+      *) out="$out/$s"; n=$((n + 1)) ;;
+    esac
+  done
+  x="$r${out#/}"; [ -z "$x" ] && x=.
+  printf '%s' "$x" | sed -E -e 's#/+$##' -e 's#^/(mnt/|cygdrive/)?([A-Za-z])$#\2:#' -e 's#^/(mnt/|cygdrive/)?([A-Za-z])/#\2:/#'
+}
+
+# --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
+# Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
+# are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
+if [ -n "${COORD_PROTECTED_ROOT:-}" ]; then
+  case "$tool" in
+    Edit|Write|MultiEdit|NotebookEdit)
+      if command -v jq >/dev/null 2>&1; then
+        fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty | strings' 2>/dev/null)
+        np=$(printf '%s' "$input" | jq -r '.tool_input.notebook_path // empty | strings' 2>/dev/null)
+      fi
+      case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) cm="" ;; *) cm=keep ;; esac
+      proot=$(canon "$COORD_PROTECTED_ROOT" $cm)
+      for p in "$fp" "$np"; do
+        [ -n "$p" ] || continue
+        case "$p" in /*|\\*|[A-Za-z]:*) full="$p" ;; *) full="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}/$p" ;; esac
+        full=$(canon "$full" $cm)
+        case "$full/" in
+          "$proot/.claude/worktrees/"*) ;;
+          "$proot/"?*)
+            echo "Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner." >&2
+            exit 2 ;;
+        esac
+      done ;;
+  esac
 fi
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 cmd="${cmd//$cr$nl/$nl}"; cmd="${cmd//\\$nl/}"; cmd="${cmd//\`$nl/ }"
@@ -304,26 +357,7 @@ compose() {
     *) if [ "$1" = "?" ]; then printf '?'; else printf '%s/%s' "$1" "$p"; fi ;;
   esac
 }
-# A path in one form for comparing: / separators, none repeated or trailing, lower case, . and x/..
-# taken out (by the text: /a/b/.. is /a; .. above the root stays at the root), a drive as c: (C:\x,
-# /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
-canon() {
-  local x r="" s out="" n=0 IFS=/; local segs=()
-  [ -n "$1" ] || return 0   # / with its separator stripped
-  x=$(printf '%s' "$1" | tr '\\A-Z' '/a-z')
-  case "$x" in /*) r=/ ;; [a-z]:*) r="${x:0:2}/"; x="${x:2}" ;; esac
-  set -f; segs=($x); set +f   # split at / (no globbing: a * in the path stays a word)
-  for s in "${segs[@]}"; do
-    case "$s" in
-      ''|.) ;;
-      ..) if [ $n -gt 0 ] && [ "${out##*/}" != .. ]; then out="${out%/*}"; n=$((n - 1))
-          elif [ -z "$r" ]; then out="$out/.."; n=$((n + 1)); fi ;;
-      *) out="$out/$s"; n=$((n + 1)) ;;
-    esac
-  done
-  x="$r${out#/}"; [ -z "$x" ] && x=.
-  printf '%s' "$x" | sed -E -e 's#/+$##' -e 's#^/(mnt/|cygdrive/)?([a-z])$#\2:#' -e 's#^/(mnt/|cygdrive/)?([a-z])/#\2:/#'
-}
+# canon <path>: above, with the edit-tool check
 branch_in() {
   if [ "$1" = "$ov_dir" ]; then printf '%s' "$ov_branch"; return; fi
   [ "$1" = "?" ] && return

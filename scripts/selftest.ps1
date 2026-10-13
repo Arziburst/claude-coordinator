@@ -11,7 +11,8 @@
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
 # The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
 #   powershell -File scripts/selftest.ps1 hooks -Settings <settings.json>   the guard hook's command: forward slashes,
-#                                                       no $env:, no PowerShell shell that turns its exit 2 into 1
+#                                                       no $env:, no PowerShell shell that turns its exit 2 into 1;
+#                                                       env COORD_PROTECTED_ROOT: a folder, edit tools matched
 #   powershell -File scripts/selftest.ps1 hookcheck -Session <id>   a session told to push to main: its transcript
 #                                                       shows the block, not a non-blocking hook error
 # For the core itself (the maintainer, CI) - a throwaway sandbox:
@@ -39,7 +40,7 @@ $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 27 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 # a step takes only its own parameters: anything else (another step's, an unknown one, a stray word) is a
 # usage error, as in selftest.sh
@@ -239,6 +240,29 @@ switch ($Step) {
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if ($h.onFailure -is [string] -and $h.onFailure -ceq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
   else { Fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)' }
+  # the owner's working copy (TOOLKIT Safety): with env COORD_PROTECTED_ROOT the guard keeps the edit
+  # tools out of it - so the root is an absolute path to a folder here, and the matcher takes in each
+  # edit tool (none, "", "*" and ".*" match every tool; otherwise the whole name must match it)
+  $root = ''
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $root = $cfg.env.COORD_PROTECTED_ROOT -replace '[\r\n\t]', ' ' }
+  if (-not $root) { Skip 'COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools' }
+  else {
+    if ($root -match '^(/|\\|[A-Za-z]:[/\\])') {
+      # Git Bash's /c/... is C:/... on Windows
+      $dir = $root
+      if (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows) { $dir = $dir -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
+      if (Test-Path -LiteralPath $dir -PathType Container) { Pass 'COORD_PROTECTED_ROOT is an absolute path to a folder' }
+      else { Fail "COORD_PROTECTED_ROOT is not a folder on this machine: $root" }
+    } else { Fail "COORD_PROTECTED_ROOT is not an absolute path: $root" }
+    $miss = @()
+    foreach ($t in @('Edit', 'Write', 'MultiEdit', 'NotebookEdit')) {
+      if ($matcher -ceq '' -or $matcher -ceq '*' -or $matcher -ceq '.*') { continue }
+      $hit = $false; try { $hit = $t -cmatch "^(?:$matcher)$" } catch { $hit = $false }
+      if (-not $hit) { $miss += $t }
+    }
+    if ($miss.Count -eq 0) { Pass 'its matcher covers Edit, Write, MultiEdit and NotebookEdit' }
+    else { Fail "its matcher leaves out $($miss -join ', '): those edit tools reach the working copy unguarded" }
+  }
   Finish
 }
 'hookcheck' {

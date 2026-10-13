@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `selftest hooks` on every settings file in tests/selftest/hooks/: the output of each, with its exit code,
+# `selftest hooks` on every settings file in tests/selftest/hooks/ (@CORE@ in it: this core's folder): the output of each, with its exit code,
 # must equal tests/selftest/hooks/expected.txt line for line, from either version (selftest.sh reads the
 # JSON with jq when present, else with awk: run it both ways). Then a step given a parameter of another
 # step, or a stray word, is a usage error (exit 2) in both versions, and runs nothing.
@@ -29,8 +29,12 @@ st() {
 }
 fail=0; n=0
 
+# each fixture is read from a copy whose @CORE@ is this core's folder: an absolute path to a folder on
+# any machine (env COORD_PROTECTED_ROOT)
+mkdir -p "$tmp/fx"; fx="$tmp/fx"; command -v cygpath >/dev/null 2>&1 && fx="$(cygpath -m "$fx")"
 for f in tests/selftest/hooks/*.json; do
-  st hooks --settings "$f" > "$tmp/one" 2>&1; rc=$?
+  sed "s#@CORE@#$core#g" "$f" > "$fx/${f##*/}"
+  st hooks --settings "$fx/${f##*/}" > "$tmp/one" 2>&1; rc=$?
   printf '== %s (exit %s)\n' "${f##*/}" "$rc"; tr -d '\r' < "$tmp/one"
 done > "$tmp/out"
 n=$((n + 1))

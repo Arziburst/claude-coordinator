@@ -2,11 +2,15 @@
 # <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work;
 # crlf, blank and bad are on work with another deny file: tests/safety-guard/run.sh says which), or a
 # folder inside one (work/.claude/worktrees/12-fix/src: the cwd; the project is still work); a ps: prefix
-# makes it a PowerShell tool call (Bash otherwise).
+# makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
+# of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path.
+# expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
+# An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
 # (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
-# Bash), so no case names a machine's own paths.
+# Bash), @PROJECT_W@ the same as C:\..., @PROJECT_U@ in Git Bash's /c/... form (the same as @PROJECT@ elsewhere), @PROJECT_UP@
+# @PROJECT@ in upper case, so no case names a machine's own paths.
 block	work	git push --force origin main
 block	work	git push origin main
 block	work	git push -f origin master
@@ -416,3 +420,56 @@ allow	work	env.exe git push origin 12-fix
 # deny files in UTF-16 block every call (tests/safety-guard/run.sh also checks the message)
 block	utf16	ls
 block	utf16nul	ls
+# The owner's working copy (COORD_PROTECTED_ROOT, the 4th column: @PROJECT@ for an edit tool when there
+# is none, - for unset): an edit tool under it is blocked, under its .claude/worktrees/ allowed
+block	edit:work	@PROJECT@/src/app.js
+block	write:work	@PROJECT@/new.txt
+block	multiedit:work	@PROJECT@/src/app.js
+block	notebook:work	@PROJECT@/notebooks/a.ipynb
+block	edit:work	@PROJECT@/.claude/settings.json
+allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js
+allow	write:work	@PROJECT@/.claude/worktrees/12-fix/new.txt
+allow	multiedit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js
+allow	notebook:work	@PROJECT@/.claude/worktrees/12-fix/a.ipynb
+# unset or empty: no change
+allow	edit:work	@PROJECT@/src/app.js	-
+allow	write:work	@PROJECT@/new.txt	-
+allow	notebook:work	@PROJECT@/notebooks/a.ipynb	-
+# backslashes, the Git Bash form (/c/...), repeated separators and . in the file's path
+block	edit:work	@PROJECT_W@\src\app.js
+block	write:work	@PROJECT_U@/new.txt
+block	edit:work	@PROJECT@//src///app.js
+block	edit:work	@PROJECT@/./src/app.js
+allow	edit:work	@PROJECT_W@\.claude\worktrees\12-fix\app.js
+# the root written with a trailing separator, backslashes or in the Git Bash form
+block	edit:work	@PROJECT@/src/app.js	@PROJECT@/
+block	edit:work	@PROJECT@/src/app.js	@PROJECT_W@\
+block	edit:work	@PROJECT_W@\src\app.js	@PROJECT_U@
+block	edit:work	@PROJECT@/src/app.js	@PROJECT@/./
+allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/app.js	@PROJECT_W@\
+# .. escaping a worktree back into the root; .. leaving the root
+block	edit:work	@PROJECT@/.claude/worktrees/12-fix/../../../src/app.js
+block	edit:work	@PROJECT@/.claude/worktrees/../src/app.js
+block	write:work	@PROJECT_W@\.claude\worktrees\12-fix\..\..\x.txt
+allow	edit:work	@PROJECT@/src/../.claude/worktrees/12-fix/app.js
+allow	edit:work	@PROJECT@/../elsewhere/a.txt
+# a relative path counts from the call's cwd
+block	edit:work	src/app.js
+block	edit:work/.claude/worktrees/12-fix/src	../../../../src/app.js
+allow	edit:work/.claude/worktrees/12-fix/src	app.js
+allow	write:work/.claude/worktrees/12-fix/src	./lib/a.js
+# letter case: ignored on Windows and macOS (fold: block there), exact on Linux (allow)
+fold	edit:work	@PROJECT_UP@/src/app.js
+fold	edit:work	@PROJECT@/src/app.js	@PROJECT_UP@
+allow	edit:work	@PROJECT_UP@/.claude/worktrees/12-fix/app.js
+# whole path segments: the root itself (a file named like the folder) and a sibling sharing the prefix
+allow	write:work	@PROJECT@
+allow	write:work	@PROJECT@/
+allow	edit:work	@PROJECT@-old/src/app.js
+allow	edit:work	@PROJECT@old/app.js
+allow	edit:work	@PROJECT_W@-old\app.js
+# the command checks are unchanged with the root set: a shell command can still write there (TOOLKIT
+# Safety: a guard against a mistake, not intent)
+allow	work	echo x > @PROJECT@/src/a.txt	@PROJECT@
+block	work	git push origin main	@PROJECT@
+allow	work	git push origin 12-fix	@PROJECT@

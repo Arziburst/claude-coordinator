@@ -174,10 +174,28 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
   variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
   protection on the code host is the real wall; the hook is not hardened against these on purpose.
-  Hooks see only shell tools — **MCP tools are covered by deny rules only** (the settings examples
+  Hooks see only the tools their matcher names (the guard: the shell tools and the edit tools, next
+  bullet) — **MCP tools are covered by deny rules only** (the settings examples
   deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
   any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
+- **The owner's working copy and the edit tools:** a worker started from the project folder
+  (`start-worker` from the repository's root, EnterWorktree) works in its own copy under
+  `.claude/worktrees/`, but an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` with an absolute path can
+  still reach the owner's checkout. With `"env": {"COORD_PROTECTED_ROOT": "<the project root>"}` in the
+  **worker** safety file (never the coordinator's own settings: the coordinator edits there) and those
+  four tools in the guard's matcher (`Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit`, as in the
+  settings examples), the guard blocks such a call whose `file_path` (`notebook_path`) lies under the
+  root, except under `<root>/.claude/worktrees/`. Both paths are compared in one form: `/` or `\`, a
+  trailing separator, `.` and `..` taken out by the text (a `..` out of a worktree back into the root is
+  blocked), a relative path from the call's cwd, letter case ignored on Windows and macOS (exact on
+  Linux), whole path segments (`<root>-old` is another folder; the root itself is not under it).
+  Unset or empty: nothing changes (opt-in). `selftest hooks --settings` checks it: set, the root must
+  be an absolute path to a folder on the machine and the matcher must take in the four tools; unset, a
+  SKIP line. `start-worker` prints a notice when it launches a worker from the root and the safety file
+  has no `COORD_PROTECTED_ROOT`. **The limit:** it guards the edit tools only — a shell command such as
+  `echo x > <root>/file` or `cp` still writes there, and a symlink is not followed; it protects against
+  a mistake, not intent (the worker's brief and branch protection remain the rules).
 - **Deny rules** in `settings.example.json` are the swarm and standard baseline: the protected branches only
   (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
   Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans
@@ -358,7 +376,8 @@ Run in this order; the first work is a **dry run** (CORE §12a).
 1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
 3. **Worker safety file** from [settings.example.json](settings.example.json) (Windows:
-   [settings.example.windows.json](settings.example.windows.json)) with absolute paths (passed to every
+   [settings.example.windows.json](settings.example.windows.json)) with absolute paths — the core copy's
+   for the hook, the project root for `COORD_PROTECTED_ROOT` (*Safety*) — (passed to every
    worker by `start-worker.sh --safety` / `start-worker.ps1 -Safety`). **The coordinator's own settings** (its session or the
    user settings): the status line if the owner wants it (CORE §3, *Installing it* above) and
    `crossSessionInbound: "accept"`.
