@@ -10,6 +10,8 @@
 #          PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. The hook's
 #          self-test must pass, or no worker starts. -Model is required (CORE section 7). Default mode auto;
 #          acceptEdits for the cautious level; bypassPermissions is refused. Exit 1 on any failed check.
+#          Launched from the root without env COORD_PROTECTED_ROOT in it: a notice (edit tools can reach
+#          the working copy).
 # The session starts in the repository root (-LaunchFrom overrides it), which the owner trusts once:
 # Claude Code refuses --bg in a folder nobody trusted, and a new worktree never is (trust is not
 # inherited from a parent). The brief's first line sends it into its worktree (EnterWorktree).
@@ -201,6 +203,11 @@ $wtFwd = $wt.Replace('\', '/')
 $same = (Resolve-Path -LiteralPath $from).Path.Replace('\', '/').TrimEnd('/') -eq (Resolve-Path -LiteralPath $root).Path.Replace('\', '/').TrimEnd('/')
 if ($same) {
   $first = "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wtFwd. Work only inside it; never change files outside it."
+  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
+  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
+  $protRoot = ''
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $protRoot = $cfg.env.COORD_PROTECTED_ROOT }
+  if (-not $protRoot) { "notice: COORD_PROTECTED_ROOT is not set in ${Safety}: edit tools can reach the working copy (TOOLKIT Safety)" }
 } else {
   # launched outside the repository (its root not trusted): EnterWorktree into another repository's
   # worktree asks for permission and the session would wait, so it works there by absolute path

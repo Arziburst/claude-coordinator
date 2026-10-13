@@ -72,6 +72,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SAFE-09 | Hard rules | sixteen rules that override every habit | SAFE |
 | F-SAFE-10 | Customer data stays in production | no production data in issues, logs, briefs or reports | SAFE |
 | F-SAFE-11 | Code-host protection and runners | branch protection is the wall; self-hosted runners stay safe on public repositories | SAFE |
+| F-SAFE-12 | The owner's working copy kept from edit tools | with `COORD_PROTECTED_ROOT` set, a worker's edit tools cannot write into the owner's checkout | SAFE |
 | F-REVIEW-01 | Independent verifier | a separate session or human verifies against the contract | REVIEW |
 | F-REVIEW-02 | Evidence classes | oracle / review / claim travel with every result | REVIEW |
 | F-REVIEW-03 | Verdict on the head commit | CI counts only on the reviewed SHA; merge pins that SHA | REVIEW |
@@ -455,6 +456,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: branch protection (PRs and checks required) is the real enforcement; a self-hosted runner on a public repository never runs fork PRs and requires approval for outside contributors, or the repository stays private
 - tested by: none
 - not covered: the protection's settings on the host are not read back automatically
+
+### F-SAFE-12 The owner's working copy kept from edit tools
+- defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, settings.example.json, settings.example.windows.json, TOOLKIT.md, procedures/INIT.md, procedures/SELFTEST.md
+- entry: every Edit, Write, MultiEdit or NotebookEdit call of a worker whose safety file sets `COORD_PROTECTED_ROOT` (PreToolUse); `selftest hooks --settings`; `selftest hookcheck --expect edit` (SELFTEST step 2a, the edit probe); a `start-worker` launch from the repository's root; one-time step `protected-root`
+- promises: with the variable set, an edit tool's `file_path` (`notebook_path`) under the root is blocked and one under `<root>/.claude/worktrees/` passes — `/` and `\`, a trailing separator, `.` and `..` (a `..` out of a worktree back into the root), a path relative to the call's cwd and the Git Bash `/c/` form normalised, letter case ignored on Windows and macOS only, whole path segments compared (`<root>-old` and the root itself are not under it); unset or empty changes nothing; the command checks are unchanged; `selftest hooks` fails a relative or missing root, on Windows a root that is not a drive path (`C:/…`, `C:\…`, or `/c/…` read as `C:/…`), and a matcher without the four tools, and says SKIP when it is unset; the edit probe (a session told to Write into the root) passes `hookcheck --expect edit` only on the guard's working-copy block — a write that went through, no hook or a non-blocking error fails — and the push probe's default `hookcheck` never passes on it; `start-worker` prints a notice when it starts a worker from the root without it
+- tested by: tests/safety-guard/cases.txt (the edit-tool cases, the 4th column), tests/safety-guard/run.sh, tests/selftest/hooks.sh (tests/selftest/hooks/protected*.json; tests/selftest/hooks/os/ per OS; hookcheck --expect edit on tests/selftest/claude: a blocked Write, a Write that went through, no hook, a push block, a non-blocking error), tests/workers/run.sh (the notice), the CI steps of F-SAFE-01 and F-SAFE-06; through Claude Code once by hand (2.1.296, Windows: a Write into the root blocked, one in a worktree passed)
+- not covered: a shell command (`echo x > <root>/file`, `cp`) still writes there — it guards against a mistake, not intent; a symlink into the root is not followed; a UNC root (`\\server\share`) fails `selftest hooks` on Windows; the edit probe runs only in the full self-test, not in CI
 
 ## REVIEW
 

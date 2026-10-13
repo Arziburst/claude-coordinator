@@ -34,6 +34,49 @@ if (-not $d) { [Console]::Error.WriteLine('Blocked by safety-guard: the tool cal
 $cmd = [string]$d.tool_input.command
 $cwd = [string]$d.cwd
 $tool = [string]$d.tool_name
+
+# A path in one form for comparing: / separators, none repeated or trailing, lower case (-Keep: the
+# letter case kept), . and x/.. taken out (by the text: /a/b/.. is /a; .. above the root stays at the
+# root), a drive as c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
+function Canon([string]$x, [switch]$Keep) {
+  if (-not $x) { return '' }   # / with its separator stripped
+  $x = $x.Replace('\', '/'); if (-not $Keep) { $x = $x.ToLowerInvariant() }; $r = ''
+  if ($x.StartsWith('/')) { $r = '/' } elseif ($x -match '^[a-z]:') { $r = $x.Substring(0, 2) + '/'; $x = $x.Substring(2) }
+  $out = New-Object System.Collections.Generic.List[string]
+  foreach ($s in $x.Split('/')) {
+    if ($s -eq '' -or $s -eq '.') { continue }
+    if ($s -eq '..') {
+      if ($out.Count -gt 0 -and $out[$out.Count - 1] -ne '..') { $out.RemoveAt($out.Count - 1) } elseif (-not $r) { $out.Add('..') }
+      continue
+    }
+    $out.Add($s)
+  }
+  $x = $r + ($out -join '/'); if (-not $x) { $x = '.' }
+  $x = $x -replace '/+$', ''
+  ($x -replace '^/(mnt/|cygdrive/)?([a-z])$', '$2:') -replace '^/(mnt/|cygdrive/)?([a-z])/', '$2:/'
+}
+
+# --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
+# Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
+# are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
+if ($env:COORD_PROTECTED_ROOT -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
+  $keep = -not (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)
+  $proot = Canon $env:COORD_PROTECTED_ROOT -Keep:$keep
+  foreach ($p in @($d.tool_input.file_path, $d.tool_input.notebook_path)) {
+    if ($p -isnot [string] -or -not $p) { continue }
+    $full = $p
+    if ($full -notmatch '^([/\\]|[A-Za-z]:)') {
+      $base = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { (Get-Location).Path }
+      $full = "$base/$full"
+    }
+    $full = (Canon $full -Keep:$keep) + '/'
+    if ($full.StartsWith("$proot/.claude/worktrees/", [StringComparison]::Ordinal)) { continue }
+    if ($full.Length -gt "$proot/".Length -and $full.StartsWith("$proot/", [StringComparison]::Ordinal)) {
+      [Console]::Error.WriteLine("Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner.")
+      exit 2
+    }
+  }
+}
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 $cmd = $cmd.Replace("`r`n", "`n").Replace("\`n", '').Replace('`' + "`n", ' ')
 # Comment lines (a "#" at the start of a line) do not count for the project patterns.
@@ -224,26 +267,7 @@ function Compose([string]$b, [string]$p) {
   if ($b -eq '?') { return '?' }
   "$b/$p"
 }
-# A path in one form for comparing: / separators, none repeated or trailing, lower case, . and x/..
-# taken out (by the text: /a/b/.. is /a; .. above the root stays at the root), a drive as c: (C:\x,
-# /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
-function Canon([string]$x) {
-  if (-not $x) { return '' }   # / with its separator stripped
-  $x = $x.Replace('\', '/').ToLowerInvariant(); $r = ''
-  if ($x.StartsWith('/')) { $r = '/' } elseif ($x -match '^[a-z]:') { $r = $x.Substring(0, 2) + '/'; $x = $x.Substring(2) }
-  $out = New-Object System.Collections.Generic.List[string]
-  foreach ($s in $x.Split('/')) {
-    if ($s -eq '' -or $s -eq '.') { continue }
-    if ($s -eq '..') {
-      if ($out.Count -gt 0 -and $out[$out.Count - 1] -ne '..') { $out.RemoveAt($out.Count - 1) } elseif (-not $r) { $out.Add('..') }
-      continue
-    }
-    $out.Add($s)
-  }
-  $x = $r + ($out -join '/'); if (-not $x) { $x = '.' }
-  $x = $x -replace '/+$', ''
-  ($x -replace '^/(mnt/|cygdrive/)?([a-z])$', '$2:') -replace '^/(mnt/|cygdrive/)?([a-z])/', '$2:/'
-}
+# Canon: above, with the edit-tool check
 function BranchIn([string]$dd) {
   if ($dd -ceq $script:ovDir) { return $script:ovBranch }
   if ($dd -eq '?') { return '' }

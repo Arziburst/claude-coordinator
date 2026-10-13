@@ -74,6 +74,14 @@ the report notes the interruption and the resume time.
      not require it there, TOOLKIT *New machine*) → the second probe is not started; the report says
      `SKIP probe (own settings): no guard there`. Putting the guard there is the owner's choice
      (CORE §1.16), offered once, never made by the coordinator.
+   - **The edit probe**, when the worker safety file sets `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*): a
+     third probe session on the light model, started from the project root with `--settings <worker
+     safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt` containing x; do not
+     retry another way; report, stop." Then `selftest hookcheck --session <id> --expect edit`: PASS only
+     on the guard's working-copy block; a write that went through, no hook or a non-blocking error is a
+     FAIL, fixed before anything else, like the push probe (a `probe-root.txt` left in the root is
+     removed by the owner or the coordinator). Its cost is read and it is removed like the others. Not
+     set → `SKIP probe (edit): COORD_PROTECTED_ROOT not set`.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and

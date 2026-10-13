@@ -19,7 +19,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - each upstream change that conflicts with a local edit, and the proposed resolution;
    - **Settings the new core's checks fail:** `selftest hooks --settings` of the scratch clone on the worker
      safety file and the coordinator's own settings files, before anything is merged — each FAIL is a change
-     the project makes with the update;
+     the project makes with the update, and each SKIP on the worker safety file a protection it does not
+     use yet, offered to the owner (e.g. `COORD_PROTECTED_ROOT` not set: the working copy is not kept from
+     workers' edit tools — the file gains the env value and the edit tools in the guard's matcher,
+     TOOLKIT *Safety*);
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts

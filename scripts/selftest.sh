@@ -12,9 +12,11 @@
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
 # The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
 #   scripts/selftest.sh hooks --settings <settings.json>   the guard hook's command: forward slashes, no $env:,
-#                                                       no PowerShell shell that turns its exit 2 into 1
-#   scripts/selftest.sh hookcheck --session <id>       a session told to push to main: its transcript shows
-#                                                       the block, not a non-blocking hook error
+#                                                       no PowerShell shell that turns its exit 2 into 1;
+#                                                       env COORD_PROTECTED_ROOT: a folder, edit tools matched
+#   scripts/selftest.sh hookcheck --session <id> [--expect edit]   a session told to push to main (with
+#                                                       edit: to Write into the protected root): its transcript
+#                                                       shows the block, not a non-blocking hook error
 # For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -26,7 +28,7 @@
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,27s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,29s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -188,6 +190,7 @@ hooks)
   # a string under hooks.PreToolUse[e]: the entry'"'"'s matcher, or a hook'"'"'s command, shell or onFailure
   function keep(path, v,    m, e, h) {
     m = split(path, P, SUBSEP)
+    if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_ROOT") { R = v; return }
     if (m < 5 || P[2] != "hooks" || P[3] != "PreToolUse" || substr(P[4], 1, 1) != "\001") return
     e = substr(P[4], 2) + 0
     if (m == 5 && P[5] == "matcher") M[e] = v
@@ -225,18 +228,20 @@ hooks)
   }
   { all = (NR > 1) ? all "\n" $0 : $0 }
   END {
-    s = all; n = length(s); i = 1; ge = ""
+    s = all; n = length(s); i = 1; ge = ""; R = ""
     ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
     ws(); if (i <= n) exit 3
-    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge] }
+    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R }
   }'
   # a UTF-8 BOM before the JSON is dropped
   json="$(B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }' "$file")"
-  ok="" g=""
+  ok="" g="" root=""
   if command -v jq >/dev/null 2>&1; then
     printf '%s\n' "$json" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1 &&
       g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1
-  else g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1; fi
+    # env.COORD_PROTECTED_ROOT: the owner's working copy, kept from edit tools (TOOLKIT Safety)
+    [ -n "$ok" ] && root="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_ROOT | strings | gsub("[\n\r\t]"; " ")')"
+  else g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1 && root="$(printf '%s\n' "$g" | sed -n 5p)"; fi
   [ -n "$ok" ] || { fail "the settings file is not valid JSON (Claude Code would not load it)"; finish; }
   [ -n "$g" ] || { fail "no safety-guard hook in the file"; finish; }
   pass "a safety-guard hook"
@@ -265,12 +270,43 @@ hooks)
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if [ "$onfail" = block ]; then pass 'onFailure "block": a guard that fails to run blocks'
   else fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)'; fi
+  # the owner's working copy (TOOLKIT Safety): with env COORD_PROTECTED_ROOT the guard keeps the edit
+  # tools out of it - so the root is an absolute path to a folder here, and the matcher takes in each
+  # edit tool (none, "", "*" and ".*" match every tool; otherwise the whole name must match it)
+  if [ -z "$root" ]; then skip "COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools"
+  else
+    # on Windows Claude Code passes C:\... file paths, so the root is a drive path: C:/... or C:\..., or
+    # Git Bash's /c/... (/mnt/c/..., /cygdrive/c/...), which the guard reads as C:/...
+    win=0; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) win=1 ;; esac
+    dir="$root"; [ $win = 1 ] && dir="$(printf '%s' "$root" | sed -E 's#^/(mnt/|cygdrive/)?([A-Za-z])(/|$)#\2:/#')"
+    case "$root" in
+      /*|\\*|[A-Za-z]:[/\\]*)
+        if [ $win = 1 ] && ! printf '%s' "$dir" | grep -Eq '^[A-Za-z]:[/\\]'; then
+          fail "COORD_PROTECTED_ROOT is not a drive path (C:/... or C:\\...): $root - Claude Code passes C:\\... file paths on Windows"
+        elif [ -d "$dir" ]; then pass "COORD_PROTECTED_ROOT is an absolute path to a folder"
+        else fail "COORD_PROTECTED_ROOT is not a folder on this machine: $root"; fi ;;
+      *) fail "COORD_PROTECTED_ROOT is not an absolute path: $root" ;;
+    esac
+    miss=""
+    for t in Edit Write MultiEdit NotebookEdit; do
+      case "$m" in ''|'*'|'.*') ;; *) printf '%s\n' "$t" | grep -Eqx -- "$m" 2>/dev/null || miss="$miss${miss:+, }$t" ;; esac
+    done
+    if [ -z "$miss" ]; then pass "its matcher covers Edit, Write, MultiEdit and NotebookEdit"
+    else fail "its matcher leaves out $miss: those edit tools reach the working copy unguarded"; fi
+  fi
   finish ;;
 
 hookcheck)
-  id=""
-  while [ $# -gt 0 ]; do case "$1" in --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;; *) usage ;; esac; done
+  id="" expect=push
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;;
+      --expect) [ $# -ge 2 ] || usage; expect="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
   [ -n "$id" ] || usage
+  case "$expect" in push|edit) ;; *) usage ;; esac
   # the id is a prefix, not a pattern; a prefix of several sessions names none of them
   case "$id" in *[][*?/\\]*) fail "the session id $id holds a pattern or path character"; finish ;; esac
   all="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null)"
@@ -281,7 +317,15 @@ hookcheck)
   tf="$all"
   if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
     fail "the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
-  elif grep -q 'Blocked by safety-guard' "$tf"; then pass "the push to a protected branch was blocked through Claude Code"
+  elif [ "$expect" = edit ]; then
+    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
+    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
+    if grep -q "Blocked by safety-guard: the owner's working copy is never edited by a worker" "$tf"; then
+      pass "the edit tool's write into the working copy was blocked through Claude Code"
+    elif grep -Eq 'File created successfully at|has been updated successfully' "$tf"; then
+      fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
+    else fail "no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)"; fi
+  elif grep 'Blocked by safety-guard' "$tf" | grep -vq "the owner's working copy is never edited"; then pass "the push to a protected branch was blocked through Claude Code"
   else fail "no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
   finish ;;
 

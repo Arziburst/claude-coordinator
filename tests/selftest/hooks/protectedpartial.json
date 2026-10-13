@@ -1,0 +1,18 @@
+{
+  "env": { "COORD_PROTECTED_ROOT": "@CORE@" },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/core/scripts/hooks/safety-guard.ps1",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

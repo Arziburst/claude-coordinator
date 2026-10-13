@@ -1,0 +1,18 @@
+{
+  "env": { "COORD_PROTECTED_ROOT": "" },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /core/scripts/hooks/safety-guard.sh",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
