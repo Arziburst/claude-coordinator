@@ -394,7 +394,10 @@ BOM, models priced apart),
   project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess; but every session knows its own full id
   (`CLAUDE_CODE_SESSION_ID` in its environment), so `session-tokens "$CLAUDE_CODE_SESSION_ID"` (PowerShell:
-  `$env:CLAUDE_CODE_SESSION_ID`) prints its own tokens, cost and time — a lead reads itself that way.
+  `$env:CLAUDE_CODE_SESSION_ID`) prints its own tokens, cost and time — a lead reads itself that way. That
+  reading lags by the current turn (measured on 2.1.296: the turn's message reaches the transcript after the
+  tool call returns, the status line after the response): on the first turn it is all zero, later it lacks
+  the turn in progress — read it at stage boundaries and take a zero first reading as "not yet".
 - **Where sessions lose money, time, quality or stability** (CORE §7a, the weekly retro's input):
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
