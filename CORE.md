@@ -409,7 +409,8 @@ never assumed (below).
   next one down. A model with its own limit (Fable on some plans) spares the main one.
 - **Detected, not asked:** the coordinator learns what it needs. *Hint, free, at every start:*
   `claude auth status` — the login method and `subscriptionType` (e.g. `max`; undocumented, so a hint,
-  never proof). *Available:* one probe per model (`claude -p --model <m> "ok"`; it loads the full
+  never proof). *Available:* one probe per model (`claude -p --model <m> "ok" --output-format json`, TOOLKIT *Usage*: a non-zero exit or an error result
+  means not available; it loads the full
   prompt, ≈ $0.75 at list price for four models) at init, when the hint changes, once a week, and after
   any run that fails with "model not available" or a model's own limit ("You've hit your Opus limit")
   — that model leaves the ladder until the next probe. *Price:* from the run log and the status line (§7a) — limit
@@ -448,7 +449,9 @@ never assumed (below).
   - **floors:** the floors above; a kind the owner pins in `PROJECT.md` is never changed. A project
     may add its own kinds by area (e.g. rendering, input) in `ROUTING.md`, each under one table row;
     a pin names a kind or an area;
-  - a level is a model or effort step on the ladder; routing never uses a model the ladder lacks.
+  - a level is a model or effort step on the ladder, effort first: one level down from strong/high is
+    strong/medium, then strong/low, then the next lighter model at high; one level up is the reverse —
+    so "revert" always means the one previous state; routing never uses a model the ladder lacks.
   Each change is one line in the next report and the journal; "model report" shows `ROUTING.md` with
   the numbers behind it.
 - Keep this table current; the ladder in `BINDINGS.md` holds the exact ids.
@@ -507,7 +510,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   preset, §3). On: every **approved** task that can run, runs, until a cap stops it — best
   quality, fewest tokens, no stretching work to a reset. Off: work on the owner's task or batch command and
   only **propose** new work (§1.11, §4b).
-- Short-window cap → pause workers until the reset. Long-window cap → no new workers, running ones
+- Short-window cap → pause workers until the reset: no new starts, and a running worker is told to
+  finish its current step, commit and push, report, and stop; after the reset `claude respawn <id>` and a
+  one-line SendMessage ("continue") resume it, as after a usage limit (TOOLKIT *Usage*). Long-window cap → no new workers, running ones
   finish. Over a cap only with the owner's permission for that occasion.
 - **Time budgets (strict preset, or where `PROJECT.md` asks):** keep tasks near their realistic estimate; warn before the pessimistic.
 - The periodic tick (~30 min) exists **only with autopilot on**; recreate it after a restart.
