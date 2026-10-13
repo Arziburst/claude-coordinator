@@ -23,7 +23,7 @@ with the client.
 | `PROJECT.md` | the project rules (layer 2) |
 | `BINDINGS.md` | tools and commands (layer 3); rows marked "re-detect" depend on the machine |
 | `LOG.md` | the coordinator's journal |
-| `RUNS.tsv` | the run log: model, cost, tokens and result per run (CORE §7) |
+| `RUNS.tsv` | the run log: model, cost, tokens, result, and start, wall and active minutes per run (CORE §7) |
 | `ROUTING.md` | the model and effort per kind of task, adjusted automatically from the run log (CORE §7) |
 | `ESCAPES.tsv` | bugs found after their change was merged: date, bug, the task that introduced it (or unknown), who found it (CORE §12) |
 | `CORE-FINDINGS.md` | the core's own failures found here, sent to claude-coordinator and proven fixed after an update (core/procedures/CORE-FINDINGS.md) |

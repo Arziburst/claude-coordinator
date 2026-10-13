@@ -2,3 +2,4 @@ claude-haiku-5-5	2205	in=5 out>=200 cache_read=0 cache_write=2000
 claude-opus-5-5	12472	in=12 out>=160 cache_read=11000 cache_write=1300
 total	14677	in=17 out>=360 cache_read=11000 cache_write=3300
 cost	$0.4182
+time	wall=6180m active=30m start=2026-10-01T10:00:00Z end=2026-10-05T17:00:01Z

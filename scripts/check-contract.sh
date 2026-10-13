@@ -12,9 +12,10 @@
 #     a line commented out does not count).
 #   - a file that cannot be read: `<file>: cannot read`.
 # WARN — allowed, but say why in the brief:
-#   - budget.model, budget.escalate_to, budget.cost or touches missing; no criterion with an oracle check.
+#   - budget.model, budget.escalate_to, budget.cost or touches missing; no criterion with an oracle check;
+#   - budget.time (optional, never missed) present but not minutes or a range of them (25, 18-40).
 # Reads the structure line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
-[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
 failed=0
 for f in "$@"; do
   { [ -f "$f" ] && [ -r "$f" ]; } || { echo "$f: cannot read"; failed=1; continue; }
@@ -116,6 +117,12 @@ for f in "$@"; do
       if (b !~ /\n[ \t]+cost:[ \t]*[0-9]/) {
         if (b ~ /\n[ \t]+tokens:[ \t]*[0-9]/) warn("budget.tokens is now budget.cost, in USD at list price (CORE §7a)")
         else warn("budget.cost missing (no spend forecast, CORE §7a)")
+      }
+      # the time estimate is optional: checked only when it is there
+      if (match(b, /\n[ \t]+time:[^\n]*/)) {
+        t = substr(b, RSTART, RLENGTH); sub(/^\n[ \t]+time:/, "", t); t = val(t)
+        if (t !~ /^[0-9]+([.][0-9]+)?([ \t]*-[ \t]*[0-9]+([.][0-9]+)?)?$/)
+          warn("budget.time (" t ") is not minutes or a range of minutes (25 or 18-40, CORE §7a)")
       }
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")

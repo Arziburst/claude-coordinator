@@ -159,7 +159,7 @@ Stack; build / run / test / lint commands; environments and deploy; CI layout; M
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
 per-worker isolation (working copies, ports, databases, containers); shared resources; serial
-identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one probe per model, list prices); first cost estimates per model from the project's existing transcripts (CORE §7a); technologies without a connected MCP server
+identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one probe per model, list prices); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
 (code host, tracker, design, database, hosting, docs, browser) — propose the matching servers, the owner
 decides what is connected and with which rights; whether git, a code host and a tracker exist
 (missing → [SOURCES.md](SOURCES.md) §3). Existing rules in other formats are merged as *Details of the

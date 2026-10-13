@@ -1,0 +1,4 @@
+claude-haiku-5-5	69	in=3 out>=6 cache_read=60 cache_write=0
+claude-opus-5-5	56	in=1 out>=5 cache_read=50 cache_write=0
+total	125	in=4 out>=11 cache_read=110 cache_write=0
+time	wall=20m active=20m start=2026-10-08T09:00:00Z end=2026-10-08T09:20:29Z

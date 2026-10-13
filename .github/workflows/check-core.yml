@@ -179,6 +179,18 @@ jobs:
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
           bash tests/session-tokens/run.sh ps pwsh
+      - name: run-stats computes the forecast numbers of the fixture run logs (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/run-stats/run.sh sh
+      - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/run-stats/run.sh ps pwsh
+      - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell)
+        if: runner.os == 'Windows'
+        run: |
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/run-stats/run.sh ps powershell
+          bash tests/run-stats/run.sh ps pwsh
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: runner.os != 'Windows'
         run: |
@@ -354,6 +366,17 @@ jobs:
           for id in t1 t6; do
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge bash scripts/session-tokens.sh $id) \
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
+          done
+          # run-stats: the same numbers under a locale with a decimal comma
+          for f in tests/run-stats/*.tsv; do
+            diff <(bash scripts/run-stats.sh $f) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f)
+            diff <(bash scripts/run-stats.sh $f --kind ordinary --model sonnet) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f -Kind ordinary -Model sonnet)
+            diff <(bash scripts/run-stats.sh $f --per-run) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f -PerRun)
+          done
+          # the time line: the transcripts' timestamps stay UTC in any zone and locale
+          for id in g1 g2 g2t g3 g4 g5 g6; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/time bash scripts/session-tokens.sh $id) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-tokens/time TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done
           # a non-UTC zone: Unix seconds and the transcripts' timestamps stay UTC
           for since in 2026-10-05T17:00:00Z 1791219600; do

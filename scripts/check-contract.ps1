@@ -6,7 +6,8 @@
 # a criterion without a valid check, an oracle without `how` (empty, blank or null is none), non_goals without
 # the two default lines (a line commented out does not count); a file
 # that cannot be read (`<file>: cannot read`). WARN: budget.model, .escalate_to, .cost or touches missing; no
-# oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
+# oracle criterion; budget.time (optional) present but not minutes or a range (25, 18-40).
+# Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -14,7 +15,7 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 9 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 10 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -132,6 +133,11 @@ foreach ($f in $Files) {
     if ($b -cmatch '\n[ \t]+tokens:[ \t]*[0-9]') { $out.Add("WARN  budget.tokens is now budget.cost, in USD at list price (CORE ${sect}7a)") }
     else { $out.Add("WARN  budget.cost missing (no spend forecast, CORE ${sect}7a)") }
     $nw++
+  }
+  # the time estimate is optional: checked only when it is there
+  if ($b -cmatch '\n[ \t]+time:([^\n]*)') {
+    $tv = Val $Matches[1]
+    if ($tv -cnotmatch '^[0-9]+([.][0-9]+)?([ \t]*-[ \t]*[0-9]+([.][0-9]+)?)?\z') { $out.Add("WARN  budget.time ($tv) is not minutes or a range of minutes (25 or 18-40, CORE ${sect}7a)"); $nw++ }
   }
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
