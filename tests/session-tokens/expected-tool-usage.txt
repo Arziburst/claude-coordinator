@@ -1,0 +1,2 @@
+claude-opus-5-5	2154	in=4 out>=50 cache_read=2000 cache_write=100
+total	2154	in=4 out>=50 cache_read=2000 cache_write=100

@@ -282,7 +282,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every
   session on the machine, other projects' too, so at every session start run `session-tokens.sh --prune`
-  / `session-tokens.ps1 -Prune` (deletes files older than 7 days; on Windows only the `-Prune` form
+  / `session-tokens.ps1 -Prune` (deletes files older than 7 × 24 hours; on Windows only the `-Prune` form
   reaches the script through `-File`).
 - **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
   `blocked`): pause until the status line's `resets_at` (CORE §9), then for each blocked session
@@ -292,7 +292,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `session-tokens.ps1 -Since <UTC time>` — the same per-model lines over every transcript on the
   machine, each message once, counted by its own timestamp (a session that crosses the reset is
   split). The limits are per account, so other projects' and ad-hoc sessions' spend counts too. The
-  reset time is the status line's `resets_at`. An ambiguous prefix lists session ids only, never
+  reset time is the status line's `resets_at`, Unix seconds: pass it as it is (`--since 1791219600`),
+  or as `YYYY-MM-DDTHH:MM:SSZ`; a time with another offset (`+02:00`) is refused, not read as UTC.
+  An ambiguous prefix (of a transcript or a status file) fails and lists session ids only, never
   project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
 - Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,

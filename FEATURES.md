@@ -547,29 +547,29 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/session-tokens.sh, scripts/session-tokens.ps1, TOOLKIT.md
 - entry: `session-tokens <session id or prefix or transcript>`
 - promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; an ambiguous prefix fails and lists ids only, never project folders
-- tested by: tests/session-tokens/expected.txt, CI step "session-tokens counts the fixture exactly" (bash, PowerShell, parity on Linux)
-- not covered: output tokens are a lower bound by design
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected.txt, tests/session-tokens/expected-s2.txt; a usage object in a tool input before the message's own, tests/session-tokens/expected-tool-usage.txt; a tool input with keys differing only by case, tests/session-tokens/expected-case-keys.txt; an ambiguous prefix of transcripts and of status files only; a status file without a projects folder; a config path with `[ ]`), CI step "session-tokens counts the fixture exactly" (bash, Windows PowerShell 5.1 and PowerShell 7, parity on Linux)
+- not covered: output tokens are a lower bound by design; the lines are read as text: a message's id and model are the first `"id":"msg_…"` and `"model"` on the line, which a tool input could hold first only if a message listed `content` before them (not seen in real transcripts)
 
 ### F-SPEND-05 Subagent cost
 - defined: scripts/session-tokens.sh, roles/lead.md, TOOLKIT.md
 - entry: `session-tokens <agentId>`
 - promises: a subagent is found by its agentId or a unique prefix; its tokens print without a cost line; its cost is reported as part of its parent and counted once
-- tested by: tests/session-tokens/expected-agent.txt
+- tested by: tests/session-tokens/expected-agent.txt through tests/session-tokens/run.sh (also under a config path with `[ ]`)
 - not covered: none known
 
 ### F-SPEND-06 Account-wide spend and the ratio
 - defined: scripts/session-tokens.sh, CORE.md §7a
 - entry: `session-tokens --since <UTC time>`; one-time step `spend-ratio`
 - promises: every transcript on the machine counts, each message by its own timestamp; the ratio is trusted only once the window rose 10 points
-- tested by: tests/session-tokens/expected-since.txt
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-since.txt from a UTC time, with milliseconds, without the Z and from Unix seconds; an offset other than Z and a date alone refused; tests/session-tokens/expected-order-since.txt: the record's own timestamp before or after "message" while a tool input carries another), parity under another time zone on Linux
 - not covered: transcripts on other machines of the same account are not seen
 
 ### F-SPEND-07 Status files pruned
 - defined: scripts/session-tokens.sh, TOOLKIT.md
 - entry: `session-tokens --prune` at every session start
 - promises: only status files older than 7 days are deleted
-- tested by: CI step "session-tokens counts the fixture exactly" (the prune case)
-- not covered: none known
+- tested by: tests/session-tokens/run.sh, the prune case (files aged 30 and 7.5 days deleted, 6.5 days and new kept, in bash and both PowerShells)
+- not covered: the boundary is to the minute in the .sh (`find -mmin`), to the tick in the .ps1
 
 ### F-SPEND-08 The status line
 - defined: scripts/statusline.sh, scripts/statusline.ps1, TOOLKIT.md

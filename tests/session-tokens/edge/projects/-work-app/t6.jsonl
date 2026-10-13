@@ -1,0 +1,1 @@
+{"type":"assistant","message":{"id":"msg_T6","type":"message","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_t6","name":"mcp__db__put","input":{"id":1,"Id":2}}],"usage":{"input_tokens":6,"cache_creation_input_tokens":0,"cache_read_input_tokens":60,"output_tokens":6}},"uuid":"t6a","sessionId":"t6","timestamp":"2026-10-06T10:00:00.000Z"}
