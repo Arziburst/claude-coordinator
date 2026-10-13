@@ -18,7 +18,7 @@ cat > "$tmp/bin/claude" <<'EOF'
 printf '%s\n' "$*" >> "$STUB_LOG"
 # --bg: remember the folder and the session name; agents --json: list the names started so far
 if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
-if [ "${1:-}" = agents ]; then printf '[%s]\n' "$(sed 's/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"; fi
+if [ "${1:-}" = agents ]; then printf '[%s]\n' "$(sed 's/\\/\\\\/g; s/"/\\"/g; s/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"; fi
 exit 0
 EOF
 cat > "$tmp/bin/gh" <<'EOF'
@@ -243,6 +243,50 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
   git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/41-a" ;;
 esac
 
+# --- findings of a macOS tester session (group WORKERS) ---
+# a quoted guard path with a space is accepted (selftest hooks accepts it); an unquoted one is refused
+mkdir -p "$tmp/core copy" && cp -R "$core/scripts" "$tmp/core copy/"
+sed -E "s#$core/scripts/hooks/(safety-guard\.(sh|ps1))#\\\\\"$mtmp/core copy/scripts/hooks/\\1\\\\\"#g" "$tmp/safety.json" > "$tmp/safety-space.json"
+grep -q 'core copy/scripts/hooks/safety-guard' "$tmp/safety-space.json" || { echo "FAIL: could not write the quoted guard path"; fail=1; }
+check 0 "start: a quoted guard path with a space" -- start --repo "$tmp/repo" --name "#44 worker: a" --branch 44-a "${W[@]}" --safety "$tmp/safety-space.json" --dry-run
+sed 's#\\"##g' "$tmp/safety-space.json" > "$tmp/safety-space-bare.json"
+check 1 "start: an unquoted guard path with a space" -- start --repo "$tmp/repo" --name "#44 worker: a" --branch 44-a "${W[@]}" --safety "$tmp/safety-space-bare.json" --dry-run
+expect_in "quote a path with a space"
+# a branch that differs from an existing one only in letter case (Windows, macOS: one branch file and
+# one worktree folder) is refused, with the worktree there and without it
+case "$(uname -s)" in Darwin|MINGW*|MSYS*|CYGWIN*)
+  check 0 "start: a branch for the letter-case checks" -- start --repo "$tmp/repo" --name "#45 worker: a" --branch 45-case "${W[@]}" --safety "$tmp/safety.json"
+  check 1 "start: a branch in another letter case, its worktree there" -- start --repo "$tmp/repo" --name "#45 worker: b" --branch 45-CASE "${W[@]}" --safety "$tmp/safety.json"
+  expect_in "differs only in letter case"
+  git -C "$tmp/repo" branch 46-case main
+  check 1 "start: a branch in another letter case, no worktree" -- start --repo "$tmp/repo" --name "#46 worker: a" --branch 46-Case "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/wt46"
+  expect_in "differs only in letter case"
+  [ -e "$tmp/wt46/46-Case" ] && { echo "FAIL: a worktree was added for a branch in another letter case"; fail=1; }
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/45-case" ;;
+esac
+# an existing branch in the same letter case is still checked out into its worktree
+git -C "$tmp/repo" branch 47-a main
+check 0 "start: an existing branch without a worktree" -- start --repo "$tmp/repo" --name "#47 worker: a" --branch 47-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/wt47"
+[ "$(git -C "$tmp/wt47/47-a" rev-parse --abbrev-ref HEAD 2>/dev/null)" = 47-a ] || { echo "FAIL: 47-a was not checked out into its worktree"; fail=1; }
+git -C "$tmp/repo" worktree remove "$tmp/wt47/47-a" 2>/dev/null
+# a --worktree-root through a symlink (macOS: /tmp and /var are links): the second start reuses it
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
+  mkdir -p "$tmp/real48" && ln -s "$tmp/real48" "$tmp/link48"
+  check 0 "start: a worktree root through a symlink" -- start --repo "$tmp/repo" --name "#48 worker: a" --branch 48-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/link48"
+  check 0 "start: the same worktree root through a symlink again" -- start --repo "$tmp/repo" --name "#48 worker: a" --branch 48-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/link48"
+  expect_in "reusing worktree"
+  git -C "$tmp/repo" worktree remove "$tmp/real48/48-a" 2>/dev/null ;;
+esac
+# a name that the JSON listing escapes is found at once, not after the 20 s wait
+names=('#49 worker: a\b')
+[ "$kind" = sh ] && names+=('#50 worker: say "hi"')
+for nm in "${names[@]}"; do
+  br="$(printf '%s' "$nm" | cut -c2-3)-a"
+  check 0 "start: the name $nm in the listing" -- start --repo "$tmp/repo" --name "$nm" --branch "$br" "${W[@]}" --safety "$tmp/safety.json"
+  case "$LAST" in *"not listed after"*) echo "FAIL: the name $nm was not found in the listing"; fail=1 ;; esac
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/$br" 2>/dev/null
+done
+
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
 check 3 "cleanup: mistyped worktree path" -- cleanup --worktree "$tmp/repo/.claude/worktrees/12-fxi" --session s1
@@ -263,6 +307,11 @@ expect_in "NOT MERGED"
 STUB_HEADS="0123456789012345678901234567890123456789" check 3 "cleanup: merged PR of an older use of the branch name" -- cleanup --worktree "$wt"
 expect_in "branch name reused"
 : > "$STUB_LOG"
+# --session followed by a flag: a usage error, not a session called --dry-run and a real cleanup
+STUB_HEADS="$head" check 1 "cleanup: --session followed by a flag" -- cleanup --worktree "$wt" --session --dry-run
+expect_in "got the flag --dry-run"
+[ -d "$wt" ] || { echo "FAIL: --session --dry-run removed the worktree"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: --session --dry-run called claude"; fail=1; }
 STUB_HEADS="$head" check 0 "cleanup: dry run" -- cleanup --worktree "$wt" --session s1 --dry-run
 expect_in "[dry-run]"
 [ -d "$wt" ] || { echo "FAIL: the dry run removed the worktree"; fail=1; }
