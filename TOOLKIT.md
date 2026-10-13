@@ -260,6 +260,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
+  `tests/session-insights/run.sh` (fixture transcripts: guard blocks followed by a retry, a way around,
+  a change and a stop, a deny rule, tool errors and a repeat, waits, rereads, a cache rewrite, a subagent,
+  `--since` across two sessions, CRLF, a BOM and malformed lines),
 `tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
 and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
 values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
@@ -372,6 +375,48 @@ BOM, models priced apart),
   An ambiguous prefix (of a transcript or a status file) fails and lists session ids only, never
   project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
+- **Where sessions lose money, time, quality or stability** (CORE §7a, the weekly retro's input):
+  `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
+  | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
+  as session-tokens: a session is its transcript and its subagents', `--since` every transcript on the
+  machine, each record by its own timestamp. It only reads and prints; nothing is sent anywhere. Lines,
+  tab-separated, one kind per line, no header; nothing for a session without messages:
+  - `block <reason> count= changed= retried= around= stopped=` — per safety-guard reason (the text
+    after `Blocked by safety-guard: ` up to `. If this is a false positive`, a path in parentheses as
+    `(<path>)`, so no folder leaves the machine) and `deny rule` (a `Permission to use … has been
+    denied` result). Only results with `is_error` that start `PreToolUse:` (the hook error) or with the message count, never
+    a test printing the message. Then the same transcript's **next tool call**: `retried` — the same tool
+    with the same command (else `file_path`, else input); `around` — another call naming one of the
+    blocked call's targets: its `file_path`, and in its command `main`, `master` and the words holding a
+    `/` or `\` with 2 letters or digits (`/dev/…` aside), plus the branch of `push while on <b>`, found as
+    a whole word, case and `\` against `/` ignored; `stopped` — an `end_turn` or the transcript's end
+    comes first; `changed` — anything else. `around` is a signal, not proof: a correct next step can
+    name the same path (a `cd` into it, the cleanup script with the worktree), and a way around through a
+    variable or another spelling is `changed`.
+  - `tool_error <tool> count= repeated=` — results with `is_error` that are no refusal (a hook, a deny
+    rule, the auto-mode classifier, a safety check, the user's no — `permissionDecision` `reject`) and
+    no interrupt; `repeated` — the tool's next call had the same command (else the same input) and
+    failed again. A command exiting non-zero is an error to the transcript, so `grep` without a match
+    and a `diff` that differs count too.
+  - `waiting minutes= calls=` — calls over 2 minutes from `tool_use` to `tool_result` that waited on a
+    person: a permission the user decided (the result's `permissionDecision` with a `source` starting
+    `user`: `user_temporary`, `user_reject`, …) or a tool named `*AskUserQuestion`. The span includes the
+    tool's own run after the answer, and transcripts written before Claude Code recorded
+    `permissionDecision` show only the AskUserQuestion waits; a prompt answered within 2 minutes is not
+    counted.
+  - `cache write= read= rewrites=` — tokens, each message once (as session-tokens); a rewrite is a
+    message writing over half its input (input + cache write + cache read) to the cache: a context paid
+    again after a pause past the cache's lifetime or a restart. A transcript's first message writes its
+    context for the first time and is not one; a rewrite after a compaction is one.
+  - `reread files= reads=` — files the Read tool read 3 or more times in one transcript (a subagent's
+    reads are its own context) and those reads, any offset or limit. No file names: `--detail` adds
+    `reread_file <path> reads=<n>` lines for local use — **that output never leaves the machine**
+    (it is not pasted into an issue, a report or the state repository).
+  - `turns assistant= tool_calls=` — distinct messages and tool calls.
+  Each transcript is read in order on its own (parallel calls: the next call is the next `tool_use`
+  record after the result); a result whose call is not in the files read (or before `--since`) is
+  skipped, and so is a line that is no record (a malformed or cut line). Exit 1 when no transcript is
+  found or a prefix is ambiguous, 2 on a usage error.
 - **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
   prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
   cost_low cost_high time_n time_median time_low time_high ready_n ready_median ready_low ready_high` —

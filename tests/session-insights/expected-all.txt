@@ -1,0 +1,14 @@
+block	deny rule	count=1 changed=0 retried=0 around=0 stopped=1
+block	push to a protected branch	count=6 changed=1 retried=2 around=1 stopped=2
+block	removing a worktree by hand (use the cleanup script)	count=1 changed=0 retried=0 around=0 stopped=1
+block	the owner's working copy is never edited by a worker (<path>); work in your worktree	count=1 changed=0 retried=0 around=1 stopped=0
+tool_error	Bash	count=3 repeated=1
+tool_error	Edit	count=1 repeated=0
+tool_error	Glob	count=1 repeated=0
+waiting	minutes=28 calls=3
+cache	write=118600 read=850000 rewrites=1
+reread	files=3 reads=10
+reread_file	/work/app/a.md	reads=3
+reread_file	/work/app/src/main.c	reads=4
+reread_file	C:\work\notes.txt	reads=3
+turns	assistant=40 tool_calls=37
