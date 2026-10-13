@@ -85,11 +85,17 @@ function Days([long]$y, [long]$m, [long]$d) {
   [long]($e * 146097 + $yoe * 365 + [Math]::Floor($yoe / 4) - [Math]::Floor($yoe / 100) + [Math]::Floor((153 * $mp + 2) / 5) + $d - 1 - 719468)
 }
 # the time line: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff], read as UTC) in milliseconds,
-# over every file as one set, sorted; wall = last - first, active = wall minus every gap over 5 minutes;
-# minutes rounded to the nearest, a half up; nothing when no record has a timestamp
+# over every file as one set, sorted; wall = last - first, active = wall minus every gap over 5 minutes
+# that no tool call spans (from a tool_use to its own tool_result, matched by id: the id's first
+# tool_use record to its last record naming it in tool_use_id); minutes rounded to the nearest, a half
+# up; nothing when no record has a timestamp
 $reStamp = [regex]'^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?'
+$reUse = [regex]'"type":[ \t]*"tool_use",[ \t]*"id":[ \t]*("[^"]*")'
+$reResult = [regex]'"tool_use_id":[ \t]*("[^"]*")'
 function Span([string[]]$Files) {
   $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''
+  $use = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
+  $res = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
   foreach ($file in $Files) {
     foreach ($line in [IO.File]::ReadLines($file)) {
       if (-not $line) { continue }
@@ -100,11 +106,28 @@ function Span([string[]]$Files) {
       $t.Add($ms)
       if ($ms -lt $first) { $first = $ms; $start = $ts.Substring(0, 19) }
       if ($ms -gt $last) { $last = $ms; $end = $ts.Substring(0, 19) }
+      # the tool calls this record starts (parallel ones too) and the results it carries
+      if ($line.Contains('"tool_use"')) {
+        foreach ($u in $reUse.Matches($line)) { $id = $u.Groups[1].Value; if (-not $use.ContainsKey($id) -or $ms -lt $use[$id]) { $use[$id] = $ms } }
+      }
+      if ($line.Contains('"tool_use_id"')) {
+        foreach ($u in $reResult.Matches($line)) { $id = $u.Groups[1].Value; if (-not $res.ContainsKey($id) -or $ms -gt $res[$id]) { $res[$id] = $ms } }
+      }
     }
   }
   if (-not $t.Count) { return }
+  # the tool calls' starts and ends, each sorted; a gap from $t[k-1] to $t[k] is spanned when more calls
+  # started than ended at or before $t[k-1] (every start and end is itself a record's time)
+  $cs = New-Object 'System.Collections.Generic.List[long]'; $ce = New-Object 'System.Collections.Generic.List[long]'
+  foreach ($id in $use.Keys) { if ($res.ContainsKey($id) -and $res[$id] -gt $use[$id]) { $cs.Add($use[$id]); $ce.Add($res[$id]) } }
+  $cs.Sort(); $ce.Sort(); $si = 0; $ei = 0
   $t.Sort(); $idle = [long]0
-  for ($k = 1; $k -lt $t.Count; $k++) { $gap = $t[$k] - $t[$k - 1]; if ($gap -gt 300000) { $idle += $gap } }   # nobody worked
+  for ($k = 1; $k -lt $t.Count; $k++) {
+    $p = $t[$k - 1]
+    while ($si -lt $cs.Count -and $cs[$si] -le $p) { $si++ }
+    while ($ei -lt $ce.Count -and $ce[$ei] -le $p) { $ei++ }
+    $gap = $t[$k] - $p; if ($gap -gt 300000 -and $si -eq $ei) { $idle += $gap }   # over 5 minutes, no tool call: nobody worked
+  }
   $wall = $last - $first
   "time`twall={0}m active={1}m start={2}Z end={3}Z" -f [long][Math]::Floor(($wall + 30000) / 60000), [long][Math]::Floor(($wall - $idle + 30000) / 60000), $start, $end
 }

@@ -1,0 +1,4 @@
+kind	model	cost_n	cost_median	cost_low	cost_high	time_n	time_median	time_low	time_high
+hard	opus	1	8.00	8.00	8.00	1	35	35	35
+ordinary	sonnet	2	1.85	0.30	3.40	1	36	36	36
+trivial	haiku	1	0.20	0.20	0.20	1	4	4	4

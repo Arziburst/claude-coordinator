@@ -65,6 +65,9 @@ expect "time: a subagent working while the transcript is quiet is active" 0 "$t/
 expect "time: a subagent alone, by its agentId" 0 "$t/expected-time-agent.txt" - -- "$tm" g2t
 expect "time: a session with one record (wall=0m)" 0 "$t/expected-time-one.txt" - -- "$tm" g3
 expect "time: no record with a timestamp, no time line" 0 "$t/expected-time-none.txt" - -- "$tm" g4
+# a 12-minute tool call is work, a 12-minute gap after a result is not, two overlapping tool calls
+# keep the time active until the later result
+expect "time: tool calls span their gaps, a gap after a result does not" 0 "$t/expected-time-tools.txt" - -- "$tm" g5
 # the same transcript with CRLF line ends (a checkout on Windows, a copy through another tool)
 mkdir -p "$tmp/crlf/projects/-work-app"
 awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$tm/projects/-work-app/g1.jsonl" > "$tmp/crlf/projects/-work-app/g1.jsonl"

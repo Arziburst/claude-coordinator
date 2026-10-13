@@ -229,9 +229,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
-`tests/run-stats/run.sh` (fixture run logs: old rows without the time columns, `-` values, under 4 and
-over 10 runs, even counts, no header or one in another order, a header only, CRLF with a BOM, a
-missing file),
+`tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
+and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
+values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
+CRLF with a BOM, a missing file),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
@@ -307,10 +308,11 @@ missing file),
   record in the files it counts (the transcript and its subagents', as one set): wall = the last minus
   the first; active = wall minus every gap over 5 minutes between two consecutive records (waiting for
   a limit, for an answer, a sleeping machine), so a background subagent working while its parent is
-  quiet is active time; minutes rounded to the nearest, a half up; `start` and `end` to the second, UTC.
-  No line when no record has a timestamp, and none with `--since` or `--prune`. A single tool call that
-  runs over 5 minutes (a long build, `gh pr checks --watch`) writes no record meanwhile, so it counts
-  as a gap. **The order** when a run ends: read its cost (a failed read retried once with the full
+  quiet is active time. A gap inside a tool call — from a `tool_use` to its own `tool_result`, matched
+  by id, parallel calls overlapping — is work whatever its length (a long build, `gh pr checks
+  --watch`); a gap after a result keeps the 5-minute rule. Minutes rounded to the nearest, a half up;
+  `start` and `end` to the second, UTC. No line when no record has a timestamp, and none with `--since`
+  or `--prune`. **The order** when a run ends: read its cost (a failed read retried once with the full
   command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every
@@ -332,13 +334,19 @@ missing file),
   by the CLI), so a worker's self-reported tokens are a guess.
 - **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
   prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
-  cost_low cost_high time_n time_median time_low time_high` — from the last 10 runs of the pair that
-  have a value for each measure (cost in USD, `active` in minutes; empty, `-`, `n/a` or `in <parent>`
-  skip the row for that measure, and rows from before the time columns count for cost only). Median: the
+  cost_low cost_high time_n time_median time_low time_high` — over **tasks**: the rows whose task
+  number agrees before its first dot (`37`, `37.1`, `37.2`) are one task, its cost and time the sums of
+  the values its rows have (cost in USD, `active` in minutes; empty, `-`, `n/a` or `in <parent>` are no
+  value, and a subagent's row, cost `in <parent>`, adds no time — it is inside its parent's); a task
+  none of whose rows has a value for a measure is left out of that measure only; rows from before the
+  time columns count for cost only. A task's kind and model are its lead row's, else its first worker
+  row's, else its first row's; an empty or `-` task (the coordinator's own daily line) is no task. Per
+  pair and measure the last 10 tasks with a value count (ordered by their last row). Median: the
   mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
-  rank (the value at rank ⌈p·n/100⌉) from 4 runs on, min and max under 4; cost to the cent, time to
+  rank (the value at rank ⌈p·n/100⌉) from 4 tasks on, min and max under 4; cost to the cent, time to
   the minute, rounded half up; a pair with no values shows `0` and `-`. `--kind <k> --model <m>`
   (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`.
+  `--per-run` (`-PerRun`) groups single rows by kind, role and model instead, for diagnosis.
   Columns are read by the header line (first field `date`), else in CORE §7's order. Exit 1 when the
   file cannot be read, 2 on a usage error.
 - Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,

@@ -467,7 +467,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
 - **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
   will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs), computed by
-  `scripts/run-stats <RUNS.tsv> --kind <k> --model <m>` (TOOLKIT *Usage*), never by hand. No history →
+  `scripts/run-stats <RUNS.tsv> --kind <k> --model <m>` (a task's rows summed, TOOLKIT *Usage*), never by hand. No history →
   seeded at init from the project's existing transcripts (`scripts/session-tokens` over
   `~/.claude/projects/<project>/`; on Arx this changed the first guess about 10×), else the
   coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
@@ -483,7 +483,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   the account's cost is summed with or without that model accordingly.
 - **Time is measured the same way, never self-reported:** a run's `start`, `wall` and `active` come
   from its transcript's timestamps (`scripts/session-tokens`, the `time` line; active leaves out every
-  gap over 5 minutes between records — a limit, an answer, a sleeping machine — and a subagent working
+  gap over 5 minutes between records — a limit, an answer, a sleeping machine — unless a tool call
+  spans it, from its `tool_use` to its own `tool_result`: a running build is work; a subagent working
   while its parent is quiet counts). Per task, derived from the run log and `gh`, no file of its own:
   - **work** — the sum of `active` over the task's runs (worker, tester, reviewer, verifier, a lead
     and its sub-runs); a subagent's row (`in <parent>`) is already inside its parent's time, as its cost is;
@@ -495,8 +496,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   - **owner wait** — ready → merge (`gh pr view <n> --json mergedAt`) plus those mid-task intervals.
     Reported, **never part of a forecast**: five minutes of work merged by hand a week later is a
     five-minute task.
-- **Time estimate per contract** (`budget.time`, minutes of work): the median `active` of the kind's
-  last 10 runs on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max
+- **Time estimate per contract** (`budget.time`, minutes of work): the median work of the kind's
+  last 10 tasks on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max
   under 4 runs: "≈ 25 min (18–40), 8 runs" — from the same `scripts/run-stats` line as the cost
   (its percentile and rounding rules are in its top comment). Time to ready is measured against it
   and reported beside it. No history → seeded at init in the same pass as the cost seed (the
