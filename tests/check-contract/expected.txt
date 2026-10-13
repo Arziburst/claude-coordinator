@@ -1,0 +1,10 @@
+how-in-text.md: ERROR criterion 1: oracle check without `how`
+how-in-text.md: FAIL (1 errors, 0 warnings)
+quoted.md: OK (0 errors, 0 warnings)
+empty-id-title.md: ERROR `id` is empty
+empty-id-title.md: ERROR `title` is empty
+empty-id-title.md: FAIL (2 errors, 0 warnings)
+misplaced.md: ERROR criterion must be the first key of each acceptance item
+misplaced.md: FAIL (1 errors, 0 warnings)
+bom.md: OK (0 errors, 0 warnings)
+missing.md: cannot read

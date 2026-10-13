@@ -16,8 +16,12 @@ case "${1:-}" in -h|--help) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2 ;; esac
 for d in "$@"; do [ -d "$d" ] || { echo "not a folder: $d" >&2; exit 2; }; done
 
 n=0; e=0
-# every file as <folder>/<path below it>, sorted the same way on every system
-list() { for d in "$@"; do d="${d%/}"; find "$d" -type f -name "*.$ext" | sed "s|^$d/||" | LC_ALL=C sort | sed "s|^|$d/|"; done; }
+# every file as <folder>/<path below it>, sorted the same way on every system. The core's deliberately
+# broken fixtures (tests/check-scripts/broken/) are left out unless the folder given is that folder or
+# inside it: a whole core copy passes, and their own check still sees them fail.
+list() { for d in "$@"; do d="${d%/}"; find "$d" -type f -name "*.$ext" | sed "s|^$d/||" | LC_ALL=C sort |
+  A="$(cd "$d" && pwd)/" awk 'BEGIN { a = ENVIRON["A"]; p = "/tests/check-scripts/broken/" } index(a, p) || !index(a $0, p)' |
+  sed "s|^|$d/|"; done; }
 
 ext=sh
 while IFS= read -r f; do

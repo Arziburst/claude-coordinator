@@ -44,6 +44,10 @@ jobs:
           printf '%s\n' "$out" | grep -q "^tests/check-scripts/broken/bad\.ps1:3: Variable reference is not valid. ':' was not followed by a valid variable name character"
           printf '%s\n' "$out" | grep -qx 'check-scripts: 3 files, 2 errors'
           bash scripts/check-scripts.sh tests/check-scripts/pwsh7 | grep -qx 'check-scripts: 1 files, 0 errors'
+          # the whole repository (UPDATE-CORE runs it on a core copy): the broken fixtures are left out
+          out="$(bash scripts/check-scripts.sh .)" || { printf '%s\n' "$out"; echo "the whole repository must pass"; exit 1; }
+          printf '%s\n' "$out" | grep -q 'broken' && { echo "the broken fixtures were checked"; exit 1; }
+          printf '%s\n' "$out" | grep -q '^check-scripts: [0-9]* files, 0 errors$'
       - name: Every script parses, and a broken one is reported (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
@@ -62,11 +66,14 @@ jobs:
           if ($x.Count -eq 0) { "needs7.ps1 must not parse under 5.1"; exit 1 }
           $out = @(.\scripts\check-scripts.ps1 tests/check-scripts/pwsh7)
           if ($LASTEXITCODE -ne 0 -or -not ($out -ceq 'check-scripts: 1 files, 0 errors')) { $out; 'needs7.ps1 not handed to pwsh'; exit 1 }
+          # the whole repository (UPDATE-CORE runs it on a core copy): the broken fixtures are left out
+          $out = @(.\scripts\check-scripts.ps1 .)
+          if ($LASTEXITCODE -ne 0 -or ($out -match 'broken')) { $out; 'the whole repository must pass without the broken fixtures'; exit 1 }
           exit 0
       - name: check-scripts.sh and .ps1 print the same on Windows (Git Bash, Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         run: |
-          for d in scripts tests/check-scripts/broken tests/check-scripts/pwsh7; do
+          for d in scripts tests/check-scripts/broken tests/check-scripts/pwsh7 . tests; do
             a="$(bash scripts/check-scripts.sh "$d")" || true
             b="$(powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-scripts.ps1 "$d" | tr -d '\r')" || true
             [ "$a" = "$b" ] || { echo "differ on $d"; printf '%s\n--\n%s\n' "$a" "$b"; exit 1; }
@@ -116,6 +123,15 @@ jobs:
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\same.md", ($m.Groups[1].Value -replace '(?m)^  escalate_to: fable ', '  escalate_to: opus  '))
           if (-not ((.\scripts\check-contract.ps1 "$env:RUNNER_TEMP\same.md") -match 'is not stronger than budget.model')) { 'an escalate_to no stronger than the model must warn'; exit 1 }
           exit 0
+      - name: check-contract on the fixture contracts (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/check-contract/run.sh sh
+      - name: check-contract on the fixture contracts (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/check-contract/run.sh ps pwsh
+      - name: check-contract on the fixture contracts (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: bash tests/check-contract/run.sh ps powershell
       - name: session-tokens counts the fixture exactly (bash)
         if: runner.os != 'Windows'
         run: |
@@ -279,6 +295,24 @@ jobs:
           .\scripts\selftest.ps1 clean -Sandbox $d
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $d)) { 'the merged sandbox was not removed'; exit 1 }
           exit 0
+      - name: selftest prepare reads CORE-FINDINGS.md the same way (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/selftest/prepare.sh sh
+      - name: selftest prepare reads CORE-FINDINGS.md the same way (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/selftest/prepare.sh ps pwsh
+      - name: selftest prepare reads CORE-FINDINGS.md the same way (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: bash tests/selftest/prepare.sh ps powershell
+      - name: The checks on a project's cloned core copy (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/selftest/core-copy.sh sh
+      - name: The checks on a project's cloned core copy (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/selftest/core-copy.sh ps pwsh
+      - name: The checks on a project's cloned core copy (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: bash tests/selftest/core-copy.sh ps powershell
       - name: Both variants print the same (pwsh on Linux)
         if: runner.os == 'Linux'
         run: |
@@ -287,6 +321,7 @@ jobs:
           for f in good shell shellexit backslash envvar post shellfar space bashonly comment noblock; do diff <(bash scripts/selftest.sh hooks --settings tests/selftest/hooks/$f.json) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings tests/selftest/hooks/$f.json); done
           for id in blocked0 nonblock noblock0 missing0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
+          diff <(bash scripts/check-scripts.sh . tests) <(pwsh -NoProfile -File scripts/check-scripts.ps1 . tests)
           f="$RUNNER_TEMP/example.md"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
           home="$RUNNER_TEMP/home"; mkdir -p "$home"

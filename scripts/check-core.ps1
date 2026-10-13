@@ -24,8 +24,19 @@ foreach ($l in [IO.File]::ReadAllLines((Join-Path $Root 'CORE.md'))) {
 }
 
 $errors = 0; $files = 0
-# -Force: dot-folders (.github ...) too, as find does; ordinal order of the relative paths, as LC_ALL=C sort
-$all = @(Get-ChildItem -Path . -Filter '*.md' -File -Recurse -Force | Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' })
+# the Markdown files below the root as check-core.sh's find lists them: dot-folders (.github ...) too, but
+# not .git, not .claude/ (agent worktrees of a checkout) and not a nested repository or worktree
+function MdFiles([string]$dir) {
+  foreach ($x in @(Get-ChildItem -LiteralPath $dir -Force)) {
+    if ($x.PSIsContainer) {
+      if ($x.Name -ceq '.git' -or $x.Name -ceq '.claude' -or ($x.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+          (Test-Path -LiteralPath (Join-Path $x.FullName '.git'))) { continue }
+      MdFiles $x.FullName
+    } elseif ($x.Name -clike '*.md') { $x }
+  }
+}
+# ordinal order of the relative paths, as LC_ALL=C sort
+$all = @(MdFiles $Root)
 $rels = [string[]]@($all | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/' })
 $byRel = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal); for ($i = 0; $i -lt $all.Count; $i++) { $byRel[$rels[$i]] = $all[$i] }
 [Array]::Sort($rels, [StringComparer]::Ordinal)

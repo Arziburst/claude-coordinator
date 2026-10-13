@@ -43,9 +43,10 @@ case "$step" in
 scripts)
   [ $# -eq 0 ] || usage
   t="$(mktemp -d)"; trap 'rm -r "$t"' EXIT
-  # a local copy (no .git) must not hold the core's CLAUDE.md: Claude Code loads it into every session
-  # that reads the copy's files, telling workers they are the coordinator
-  if [ -f "$core/CLAUDE.md" ] && [ ! -e "$core/.git" ]; then
+  # a local copy must not hold the core's CLAUDE.md: Claude Code loads it into every session that reads
+  # the copy's files, telling workers they are the coordinator. Only the maintainer's own checkout has
+  # .github/ (a project's copy leaves it out), so a copy made by git clone (with .git) counts too
+  if [ -f "$core/CLAUDE.md" ] && [ ! -d "$core/.github" ]; then
     fail "the local core copy holds CLAUDE.md: remove it (it tells every worker it is the coordinator)"
   else pass "no CLAUDE.md in a local core copy"; fi
   check "check-core" -- bash "$core/scripts/check-core.sh" "$core"
@@ -229,11 +230,17 @@ prepare|verify)
     fi
     # the record of the core's own failures (procedures/CORE-FINDINGS.md) in the template's format
     fnd="$state/CORE-FINDINGS.md"
+    # its lines without CR and without a UTF-8 BOM (both are fine); UTF-16 (Windows PowerShell 5.1's
+    # Out-File) is not read as text at all
+    lines() { tr -d '\r' < "$fnd" | B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }'; }
     if [ ! -f "$fnd" ]; then fail "no CORE-FINDINGS.md in the state repository (INIT 3.4, CORE-FINDINGS.template.md)"
-    elif ! tr -d '\r' < "$fnd" | grep -qxF '| id | date | core | trigger | what happened (evidence) | workaround | status |'; then
+    elif case "$(od -An -tx1 -N2 "$fnd" | tr -d ' \t\n')" in fffe|feff) true ;; *) false ;; esac; then
+      fail "CORE-FINDINGS.md is not UTF-8 (re-save it as UTF-8)"
+    elif ! lines | grep -qxF '| id | date | core | trigger | what happened (evidence) | workaround | status |'; then
       fail "CORE-FINDINGS.md lacks the template's table header"
     else
-      bad="$(tr -d '\r' < "$fnd" | awk -F'|' '/^\|/ && !/^\| id \|/ && !/^\|---/ { s = $(NF - 1); gsub(/^ +| +$/, "", s); if (s !~ /^(new|discussed|sent|fixed|dropped|not core)/) print s }' | head -n 1)"
+      # the status cell, case-sensitive; an empty one is unknown too
+      bad="$(lines | awk -F'|' '/^\|/ && !/^\| id \|/ && !/^\|---/ { s = $(NF - 1); gsub(/^[ \t]+|[ \t]+$/, "", s); if (s !~ /^(new|discussed|sent|fixed|dropped|not core)/) print (s == "" ? "<empty>" : s) }' | head -n 1)"
       if [ -z "$bad" ]; then pass "CORE-FINDINGS.md in the template's format"; else fail "CORE-FINDINGS.md: unknown status '$bad'"; fi
     fi
     if git -C "$state" show-ref -q --verify "refs/heads/$base"; then

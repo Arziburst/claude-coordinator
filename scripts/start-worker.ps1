@@ -19,6 +19,8 @@
 # origin, or a -Base not on origin yet (a lead's integration branch), starts the branch from the local -Base.
 # The hook path in -Safety uses forward slashes: hooks run through Git Bash on Windows, which drops
 # backslashes, and a hook that fails to run blocks nothing.
+# The worktrees' folder and a coordinator/ state repository at the root are kept out of the project's
+# git: one line each in its .git/info/exclude, never .gitignore.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun)
@@ -102,6 +104,26 @@ else {
     }
     [IO.File]::AppendAllText($ex, "$nl/$($r[0])`n")
     "added /$($r[0]) to the repository's .git/info/exclude"
+  }
+}
+# The coordinator's own state repository (<root>/coordinator, INIT 3.4) never shows in the project's git
+# either: a project that got `git init` after coordinator/ existed has no line for it yet
+if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
+  $ign = & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q coordinator/ 2>$null; $LASTEXITCODE }
+  if ($ign -ne 0) {
+    if ($DryRun) { "[dry-run] add /coordinator/ to the repository's .git/info/exclude" }
+    else {
+      $common = & { $ErrorActionPreference = 'Continue'; git -C $root rev-parse --path-format=absolute --git-common-dir }
+      New-Item -ItemType Directory -Force -Path (Join-Path $common 'info') | Out-Null
+      $ex = Join-Path $common 'info/exclude'
+      # a file without a final newline would glue the new line to its last one
+      $nl = ''
+      if ((Test-Path -LiteralPath $ex) -and (Get-Item -LiteralPath $ex).Length -gt 0) {
+        $bytes = [IO.File]::ReadAllBytes($ex); if ($bytes[$bytes.Length - 1] -ne 10) { $nl = "`n" }
+      }
+      [IO.File]::AppendAllText($ex, "$nl/coordinator/`n")
+      "added /coordinator/ to the repository's .git/info/exclude"
+    }
   }
 }
 
