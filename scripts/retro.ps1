@@ -162,7 +162,8 @@ if ($Week -and $Week -cnotmatch '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[0
 $RunLines = Read-Lines $RunLog
 $dir = Split-Path -Parent (Resolve-Path -LiteralPath $RunLog).Path
 if (-not $Project) { $Project = Split-Path -Parent $dir }
-if (-not [IO.Path]::IsPathRooted($Project)) { $Project = Join-Path (Get-Location).Path $Project }
+# absolute as the .sh takes it: rooted, or a drive letter (C:/x is a Windows root even in pwsh on Linux)
+if (-not ([IO.Path]::IsPathRooted($Project) -or $Project -cmatch '^[A-Za-z]:')) { $Project = Join-Path (Get-Location).Path $Project }
 if (-not $PSBoundParameters.ContainsKey('Journal') -and (Test-Path -LiteralPath (Join-Path $dir 'LOG.md') -PathType Leaf)) { $Journal = Join-Path $dir 'LOG.md' }
 if (-not $PSBoundParameters.ContainsKey('Escapes') -and (Test-Path -LiteralPath (Join-Path $dir 'ESCAPES.tsv') -PathType Leaf)) { $Escapes = Join-Path $dir 'ESCAPES.tsv' }
 $JournalLines = @(); $EscapeLines = @()
