@@ -3,11 +3,15 @@
 #   scripts/run-stats.sh <RUNS.tsv>                                 per kind and model, over TASKS
 #   scripts/run-stats.sh <RUNS.tsv> --kind <kind> --model <model>   that pair's line only (a contract's estimate)
 #   scripts/run-stats.sh <RUNS.tsv> --per-run                       per kind, role and model, over single rows
+#   scripts/run-stats.sh <RUNS.tsv> --task <n> [--pr-json <file|->] [--waits <file>]
+#                                                                   one task's `task` row: time to ready (below)
 #   scripts/run-stats.sh --limits [options]                         the limits: percent per dollar, dollars left
 #                                                                   and a block's fit (below)
 # RUNS.tsv (CORE §7): tab-separated, columns by the header line when there is one (its first field `date`;
-# names task, role, kind, model, cost, active), else in CORE §7's order (task 2, role 3, kind 4, model 5,
-# cost 9, active 13). Blank lines and lines starting with # are skipped; CRLF and a UTF-8 BOM read as plain.
+# names task, role, kind, model, cost, result, start, wall, active), else in CORE §7's order (task 2, role 3,
+# kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14). Blank lines and lines starting
+# with # are skipped; CRLF and a UTF-8 BOM read as plain. A row with role `task` is a finished task's own row
+# (CORE §7: wall = its time to ready); it counts only toward ready below, never toward cost or time.
 # Values: cost in USD (a number, `$` allowed), active in minutes (a number, a trailing `m` allowed); any
 # other value (empty, `-`, `n/a`, `in <parent>`) has none, and a row without the time columns has no time.
 # A TASK is the rows whose task number agrees before its first dot (37, 37.1 and 37.2 are task 37; an
@@ -15,14 +19,33 @@
 # subagent's row, cost `in <parent>`, adds no time: it is inside its parent's); a task none of whose rows
 # has a value for a measure is left out of that measure only. Its kind and model are its lead row's, else
 # its first worker row's (the model it was planned on), else its first row's; tasks are ordered by their
-# last row. Per kind and model and per measure, the LAST 10 tasks that have a value for it count.
-# --per-run: every row on its own, grouped by kind, role and model, the last 10 rows with a value.
+# last row. Ready: per task its last `task` row's wall, under that row's kind and model, tasks ordered by
+# that row. Per kind and model and per measure, the LAST 10 tasks that have a value for it count.
+# --per-run: every row on its own (no `task` rows), grouped by kind, role and model, the last 10 rows with a
+# value, without the ready columns.
 # Prints a header, then tab-separated (sorted; --per-run adds role after kind):
 #   kind model cost_n cost_median cost_low cost_high time_n time_median time_low time_high
+#   ready_n ready_median ready_low ready_high
 #   median: the middle value, the mean of the two middle ones for an even count;
 #   low / high: the 25th and 75th percentile by nearest rank (the value at rank ceil(p * n / 100) of the
 #   sorted values, 1-based) from 4 values on, min and max under 4;
 #   cost to the cent, time to the minute, each rounded half up once; no values: n 0 and `-`.
+# --task <n> (CORE §7a: time to ready, owner wait): prints the task's `task` row to append to RUNS.tsv, in the
+#   header's order (a column it does not name stays empty), then the names it lacks in CORE §7's order, `wait`
+#   last: date (UTC: the merge, else ready) task role(`task`) kind model effort(-) estimate(-) tokens(-) cost(-)
+#   result(`merged` / `ready`) start wall active wait. The task's rows (before the first dot; `task` rows
+#   aside): start = the earliest start; active = the work, its rows' active summed (a subagent's, `in
+#   <parent>`, aside); kind and model as above. Ready = the later of the last approval of a verifier row
+#   (result `approved…`: its start + wall) and the checks all green; a task with verifier rows none of which
+#   approved is not ready. --pr-json: `gh pr view <n> --json statusCheckRollup,mergedAt,createdAt` (- reads
+#   stdin), read as text: per check (its type, workflow and name) the run started last counts - a rerun
+#   replaces a red run -, green = a CheckRun COMPLETED with SUCCESS / NEUTRAL / SKIPPED or a StatusContext
+#   SUCCESS, the checks' time the last completedAt (else startedAt); one not green: not ready; no checks: the
+#   verifier alone. --waits: the journal's owner decisions for the task, `<asked> <answered>` per line
+#   (YYYY-MM-DDTHH:MM:SS[.f]Z; # comments); the part of each inside start .. ready, overlaps once, is the
+#   mid-task wait. wall = ready - start - that wait; wait = merge - ready (never below 0) + that wait;
+#   unmerged (mergedAt null or no --pr-json): result `ready`, wait `<mid-task wait>+` (still open). Seconds
+#   exact, each minute value rounded half up once.
 # --limits (CORE §7a: limit percent per dollar, the block forecast), every option optional:
 #   --status <file>        the status JSON (default <config>/coordinator/statusline.json, <config> being
 #                          $CLAUDE_CONFIG_DIR or ~/.claude): rate_limits.five_hour and .seven_day
@@ -32,7 +55,8 @@
 #                          in USD per million tokens (cache write at the 1-hour price; `$` and ` / ` allowed,
 #                          # comments), then `not-weekly` for a model with its own limit whose spend does not
 #                          count toward the weekly one (BINDINGS Models); a spend model takes the line of its own
-#                          id, else of the longest id it starts with (a dated id); none: exit 1
+#                          id, else of the longest id it starts with (a dated id); none: exit 1. Assumed: every
+#                          model, an own-limit one too, spends the 5-hour window (not measured): five_hour sums them all
 #   --prev-5h, --prev-week <% per $>   the last window's ratio      --cap-5h, --cap-week <%>   the caps (§9)
 #   --block <USD>          the block's estimate                     --now <Unix seconds>       instead of the clock
 # Prints a header, then a line for five_hour and one for seven_day, tab-separated:
@@ -47,8 +71,9 @@
 #   A window absent from the JSON: all `-`. resets_at passed: the window has reset - used 0, since, resets
 #   and cost `-` (its spend is the old window's), the ratio only from --prev-*.
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
-# line is malformed or a spend model has no price; 2 on a usage error.
-usage() { sed -n '2,50s/^# \{0,1\}//p' "$0"; exit 2; }
+# line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
+# ready or a wait line is malformed; 2 on a usage error.
+usage() { sed -n '2,75s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -150,7 +175,124 @@ limits() {
         blk = one(rdiv(p, 100000)); fit = (100 * u + p <= 100 * L4) ? "fits" : "does not fit" }
       print w "\t" one(rdiv(u, 1000)) "\t" since "\t" res "\t" cost "\t" (r < 0 ? "-" : sprintf("%d.%04d", idiv(r, 10000), r % 10000)) "\t" basis "\t" left "\t" lc "\t" blk "\t" fit }'
 }
+# YYYY-MM-DDTHH:MM:SS[.fraction]Z as Unix seconds (the civil calendar: no mktime in the BSD awk), -1 when it is
+# none; and back to YYYY-MM-DDTHH:MM:SSZ
+tfn='function epoch(v,   y, m, d, h, mi, s, e, yoe, doe) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+    if (v !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]([.][0-9]+)?Z$/) return -1
+    y = substr(v, 1, 4) + 0; m = substr(v, 6, 2) + 0; d = substr(v, 9, 2) + 0
+    h = substr(v, 12, 2) + 0; mi = substr(v, 15, 2) + 0; s = substr(v, 18, 2) + 0
+    if (m < 1 || m > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 60) return -1
+    y -= (m <= 2); e = idiv(y, 400); yoe = y - e * 400
+    doe = yoe * 365 + idiv(yoe, 4) - idiv(yoe, 100) + idiv(153 * (m > 2 ? m - 3 : m + 9) + 2, 5) + d - 1
+    return (e * 146097 + doe - 719468) * 86400 + h * 3600 + mi * 60 + s }
+  function iso(t,   s, z, e, doe, yoe, doy, mp, d, m, y) { s = t % 86400; z = idiv(t - s, 86400) + 719468
+    e = idiv(z, 146097); doe = z - e * 146097
+    yoe = idiv(doe - idiv(doe, 1460) + idiv(doe, 36524) - idiv(doe, 146096), 365)
+    doy = doe - (365 * yoe + idiv(yoe, 4) - idiv(yoe, 100)); mp = idiv(5 * doy + 2, 153)
+    d = doy - idiv(153 * mp + 2, 5) + 1; m = mp < 10 ? mp + 3 : mp - 9; y = yoe + e * 400 + (m <= 2)
+    return sprintf("%04d-%02d-%02dT%02d:%02d:%02dZ", y, m, d, idiv(s, 3600), idiv(s % 3600, 60), s % 60) }'
+# --task: one task's `task` row - its time to ready and owner wait (CORE 7a)
+taskrow() {
+  local f="$1" id="$2" pj="" wf="" x C="checks none" G="-" W=""
+  shift 2
+  while [ $# -gt 0 ]; do
+    [ $# -ge 2 ] || usage
+    case "$1" in --pr-json) pj="$2" ;; --waits) wf="$2" ;; *) usage ;; esac; shift 2
+  done
+  [ "$wf" != - ] || usage                                             # stdin is for the PR's JSON only
+  for x in "$f" "$pj" "$wf"; do
+    [ -z "$x" ] || [ "$x" = - ] || { [ -f "$x" ] && [ -r "$x" ]; } || { echo "run-stats: cannot read $x" >&2; return 1; }
+  done
+  # the PR: `merged <seconds|->`, then `checks none`, `checks green <seconds>` (the last completion of the
+  # checks' latest runs) or `checks red <state> <name>`; the JSON as one line, read as text, each check a flat object
+  if [ -n "$pj" ]; then
+    x="$pj"; [ "$x" = - ] && x=""
+    x="$(B="$B" LC_ALL=C awk "$units$tfn"'
+      { bom(); s = s " " $0 }
+      function str(o, k,   v) { if (!match(o, "\"" k "\"[ \t]*:[ \t]*\"[^\"]*\"")) return ""
+        v = substr(o, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*"/, "", v); sub(/"$/, "", v); return v }
+      END { m = epoch(str(s, "mergedAt")); print "merged", (m < 0 ? "-" : m)
+        p = index(s, "\"statusCheckRollup\""); r = substr(s, p + 19)
+        if (!p || !match(r, /^[ \t]*:[ \t]*\[/)) { print "checks none"; exit }
+        r = substr(r, RLENGTH + 1); n = 0
+        # per check (its type, workflow and name) the run started last; a tie: the later one in the list
+        while (match(r, /^[ \t,]*[{][^{}]*[}]/)) { o = substr(r, RSTART, RLENGTH); r = substr(r, RLENGTH + 1)
+          k = str(o, "__typename") "\t" str(o, "workflowName") "\t" str(o, "name") str(o, "context"); t = epoch(str(o, "startedAt"))
+          if ((k in at) && t < at[k]) continue
+          if (!(k in at)) key[++n] = k
+          at[k] = t; nm[k] = str(o, "name") str(o, "context"); e = epoch(str(o, "completedAt")); fin[k] = (e < 0) ? t : e
+          if (str(o, "__typename") == "StatusContext") { st[k] = str(o, "state"); ok[k] = (st[k] == "SUCCESS") }
+          else { st[k] = (str(o, "status") == "COMPLETED") ? str(o, "conclusion") : str(o, "status")
+            ok[k] = (st[k] == "SUCCESS" || st[k] == "NEUTRAL" || st[k] == "SKIPPED") } }
+        g = -1
+        for (i = 1; i <= n; i++) { k = key[i]; if (!ok[k]) { print "checks red", (st[k] == "" ? "unknown" : st[k]), nm[k]; exit }
+          if (fin[k] > g) g = fin[k] }
+        print (g < 0 ? "checks none" : "checks green " g) }' ${x:+"$x"})" || return 1
+    G="${x%%
+*}"; G="${G#merged }"; C="${x#*
+}"
+  fi
+  # the owner-decision intervals: `<asked> <answered>` per line, UTC
+  if [ -n "$wf" ]; then
+    W="$(F="$wf" B="$B" LC_ALL=C awk "$units$tfn"'
+      { bom() }
+      /^[ \t]*(#|$)/ { next }
+      { a = epoch($1); b = epoch($2)
+        if (NF != 2 || a < 0 || b < a) { print "run-stats: " ENVIRON["F"] ":" FNR ": not an owner wait (<asked UTC> <answered UTC>)" > "/dev/stderr"; exit 1 }
+        print a, b }' "$wf")" || return 1
+  fi
+  F="$f" T="$id" C="$C" G="$G" W="$W" B="$B" LC_ALL=C awk -F '\t' "$units$tfn"'
+    BEGIN { T = ENVIRON["T"]; sub(/[.].*$/, "", T); ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cs = 10; cb = 11; cw = 12; ca = 13
+      first = -1; ver = -1 }
+    function col(c) { return c ? $c : "" }
+    function minutes(v) { sub(/m[ \t]*$/, "", v); return units(v) }   # in 1/10000 minute
+    function fail(m) { print "run-stats: task " T ": " m > "/dev/stderr"; bad = 1; exit 1 }
+    { bom() }
+    /^[ \t]*$/ || /^#/ { next }
+    $1 == "date" { nh = NF; ct = cr = ck = cm = cc = cs = cb = cw = ca = 0
+      for (i = NF; i >= 1; i--) { hd[i] = $i; if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
+        if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "result") cs = i; if ($i == "start") cb = i
+        if ($i == "wall") cw = i; if ($i == "active") ca = i }
+      next }
+    { t = col(ct); sub(/[.].*$/, "", t); r = col(cr); if (t != T || r == "task") next
+      n++; a = minutes(col(ca)); s = epoch(col(cb))
+      if (a >= 0 && col(cc) !~ /^[ \t]*in[ \t]/) { act += a; ha = 1 }   # a subagent: in its parent
+      p = (r == "lead") ? 3 : ((r == "worker") ? 2 : 1)
+      if (p > pr) { pr = p; k = col(ck); m = col(cm) }
+      if (s >= 0 && (first < 0 || s < first)) first = s
+      # the verifier approved at its run'"'"'s start + wall; the last approval counts
+      if (r == "verifier") { hv = 1; w = minutes(col(cw))
+        if (col(cs) ~ /^[ \t]*approved/ && s >= 0 && w >= 0 && s + idiv(w * 6, 1000) > ver) ver = s + idiv(w * 6, 1000) } }
+    END { if (bad) exit 1
+      if (!n) fail("no rows in " ENVIRON["F"])
+      if (first < 0) fail("no run has a start")
+      if (hv && ver < 0) fail("not ready - no verifier run approved it")
+      split(ENVIRON["C"], c, " "); g = -1
+      if (c[2] == "red") { x = ENVIRON["C"]; sub(/^checks red [^ ]* /, "", x); fail("not ready - the check " x " is " c[3]) }
+      if (c[2] == "green") g = c[3] + 0
+      ready = ver > g ? ver : g
+      if (ready < 0) fail("not ready - no approved verifier run and no green checks")
+      if (ready < first) ready = first
+      # the owner waits inside first start .. ready, overlaps once
+      nw = split(ENVIRON["W"], L, "\n"); q = 0
+      for (i = 1; i <= nw; i++) { if (split(L[i], iv, " ") < 2) continue
+        lo = iv[1] + 0; hi = iv[2] + 0; if (lo < first) lo = first; if (hi > ready) hi = ready; if (hi <= lo) continue
+        q++; for (j = q; j > 1 && A[j - 1] > lo; j--) { A[j] = A[j - 1]; Z[j] = Z[j - 1] }; A[j] = lo; Z[j] = hi }
+      wait = 0; e = -1
+      for (i = 1; i <= q; i++) { lo = A[i] > e ? A[i] : e; if (Z[i] > lo) wait += Z[i] - lo; if (Z[i] > e) e = Z[i] }
+      mg = ENVIRON["G"]
+      if (mg != "-") { o = mg - ready; if (o < 0) o = 0; V["wait"] = idiv(o + wait + 30, 60); V["result"] = "merged"; V["date"] = substr(iso(mg + 0), 1, 10) }
+      else { V["wait"] = idiv(wait + 30, 60) "+"; V["result"] = "ready"; V["date"] = substr(iso(ready), 1, 10) }
+      V["task"] = T; V["role"] = "task"; V["kind"] = k; V["model"] = m; V["effort"] = V["estimate"] = V["tokens"] = V["cost"] = "-"
+      V["start"] = iso(first); V["wall"] = idiv(ready - first - wait + 30, 60); V["active"] = ha ? idiv(act + 5000, 10000) : "-"
+      # the header'"'"'s order (a column it does not name: empty), then the names it lacks in CORE 7'"'"'s order
+      x = "date task role kind model effort estimate tokens cost result start wall active wait"; split(x, nn, " ")
+      o = ""; for (i = 1; i <= nh; i++) { v = ""; if ((hd[i] in V) && !(hd[i] in u)) { v = V[hd[i]]; u[hd[i]] = 1 }; o = o (i > 1 ? "\t" : "") v }
+      for (i = 1; i <= 14; i++) if (!(nn[i] in u)) o = o (o == "" && i == 1 ? "" : "\t") V[nn[i]]
+      print o }' "$f"
+}
 [ "${1:-}" = --limits ] && { shift; limits "$@"; exit $?; }
+[ "${2:-}" = --task ] && { [ $# -ge 3 ] && [ -n "$1" ] && [ -n "$3" ] || usage; f="$1"; id="$3"; shift 3; taskrow "$f" "$id" "$@"; exit $?; }
 f="${1:-}"; kind=""; model=""; mode=task
 case $# in
   1) ;;
@@ -162,7 +304,7 @@ esac
 { [ -f "$f" ] && [ -r "$f" ]; } || { echo "run-stats: cannot read $f" >&2; exit 1; }
 # the file name and the pair via the environment: awk -v would read C:\Users as escapes (Git Bash)
 K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '\t' '
-  BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; ca = 13 }
+  BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cw = 12; ca = 13 }
   # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number
   function units(v, unit,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
     if (unit == "$") sub(/^[$]/, "", v); else sub(/m$/, "", v)
@@ -172,11 +314,15 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
   function col(c) { return c ? $c : "" }
   { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
   /^[ \t]*$/ || /^#/ { next }
-  $1 == "date" { ct = cr = ck = cm = cc = ca = 0
+  $1 == "date" { ct = cr = ck = cm = cc = cw = ca = 0
     for (i = NF; i >= 1; i--) { if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
-      if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "active") ca = i }   # the first of a name
+      if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "wall") cw = i; if ($i == "active") ca = i }   # the first of a name
     next }
   { k = col(ck); m = col(cm); r = col(cr); c = units(col(cc), "$"); a = units(col(ca), "m")
+    # a task row (role task): its wall is the time to ready, the forecast only; the last one of a task counts
+    if (r == "task") { if (mode == "run") next
+      t = col(ct); sub(/[.].*$/, "", t); if (t == "" || t == "-") next
+      rl[t] = ++rrow; rk[t] = k; rm[t] = m; rw[t] = units(col(cw), "m"); next }
     if (mode == "run") { if (k == "" || m == "") next
       g = k "\t" r "\t" m; seen[g] = 1
       if (c >= 0) V[g, "c", ++N[g, "c"]] = c; if (a >= 0) V[g, "t", ++N[g, "t"]] = a; next }
@@ -205,8 +351,14 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
         if (tk[t] == "" || tm[t] == "") continue
         g = tk[t] "\t" tm[t]; seen[g] = 1
         if (t in hc) V[g, "c", ++N[g, "c"]] = tc[t]; if (t in ha) V[g, "t", ++N[g, "t"]] = ta[t] }
+      # the task rows in the order of each task'"'"'s last one, under the kind and model they name
+      for (t in rl) rt[rl[t]] = t
+      for (i = 1; i <= rrow; i++) { if (!(i in rt)) continue; t = rt[i]
+        if (rk[t] == "" || rm[t] == "") continue
+        g = rk[t] "\t" rm[t]; seen[g] = 1; if (rw[t] >= 0) V[g, "r", ++N[g, "r"]] = rw[t] }
+      x = "\t"; y = "\tready_n\tready_median\tready_low\tready_high"
     }
-    if (mode == "one") { g = ENVIRON["K"] "\t" ENVIRON["M"]; print g "\t" stats(g, "c", 100) "\t" stats(g, "t", 10000); exit }
-    print (mode == "run" ? "kind\trole\tmodel" : "kind\tmodel") "\tcost_n\tcost_median\tcost_low\tcost_high\ttime_n\ttime_median\ttime_low\ttime_high"
-    for (g in seen) print g "\t" stats(g, "c", 100) "\t" stats(g, "t", 10000) | "LC_ALL=C sort"
+    if (mode == "one") { g = ENVIRON["K"] "\t" ENVIRON["M"]; print g "\t" stats(g, "c", 100) "\t" stats(g, "t", 10000) x stats(g, "r", 10000); exit }
+    print (mode == "run" ? "kind\trole\tmodel" : "kind\tmodel") "\tcost_n\tcost_median\tcost_low\tcost_high\ttime_n\ttime_median\ttime_low\ttime_high" y
+    for (g in seen) print g "\t" stats(g, "c", 100) "\t" stats(g, "t", 10000) (x == "" ? "" : x stats(g, "r", 10000)) | "LC_ALL=C sort"
     close("LC_ALL=C sort") }' "$f"

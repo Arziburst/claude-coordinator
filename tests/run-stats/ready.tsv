@@ -1,0 +1,37 @@
+date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	wait
+# the task rows (role task) give the ready columns and add nothing to cost or time: their active repeats the
+# work, so counting them would double it. Task 3 has two task rows (ready, then merged): the last one counts
+# and moves task 3 to the end; task 5's has no wall; task 1's falls out of the last 10.
+2026-10-01	1	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-01T08:00:00Z	12	10
+2026-10-01	1	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T08:00:00Z	500	10	30
+2026-10-01	2	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-01T09:00:00Z	12	11
+2026-10-01	2	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T09:00:00Z	20	11	5
+2026-10-01	3	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-01T10:00:00Z	14	12
+2026-10-01	3	task	ordinary	sonnet	-	-	-	-	ready	2026-10-01T10:00:00Z	999	12	0+
+2026-10-02	4	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-02T08:00:00Z	15	13
+2026-10-02	4	task	ordinary	sonnet	-	-	-	-	merged	2026-10-02T08:00:00Z	25	13	60
+2026-10-02	5	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-02T09:00:00Z	16	14
+2026-10-02	5	task	ordinary	sonnet	-	-	-	-	merged	2026-10-02T09:00:00Z	-	14	-
+2026-10-02	6	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-02T10:00:00Z	17	15
+2026-10-02	6	task	ordinary	sonnet	-	-	-	-	merged	2026-10-02T10:00:00Z	40	15	10
+2026-10-03	7	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-03T08:00:00Z	18	16
+2026-10-03	7	task	ordinary	sonnet	-	-	-	-	merged	2026-10-03T08:00:00Z	22	16	2
+2026-10-03	8	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-03T09:00:00Z	19	17
+2026-10-03	8	task	ordinary	sonnet	-	-	-	-	merged	2026-10-03T09:00:00Z	35	17	7
+2026-10-03	9	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-03T10:00:00Z	20	18
+2026-10-03	9	task	ordinary	sonnet	-	-	-	-	merged	2026-10-03T10:00:00Z	28	18	1
+2026-10-04	10	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-04T08:00:00Z	21	19
+2026-10-04	10	task	ordinary	sonnet	-	-	-	-	merged	2026-10-04T08:00:00Z	50	19	1440
+2026-10-04	11	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-04T09:00:00Z	22	20
+2026-10-04	11	task	ordinary	sonnet	-	-	-	-	merged	2026-10-04T09:00:00Z	45	20	3
+2026-10-04	12	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-04T10:00:00Z	23	21
+2026-10-04	12	task	ordinary	sonnet	-	-	-	-	merged	2026-10-04T10:00:00Z	30	21	4
+2026-10-05	3	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T10:00:00Z	31m	12	1500
+# a lead and its sub-run, and a second lead task: their task rows under the lead's kind and model
+2026-10-05	20	lead	hard	opus	high	12	1	4.00	approved	2026-10-05T08:00:00Z	50	20
+2026-10-05	20.1	worker	hard	sonnet	medium	3	1	2.00	approved	2026-10-05T08:05:00Z	20	15
+2026-10-05	20	task	hard	opus	-	-	-	-	merged	2026-10-05T08:00:00Z	60	35	15
+2026-10-06	21	lead	hard	opus	high	12	1	3.00	approved	2026-10-06T08:00:00Z	40	30
+2026-10-06	21	task	hard	opus	-	-	-	-	merged	2026-10-06T08:00:00Z	90	30	20
+# a task row alone under its pair (its runs logged before the kind was named)
+2026-10-06	22	task	trivial	haiku	-	-	-	-	merged	2026-10-06T09:00:00Z	7	4	1

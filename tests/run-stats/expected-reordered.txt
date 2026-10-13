@@ -1,2 +1,2 @@
-kind	model	cost_n	cost_median	cost_low	cost_high	time_n	time_median	time_low	time_high
-hard	opus	1	4.50	4.50	4.50	1	12	12	12
+kind	model	cost_n	cost_median	cost_low	cost_high	time_n	time_median	time_low	time_high	ready_n	ready_median	ready_low	ready_high
+hard	opus	1	4.50	4.50	4.50	1	12	12	12	0	-	-	-

@@ -347,7 +347,8 @@ BOM, models priced apart),
   by the CLI), so a worker's self-reported tokens are a guess.
 - **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
   prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
-  cost_low cost_high time_n time_median time_low time_high` — over **tasks**: the rows whose task
+  cost_low cost_high time_n time_median time_low time_high ready_n ready_median ready_low ready_high` —
+  over **tasks**: the rows whose task
   number agrees before its first dot (`37`, `37.1`, `37.2`) are one task, its cost and time the sums of
   the values its rows have (cost in USD, `active` in minutes; empty, `-`, `n/a` or `in <parent>` are no
   value, and a subagent's row, cost `in <parent>`, adds no time — it is inside its parent's); a task
@@ -357,11 +358,32 @@ BOM, models priced apart),
   pair and measure the last 10 tasks with a value count (ordered by their last row). Median: the
   mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
   rank (the value at rank ⌈p·n/100⌉) from 4 tasks on, min and max under 4; cost to the cent, time to
-  the minute, rounded half up; a pair with no values shows `0` and `-`. `--kind <k> --model <m>`
-  (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`.
-  `--per-run` (`-PerRun`) groups single rows by kind, role and model instead, for diagnosis.
+  the minute, rounded half up; a pair with no values shows `0` and `-`. The `ready_*` columns come
+  from the **task rows** (role `task`, CORE §7) alone: per task its last task row's `wall` (time to
+  ready), under that row's kind and model, the same last-10 and percentile rules; task rows add nothing
+  to cost or time, which their runs already hold. `--kind <k> --model <m>`
+  (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`, and the
+  ready forecast beside them. `--per-run` (`-PerRun`) groups single rows by kind, role and model instead,
+  for diagnosis, without task rows and without the ready columns.
   Columns are read by the header line (first field `date`), else in CORE §7's order. Exit 1 when the
   file cannot be read, 2 on a usage error.
+- **A task's time to ready and owner wait** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv> --task <n>
+  --pr-json <file> --waits <file>` (`run-stats.ps1 <RUNS.tsv> -Task <n> -PrJson <file> -Waits <file>`)
+  prints the task row to append to `RUNS.tsv` when the task merges: `gh pr view <PR> --json
+  statusCheckRollup,mergedAt,createdAt > <file>` (or `--pr-json -` from a pipe; `-PrJson:-` in
+  Windows PowerShell 5.1), and the owner questions that held the task up, from the journal, one
+  `<asked> <answered>` per line in UTC (`2026-10-06T08:20:00Z 2026-10-06T08:35:00Z`; `#` comments). It
+  takes the task's rows (`37`, `37.1`, … — task rows aside): `start` the earliest start, `active` the
+  summed work (a subagent's row aside), kind and model as above; ready is the later of the last
+  approving verifier run's start + wall and the moment the checks were all green — per check (type,
+  workflow, name) its run started last counts, so a green rerun replaces a red run, and the last
+  `completedAt` of those; a check not green (red, running) or verifier rows none of which approved:
+  not ready, exit 1; no checks, or no `--pr-json`: the verifier alone. `wall` = ready − start − the
+  owner waits inside that span (overlaps once); `wait` = merge − ready + those waits; unmerged:
+  result `ready`, `wait` `<m>+` (open — append the merged row later; the last one counts). Minutes
+  rounded half up from exact seconds; the row in the file's header order, missing names (`wait` in an
+  older file) appended in CORE §7's order. Exit 1 also when the task has no rows or no start, or a wait
+  line is no pair of UTC times.
 - **Limits: percent per dollar and the block's fit** (CORE §7a): `scripts/run-stats.sh --limits`
   (`run-stats.ps1 -Limits`, the options in each shell's form: `-Spend5h`, `-CapWeek`, …) does the
   limit arithmetic, never by hand. Inputs, all optional: `--status <file>` (default
@@ -371,7 +393,9 @@ BOM, models priced apart),
   <file>`, needed with a spend — the ladder's list prices from BINDINGS *Models*, one model per line,
   `<model id> <input> <output> <cache read> <cache write>` in USD per million tokens (cache write at the
   1-hour price; `$` and ` / ` allowed, `#` comments; e.g. `claude-opus-5-5 $5 / $25 / $0.50 / $10`), then
-  `not-weekly` for a model with its own limit whose spend does not count toward the weekly one; a spend
+  `not-weekly` for a model with its own limit whose spend does not count toward the weekly one (assumed:
+  every model, an own-limit one too, spends the 5-hour window — not measured — so `five_hour` sums them
+  all); the project keeps it as `coordinator/prices.txt` (one-time step `prices-file`); a spend
   model takes its own id's line, else the longest id it starts with, else exit 1; `--prev-5h` /
   `--prev-week <% per $>` (the last window's ratio); `--cap-5h` / `--cap-week <%>` (the project's caps,
   §9); `--block <USD>` (the block's estimate). Two steps: first without a spend, for each window's

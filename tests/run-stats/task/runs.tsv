@@ -1,0 +1,20 @@
+date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active
+# task 40: a tester, a worker, a verifier asking for rework, the worker again, the verifier approving at
+# 09:14 + 6 min = 09:20:00; a subagent inside the worker (no time of its own); an earlier task row (ignored)
+2026-10-06	40	tester	ordinary	haiku	low	0.5	1	0.40	approved	2026-10-06T08:00:00Z	10	8
+2026-10-06	40	worker	ordinary	sonnet	medium	3	1	3.00	approved	2026-10-06T08:12:00Z	40	30
+2026-10-06	40	researcher	ordinary	haiku	low	-	1	in 40	approved	2026-10-06T08:20:00Z	5	4
+2026-10-06	40	verifier	ordinary	haiku	low	0.3	1	0.20	rework 1	2026-10-06T08:52:00Z	4	3
+2026-10-06	40	worker	ordinary	sonnet	medium	3	1	1.00	approved	2026-10-06T08:58:00Z	15	12
+2026-10-06	40	verifier	ordinary	haiku	low	0.3	1	0.20	approved	2026-10-06T09:14:00Z	6	5
+2026-10-06	40	task	ordinary	sonnet	-	-	-	-	ready	2026-10-06T08:00:00Z	80	58	0+
+# task 41: its only verifier run asked for rework - not ready
+2026-10-06	41	worker	ordinary	sonnet	medium	3	1	2.00	approved	2026-10-06T10:00:00Z	30	25
+2026-10-06	41	verifier	ordinary	haiku	low	0.3	1	0.20	rework 1	2026-10-06T10:35:00Z	5	4
+# task 42: a lead and its sub-runs, no verifier row: ready when the checks are green
+2026-10-06	42.1	worker	hard	sonnet	medium	3	1	2.00	approved	2026-10-06T07:35:00Z	20	15
+2026-10-06	42.2	worker	hard	sonnet	medium	3	1	1.50	approved	2026-10-06T08:10:00Z	12	-
+2026-10-06	42.2	tester	hard	haiku	low	0.3	1	in 42	approved	2026-10-06T08:12:00Z	3	2
+2026-10-06	42	lead	hard	opus	high	12	1	4.00	approved	2026-10-06T07:30:00Z	60	20
+# task 43: a row from before the time columns - no start
+2026-10-06	43	worker	trivial	haiku	low	0.2	1	0.10	approved
