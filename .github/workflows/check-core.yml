@@ -102,6 +102,8 @@ jobs:
         run: |
           awk '/^```yaml$/ {on = 1; next} on && /^```/ {exit} on' CONTRACT.md > "$RUNNER_TEMP/example.md"
           bash scripts/check-contract.sh "$RUNNER_TEMP/example.md"
+          sed "s/^  escalate_to: fable /  escalate_to: opus  /" "$RUNNER_TEMP/example.md" > "$RUNNER_TEMP/same.md"
+          bash scripts/check-contract.sh "$RUNNER_TEMP/same.md" | grep -q "is not stronger than budget.model" || { echo "an escalate_to no stronger than the model must warn"; exit 1; }
       - name: The example contract in CONTRACT.md passes the contract check (PowerShell)
         if: runner.os == 'Windows'
         shell: powershell
@@ -110,7 +112,10 @@ jobs:
           $m = [regex]::Match($s, '(?s)```yaml\r?\n(.*?)```')
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\example.md", $m.Groups[1].Value)
           .\scripts\check-contract.ps1 "$env:RUNNER_TEMP\example.md"
-          exit $LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\same.md", ($m.Groups[1].Value -replace '(?m)^  escalate_to: fable ', '  escalate_to: opus  '))
+          if (-not ((.\scripts\check-contract.ps1 "$env:RUNNER_TEMP\same.md") -match 'is not stronger than budget.model')) { 'an escalate_to no stronger than the model must warn'; exit 1 }
+          exit 0
       - name: session-tokens counts the fixture exactly (bash)
         if: runner.os != 'Windows'
         run: |

@@ -20,6 +20,10 @@ for f in "$@"; do
     function val(s) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
     function err(m) { print F ": ERROR " m; ne++ }
     function warn(m) { print F ": WARN  " m; nw++ }
+    # the value of a budget key; the fixed model names in order of strength (0: a name not on this list)
+    function bval(t, k,   v) { if (!match(t, "\n[ \t]+" k ":[ \t]*[^ \t\n#]+")) return ""
+                              v = substr(t, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", v); return v }
+    function brank(m) { m = tolower(m); return m ~ /fable/ ? 4 : m ~ /opus/ ? 3 : m ~ /sonnet/ ? 2 : m ~ /haiku/ ? 1 : 0 }
     { sub(/\r$/, ""); L[++n] = $0 }   # CRLF files read like LF ones (as in check-contract.ps1)
     END {
       # the contract block: front matter, or the body of a top-level "contract:", else the whole file
@@ -74,6 +78,8 @@ for f in "$@"; do
       b = "\n" txt["budget"]
       if (b !~ /\n[ \t]+model:[ \t]*[^ \t\n]/) warn("budget.model missing (CORE §7)")
       if (b !~ /\n[ \t]+escalate_to:[ \t]*[^ \t\n]/) warn("budget.escalate_to missing (no stronger model to retry on)")
+      else if (brank(bval(b, "model")) && brank(bval(b, "escalate_to")) && brank(bval(b, "escalate_to")) <= brank(bval(b, "model")))
+        warn("budget.escalate_to (" bval(b, "escalate_to") ") is not stronger than budget.model (" bval(b, "model") "): its one retry gains nothing")
       if (b !~ /\n[ \t]+cost:[ \t]*[0-9]/) {
         if (b ~ /\n[ \t]+tokens:[ \t]*[0-9]/) warn("budget.tokens is now budget.cost, in USD at list price (CORE §7a)")
         else warn("budget.cost missing (no spend forecast, CORE §7a)")

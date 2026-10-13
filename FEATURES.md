@@ -462,12 +462,12 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - entry: a worker reports ready with green checks
 - promises: the verifier is not the author and changes nothing; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner
 - tested by: SELFTEST step 4 (a verifier run)
-- not covered: none known
+- not covered: SELFTEST step 4 checks only that each sub-task has a verdict, not its commit, per-criterion verdicts or evidence classes
 
 ### F-REVIEW-02 Evidence classes
 - defined: CONTRACT.md, CORE.md §6
 - entry: every report and verdict
-- promises: every result is `oracle`, `review` or `claim`; a check run by the reviewer on the reviewed commit is an oracle; the class survives into reports and the owner's summary
+- promises: every result is `oracle`, `oracle (worker's run, <commit>)`, `review`, `claim` or `owner`; a check run by the reviewer on the reviewed commit is an oracle; the class survives into reports and the owner's summary
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -502,9 +502,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-07 One escalation per contract
 - defined: CORE.md §7, roles/lead.md
 - entry: a review failure a stronger model would fix
-- promises: the contract's `escalate_to` is used once; a failed or stuck escalated run restarts nothing and the owner gets both reports and the options
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- promises: the contract's `escalate_to` is used once; a stuck run is helped or split and spends no escalation; check-contract warns when `escalate_to` is not stronger than `model`; a failed or stuck escalated run restarts nothing and the owner gets both reports and the options
+- tested by: CI step "The example contract in CONTRACT.md passes the contract check" (an `escalate_to` no stronger than the model warns)
+- not covered: the restart itself rests on the sessions following the rule
 
 ### F-REVIEW-08 Re-review scope
 - defined: CORE.md §6, roles/verifier.md

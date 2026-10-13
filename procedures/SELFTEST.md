@@ -110,7 +110,7 @@ the report notes the interruption and the resume time.
      cleanup-worker's fallback to `origin/<branch>` (roles/worker.md pushes with `-u`).
    - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
      the coordinator posts that verdict as a PR comment.
-   - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash`, never
+   - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash --match-head-commit <the commit the verdict names>`, never
      `--delete-branch`), checks `gh pr view --json state` → `MERGED`, and runs **cleanup-worker** on the
      worker's worktree (it must report cleaned: a merged PR with the pushed head). A merge refused by
      the auto mode's classifier goes to the owner as the exact `! gh pr merge …` command (TOOLKIT

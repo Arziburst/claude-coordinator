@@ -377,7 +377,9 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 - Re-review after fixes until approval with no Blocker or Major — **only what can have changed**: the
   failed criteria, the findings, and every criterion whose files the fix touched (`git diff <reviewed
   commit>..<new head>`); a criterion confirmed before and untouched since stays confirmed, with its
-  evidence and the commit it was confirmed on. The author never marks its own change
+  evidence and the commit it was confirmed on — except a CI oracle, which counts only on the head it ran
+  on (CONTRACT): it is re-taken from the CI run on the new head (green anyway before a merge, §1.7),
+  or the criterion stands as `review`. The author never marks its own change
   ready unless `PROJECT.md` says so.
 
 ## 7. Models and effort
@@ -413,7 +415,8 @@ never assumed (below).
   high where Opus is missing; the quality checks (contract, oracles, independent review, green CI) never
   depend on the level.
 - A worker failing on a usage limit restarts on another model; one failing review for a reason a stronger
-  model would fix restarts on its contract's `escalate_to` — **once per contract**. If the escalated run
+  model would fix restarts on its contract's `escalate_to` — **once per contract**; a stuck run (a
+  `blocked` report) is helped or split (§4) and spends no escalation. If the escalated run
   fails its review too (or gets stuck), nothing restarts again: the owner gets both reports and the
   options — split the task, rewrite the contract, the top rung, or drop it (§12).
 - **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
