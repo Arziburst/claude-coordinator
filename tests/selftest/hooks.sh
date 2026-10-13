@@ -54,5 +54,16 @@ usage hookcheck --session s1 --settings tests/selftest/hooks/good.json
 usage prepare --project "$tmp" --state "$tmp" --core c1 --state-repo o/r
 usage verify --project "$tmp" --state "$tmp" --core c1 --settings tests/selftest/hooks/good.json
 
+# hookcheck: a prefix of several transcripts, and a pattern or path character, name no session
+hc() {   # hc <session> <expected line>: exit 1 and that FAIL line
+  n=$((n + 1))
+  CLAUDE_CONFIG_DIR=tests/selftest/claude st hookcheck --session "$1" > "$tmp/one" 2>&1; rc=$?
+  { [ "$rc" = 1 ] && tr -d '\r' < "$tmp/one" | grep -qxF -- "$2"; } ||
+    { echo "FAIL (hookcheck --session $1): expected exit 1 and '$2', got exit $rc:"; sed 's/^/    /' "$tmp/one"; fail=1; }
+}
+hc n 'FAIL hookcheck: ambiguous session n: noblock0-0000-0000-0000-000000000003 nonblock-0000-0000-0000-000000000002'
+hc '*' 'FAIL hookcheck: the session id * holds a pattern or path character'
+hc 'blocked0/x' 'FAIL hookcheck: the session id blocked0/x holds a pattern or path character'
+
 echo "selftest hooks ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

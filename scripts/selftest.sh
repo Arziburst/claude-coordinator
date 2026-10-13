@@ -249,7 +249,7 @@ hooks)
     *) pass 'no $env: in its command' ;; esac
   # an unquoted path must be one word: a space splits it and the hook never runs (letter case as in the .ps1)
   lc="$(printf '%s\n' "$cmd" | tr '[:upper:]' '[:lower:]')"
-  if printf '%s\n' "$lc" | grep -Eq '"[^"]*safety-guard\.(sh|ps1)"'; then pass "its path is quoted or has no space"
+  if printf '%s\n' "$lc" | grep -Eq "\"[^\"]*safety-guard\.(sh|ps1)\"|'[^']*safety-guard\.(sh|ps1)'"; then pass "its path is quoted or has no space"
   else
     word="$(printf '%s\n' "$lc" | sed 's/safety-guard\..*//; s/.* //')"
     case "$word" in /*|[a-z]:*|'$'*|'~'*) pass "its path is quoted or has no space" ;;
@@ -271,8 +271,14 @@ hookcheck)
   id=""
   while [ $# -gt 0 ]; do case "$1" in --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;; *) usage ;; esac; done
   [ -n "$id" ] || usage
-  tf="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null | head -n 1)"
-  [ -n "$tf" ] || { fail "no transcript for session $id"; finish; }
+  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
+  case "$id" in *[][*?/\\]*) fail "the session id $id holds a pattern or path character"; finish ;; esac
+  all="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null)"
+  [ -n "$all" ] || { fail "no transcript for session $id"; finish; }
+  if [ "$(printf '%s\n' "$all" | wc -l | tr -d ' ')" -gt 1 ]; then
+    fail "ambiguous session $id: $(printf '%s\n' "$all" | sed 's|.*/||; s|\.jsonl$||' | LC_ALL=C sort | paste -sd ' ' -)"; finish
+  fi
+  tf="$all"
   if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
     fail "the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
   elif grep -q 'Blocked by safety-guard' "$tf"; then pass "the push to a protected branch was blocked through Claude Code"

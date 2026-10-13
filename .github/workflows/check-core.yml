@@ -103,7 +103,7 @@ jobs:
         shell: powershell
         run: |
           $h = 'tests/selftest/hooks'
-          foreach ($f in @('good', 'shellexit', 'comment', 'minified', 'twoentries', 'matcherall')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 0) { "$f.json must pass"; exit 1 } }
+          foreach ($f in @('good', 'shellexit', 'comment', 'minified', 'twoentries', 'matcherall', 'singlequote')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 0) { "$f.json must pass"; exit 1 } }
           foreach ($f in @('shell', 'backslash', 'envvar', 'post', 'shellfar', 'space', 'bashonly', 'noblock', 'matcherafter', 'trailingcomma')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 1) { "$f.json must fail"; exit 1 } }
           $env:CLAUDE_CONFIG_DIR = "$PWD\tests\selftest\claude"
           .\scripts\selftest.ps1 hookcheck -Session blocked0; if ($LASTEXITCODE -ne 0) { 'blocked0 must pass'; exit 1 }
