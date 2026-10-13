@@ -229,6 +229,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
+`tests/run-stats/run.sh` (fixture run logs: old rows without the time columns, `-` values, under 4 and
+over 10 runs, even counts, no header or one in another order, a header only, CRLF with a BOM, a
+missing file),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
@@ -327,6 +330,17 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   An ambiguous prefix (of a transcript or a status file) fails and lists session ids only, never
   project folders. A model cannot see its own counter (the status line is drawn
   by the CLI), so a worker's self-reported tokens are a guess.
+- **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
+  prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
+  cost_low cost_high time_n time_median time_low time_high` — from the last 10 runs of the pair that
+  have a value for each measure (cost in USD, `active` in minutes; empty, `-`, `n/a` or `in <parent>`
+  skip the row for that measure, and rows from before the time columns count for cost only). Median: the
+  mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
+  rank (the value at rank ⌈p·n/100⌉) from 4 runs on, min and max under 4; cost to the cent, time to
+  the minute, rounded half up; a pair with no values shows `0` and `-`. `--kind <k> --model <m>`
+  (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`.
+  Columns are read by the header line (first field `date`), else in CORE §7's order. Exit 1 when the
+  file cannot be read, 2 on a usage error.
 - Background sessions draw their status line without being opened. The status line command receives JSON with `rate_limits.five_hour.used_percentage`,
   `rate_limits.seven_day.used_percentage` and `resets_at` (claude.ai Pro / Max only, after the first
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)

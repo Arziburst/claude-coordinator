@@ -42,7 +42,7 @@ budget:
   effort: high
   escalate_to: fable               # model for one retry after a failed review
   cost: 16                         # USD at list price: the whole task, its tests and review (CORE §7a)
-  time: 18-40                      # optional: minutes to ready, the median's range (CORE §7a)
+  time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
 ---
@@ -56,11 +56,11 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
   result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
-- **`cost`**: the coordinator's estimate in dollars at list price (CORE §7a) — cost, not tokens: most
+- **`cost`**: the coordinator's estimate in dollars at list price (CORE §7a, `scripts/run-stats`) — cost, not tokens: most
   tokens are cheap cache reads, so a token count measures context times turns, not spend. A lead fits
   its sub-contracts inside it and stops to ask when a run goes over twice its own estimate.
-- **`time`** (optional): the forecast time to ready in minutes, a number or a range (`25`, `18-40`) —
-  measured from the transcripts, owner waits left out (CORE §7a). check-contract warns only when it is
+- **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`) —
+  from `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract warns only when it is
   there and is neither; a contract without it is fine.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, the
   coordinator restarts the contract on this model with the failed report attached (CORE §7) — once; a

@@ -466,7 +466,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   `scripts/session-tokens` `cost` line (the status line's, cumulative), or, where a session never drew
   one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
 - **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
-  will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs). No history →
+  will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs), computed by
+  `scripts/run-stats <RUNS.tsv> --kind <k> --model <m>` (TOOLKIT *Usage*), never by hand. No history →
   seeded at init from the project's existing transcripts (`scripts/session-tokens` over
   `~/.claude/projects/<project>/`; on Arx this changed the first guess about 10×), else the
   coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
@@ -494,9 +495,11 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   - **owner wait** — ready → merge (`gh pr view <n> --json mergedAt`) plus those mid-task intervals.
     Reported, **never part of a forecast**: five minutes of work merged by hand a week later is a
     five-minute task.
-- **Time estimate per contract** (`budget.time`, minutes): the median time to ready of the kind's last
-  10 tasks on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max under 4
-  tasks: "≈ 25 min (18–40), 8 runs". No history → seeded at init in the same pass as the cost seed (the
+- **Time estimate per contract** (`budget.time`, minutes of work): the median `active` of the kind's
+  last 10 runs on the model, shown as a range — the 25th–75th percentile (nearest rank), or min–max
+  under 4 runs: "≈ 25 min (18–40), 8 runs" — from the same `scripts/run-stats` line as the cost
+  (its percentile and rounding rules are in its top comment). Time to ready is measured against it
+  and reported beside it. No history → seeded at init in the same pass as the cost seed (the
   median `active` of the project's existing sessions, per model — a session under the model with most
   of its cost — until the kind has its own runs), else the coordinator's own estimate; either is
   marked `guess`.
@@ -505,12 +508,13 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
   median, marked `rough`. It does not fit → a smaller block, or the owner decides (over a cap only
   with permission).
-- **Analysis after the block:** one report line — forecast vs actual (cost, percent, time to ready per
-  task and for the block, deviation), the
+- **Analysis after the block:** one report line — forecast vs actual (cost, percent, time — work and
+  time to ready — per task and for the block, deviation), the
   worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate in cost or in time is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
   A side line gives the average owner wait before merge — a hint where the pipeline stalls, never a
-  reproach. Estimates recalibrate by themselves through the medians; "spend report" shows the numbers behind them.
+  reproach. Estimates recalibrate by themselves through the medians; "spend report" shows the numbers
+  behind them (`scripts/run-stats <RUNS.tsv>`: every kind and model).
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
 
