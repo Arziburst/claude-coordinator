@@ -35,6 +35,24 @@ for b in main work crlf blank bad bom utf16 utf16nul; do
 done
 # working folders inside a worktree of work (the cases name them in the branch column)
 mkdir -p "$tmp/work/.claude/worktrees/12-fix/src"
+fail=0; n=0; cr="$(printf '\r')"
+# Links (a junction in Git Bash, which needs no admin rights; a symlink elsewhere): links/work to the
+# project work (@LINK@), and inside work out-link to a folder outside it, dangling to a folder that is not
+# there, loopa and loopb to each other.
+mklinkdir() {   # mklinkdir <link> <target>
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' cmd /c mklink /J "$(winpath w "$1")" "$(winpath w "$2")" >/dev/null 2>&1 ;;
+    *) ln -s "$2" "$1" ;;
+  esac
+  [ -L "$1" ] || { echo "FAIL (links) could not make the link $1"; fail=1; }
+}
+mkdir -p "$tmp/links" "$tmp/elsewhere/x"
+mklinkdir "$tmp/links/work" "$tmp/work"
+mklinkdir "$tmp/work/out-link" "$tmp/elsewhere"
+mklinkdir "$tmp/work/dangling" "$tmp/gone"
+mklinkdir "$tmp/work/loopa" "$tmp/work/loopb"
+mklinkdir "$tmp/work/loopb" "$tmp/work/loopa"
+export SG_LINK="$(winpath m "$tmp/links/work")" SG_LINK_W="$(winpath w "$tmp/links/work")"
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath); @PROJECT@ the project's folder (C:/... in Git Bash)
 export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "$HOME")"
@@ -47,12 +65,13 @@ function rep(s, from, to,    k, o) { o = ""; while ((k = index(s, from)) > 0) { 
 function subst(s) {
   s = rep(s, "@HOME_M@", ENVIRON["SG_HOME_M"]); s = rep(s, "@HOME_W@", ENVIRON["SG_HOME_W"]); s = rep(s, "@HOME@", ENVIRON["SG_HOME"])
   s = rep(s, "@PROJECT_W@", ENVIRON["SG_PROJECT_W"]); s = rep(s, "@PROJECT_UP@", ENVIRON["SG_PROJECT_UP"])
-  s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
+  s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); s = rep(s, "@LINK_W@", ENVIRON["SG_LINK_W"])
+  s = rep(s, "@LINK@", ENVIRON["SG_LINK"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
 }'
-fail=0; n=0
-while IFS="$(printf '\t')" read -r expect branch cmd root; do
+while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
   case "$expect" in ''|'#'*) continue ;; esac
   [ "$expect" = fold ] && expect=$fold
+  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"   # a checkout with CRLF line ends
   n=$((n + 1))
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, the others an edit tool's call with the command column as its file path; the
@@ -71,6 +90,9 @@ while IFS="$(printf '\t')" read -r expect branch cmd root; do
   [ "$root" = - ] && root=""
   root="$(printf '%s' "$root" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')"
+  # the 5th column: CLAUDE_PROJECT_DIR; the project's folder when there is none, - for unset
+  case "$pdir" in '') pdir="$SG_PROJECT" ;; -) pdir="" ;; *) pdir="$(printf '%s' "$pdir" | awk "$SUBST_AWK"'
+    { printf "%s", subst($0) }')" ;; esac
   json="$(printf '%s' "$cmd" | awk -v cwd="$dir" -v tool="$tool" "$SUBST_AWK"'
     { gsub(/\\n/, "\001"); gsub(/\\t/, "\002"); $0 = subst($0)
       gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n"); gsub(/\002/, "\\t")
@@ -80,10 +102,11 @@ while IFS="$(printf '\t')" read -r expect branch cmd root; do
       else if (tool == "NotebookEdit") ti = "{\"notebook_path\":\"" $0 "\",\"new_source\":\"x\",\"cell_id\":\"c1\"}"
       else ti = "{\"command\":\"" $0 "\"}"
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
-  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$SG_PROJECT" COORD_PROTECTED_ROOT="$root" "$@" >/dev/null 2>&1
+  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" "$@" >/dev/null 2>&1
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
+  nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
+  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
 
 # The input itself: a BOM before the JSON is read through; what is not a JSON object blocks.

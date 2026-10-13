@@ -135,7 +135,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `Get-ChildItem` / `ls` piped into `Remove-Item -Recurse`, `git worktree remove --force`; a drive also
   as `/c`, `/mnt/c`, `/cygdrive/c`, home also written out in its Windows or Git Bash form, `~name` as
   a user's home for the Bash tool only; `.`, `*`, `..` and other relative targets count from the folder
-  a `cd` led to, and `.` and `x/..` are taken out of the path by its text). It parses
+  a `cd` led to, and `.` and `x/..` are taken out of the path by its text). A removal's target, an edit
+  tool's path, the project's folder, home and `COORD_PROTECTED_ROOT` are also compared as they lie on
+  disk — symlinks and junctions resolved for the part that exists (`cd -P`; in PowerShell the item's link
+  target), `..` after a link going to its target's parent, the rest kept as written —, so a link to them
+  is no way around the rules. It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
   wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf

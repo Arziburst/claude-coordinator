@@ -118,13 +118,13 @@ else
   fp="${both%%$nl*}"; both="${both#*$nl}"; np="${both%%$nl*}"; cmd="${both#*$nl}"
 fi
 
-# A path in one form for comparing: / separators, none repeated or trailing, lower case (canon <path>
-# keep: the letter case kept), . and x/.. taken out (by the text: /a/b/.. is /a; .. above the root stays
+# A path in one form for comparing (its canon form): / separators, none repeated or trailing, lower case
+# (keep: the letter case kept), . and x/.. taken out (by the text: /a/b/.. is /a; .. above the root stays
 # at the root), a drive as c: (C:\x, /c/x, /mnt/c/x and /cygdrive/c/x are all c:/x); / itself is empty.
-canon() {
-  local x r="" s out="" n=0 IFS=/; local segs=()
-  [ -n "$1" ] || return 0   # / with its separator stripped
-  if [ "${2:-}" = keep ]; then x=$(printf '%s' "$1" | tr '\\' '/'); else x=$(printf '%s' "$1" | tr '\\A-Z' '/a-z'); fi
+# canon_core <path>: of a path already in / separators and in the letter case wanted (no forks)
+canon_core() {
+  local x="$1" r="" s out="" n=0 t IFS=/; local segs=()
+  [ -n "$x" ] || return 0
   case "$x" in /*) r=/ ;; [A-Za-z]:*) r="${x:0:2}/"; x="${x:2}" ;; esac
   set -f; segs=($x); set +f   # split at / (no globbing: a * in the path stays a word)
   for s in "${segs[@]}"; do
@@ -136,7 +136,71 @@ canon() {
     esac
   done
   x="$r${out#/}"; [ -z "$x" ] && x=.
-  printf '%s' "$x" | sed -E -e 's#/+$##' -e 's#^/(mnt/|cygdrive/)?([A-Za-z])$#\2:#' -e 's#^/(mnt/|cygdrive/)?([A-Za-z])/#\2:/#'
+  while :; do case "$x" in */) x="${x%/}" ;; *) break ;; esac; done
+  # a drive in its Git Bash, WSL or Cygwin form: /c, /mnt/c, /cygdrive/c (and what follows) -> c:
+  case "$x" in /mnt/?|/mnt/?/*) t="${x#/mnt/}" ;; /cygdrive/?|/cygdrive/?/*) t="${x#/cygdrive/}" ;; /?|/?/*) t="${x#/}" ;; *) t="" ;; esac
+  case "$t" in [A-Za-z]|[A-Za-z]/*) x="${t%%/*}:${t#?}" ;; esac
+  printf '%s' "$x"
+}
+# canon_all <keep or ""> <path>...: the canon form of each path, one per line (one tr for all of them)
+canon_all() {
+  local l
+  while IFS= read -r l; do canon_core "$l"; printf '\n'; done <<CANON_ALL_END
+$(case_fold "$@")
+CANON_ALL_END
+}
+case_fold() {   # case_fold <keep or ""> <path>...: one per line, \ as /, lower case unless keep
+  local m="$1"; shift
+  if [ "$m" = keep ]; then printf '%s\n' "$@" | tr '\\' '/'; else printf '%s\n' "$@" | tr '\\A-Z' '/a-z'; fi
+}
+# A path as it lies on disk (#121): the part of it that exists, entered a folder at a time with cd -P
+# (links - symlinks, junctions - resolved; .. after a link goes to the link target's parent, as the
+# system takes it), then the rest as written. physical <keep or ""> <path>... prints one line per path:
+# "." and its canon form (so / is "."), or an empty line when not even its start exists. One subshell for
+# all the paths; a loop or a dangling link ends the existing part (cd -P fails), so nothing hangs. Git
+# Bash: cd -P and pwd -P see through a junction; pwd -W gives the C:/... form.
+case "${OSTYPE:-}" in msys*|cygwin*) pwdw=-W ;; *) pwdw=-P ;; esac   # Git Bash: msys (no fork for uname)
+physical() {
+  local a b
+  while IFS= read -r a && IFS= read -r b; do
+    a="${a#.}"; b="${b#.}"
+    if [ -n "$a" ]; then printf .; canon_core "$a$b"; fi
+    printf '\n'
+  done <<PHYSICAL_END
+$(physical_folded "$@")
+PHYSICAL_END
+}
+physical_folded() {   # physical_folded <keep or ""> <path>...: physical_parts, in lower case unless keep
+  local m="$1"; shift
+  if [ "$m" = keep ]; then physical_parts "$@"; else physical_parts "$@" | tr 'A-Z' 'a-z'; fi
+}
+# two lines per path, each starting with "." (so none is empty): the physical folder, the rest; run in a
+# subshell (it changes the directory). A folder at a time, not cd -P <whole path>: Git Bash takes .. in a
+# C:/... path by the text, before the links.
+physical_parts() {
+  local p s rest start here i; local segs
+  CDPATH=; here="$PWD"
+  for p in "$@"; do
+    p="${p//$nl/ }"; p="${p//\\//}"; rest=""
+    case "$p" in /*) start=/ ;; [A-Za-z]:*) start="${p:0:2}/"; p="${p:2}" ;; *) start="$here" ;; esac
+    if ! cd -P -- "$start" 2>/dev/null; then printf '.\n.\n'; continue; fi
+    set -f; IFS=/ read -r -a segs <<PHYSICAL_PATH_END
+$p
+PHYSICAL_PATH_END
+    set +f
+    i=0
+    for s in "${segs[@]}"; do
+      i=$((i + 1))
+      case "$s" in
+        ''|.) continue ;;
+        ..) case "$pwdw$PWD" in -W/|-W/[A-Za-z]) ;; *) cd -P .. 2>/dev/null ;; esac; continue ;;   # above a drive: stays
+      esac
+      [ -d "./$s" ] && cd -P -- "./$s" 2>/dev/null && continue
+      rest="/$s"; while [ $i -lt ${#segs[@]} ]; do rest="$rest/${segs[$i]}"; i=$((i + 1)); done
+      break
+    done
+    printf .; pwd $pwdw; printf '.%s\n' "$rest"
+  done
 }
 
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
@@ -150,18 +214,36 @@ if [ -n "${COORD_PROTECTED_ROOT:-}" ]; then
         np=$(printf '%s' "$input" | jq -r '.tool_input.notebook_path // empty | strings' 2>/dev/null)
       fi
       case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) cm="" ;; *) cm=keep ;; esac
-      proot=$(canon "$COORD_PROTECTED_ROOT" $cm)
+      eps=(); efull=()
       for p in "$fp" "$np"; do
         [ -n "$p" ] || continue
         case "$p" in /*|\\*|[A-Za-z]:*) full="$p" ;; *) full="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}/$p" ;; esac
-        full=$(canon "$full" $cm)
-        case "$full/" in
-          "$proot/.claude/worktrees/"*) ;;
-          "$proot/"?*)
-            echo "Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner." >&2
-            exit 2 ;;
-        esac
-      done ;;
+        eps+=("$p"); efull+=("$full")
+      done
+      if [ ${#eps[@]} -gt 0 ]; then
+        # the root and each path as written and as they lie on disk (links resolved, #121): either form
+        # of the path under either form of the root blocks
+        # lines: the root and each path as written, then the same as on disk ("." and the form, or empty)
+        ef=(); while IFS= read -r l; do ef+=("$l"); done <<EDIT_FORMS_END
+$(canon_all "$cm" "$COORD_PROTECTED_ROOT" "${efull[@]}"; physical "$cm" "$COORD_PROTECTED_ROOT" "${efull[@]}")
+EDIT_FORMS_END
+        ne=$(( ${#efull[@]} + 1 ))
+        proots=("${ef[0]}"); [ -n "${ef[$ne]:-}" ] && proots+=("${ef[$ne]#.}")
+        k=0
+        for p in "${eps[@]}"; do
+          k=$((k + 1)); forms=("${ef[$k]}"); [ -n "${ef[$((ne + k))]:-}" ] && forms+=("${ef[$((ne + k))]#.}")
+          for full in "${forms[@]}"; do
+            for proot in "${proots[@]}"; do
+              case "$full/" in
+                "$proot/.claude/worktrees/"*) ;;
+                "$proot/"?*)
+                  echo "Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner." >&2
+                  exit 2 ;;
+              esac
+            done
+          done
+        done
+      fi ;;
   esac
 fi
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
@@ -357,7 +439,7 @@ compose() {
     *) if [ "$1" = "?" ]; then printf '?'; else printf '%s/%s' "$1" "$p"; fi ;;
   esac
 }
-# canon <path>: above, with the edit-tool check
+# canon_all, physical: above, with the edit-tool check
 branch_in() {
   if [ "$1" = "$ov_dir" ]; then printf '%s' "$ov_branch"; return; fi
   [ "$1" = "?" ] && return
@@ -491,22 +573,34 @@ strip_all() {   # x/* , x/** , x/. and trailing separators -> x
   while :; do case "$x" in */\*\*|*\\\*\*) x="${x%?}" ;; */\*|*\\\*|*/.|*\\.) x="${x%??}" ;; */|*\\) x="${x%?}" ;; *) break ;; esac; done
   printf '%s' "$x"
 }
-# the project's folders, in canon form: CLAUDE_PROJECT_DIR, the top of the repository the session works
-# in and that repository's main checkout (from a worktree); read once, on the first removal
-roots=(); roots_read=0
-project_roots() {
-  local c out common
-  [ $roots_read = 1 ] && return; roots_read=1
-  [ -n "${CLAUDE_PROJECT_DIR:-}" ] && roots+=("$(canon "$CLAUDE_PROJECT_DIR")")
+# home and the project's folders (CLAUDE_PROJECT_DIR, the top of the repository the session works in and
+# that repository's main checkout, from a worktree), each in canon form as written and as it lies on disk
+# (links resolved); read once, on the first removal
+homes=(); roots=(); forms_read=0
+protected_forms() {
+  local c out common h l k=0 nh; local raw=()
+  [ $forms_read = 1 ] && return; forms_read=1
+  for h in "$HOME" "${USERPROFILE:-}"; do [ -n "$h" ] && raw+=("$h"); done
+  nh=${#raw[@]}
+  [ -n "${CLAUDE_PROJECT_DIR:-}" ] && raw+=("$CLAUDE_PROJECT_DIR")
   c="${cwd:-${CLAUDE_PROJECT_DIR:-}}"
-  [ -n "$c" ] || return 0
-  out=$(git -C "$c" rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>/dev/null) || return 0
-  roots+=("$(canon "${out%%$nl*}")")
-  common="${out#*$nl}"
-  case "$common" in */.git) roots+=("$(canon "${common%/.git}")") ;; esac
+  if [ -n "$c" ] && out=$(git -C "$c" rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>/dev/null); then
+    raw+=("${out%%$nl*}")
+    common="${out#*$nl}"
+    case "$common" in */.git) raw+=("${common%/.git}") ;; esac
+  fi
+  [ ${#raw[@]} -gt 0 ] || return 0
+  # as written (one line per path), then as on disk ("." and the form, or an empty line)
+  while IFS= read -r l; do
+    k=$((k + 1))
+    if [ $k -gt ${#raw[@]} ]; then [ -n "$l" ] || continue; l="${l#.}"; fi
+    if [ $(( (k - 1) % ${#raw[@]} )) -lt $nh ]; then homes+=("$l"); else roots+=("$l"); fi
+  done <<FORMS_END
+$(canon_all "" "${raw[@]}"; physical "" "${raw[@]}")
+FORMS_END
 }
 rm_target() {   # rm_target <path> <1: the project's folder and the folders holding it count too>
-  local x full h r
+  local x full fr ph f h r; local forms=()
   x=$(strip_all "$1")
   [[ $x =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
   case "$x" in
@@ -518,22 +612,31 @@ rm_target() {   # rm_target <path> <1: the project's folder and the folders hold
   [ "$tool" != PowerShell ] && [[ $x =~ $RE_TILDE ]] && block "recursive removal of /, a drive or home"
   # the full path: relative targets (., *, .., x) from the directory a cd led to; home given literally
   # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c; . and x/.. taken out
-  full=$(compose "$dir" "$1")
-  [ "$full" = "?" ] && return
-  full=$(canon "$(strip_all "$full")")
+  fr=$(compose "$dir" "$1")
+  [ "$fr" = "?" ] && return
+  fr=$(strip_all "$fr")
+  # as written and as it lies on disk (a link to the project, home or a worktree, #121)
+  full=$(canon_all "" "$fr"; physical "" "$fr")
+  ph="${full#*$nl}"; [ "$ph" = "$full" ] && ph=""; full="${full%%$nl*}"
   case "$full" in ''|[a-z]:) block "recursive removal of /, a drive or home" ;; esac
   # . or * inside a worktree (after a cd to it, or with it as the working folder), .. up to one
   [[ $full =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
-  # home or a folder that holds it
-  for h in "$HOME" "${USERPROFILE:-}"; do
-    [ -n "$h" ] || continue
-    h=$(canon "$h"); case "$h/" in "$full/"*) block "recursive removal of /, a drive or home" ;; esac
+  # the same checks on the path as it lies on disk
+  forms=("$full")
+  [ -n "$ph" ] && forms+=("${ph#.}")
+  protected_forms
+  for f in "${forms[@]}"; do
+    case "$f" in ''|[a-z]:) block "recursive removal of /, a drive or home" ;; esac
+    [[ $f =~ $RE_WT ]] && block "removing a worktree by hand (use the cleanup script)"
+    # home or a folder that holds it
+    for h in "${homes[@]}"; do case "$h/" in "$f/"*) block "recursive removal of /, a drive or home" ;; esac; done
   done
   [ "${2:-1}" = 1 ] || return 0
   # the project's folder or a folder that holds it
-  project_roots
-  for r in "${roots[@]}"; do
-    case "$r/" in "$full/"*) block "recursive removal of the project or a folder that holds it" ;; esac
+  for f in "${forms[@]}"; do
+    for r in "${roots[@]}"; do
+      case "$r/" in "$f/"*) block "recursive removal of the project or a folder that holds it" ;; esac
+    done
   done
 }
 rm_seg() {

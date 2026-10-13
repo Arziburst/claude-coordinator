@@ -56,24 +56,93 @@ function Canon([string]$x, [switch]$Keep) {
   ($x -replace '^/(mnt/|cygdrive/)?([a-z])$', '$2:') -replace '^/(mnt/|cygdrive/)?([a-z])/', '$2:/'
 }
 
+# A path as it lies on disk (#121): the part of it that exists, walked a folder at a time with links
+# (symlinks, junctions: the item's LinkTarget in PowerShell 7, Target in 5.1) resolved, then the rest as
+# written; .. after a link goes to the link target's parent, as cd -P does in safety-guard.sh.
+# Physical <path> [-Keep] gives its Canon form, or $null on Windows for a path from / that is not a drive
+# (Git Bash's /tmp is not known here). A link is followed only to an existing folder; more than 40 links
+# in one path (a loop) end the existing part, so nothing hangs.
+$isWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
+function LinkTarget([string]$p) {
+  try { $it = Get-Item -LiteralPath $p -Force -ErrorAction Stop } catch { return '' }
+  if (-not $it.LinkType) { return '' }   # another reparse point (a cloud file ...) is a plain folder
+  $t = $null
+  if ($it.PSObject.Properties['LinkTarget']) { $t = $it.LinkTarget }   # PowerShell 7
+  if (-not $t) { $t = @($it.Target)[0] }                                # Windows PowerShell 5.1
+  ([string]$t).Replace('\', '/') -replace '^//\?/|^/\?\?/', ''
+}
+# @(<the existing folder, physical>, <the rest as written>), or $null
+function PhysDir([string]$p) {
+  $p = $p.Replace('\', '/')
+  if ($isWin) { $p = $p -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
+  if ($p -notmatch '^([A-Za-z]:|/)') { $p = (Get-Location).ProviderPath.Replace('\', '/') + '/' + $p }
+  if ($p -match '^[A-Za-z]:') { $root = $p.Substring(0, 2) + '/'; $p = $p.Substring(2) }
+  elseif ($isWin) { return $null } else { $root = '/' }
+  $segs = $p.Split('/'); $cur = $root
+  for ($i = 0; $i -lt $segs.Count; $i++) {
+    $s = $segs[$i]
+    if ($s -eq '' -or $s -eq '.') { continue }
+    if ($s -eq '..') {
+      $k = $cur.LastIndexOf('/'); $cur = if ($k -lt $root.Length) { $root } else { $cur.Substring(0, $k) }
+      continue
+    }
+    $cand = if ($cur.EndsWith('/')) { $cur + $s } else { "$cur/$s" }
+    $a = [int][IO.DirectoryInfo]::new($cand).Attributes
+    $t = if ($a -ne -1 -and ($a -band 1024)) { LinkTarget $cand } else { '' }   # a reparse point: a symlink or a junction
+    if ($t) {
+      if (++$script:hops -le 40) {
+        if ($t -notmatch '^([A-Za-z]:|/)') { $t = "$cur/$t" }
+        $r = PhysDir $t
+        if ($null -ne $r -and -not $r[1]) { $cur = $r[0]; continue }
+      }
+      # a loop, or it does not lead to an existing folder
+    } elseif ($a -ne -1 -and ($a -band 16)) {
+      # an 8.3 name (RUNNER~1) in its long form, as git and cd -P give it: GetFullPath expands it
+      $cur = if ($isWin -and $s.Contains('~')) { [IO.Path]::GetFullPath($cand).Replace('\', '/') } else { $cand }
+      continue
+    }
+    # not there, or not a folder: the rest as written
+    return @($cur, ('/' + ($segs[$i..($segs.Count - 1)] -join '/')))
+  }
+  @($cur, '')
+}
+function Physical([string]$p, [switch]$Keep) {
+  $script:hops = 0
+  $r = PhysDir $p
+  if ($null -eq $r) { return $null }
+  Canon ($r[0] + $r[1]) -Keep:$Keep
+}
+
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
 if ($env:COORD_PROTECTED_ROOT -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
   $keep = -not (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)
-  $proot = Canon $env:COORD_PROTECTED_ROOT -Keep:$keep
+  # the root and each path as written and as they lie on disk (links resolved, #121): either form of the
+  # path under either form of the root blocks
+  $proots = $null
   foreach ($p in @($d.tool_input.file_path, $d.tool_input.notebook_path)) {
     if ($p -isnot [string] -or -not $p) { continue }
+    if ($null -eq $proots) {
+      $proots = @(Canon $env:COORD_PROTECTED_ROOT -Keep:$keep)
+      $ph = Physical $env:COORD_PROTECTED_ROOT -Keep:$keep; if ($null -ne $ph) { $proots += $ph }
+    }
     $full = $p
     if ($full -notmatch '^([/\\]|[A-Za-z]:)') {
       $base = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { (Get-Location).Path }
       $full = "$base/$full"
     }
-    $full = (Canon $full -Keep:$keep) + '/'
-    if ($full.StartsWith("$proot/.claude/worktrees/", [StringComparison]::Ordinal)) { continue }
-    if ($full.Length -gt "$proot/".Length -and $full.StartsWith("$proot/", [StringComparison]::Ordinal)) {
-      [Console]::Error.WriteLine("Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner.")
-      exit 2
+    $forms = @(Canon $full -Keep:$keep)
+    $ph = Physical $full -Keep:$keep; if ($null -ne $ph) { $forms += $ph }
+    foreach ($f in $forms) {
+      $f += '/'
+      foreach ($proot in $proots) {
+        if ($f.StartsWith("$proot/.claude/worktrees/", [StringComparison]::Ordinal)) { continue }
+        if ($f.Length -gt "$proot/".Length -and $f.StartsWith("$proot/", [StringComparison]::Ordinal)) {
+          [Console]::Error.WriteLine("Blocked by safety-guard: the owner's working copy is never edited by a worker ($p); work in your worktree. If this is a false positive, ask the owner.")
+          exit 2
+        }
+      }
     }
   }
 }
@@ -398,19 +467,36 @@ function StripAll([string]$x) {   # x/* , x/** , x/. and trailing separators -> 
   }
   $x
 }
-# the project's folders, in canon form: CLAUDE_PROJECT_DIR, the top of the repository the session works
-# in and that repository's main checkout (from a worktree); read once, on the first removal
-$script:roots = $null
-function ProjectRoots {
+# home and the project's folders (CLAUDE_PROJECT_DIR, the top of the repository the session works in and
+# that repository's main checkout, from a worktree), each in canon form as written and as it lies on disk
+# (links resolved); read once, on the first removal
+$script:roots = $null; $script:homes = $null
+function ProtectedForms {
   if ($null -ne $script:roots) { return }
-  $script:roots = @()
-  if ($env:CLAUDE_PROJECT_DIR) { $script:roots += Canon $env:CLAUDE_PROJECT_DIR }
+  $script:roots = @(); $script:homes = @()
+  $hs = @(); foreach ($h in @($HOME, $env:USERPROFILE, $env:HOME)) { if ($h) { $hs += $h } }
+  $rs = @()
+  if ($env:CLAUDE_PROJECT_DIR) { $rs += $env:CLAUDE_PROJECT_DIR }
   $c = if ($cwd) { $cwd } else { $env:CLAUDE_PROJECT_DIR }
-  if (-not $c) { return }
-  $out = @(git -C $c rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>$null)
-  if ($LASTEXITCODE -ne 0 -or $out.Count -lt 2) { return }
-  $script:roots += Canon $out[0]
-  if ($out[1] -match '/\.git$') { $script:roots += Canon $out[1].Substring(0, $out[1].Length - 5) }
+  if ($c) {
+    $out = @(git -C $c rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $out.Count -ge 2) {
+      $rs += $out[0]
+      if ($out[1] -match '/\.git$') { $rs += $out[1].Substring(0, $out[1].Length - 5) }
+    }
+  }
+  # the same folder in several forms (C:\Users\x and /c/Users/x; CLAUDE_PROJECT_DIR and the repository's
+  # top) is resolved once
+  $seen = @()
+  foreach ($h in $hs) {
+    $c = Canon $h; if ($seen -ccontains $c) { continue }; $seen += $c
+    $script:homes += $c; $ph = Physical $h; if ($null -ne $ph) { $script:homes += $ph }
+  }
+  $seen = @()
+  foreach ($r in $rs) {
+    $c = Canon $r; if ($seen -ccontains $c) { continue }; $seen += $c
+    $script:roots += $c; $ph = Physical $r; if ($null -ne $ph) { $script:roots += $ph }
+  }
 }
 # a path and the folders that hold it: is $full one of them
 function Holds([string]$full, [string]$p) { "$p/".StartsWith("$full/", [StringComparison]::Ordinal) }
@@ -425,20 +511,28 @@ function RmTarget([string]$t, [bool]$proj = $true) {
   if ($tool -cne 'PowerShell' -and $x -match '^~[^/\\]+$') { Block 'recursive removal of /, a drive or home' }
   # the full path: relative targets (., *, .., x) from the directory a cd led to; home given literally
   # (/c/Users/x, C:\Users\x), a drive as /c, /mnt/c or /cygdrive/c; . and x/.. taken out
-  $full = Compose $script:dir $t
-  if ($full -eq '?') { return }
-  $full = Canon (StripAll $full)
+  $fr = Compose $script:dir $t
+  if ($fr -eq '?') { return }
+  $fr = StripAll $fr
+  $full = Canon $fr
   if ($full -match '^([a-z]:)?$') { Block 'recursive removal of /, a drive or home' }
   # . or * inside a worktree (after a cd to it, or with it as the working folder), .. up to one
   if ($full -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
-  # home or a folder that holds it
-  foreach ($h in @($HOME, $env:USERPROFILE, $env:HOME)) {
-    if ($h -and (Holds $full (Canon $h))) { Block 'recursive removal of /, a drive or home' }
+  # the same checks on the path as it lies on disk (a link to the project, home or a worktree, #121)
+  $forms = @($full)
+  $ph = Physical $fr; if ($null -ne $ph) { $forms += $ph }
+  ProtectedForms
+  foreach ($f in $forms) {
+    if ($f -match '^([a-z]:)?$') { Block 'recursive removal of /, a drive or home' }
+    if ($f -match $WT) { Block 'removing a worktree by hand (use the cleanup script)' }
+    # home or a folder that holds it
+    foreach ($h in $script:homes) { if (Holds $f $h) { Block 'recursive removal of /, a drive or home' } }
   }
   if (-not $proj) { return }
   # the project's folder or a folder that holds it
-  ProjectRoots
-  foreach ($r in $script:roots) { if (Holds $full $r) { Block 'recursive removal of the project or a folder that holds it' } }
+  foreach ($f in $forms) {
+    foreach ($r in $script:roots) { if (Holds $f $r) { Block 'recursive removal of the project or a folder that holds it' } }
+  }
 }
 function RmSeg([string]$b, [string[]]$a) {
   $rec = $false; $dd = $false; $tg = @()
