@@ -183,6 +183,11 @@ hooks)
   m="$(awk -v s="$ps" -v n="$n" 'NR >= s && NR <= n && /"matcher"[ \t]*:/ { m = $0 } END { print m }' "$file")"
   case "$m" in ''|*PowerShell*|*'"*"'*) pass "its matcher covers the PowerShell tool" ;;
     *) fail "its matcher leaves out PowerShell: the PowerShell tool runs unguarded" ;; esac
+  # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
+  if awk -v n="$n" '{ l[NR] = $0 } END { a = n; while (a > 1 && l[a] !~ /[{]/) a--; b = n; while (b < NR && l[b] !~ /[}]/) b++
+       for (i = a; i <= b; i++) if (l[i] ~ /"onFailure"[ \t]*:[ \t]*"block"/) exit 0; exit 1 }' "$file"; then
+    pass 'onFailure "block": a guard that fails to run blocks'
+  else fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)'; fi
   finish ;;
 
 hookcheck)

@@ -9,6 +9,7 @@
             "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/core/scripts/hooks/safety-guard.ps1",
             "timeout": 10,
+            "onFailure": "block",
             "statusMessage": "guard",
             "async": false,
             "once": false,

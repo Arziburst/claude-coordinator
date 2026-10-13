@@ -208,6 +208,9 @@ switch ($Step) {
   # its entry's matcher (none: every tool) must take in the PowerShell tool too
   if (-not $matcher -or "$matcher".Contains('PowerShell') -or "$matcher" -eq '*') { Pass 'its matcher covers the PowerShell tool' }
   else { Fail 'its matcher leaves out PowerShell: the PowerShell tool runs unguarded' }
+  # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
+  if ($h.onFailure -eq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
+  else { Fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)' }
   Finish
 }
 'hookcheck' {

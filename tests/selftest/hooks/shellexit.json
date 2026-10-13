@@ -9,7 +9,8 @@
             "type": "command",
             "shell": "powershell",
             "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File C:/core/scripts/hooks/safety-guard.ps1; exit $LASTEXITCODE",
-            "timeout": 10
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       }

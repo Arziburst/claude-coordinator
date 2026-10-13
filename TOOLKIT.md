@@ -129,7 +129,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   only `tool_input`'s own `command` is read. A project's own patterns (`.claude/coordinator-deny.txt`,
   one regex per line, trimmed, CRLF or LF) block what they match; a pattern that cannot be read blocks
   every call (`project rule cannot be read: <line>`) until the file is fixed.
-  **A hook that fails to run does not block** — on Windows hook commands run through
+  **A hook that fails to run does not block** unless it says so: the guard hook carries `"onFailure":
+  "block"` (Claude Code 2.1.295+; measured on 2.1.296: a wrong path let a push through with exit 127,
+  with the field the call was blocked), so a broken path, a crash or a timeout fails closed. Still,
+  on Windows hook commands run through
   Git Bash, so a path with backslashes (`C:\x\y`) or a PowerShell variable (`$env:CLAUDE_PROJECT_DIR`, read
   as `$env`) silently breaks it: absolute paths with forward slashes (or bash's `$CLAUDE_PROJECT_DIR`).
   **No `"shell": "powershell"` on the guard hook:** a PowerShell shell around it turns its exit 2
