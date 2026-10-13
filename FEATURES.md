@@ -586,9 +586,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: no automated check — it rests on the sessions following the rule
 
 ### F-SPEND-10 Caps and autopilot budget
-- defined: CORE.md §9, procedures/INIT.md
+- defined: CORE.md §9, procedures/INIT.md, TOOLKIT.md
 - entry: INIT question 8; the status line's limits
-- promises: a short-window cap pauses workers to the reset; a long-window cap starts no new worker; going over a cap needs the owner's permission for that occasion
+- promises: a short-window cap pauses workers to the reset (they finish a step, push and go idle; a stopped session is resumed by its full id, never a short one, TOOLKIT *Pause and resume*); a long-window cap starts no new worker; going over a cap needs the owner's permission for that occasion
 - tested by: none
 - not covered: API-key setups have no limit data and budget by cost
 
