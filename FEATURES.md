@@ -88,7 +88,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-04 | session-tokens | tokens, cost and time of one session from its transcript | SPEND |
 | F-SPEND-05 | Subagent cost | a subagent is read by its agentId and counted once | SPEND |
 | F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
-| F-SPEND-07 | Status files pruned | per-session status files older than 7 days are deleted | SPEND |
+| F-SPEND-07 | Status files pruned | status files older than 7×24 hours and statusline temp files older than 1 hour are deleted | SPEND |
 | F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
 | F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast against the limits, analysis after | SPEND |
 | F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
@@ -576,15 +576,15 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-07 Status files pruned
 - defined: scripts/session-tokens.sh, TOOLKIT.md
 - entry: `session-tokens --prune` at every session start
-- promises: only status files older than 7 days are deleted
-- tested by: tests/session-tokens/run.sh, the prune case (files aged 30 and 7.5 days deleted, 6.5 days and new kept, in bash and both PowerShells)
+- promises: status files older than 7×24 hours and statusline temp files older than 1 hour are deleted; nothing else
+- tested by: tests/session-tokens/run.sh, the prune cases (files aged 30 and 7.5 days deleted, 6.5 days and new kept; the status line's `statusline.*.tmp` aged 2 hours deleted, 30 minutes kept, the last session's status file kept; in bash and both PowerShells)
 - not covered: the boundary is to the minute in the .sh (`find -mmin`), to the tick in the .ps1
 
 ### F-SPEND-08 The status line
 - defined: scripts/statusline.sh, scripts/statusline.ps1, TOOLKIT.md
 - entry: INIT question 9; one-time step `statusline-verified`
 - promises: installed only on the owner's yes and only where no status line exists; it saves the status JSON per session for the coordinator and prints model, context and limits
-- tested by: selftest scripts step (the status line on a fixture)
+- tested by: selftest scripts step (the status line on a fixture); tests/statusline/run.sh (the line, the last session's status file and the session's copy saved and no `statusline.*.tmp` left: on the fixture, a config path with [ ], 20 runs at once, and in PowerShell the status file held open by a reader; in bash and both PowerShells)
 - not covered: only the owner sees the drawn line
 
 ### F-SPEND-09 Estimates and forecasts

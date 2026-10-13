@@ -349,8 +349,9 @@ BOM, models priced apart),
   from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
   transcript, but not its cost line). The status line writes a file for every
   session on the machine, other projects' too, so at every session start run `session-tokens.sh --prune`
-  / `session-tokens.ps1 -Prune` (deletes files older than 7 × 24 hours; on Windows only the `-Prune` form
-  reaches the script through `-File`).
+  / `session-tokens.ps1 -Prune` (deletes files older than 7 × 24 hours, and the Windows status line's
+  `coordinator/statusline.*.tmp` older than an hour, left when it was killed mid-write; on Windows only
+  the `-Prune` form reaches the script through `-File`).
 - **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
   `blocked`): pause until the status line's `resets_at` (CORE §9), then for each blocked session
   `claude respawn <id>` **and** a one-line SendMessage ("the limit has reset, continue") —
@@ -413,7 +414,9 @@ BOM, models priced apart),
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
   save it to `~/.claude/coordinator/statusline.json` (the last session to draw) and to
   `~/.claude/coordinator/sessions/<session_id>.json` (one per session) for the coordinator to read, and print
-  `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`.
+  `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. The .ps1 writes `statusline.<pid>.tmp` and
+  moves it over `statusline.json`; when another status line or a reader holds the file the move fails
+  (three tries, 20 ms apart), the old `statusline.json` stays for that tick and the temp file is removed.
   [statusline](https://code.claude.com/docs/en/statusline.md)
 - **Installing it** (only on the owner's yes in the init quiz, CORE §3, and only where no `statusLine`
   is set yet; replacing a project's own one is the owner's choice, and first the coordinator lists

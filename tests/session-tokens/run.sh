@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The session-tokens cases: the fixtures against their expected lines (the time line included), the
-# error cases and their exit codes, --prune on files with set ages, a missing projects folder, a config
-# path with [ ] in it.
+# error cases and their exit codes, --prune on status files and status-line temp files with set ages, a
+# missing projects folder, a config path with [ ] in it.
 #   tests/session-tokens/run.sh sh              # scripts/session-tokens.sh, with the bash running this file
 #   tests/session-tokens/run.sh ps pwsh         # scripts/session-tokens.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
@@ -93,8 +93,13 @@ stamp() {   # the local time $1 seconds ago, for touch -t: GNU date reads @<n>, 
   if date --version >/dev/null 2>&1; then date -d "@$s" +%Y%m%d%H%M.%S; else date -r "$s" +%Y%m%d%H%M.%S; fi
 }
 touch "$d/new.json"; touch -t "$(stamp 561600)" "$d/d6.json"; touch -t "$(stamp 648000)" "$d/d7.json"; touch -t "$(stamp 2592000)" "$d/old.json"
+# and the status line's temp files older than an hour: 2 hours goes, 30 minutes stays; statusline.json stays at any age
+c="$tmp/prune/coordinator"
+touch -t "$(stamp 7200)" "$c/statusline.101.tmp"; touch -t "$(stamp 1800)" "$c/statusline.102.tmp"; touch -t "$(stamp 2592000)" "$c/statusline.json"
 n=$((n + 1)); run "$tmp/prune" --prune
 left="$(ls "$d" | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$rc" = 0 ] && [ "$left" = "d6.json new.json " ]; then echo "ok   --prune at 7 x 24 hours"; else bad "--prune: exit $rc, left $left"; fi
+n=$((n + 1)); left="$(ls "$c" | LC_ALL=C sort | tr '\n' ' ')"
+if [ "$left" = "sessions statusline.102.tmp statusline.json " ]; then echo "ok   --prune: the status line's temp files at 1 hour"; else bad "--prune temp files: left $left"; fi
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
 exit "$fail"
