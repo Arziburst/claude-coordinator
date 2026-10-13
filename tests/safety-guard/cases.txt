@@ -5,12 +5,14 @@
 # makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
 # of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path.
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
-# An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset).
+# An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset),
+# an optional 5th CLAUDE_PROJECT_DIR (without one: the cwd's first folder; -: unset).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
 # (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
 # Bash), @PROJECT_W@ the same as C:\..., @PROJECT_U@ in Git Bash's /c/... form (the same as @PROJECT@ elsewhere), @PROJECT_UP@
-# @PROJECT@ in upper case, so no case names a machine's own paths.
+# @PROJECT@ in upper case, so no case names a machine's own paths. @LINK@ (@LINK_W@ with backslashes) is
+# a link to the project work from another folder (links/work: a symlink, in Git Bash a junction).
 block	work	git push --force origin main
 block	work	git push origin main
 block	work	git push -f origin master
@@ -473,3 +475,41 @@ allow	edit:work	@PROJECT_W@-old\app.js
 allow	work	echo x > @PROJECT@/src/a.txt	@PROJECT@
 block	work	git push origin main	@PROJECT@
 allow	work	git push origin 12-fix	@PROJECT@
+# --- links (#121): a path is compared as written and as it lies on disk (links resolved, the part that does
+# not exist yet kept as written), so the project's folder and the owner's working copy are protected
+# through a link either way. run.sh makes links/work -> work (@LINK@) and inside work: out-link -> a
+# folder outside the project, dangling -> a folder that is not there, loopa <-> loopb.
+block	work	rm -rf @LINK@
+block	work	rm -rf @LINK@/
+block	work	rm -rf @LINK@/*
+block	work	rm -rf @LINK@/..
+block	work	cd @LINK@ && rm -rf .
+block	work	find @LINK@ -delete
+block	ps:work	Remove-Item -Recurse -Force @LINK_W@
+block	ps:work	Remove-Item -Recurse -Force @LINK_W@\*
+# the cwd through the link, CLAUDE_PROJECT_DIR unset (git reports the repository's top as the real path)
+block	links/work	rm -rf .	-	-
+block	links/work	rm -rf *	-	-
+block	links/work	rm -rf ..	-	-
+block	ps:links/work	Remove-Item -Recurse -Force .	-	-
+allow	links/work	rm -rf build	-	-
+# removing inside a folder a link leads to is not removing the project; a dangling link; a loop (no hang)
+allow	work	rm -rf out-link
+allow	work	rm -rf out-link/*
+allow	work	rm -rf @PROJECT@/out-link/x
+allow	ps:work	Remove-Item -Recurse -Force out-link\x
+allow	work	rm -rf dangling
+allow	work	rm -rf dangling/x
+allow	work	rm -rf loopa
+allow	work	rm -rf loopa/x
+# the edit tools: the root through the link and the file's path real, the reverse, and through a folder above the root
+block	write:work	@PROJECT@/a.txt	@LINK@
+block	write:work	@LINK@/a.txt	@PROJECT@
+block	edit:work	@LINK_W@\src\app.js
+block	write:work	@PROJECT@/src/a.txt	@LINK@/src
+block	write:work	@LINK@/src/a.txt	@PROJECT@/src
+allow	write:work	@LINK@/.claude/worktrees/12-fix/a.txt
+allow	write:work	@PROJECT@/.claude/worktrees/12-fix/a.txt	@LINK@
+allow	edit:work	@PROJECT@/out-link/a.txt	@LINK@/src
+allow	edit:work	@PROJECT@/dangling/a.txt	@LINK@/src
+allow	edit:work	@PROJECT@/loopa/a.txt	@LINK@/src
