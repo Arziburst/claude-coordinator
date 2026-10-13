@@ -26,19 +26,21 @@ foreach ($l in [IO.File]::ReadAllLines((Join-Path $Root 'CORE.md'))) {
 $errors = 0; $files = 0
 # the Markdown files below the root as check-core.sh's find lists them: dot-folders (.github ...) too, but
 # not .git, not .claude/ (agent worktrees of a checkout) and not a nested repository or worktree
-function MdFiles([string]$dir) {
+# Relative paths are built from the names while walking, never cut from FullName: a root given in its
+# 8.3 form (C:\Users\RUNNER~1\...) comes back long in FullName, and the cut would land mid-name.
+$byRel = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
+function MdFiles([string]$dir, [string]$rel) {
   foreach ($x in @(Get-ChildItem -LiteralPath $dir -Force)) {
     if ($x.PSIsContainer) {
       if ($x.Name -ceq '.git' -or $x.Name -ceq '.claude' -or ($x.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
           (Test-Path -LiteralPath (Join-Path $x.FullName '.git'))) { continue }
-      MdFiles $x.FullName
-    } elseif ($x.Name -clike '*.md') { $x }
+      MdFiles $x.FullName "$rel$($x.Name)/"
+    } elseif ($x.Name -clike '*.md') { $byRel["$rel$($x.Name)"] = $x }
   }
 }
+MdFiles $Root ''
 # ordinal order of the relative paths, as LC_ALL=C sort
-$all = @(MdFiles $Root)
-$rels = [string[]]@($all | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/' })
-$byRel = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal); for ($i = 0; $i -lt $all.Count; $i++) { $byRel[$rels[$i]] = $all[$i] }
+$rels = [string[]]@($byRel.Keys)
 [Array]::Sort($rels, [StringComparer]::Ordinal)
 foreach ($rel in $rels) {
   $file = $byRel[$rel]
@@ -124,9 +126,12 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
     elseif (-not (Test-Path -LiteralPath (Join-Path $Root $rest))) { "FEATURES.md:${ln}: no such file $rest"; $errors++ }
   }
   $text = [IO.File]::ReadAllText($fm)
-  $scripts = [string[]]@(Get-ChildItem -Path scripts -Filter '*.sh' -File -Recurse -Depth 1 | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/' })
+  # scripts/*.sh and scripts/*/*.sh, procedures/*.md and roles/*.md, their names built while listing
+  $sdir = Join-Path $Root 'scripts'
+  $scripts = [string[]]@(@(Get-ChildItem -LiteralPath $sdir -Filter '*.sh' -File | ForEach-Object { "scripts/$($_.Name)" }) +
+    @(Get-ChildItem -LiteralPath $sdir -Directory | ForEach-Object { $sub = $_.Name; Get-ChildItem -LiteralPath $_.FullName -Filter '*.sh' -File | ForEach-Object { "scripts/$sub/$($_.Name)" } }))
   [Array]::Sort($scripts, [StringComparer]::Ordinal)
-  $docs = [string[]]@(Get-ChildItem -Path procedures, roles -Filter '*.md' -File | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/' })
+  $docs = [string[]]@(foreach ($dn in 'procedures', 'roles') { Get-ChildItem -LiteralPath (Join-Path $Root $dn) -Filter '*.md' -File | ForEach-Object { "$dn/$($_.Name)" } })
   [Array]::Sort($docs, [StringComparer]::Ordinal)
   foreach ($f in @($scripts) + @($docs)) {
     if (-not $text.Contains(($f -replace '\.sh$', ''))) { "FEATURES.md: $f is in no feature"; $errors++ }

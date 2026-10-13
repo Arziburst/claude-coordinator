@@ -32,7 +32,9 @@ function List([string]$ext) {
   $p = '/tests/check-scripts/broken/'
   foreach ($d in $Folders) {
     $shown = $d.TrimEnd('/', '\').Replace('\', '/')
-    $root = (Resolve-Path -LiteralPath $d).Path.TrimEnd('/', '\')
+    # Get-Item's FullName is in the form the listing's FullNames take (a root given as C:\Users\RUNNER~1\...
+    # comes back long), so the relative paths are cut at the right place
+    $root = (Get-Item -LiteralPath $d -Force).FullName.TrimEnd('/', '\')
     $a = $root.Replace('\', '/') + '/'
     $rel = [string[]]@(Get-ChildItem -LiteralPath $root -Recurse -File -Filter "*.$ext" |
       Where-Object { $_.Extension -eq ".$ext" } |
