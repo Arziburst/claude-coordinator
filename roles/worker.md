@@ -17,7 +17,9 @@ resources and launch/test limits, and the phrase that ends your report.
    `do_not_decide` item or invent a business value — raise it as a question and continue with what
    does not depend on it.
 3. **Your branch only.** Work in your own working copy and branch (never the coordinator's checkout); commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its remote); open the
-   PR the contract names. Never push to or rewrite the protected branches or anyone else's branch.
+   PR the contract names. Waiting on CI, keep `gh pr checks <n> --watch` (or an equivalent wait)
+   running in the background until you report: a background session idle with nothing running may
+   exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite the protected branches or anyone else's branch.
    Merge main when the coordinator says another PR landed. Secrets are used, never copied; customer
    data never leaves production; production actions only as the brief allows (CORE §1.4, §1.13).
 4. **Prove each criterion yourself.** For `check: oracle`, run the named test or command and keep its

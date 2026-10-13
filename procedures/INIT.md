@@ -195,7 +195,8 @@ with one line at the summary or later.
   record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
   `.git/info/exclude` (`/.claude/worktrees/`) unless the project's git already ignores it — start-worker
-  checks and adds it before every start, so an older project gets it at its next worker. Never
+  checks and adds it before every start, so an older project gets it at its next worker; likewise
+  `/.lead/`, where a lead keeps its notes inside its worktree (roles/lead.md). Never
   `.gitignore`: that is a project file its team and the client would see. Nothing else of the
   coordinator is written into the project's tree (the roles go to `~/.claude/agents/`, the hook is
   referenced by its absolute path in `coordinator/core/`).

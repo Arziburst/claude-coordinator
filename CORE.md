@@ -266,7 +266,9 @@ The continuous work:
    one. A session waiting on a permission prompt sends no idle notice: no report or notice when one
    is due → `ListAgents`; `waiting` → tell the owner, never answer the prompt (§1.9). **One
    subscription per expected report:** a lead idle while its workers run is normal — check
-   `ListAgents` once, never re-subscribe in a loop, wait for its report. **Renamed** (by the owner, or
+   `ListAgents` once, never re-subscribe in a loop, wait for its report; one gone `done` (its
+   worker's report fell back to you) is resumed by its full id with that report (TOOLKIT *Pause and
+   resume*). **Renamed** (by the owner, or
    after a restart) → tell every running session the new name, one SendMessage each; the roles'
    fallback to the project's Coordinator is only the net. Answer workers
    point first; only owner decisions go to the owner; a worker near its context limit or stuck → help

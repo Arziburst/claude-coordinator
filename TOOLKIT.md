@@ -58,7 +58,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   tool's `model`. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
-  bare name; idle sessions may exit — `respawn` them when their turn comes; remove a session with
+  bare name; a background session idle with nothing running may exit (`done`, unreachable by
+  SendMessage; 2.1.296) — a lead or a worker that still expects a message keeps a background wait
+  running (roles/lead.md step 3, roles/worker.md step 3), one gone `done` is resumed (*Pause and
+  resume*); remove a session with
   `claude rm` as its own command (some guards block compound removals).
 - **Pause and resume a session** (a core update, the owner's request, a cap — CORE §9; measured on
   2.1.296): a session that only has to wait is told to finish its step, commit, push, report and go idle;
@@ -71,7 +74,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   session working there) and never `claude resume <id>` (no such command — the id becomes a new
   session's prompt). After a pause over an hour the prompt cache is gone and the resumed session pays its
   whole history again: for a long session a fresh worker on the pushed branch with a short note may cost
-  less. A lead pauses and resumes its own workers the same way. `claude respawn` is not a resume: it
+  less. A lead pauses and resumes its own workers the same way; a lead gone `done` while its workers
+  run is resumed by the coordinator the same way, with the worker's report that fell back to it as the
+  message. A resume under a new job deletes the old job folder (`$CLAUDE_JOB_DIR/tmp`), so nothing
+  durable lives there: a lead's notes go in `<its worktree>/.lead/`, the coordinator's contracts and
+  briefs in the state repository (`coordinator/`). `claude respawn` is not a resume: it
   restarts a running session on a new Claude binary (and a usage-limit block, *Usage*).
 
 ## Working copies
@@ -79,7 +86,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
   trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
-  local `.git/info/exclude` line (INIT 3.4). Its built-in alternative (`claude --worktree <name>`, branch
+  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md`.
@@ -375,7 +382,9 @@ BOM, models priced apart),
   a time with another offset (`+02:00`) is refused, not read as UTC.
   An ambiguous prefix (of a transcript or a status file) fails and lists session ids only, never
   project folders. A model cannot see its own counter (the status line is drawn
-  by the CLI), so a worker's self-reported tokens are a guess.
+  by the CLI), so a worker's self-reported tokens are a guess; but every session knows its own full id
+  (`CLAUDE_CODE_SESSION_ID` in its environment), so `session-tokens "$CLAUDE_CODE_SESSION_ID"` (PowerShell:
+  `$env:CLAUDE_CODE_SESSION_ID`) prints its own tokens, cost and time — a lead reads itself that way.
 - **Where sessions lose money, time, quality or stability** (CORE §7a, the weekly retro's input):
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup

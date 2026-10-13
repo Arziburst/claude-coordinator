@@ -55,7 +55,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-02 | Worker safety settings checked | no worker starts with a guard that would not block | WORKERS |
 | F-WORKERS-03 | Start from a trusted folder | the session starts in the trusted root and enters its worktree | WORKERS |
 | F-WORKERS-04 | Report address and subscription | `--report-to` is required; the subscribe line is printed once the session is listed | WORKERS |
-| F-WORKERS-05 | Worktrees kept out of git | one `.git/info/exclude` line, never `.gitignore` | WORKERS |
+| F-WORKERS-05 | Worktrees kept out of git | one `.git/info/exclude` line each for the worktrees and a lead's `.lead/`, never `.gitignore` | WORKERS |
 | F-WORKERS-06 | cleanup-worker | only clean, pushed and merged work is removed | WORKERS |
 | F-WORKERS-07 | Permission modes | workers run in `auto` or `acceptEdits`; bypass is refused | WORKERS |
 | F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
@@ -240,21 +240,21 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-06 Tests first
 - defined: roles/tester.md, CORE.md §4
 - entry: an oracle criterion with no test yet; every risky change (§5)
-- promises: the tester writes only test files; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check
+- promises: the tester writes only test files; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
 ### F-WORK-07 Leads for large tasks
 - defined: roles/lead.md, CORE.md §4, TOOLKIT.md
 - entry: a task that would not fit one worker, or whose pieces must land together
-- promises: the lead splits into sub-contracts, starts and verifies its workers, integrates on its own branch only and returns one PR and one report with every run's spend; a lead over its budget starts nothing new
-- tested by: SELFTEST step 4 (a lead with two workers)
-- not covered: none known
+- promises: the lead splits into sub-contracts, starts and verifies its workers, integrates on its own branch only and returns one PR and one report with every run's spend; a lead over its budget starts nothing new; its own share (often 30–100% of its workers' sum) is planned for and read at each stage by `$CLAUDE_CODE_SESSION_ID`; while any worker runs it keeps one background wait alive so it stays reachable, and one gone `done` is resumed by the coordinator with the report that fell back to it; its sub-contracts, briefs and run notes live in `<its worktree>/.lead/`, never in the job's tmp; its verifier reviews the sub-branch's change and the lead runs the build and test oracles on its integration branch right after each merge, a failure going back to the worker
+- tested by: SELFTEST step 4 (a lead with two workers); tests/workers/run.sh (the `.lead/` exclude line, F-WORKERS-05)
+- not covered: the background wait, the self-read and the oracles after each merge rest on the lead following the rule; whether an idle background session exits depends on the Claude Code version (seen on 2.1.296)
 
 ### F-WORK-08 The worker role
 - defined: roles/worker.md, CONTRACT.md
 - entry: a worker's brief
-- promises: the worker changes only what the criteria need, works on its own branch, proves each oracle itself, reports to the address in its brief with every criterion's evidence class and any suspected core fault in `core_findings`; stuck → a `blocked` report
+- promises: the worker changes only what the criteria need, works on its own branch, proves each oracle itself, reports to the address in its brief with every criterion's evidence class and any suspected core fault in `core_findings`; stuck → a `blocked` report; waiting on CI it keeps a background wait (`gh pr checks --watch`) running until it reports
 - tested by: SELFTEST step 4
 - not covered: none known
 
@@ -340,8 +340,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-05 Worktrees kept out of git
 - defined: scripts/start-worker.sh, procedures/INIT.md
 - entry: every real start
-- promises: `/.claude/worktrees/` is written once to the project's `.git/info/exclude`, never to `.gitignore`, even after a last line without a newline; a dry run writes nothing
-- tested by: tests/workers/run.sh (one exclude line however many starts; the dry run writes none; a coordinator/ state repository kept out too)
+- promises: `/.claude/worktrees/` is written once to the project's `.git/info/exclude`, never to `.gitignore`, even after a last line without a newline; so is `/.lead/` (a lead's notes in its worktree), unless the project's git already ignores it; a dry run writes nothing and prints the line it would add
+- tested by: tests/workers/run.sh (one exclude line each however many starts, none added on a second start; the dry run writes none; a file in a worktree's `.lead/` leaves its status clean; a coordinator/ state repository kept out too; in bash and both PowerShells)
 - not covered: none known
 
 ### F-WORKERS-06 cleanup-worker
@@ -368,9 +368,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-09 Messages between sessions
 - defined: TOOLKIT.md, CORE.md §4
 - entry: SendMessage, ListAgents
-- promises: the session name is the address; after a rename every running session is told the new name; roles fall back to the project's Coordinator and never drop a report silently
+- promises: the session name is the address; after a rename every running session is told the new name; roles fall back to the project's Coordinator and never drop a report silently; a session that still expects a message keeps a background wait running, and one gone `done` is resumed by its full id with the message
 - tested by: none
-- not covered: native Windows and WSL2 sessions cannot message each other
+- not covered: native Windows and WSL2 sessions cannot message each other; a background session idle with nothing running may exit (`done`) and is then unreachable (2.1.296) — the background wait is a rule, not checked
 
 ### F-WORKERS-10 A run cut by a usage limit
 - defined: TOOLKIT.md, CORE.md §9
@@ -470,7 +470,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-01 Independent verifier
 - defined: roles/verifier.md, CORE.md §6
 - entry: a worker reports ready with green checks
-- promises: the verifier is not the author and changes nothing; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner
+- promises: the verifier is not the author and changes nothing — it reads another commit with `git show`, `git grep`, `git diff`, `git log` or a scratch worktree, never with checkout, switch, reset, stash or restore in a working copy; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner
 - tested by: SELFTEST step 4 (a verifier run)
 - not covered: SELFTEST step 4 checks only that each sub-task has a verdict, not its commit, per-criterion verdicts or evidence classes
 
@@ -605,7 +605,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-11 A lead's cost order
 - defined: roles/lead.md, TOOLKIT.md
 - entry: a lead's run ending
-- promises: the cost is read with the full command first (retried once, never `n/a`), then the status file is deleted, then the session stopped and removed
+- promises: the cost is read with the full command first (retried once, never `n/a`), then the status file is deleted, then the session stopped and removed; the lead's own session is read the same way by `$CLAUDE_CODE_SESSION_ID` at each stage and before its report (its line carries a real cost and time, never `n/a`), and the coordinator's later read of it is the number that counts
 - tested by: SELFTEST step 6
 - not covered: none known
 

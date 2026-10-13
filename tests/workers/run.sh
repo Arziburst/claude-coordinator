@@ -108,10 +108,13 @@ check 0 "start: dry run" -- start "${S[@]}" --dry-run
 expect_in "[dry-run]"
 expect_in "keep "
 grep -q 'worktrees' "$tmp/repo/.git/info/exclude" 2>/dev/null && { echo "FAIL: the dry run wrote info/exclude"; fail=1; }
+expect_in "[dry-run] add /.lead/ to the repository's .git/info/exclude"
+grep -q '^/.lead/' "$tmp/repo/.git/info/exclude" 2>/dev/null && { echo "FAIL: the dry run wrote /.lead/ to info/exclude"; fail=1; }
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] && { echo "FAIL: the dry run created the worktree"; fail=1; }
 [ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
 check 0 "start: real start with the stub claude" -- start "${S[@]}"
 expect_in 'subscribe: SendMessage(to: "#12 worker: Fix", notify_when_idle: true)'
+expect_in "added /.lead/ to the repository's .git/info/exclude"
 # it waited until the new session was listed before printing the subscribe line (no race)
 grep -qx "agents --json" "$STUB_LOG" || { echo "FAIL: start-worker did not wait for the session to be listed"; fail=1; }
 case "$LAST" in *"not listed after"*) echo "FAIL: the started session was not found in claude agents"; fail=1 ;; esac
@@ -128,6 +131,7 @@ grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with pat
 mkdir -p "$tmp/launch"
 check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+case "$LAST" in *"/.lead/"*) echo "FAIL: /.lead/ added on a second start"; fail=1 ;; esac
 # the self-test's shape: a repository without an origin (a local state repository), its worktree under
 # another folder, launched from that folder - the branch starts from the local base, the brief says to
 # work by absolute path instead of EnterWorktree
@@ -147,6 +151,12 @@ git -C "$tmp/state" worktree remove "$tmp/project/.claude/worktrees/st1"
 [ -z "$(git -C "$tmp/repo" status --porcelain)" ] || { echo "FAIL: the project's git sees the worktrees:"; git -C "$tmp/repo" status --short | sed 's/^/    /'; fail=1; }
 [ "$(grep -c '^/.claude/worktrees/$' "$tmp/repo/.git/info/exclude")" = 1 ] || { echo "FAIL: /.claude/worktrees/ is not in info/exclude exactly once"; fail=1; }
 grep -q '^/.claude/worktrees/$' "$tmp/repo/.gitignore" 2>/dev/null && { echo "FAIL: .gitignore was written"; fail=1; }
+# a lead's notes in <its worktree>/.lead/ are never committed: one line, however many starts
+lw="$tmp/repo/.claude/worktrees/12-fix"
+[ "$(grep -c '^/.lead/$' "$tmp/repo/.git/info/exclude")" = 1 ] || { echo "FAIL: /.lead/ is not in info/exclude exactly once"; fail=1; }
+mkdir -p "$lw/.lead" && echo notes > "$lw/.lead/x"
+[ -z "$(git -C "$lw" status --porcelain)" ] || { echo "FAIL: the worktree's git sees .lead/:"; git -C "$lw" status --short | sed 's/^/    /'; fail=1; }
+rm "$lw/.lead/x" && rmdir "$lw/.lead"
 # a lead's integration branch, created locally and not pushed yet: the worker starts from the local one
 git -C "$tmp/repo" branch 20-lead main
 W=(--repo "$tmp/repo" --name "#20.1 worker: Part" --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "#20 lead: Big")
