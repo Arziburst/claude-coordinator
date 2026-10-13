@@ -96,7 +96,11 @@ function PhysDir([string]$p) {
         if ($null -ne $r -and -not $r[1]) { $cur = $r[0]; continue }
       }
       # a loop, or it does not lead to an existing folder
-    } elseif ($a -ne -1 -and ($a -band 16)) { $cur = $cand; continue }
+    } elseif ($a -ne -1 -and ($a -band 16)) {
+      # an 8.3 name (RUNNER~1) in its long form, as git and cd -P give it: GetFullPath expands it
+      $cur = if ($isWin -and $s.Contains('~')) { [IO.Path]::GetFullPath($cand).Replace('\', '/') } else { $cand }
+      continue
+    }
     # not there, or not a folder: the rest as written
     return @($cur, ('/' + ($segs[$i..($segs.Count - 1)] -join '/')))
   }
