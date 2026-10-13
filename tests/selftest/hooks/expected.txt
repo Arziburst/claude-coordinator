@@ -131,7 +131,7 @@ PASS hooks: its path is quoted or has no space
 PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
-FAIL hooks: COORD_PROTECTED_ROOT is not a folder on this machine: /nonexistent-coordinator-root
+FAIL hooks: COORD_PROTECTED_ROOT is not a folder on this machine: C:/nonexistent-coordinator-root
 PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
 selftest hooks: 8 pass, 1 fail, 0 skipped
 == protectedpartial.json (exit 1)

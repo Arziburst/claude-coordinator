@@ -14,8 +14,9 @@
 #   scripts/selftest.sh hooks --settings <settings.json>   the guard hook's command: forward slashes, no $env:,
 #                                                       no PowerShell shell that turns its exit 2 into 1;
 #                                                       env COORD_PROTECTED_ROOT: a folder, edit tools matched
-#   scripts/selftest.sh hookcheck --session <id>       a session told to push to main: its transcript shows
-#                                                       the block, not a non-blocking hook error
+#   scripts/selftest.sh hookcheck --session <id> [--expect edit]   a session told to push to main (with
+#                                                       edit: to Write into the protected root): its transcript
+#                                                       shows the block, not a non-blocking hook error
 # For the core itself (the maintainer, CI) - a throwaway sandbox:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a throwaway repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -27,7 +28,7 @@
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,29s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -274,9 +275,15 @@ hooks)
   # edit tool (none, "", "*" and ".*" match every tool; otherwise the whole name must match it)
   if [ -z "$root" ]; then skip "COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools"
   else
+    # on Windows Claude Code passes C:\... file paths, so the root is a drive path: C:/... or C:\..., or
+    # Git Bash's /c/... (/mnt/c/..., /cygdrive/c/...), which the guard reads as C:/...
+    win=0; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) win=1 ;; esac
+    dir="$root"; [ $win = 1 ] && dir="$(printf '%s' "$root" | sed -E 's#^/(mnt/|cygdrive/)?([A-Za-z])(/|$)#\2:/#')"
     case "$root" in
       /*|\\*|[A-Za-z]:[/\\]*)
-        if [ -d "$root" ]; then pass "COORD_PROTECTED_ROOT is an absolute path to a folder"
+        if [ $win = 1 ] && ! printf '%s' "$dir" | grep -Eq '^[A-Za-z]:[/\\]'; then
+          fail "COORD_PROTECTED_ROOT is not a drive path (C:/... or C:\\...): $root - Claude Code passes C:\\... file paths on Windows"
+        elif [ -d "$dir" ]; then pass "COORD_PROTECTED_ROOT is an absolute path to a folder"
         else fail "COORD_PROTECTED_ROOT is not a folder on this machine: $root"; fi ;;
       *) fail "COORD_PROTECTED_ROOT is not an absolute path: $root" ;;
     esac
@@ -290,9 +297,16 @@ hooks)
   finish ;;
 
 hookcheck)
-  id=""
-  while [ $# -gt 0 ]; do case "$1" in --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;; *) usage ;; esac; done
+  id="" expect=push
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;;
+      --expect) [ $# -ge 2 ] || usage; expect="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
   [ -n "$id" ] || usage
+  case "$expect" in push|edit) ;; *) usage ;; esac
   # the id is a prefix, not a pattern; a prefix of several sessions names none of them
   case "$id" in *[][*?/\\]*) fail "the session id $id holds a pattern or path character"; finish ;; esac
   all="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null)"
@@ -303,6 +317,14 @@ hookcheck)
   tf="$all"
   if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
     fail "the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
+  elif [ "$expect" = edit ]; then
+    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
+    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
+    if grep -q "Blocked by safety-guard: the owner's working copy is never edited by a worker" "$tf"; then
+      pass "the edit tool's write into the working copy was blocked through Claude Code"
+    elif grep -Eq 'File created successfully at|has been updated successfully' "$tf"; then
+      fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
+    else fail "no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)"; fi
   elif grep -q 'Blocked by safety-guard' "$tf"; then pass "the push to a protected branch was blocked through Claude Code"
   else fail "no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
   finish ;;

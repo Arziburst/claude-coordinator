@@ -1,5 +1,5 @@
 {
-  "env": { "COORD_PROTECTED_ROOT": "/nonexistent-coordinator-root" },
+  "env": { "COORD_PROTECTED_ROOT": "C:/nonexistent-coordinator-root" },
   "hooks": {
     "PreToolUse": [
       {

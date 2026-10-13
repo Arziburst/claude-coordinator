@@ -191,8 +191,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   blocked), a relative path from the call's cwd, letter case ignored on Windows and macOS (exact on
   Linux), whole path segments (`<root>-old` is another folder; the root itself is not under it).
   Unset or empty: nothing changes (opt-in). `selftest hooks --settings` checks it: set, the root must
-  be an absolute path to a folder on the machine and the matcher must take in the four tools; unset, a
-  SKIP line. `start-worker` prints a notice when it launches a worker from the root and the safety file
+  be an absolute path to a folder on the machine — on Windows a drive path (`C:/…`, `C:\…`, or Git
+  Bash's `/c/…`, which the guard reads as `C:/…`), since Claude Code passes `C:\…` file paths there —
+  and the matcher must take in the four tools; unset, a SKIP line. Through Claude Code it is proven by
+  the edit probe (SELFTEST step 2a, `selftest hookcheck --session <id> --expect edit`; measured on
+  2.1.296, Windows: the settings file's `env` reaches the hook). `start-worker` prints a notice when it launches a worker from the root and the safety file
   has no `COORD_PROTECTED_ROOT`. **The limit:** it guards the edit tools only — a shell command such as
   `echo x > <root>/file` or `cp` still writes there, and a symlink is not followed; it protects against
   a mistake, not intent (the worker's brief and branch protection remain the rules).
