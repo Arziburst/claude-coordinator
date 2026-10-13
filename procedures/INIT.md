@@ -94,7 +94,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    project already has (a document, Jira, a board) stays the source: nothing is proposed then.
 5. **State repository — where does it live?** `coordinator/` is always a local git (3.4); the question
    is its remote, **always private**: *the owner's account* (recommended solo) —
-   `gh repo create <owner>/<project>-coordinator-state --private`, first push `git push -u origin state`; *the team's organization*
+   `gh repo create <owner>/<project>-coordinator-state --private --source coordinator --remote origin`, first push `git -C coordinator push -u origin state`; *the team's organization*
    (recommended for a team); *local only* — warn: a lost disk or a move without a handoff loses the
    journal, the rules and the decisions. With a remote: verify `PRIVATE` (`gh repo view --json
    visibility`), push as CORE §12b says (at every event that matters, at most every 15 minutes), record the link in `BINDINGS.md`, offer a pointer the next
@@ -184,7 +184,7 @@ with one line at the summary or later.
   ignored by the project's git through `.git/info/exclude`, so the project's history, PRs and the client
   see none of it. Create it if missing — `git -C coordinator init`, then `git -C coordinator symbolic-ref HEAD
   refs/heads/state` before the first commit (its branch is always `state`, §12b), add `coordinator/` to the project's
-  `.git/info/exclude`, first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
+  info/exclude (`git rev-parse --git-path info/exclude`: a linked worktree's `.git` is a file), first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
   commit at every change and push per CORE §12b where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
 - **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
@@ -216,7 +216,8 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
   architecture, hosting, services, costs and limits — returned as **an options table with a
   recommendation** and the first radar list of competitors and references (CORE §4b); the owner decides,
   and each decision goes into the decision log with its reason.
-  Then **propose the infrastructure, one yes each**: `git init`; a private repository on the code host;
+  Then **propose the infrastructure, one yes each**: `git init` (then the exclude line of 3.4 for
+  `coordinator/` — before it there was no project git to hide it from); a private repository on the code host;
   a board for the tasks (a GitHub Project, or `TASKS.md`: question 4); a CI skeleton with the definition-of-done checks; branch
   protection; the state repository (question 5). Risky areas and production (6, 7) wait until there is
   code that has them. The first tasks are the project skeleton, CI and the board's
@@ -229,7 +230,8 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
 - **A project with an older coordinator** (rules in the repository, a remote core, no `coordinator/`):
   no full quiz — the migration plan ([MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md)) for one yes, the old
   answers mapped to a strictness preset (CORE §3), then only what the old rules did not cover (the state
-  repository, the sources of truth).
+  repository, the sources of truth), and every row of [ONE-TIME.md](../ONE-TIME.md) with no line in
+  `coordinator/CHECKLIST.md` (built as UPDATE-CORE step 3 says) — settings as a quiz, checks offered.
 - **A new machine or a teammate** (a state repository exists): find it (HANDOFF, *Finding it*); no
   access → name the repository and whom to ask, stop. With access: clone it, re-detect the "re-detect"
   rows, and instead of the quiz one "still so?" per section; then the dry run.
@@ -246,3 +248,4 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
      session's subscriptions died with it — and match each to its task in the journal and the board.
   4. Then the open questions and one "still so?" per section instead of the quiz; no dry run or
      self-test when the machine and the core commit are the same (CHECKLIST says so).
+  5. **Autopilot on** (`PROJECT.md`) → recreate the tick (CORE §9, TOOLKIT *The periodic tick*).

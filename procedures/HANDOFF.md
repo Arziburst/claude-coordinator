@@ -22,7 +22,8 @@ holding the coordinator's files —
   pointer the project carries if the owner chose one at init (a line `Coordinator state: <url>` in the
   project's `CLAUDE.md`, added through the project's change path; never in a client's repository);
   `gh repo view <owner>/<project>-coordinator-state` and the same name in the project repository's
-  organization; else ask the owner for the link. Found but not readable (404 / 403 with this login) →
+  organization; else ask the owner for the link. Found but not readable — gh cannot tell it from absent (a private repository answers "Could not resolve"
+  as a missing one does) →
   tell the owner the repository and that its owner must grant access; work stops until then. Nothing
   found and the owner confirms there is none → the init quiz as for a new project.
 - **The handoff — only on the owner's command** ("prepare a handoff", "update the state repo"); moves
@@ -35,7 +36,7 @@ holding the coordinator's files —
   3. Mark machine-specific rows of `BINDINGS.md` "re-detect"; commit `coordinator/` and push it to its
      remote — created if missing (local only until now) where the owner chooses, the owner's account or
      the team's organization
-     (`gh repo create <owner-or-org>/<project>-coordinator-state --private`); push with `git push -u origin state`,
+     (`gh repo create <owner-or-org>/<project>-coordinator-state --private --source coordinator --remote origin`); push with `git -C coordinator push -u origin state`,
      so `state` becomes its default branch; verify it is private
      (`gh repo view --json visibility` → `PRIVATE`); record in `HANDOFF.md` the claude-coordinator commit
      the coordinator ran on; commit and push.
@@ -45,7 +46,7 @@ holding the coordinator's files —
   (above). The session reads its
   `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
   context already known: clone the project, clone the state repository into its `coordinator/` and add
-  `coordinator/` to the project's `.git/info/exclude`, re-detect the platform and the "re-detect" rows, check the
+  `coordinator/` to the project's info/exclude (`git rev-parse --git-path info/exclude`), re-detect the platform and the "re-detect" rows, check the
   logins and the safety setup, confirm the quiz briefly, offer the machine rows of
   [ONE-TIME.md](../ONE-TIME.md) missing for this `hostname` in `CHECKLIST.md`, dry run (§12a) — including which interrupted
   tasks it would restart — then wait for the owner.

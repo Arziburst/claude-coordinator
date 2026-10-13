@@ -13,7 +13,8 @@ state repository (`coordinator/CORE-FINDINGS.md`), never in the project and neve
   code, the exact error, a commit, a CI run, a session's hook record), **before** working around it;
   the workaround goes into the row too.
 - **Statuses:** `new` → `sent #<issue>` (filed to claude-coordinator) or `discussed` → `sent <date>`
-  (handed over by the owner) → `fixed <core commit>` (proven here after an update) · `dropped` (why) ·
+  (handed over by the owner) → `fixed <core commit>` (proven here after an update) · `fixed upstream
+  <commit>` (fixed before it was sent: update the core) · `dropped` (why) ·
   `not core` (why).
 
 | id | date | core | trigger | what happened (evidence) | workaround | status |

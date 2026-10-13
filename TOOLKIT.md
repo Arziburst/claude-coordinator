@@ -53,7 +53,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   model from `--model`. `~/.claude/agents/` serves every project on the machine, so it holds the
   **upstream** roles only: a role this project edited in its local core is never installed (another
   project would overwrite it) — the coordinator starts that subagent as a general one with the local
-  role file's body at the top of its prompt and the role's model. Check the frontmatter fields (`name`,
+  role file's body at the top of its prompt and the role's model. A role's `model:` names a model, not a rung
+  (CORE §7): where the ladder lacks it, the coordinator passes the ladder's model for that rung as the Agent
+  tool's `model`. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; idle sessions may exit — `respawn` them when their turn comes; remove a session with

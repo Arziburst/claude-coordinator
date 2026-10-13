@@ -123,7 +123,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-START-01 The one start sequence
 - defined: CORE.md §2, procedures/INIT.md, README.md
 - entry: any fresh session in a project; the link to this repository; this repository's own CLAUDE file
-- promises: the nine steps run in order (identity → one coordinator → files → context → open questions → quiz → platform and safety → dry run → wait); after step 9 nothing starts until the owner gives a task or a batch command; a question is answered, never treated as an order (§1.2)
+- promises: the nine steps run in order (identity → one coordinator → files → context, then the session-start housekeeping in a set-up project → open questions → quiz → platform and safety → the dry run's two real checks and the self-test → wait); after step 9 nothing starts until the owner gives a task or a batch command; a question is answered, never treated as an order (§1.2)
 - tested by: none (model behaviour)
 - not covered: no automated check that a session follows the order
 
@@ -230,7 +230,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-05 Delegation and naming
 - defined: CORE.md §4, TOOLKIT.md
 - entry: delegating a task
-- promises: one task per worker or lead; every session is named `#<task> <role>: <title>` with no project prefix; the brief carries the contract, decisions, parallel work, resources and the report phrase, not the role rules
+- promises: one task per worker or lead; workers, leads, testers and verifiers are named `#<task> <role>: <title>` with no project prefix (a researcher `researcher: <topic>`, the coordinator by its name); the brief's text carries the contract, decisions, parallel work, resources and the report phrase, never the role rules (start-worker prepends the role file)
 - tested by: tests/workers/run.sh (the name reaches the session and the subscribe line)
 - not covered: none known
 
@@ -265,7 +265,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-10 Research and the radar
 - defined: roles/researcher.md, CORE.md §4b
 - entry: a new or costly-to-reverse feature; the radar list in the project's settings
-- promises: research is read-only and returns a catalog with each candidate's licence and advice; research creates no task; the owner decides row by row; no customer data or private code goes into a search
+- promises: research is read-only and returns a catalog with each candidate's licence and advice; research creates no task; the owner decides row by row; no customer data or secrets go into a search, the project's private code only where `PROJECT.md` allows it
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -604,14 +604,14 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-STATE-01 The state repository
 - defined: CORE.md §12b, procedures/INIT.md, state-repo/README.template.md
 - entry: INIT 3.4; question 5
-- promises: `coordinator/` is its own git repository, excluded from the project's git by `.git/info/exclude`; the core copy, journal, run log and findings live there, never in the project's history
+- promises: `coordinator/` is its own git repository, excluded from the project's git by its info/exclude file; the core copy, journal, run log and findings live there, never in the project's history from then on (a migrated project keeps its past history)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
 ### F-STATE-02 The state branch
 - defined: CORE.md §12b, ONE-TIME.md
 - entry: one-time step `state-branch`
-- promises: the one branch is `state`, also the remote's default; a state repository on main or master moves on the owner's yes; the old remote branch is deleted by the owner (the guard blocks it)
+- promises: the working branch is `state` (the self-test's evidence branches aside), also the remote's default; a state repository on main or master moves on the owner's yes; the old remote branch is deleted by the owner (the guard blocks it)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -727,7 +727,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-FINDINGS-06 Mistakes become rules
 - defined: CORE.md §10
 - entry: a correction or a found mistake
-- promises: acknowledged in one line, the consequence fixed, the lesson written as a rule — project-specific in the project's settings, universal proposed for the core
+- promises: acknowledged in one line, the consequence fixed, the lesson written as a rule — project-specific in `PROJECT.md` *Lessons*, universal proposed for the core
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 

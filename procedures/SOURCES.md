@@ -78,7 +78,8 @@ Detected at init (INIT, *Platform* and 3.2), said to the owner in one line, reco
 - **Git, no code host** → no PRs and no CI: each worker still has its own branch and worktree; the
   verifier reviews the branch diff and runs the checks locally; merging per the strictness (CORE §3),
   locally. Only the hook guards the protected branches (no branch protection — say so at init). The
-  state repository can only be local (warn as INIT says).
+  state repository is local, or the owner's own private repository on a code host where a gh login
+  exists (INIT question 5) — the project's code needs no host for that.
 - **No git** → propose `git init` in the project (the owner's yes; without it there are no branches,
   worktrees, rollback or parallel workers). Refused → one worker at a time in the folder itself, a copy
   of the folder outside the project before each task; the swarm preset is not available.
