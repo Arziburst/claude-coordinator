@@ -175,6 +175,18 @@ jobs:
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
           bash tests/session-tokens/run.sh ps pwsh
+      - name: The status line saves its files and leaves no temp file (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/statusline/run.sh sh
+      - name: The status line saves its files and leaves no temp file (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/statusline/run.sh ps pwsh
+      - name: The status line saves its files and leaves no temp file (PowerShell)
+        if: runner.os == 'Windows'
+        run: |
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/statusline/run.sh ps powershell
+          bash tests/statusline/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (bash)
         if: runner.os != 'Windows'
         run: bash tests/run-stats/run.sh sh
