@@ -144,6 +144,18 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     cycle") runs the batch recipe over the runnable work; the recipe is agreed in the summary. In both,
     a single task can be handed over any time. The autopilot (swarm) runs the batch recipe on its tick.
     Recorded in `PROJECT.md` *Settings*.
+13. **Help improve the coordinator?** Asked softly, in the owner's language, close to: "Would you like to
+    help improve the coordinator? Once a week it would send its repository a short anonymous summary —
+    numbers only: what tasks cost and how long they took, how many were reworked, where the safety guard
+    got in the way. No code, no file names, nothing of what the tasks were about. You can see each
+    summary before it is sent, or turn it off at any time." (Russian: "Хотите помочь улучшать координатор?
+    Раз в неделю он будет отправлять в его репозиторий короткую обезличенную сводку — только цифры:
+    сколько стоили и длились задачи, сколько было доработок, где мешала защита. Ни кода, ни имён файлов,
+    ни содержания задач. Каждую сводку можно посмотреть до отправки или выключить в любой момент.")
+    Options: *show me each summary first* (recommended — and for the first week whatever the answer;
+    then the owner picks the mode, [RETRO.md](RETRO.md)) · *send it* · *only me — the weekly retro runs,
+    nothing leaves this machine*. Recorded in `PROJECT.md` *Settings* with the anonymous id
+    (`scripts/retro --new-id`, random, never derived from a name); the weekly retro runs in every mode.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the
@@ -158,7 +170,9 @@ Asked only when they apply:
 Stack; build / run / test / lint commands; environments and deploy; CI layout; MCP servers and their
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
-per-worker isolation (working copies, ports, databases, containers); shared resources; serial
+per-worker isolation (working copies, ports, databases, containers; the worktree roots outside
+`.claude/worktrees`, one-time step `worktree-roots`); the project's own task kinds mapped to the core's
+(`ROUTING.md` `## Kinds`, one-time step `kinds-map`, proposed from the run log); shared resources; serial
 identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one probe per model, list prices — written also as `coordinator/prices.txt`, the prices file of `scripts/run-stats --limits`, one-time step `prices-file`; a price not on the pricing page is asked); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
 (code host, tracker, design, database, hosting, docs, browser) — propose the matching servers, the owner
 decides what is connected and with which rights; whether git, a code host and a tracker exist

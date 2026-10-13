@@ -126,6 +126,12 @@ expect "ready: task rows give ready, the last 10, the last row of a task, never 
 expect "ready: --per-run leaves task rows out" 0 "$t/expected-ready-per-run.txt" - -- ready.tsv --per-run
 expect "ready: one kind and model" 0 "$t/expected-ready-one.txt" - -- ready.tsv --kind ordinary --model sonnet
 
+# a real run log: a cost cell's leading number (`0.0648 prices`, `$0.05 status`, `$1.20`; `n/a` and `in 52` none),
+# an estimate_time column ignored, a verifier's `pass` and `Done (…)` as approvals
+expect "real: a cost cell read by its leading number, estimate_time ignored" 0 "$t/expected-real.txt" - -- real.tsv
+expect "real: --task with a verifier's pass" 0 "$t/expected-real-pass.txt" - -- real.tsv --task 50
+expect "real: --task with a verifier's Done (…)" 0 "$t/expected-real-done.txt" - -- real.tsv --task 53
+
 # --task: one task's row from its runs, the PR's gh JSON and the journal's owner waits (fixtures in task/)
 k="$here/task"
 expect "task: checks green after the verifier, merged" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json pr-late.json

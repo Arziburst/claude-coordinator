@@ -5,7 +5,8 @@
 # A task is the rows whose task number agrees before its first dot: its cost and time are the sums of the values its
 # rows have (a subagent's row, cost `in <parent>`, adds no time); its kind and model are its lead row's, else its first
 # worker row's, else its first row's; a `task` row (one per finished task, CORE 7) adds nothing to them. Per kind and
-# model and per measure, the last 10 tasks with a value count; ready: the wall of the last `task` row of each task.
+# model and per measure, the last 10 tasks with a value count; ready: the wall of the last `task` row of each task. A
+# cost cell counts by its leading number (`0.0648 prices` is 0.0648); a verifier's `done` or `pass` is an approval.
 # Prints, tab-separated: kind model cost_n cost_median cost_low cost_high time_n time_median time_low time_high
 # ready_n ready_median ready_low ready_high (-PerRun: kind role model and the cost and time columns, no task rows)
 # (median: the mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
@@ -28,7 +29,7 @@ param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [string]$Ta
   [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$Now)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 25 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 if ($Limits) {
   if ($File -or $Kind -or $Model -or $PerRun -or $Task -or $PrJson -or $Waits) { Show-Usage }
 } elseif ($Task -or $PrJson -or $Waits) {
@@ -253,7 +254,7 @@ if ($Task) {
     # the verifier approved at its run's start + wall; the last approval counts
     if ($r -ceq 'verifier') {
       $hv = $true; $w = Minutes (& $col $cw)
-      if ((& $col $cs) -cmatch '^[ \t]*approved' -and $s -ge 0 -and $w -ge 0 -and $s + (IDiv ($w * 6) 1000) -gt $ver) { $ver = $s + (IDiv ($w * 6) 1000) }
+      if ((& $col $cs) -match '^[ \t]*(approved|done([^a-z]|\z)|pass([^a-z]|\z))' -and $s -ge 0 -and $w -ge 0 -and $s + (IDiv ($w * 6) 1000) -gt $ver) { $ver = $s + (IDiv ($w * 6) 1000) }
     }
   }
   if ($n -eq 0) { Fail "no rows in $File" }
@@ -287,8 +288,9 @@ if ($null -eq $L) { [Console]::Error.WriteLine("run-stats: cannot read $File"); 
 # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number
 function Units([string]$v, [string]$unit) {
   $v = $v.Trim(' ', "`t")
-  if ($unit -ceq '$') { $v = $v -creplace '^[$]', '' } else { $v = $v -creplace 'm$', '' }
-  if ($v -cmatch '^([0-9]+)(?:[.]([0-9]+))?\z') { return [long]$Matches[1] * 10000 + [long](($Matches[2] + '0000').Substring(0, 4)) }
+  # a cost: its leading number (`0.0648 prices` is 0.0648, `$1.20` 1.20); minutes: the whole value, `m` allowed
+  if ($unit -ceq '$') { $v = $v -creplace '^[$]', ''; $re = '^([0-9]+)(?:[.]([0-9]+))?' } else { $v = $v -creplace 'm$', ''; $re = '^([0-9]+)(?:[.]([0-9]+))?\z' }
+  if ($v -cmatch $re) { return [long]$Matches[1] * 10000 + [long](($Matches[2] + '0000').Substring(0, 4)) }
   [long]-1
 }
 function Rank([long]$p, [long]$n) { [long][Math]::Ceiling($p * $n / 100) }

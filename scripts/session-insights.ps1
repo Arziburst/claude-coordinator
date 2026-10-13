@@ -2,6 +2,9 @@
 # the same lines, see its top comment for each). The input of the weekly retro (CORE section 7a); reads only, sends nothing.
 #   powershell -File scripts/session-insights.ps1 <session-id | id prefix | a subagent's agentId | transcript.jsonl> [-Detail]   (or: pwsh -File ...)
 #   powershell -File scripts/session-insights.ps1 -Since 2026-10-05T17:00:00Z [-Detail]   every transcript from then on (UTC; or Unix seconds)
+#     [-Until <UTC time>] [-SkipTests] [-Project <folder>]   the retro's filters: records before -Until only; no probe or
+#     self-test sessions; only sessions whose first cwd is the folder or inside it, several joined by | (the rules:
+#     session-insights.sh's top comment)
 # Tab-separated lines, no header, nothing for a session without messages: "block <reason> count= changed= retried= around= stopped="
 # per safety-guard reason and "deny rule", "refusal <source>" the same for other refusals (what the next tool call did);
 # "tool_error <tool> count= repeated= exit_only=" (exit_only: errors that are only "Exit code <n>", left out of count);
@@ -10,29 +13,33 @@
 # "reread files= reads=" (files the Read tool read 3+ times in one transcript; -Detail adds "reread_file <path> reads=",
 # file names for this machine only); "turns assistant= tool_calls=". One session is its transcript and its subagents'.
 # Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
-param([string]$Session, [string]$Since, [switch]$Detail)
+param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project)
 # this script's output is written as UTF-8, whatever the console's code page; the caller's console gets its own
 # encoding back on every way out (the body runs inside try, the encoding is restored in finally)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ((-not $Session -and -not $Since) -or ($Session -and $Since)) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 12 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+if ((-not $Session -and -not $Since) -or ($Session -and $Since) -or (-not $Since -and ($Until -or $SkipTests -or $Project))) {
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 15 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
 $projects = Join-Path $cfg 'projects'
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
-$cut = ''
-if ($Since) {
-  $bad = "-Since needs YYYY-MM-DDTHH:MM:SS in UTC (Z or nothing after it) or Unix seconds, got $Since"
-  if ($Since -cmatch '^[0-9]+\z') {
+# a -Since / -Until value as YYYY-MM-DDTHH:MM:SS in UTC, or the usage error
+function Utc([string]$name, [string]$v) {
+  $bad = "$name needs YYYY-MM-DDTHH:MM:SS in UTC (Z or nothing after it) or Unix seconds, got $v"
+  if ($v -cmatch '^[0-9]+\z') {
     # Unix seconds (the status line's resets_at)
-    if ($Since.Length -gt 10) { [Console]::Error.WriteLine($bad); exit 2 }
-    $cut = [DateTimeOffset]::FromUnixTimeSeconds([long]$Since).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ss')
-  } elseif ($Since -cmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z?\z') {   # no other offset
-    $cut = $Since.Substring(0, 19)
-  } else { [Console]::Error.WriteLine($bad); exit 2 }
+    if ($v.Length -gt 10) { [Console]::Error.WriteLine($bad); exit 2 }
+    return [DateTimeOffset]::FromUnixTimeSeconds([long]$v).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ss')
+  } elseif ($v -cmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z?\z') {   # no other offset
+    return $v.Substring(0, 19)
+  }
+  [Console]::Error.WriteLine($bad); exit 2
 }
+$cut = ''; $upto = ''
+if ($Since) { $cut = Utc '-Since' $Since }
+if ($Until) { $upto = Utc '-Until' $Until }
 
 $ORD = [StringComparison]::Ordinal
 $reTime = [regex]'"timestamp":[ \t]*"([^"]*)"'
@@ -218,6 +225,7 @@ function Insights([string[]]$Files) {
         if (-not $ts) { continue }
         $t19 = if ($ts.Length -gt 19) { $ts.Substring(0, 19) } else { $ts }
         if ([string]::CompareOrdinal($t19, $cut) -lt 0) { continue }
+        if ($upto -and [string]::CompareOrdinal($t19, $upto) -ge 0) { continue }
       }
       $ms = Tms $ts
       if ($isR) {
@@ -335,6 +343,73 @@ function Insights([string[]]$Files) {
   "turns`tassistant={0} tool_calls={1}" -f $S.na, $S.nc
 }
 
+# -SkipTests / -Project: of the files (in order, $keys their paths under projects/ with /), those of the sessions
+# kept. Per file its first cwd and its last name (customTitle / agentName); a subagent's file is judged by its
+# parent's transcript when that is listed (its own cwd also counts for the sandbox) - as the .sh's pick
+$reCwd = [regex]'"cwd":"([^"]*)"'
+$reName = [regex]'"(?:customTitle|agentName)":"([^"]*)"'
+$reSlashes = [regex]'/+'
+$reDrive = [regex]'^([a-z]):/'
+$reWordC = [regex]'^[a-z0-9_-]$'
+$reSt = [regex]'^#st[0-9]'
+$reSandbox = [regex]'/coordinator-selftest(/|\z)'
+$reSubFile = [regex]'/subagents/[^/]*\.jsonl\z'
+# a path compared: \ read as /, repeated / as one, lower case, C:/x as /c/x, no trailing /
+function PNorm([string]$p) {
+  $p = $reDrive.Replace((Lower $reSlashes.Replace($p.Replace('\', '/'), '/')), '/$1/')
+  if ($p.EndsWith('/', $ORD)) { $p = $p.Substring(0, $p.Length - 1) }
+  $p
+}
+# $w in $s as a whole word: no letter, digit, _ or - right before or after it
+function PWord([string]$s, [string]$w) {
+  $p = 0
+  while ($true) {
+    $i = $s.IndexOf($w, $p, $ORD); if ($i -lt 0) { return $false }
+    $b = if ($i -gt 0) { [string]$s[$i - 1] } else { '' }
+    $a = if ($i + $w.Length -lt $s.Length) { [string]$s[$i + $w.Length] } else { '' }
+    if (-not $reWordC.IsMatch($b) -and -not $reWordC.IsMatch($a)) { return $true }
+    $p = $i + 1
+  }
+}
+# a probe or self-test session by its name: probe, selftest or self-test as a word before the first colon, or a
+# task #st<n>; the title after the colon never counts (a task about a self-test is work)
+function Tested([string]$n) {
+  $v = Lower $n; $i = $v.IndexOf(':')
+  $h = if ($i -ge 0) { $v.Substring(0, $i) } else { $v }
+  $reSt.IsMatch($v) -or (PWord $h 'probe') -or (PWord $h 'selftest') -or (PWord $h 'self-test')
+}
+function Pick([string[]]$files, [string[]]$keys) {
+  # the folders of -Project, joined by |
+  $R = @(if ($Project) { foreach ($p1 in $Project.Split('|')) { if ($p1) { PNorm $p1 } } })
+  $cwd = NewMap; $nm = NewMap; $listed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  for ($k = 0; $k -lt $files.Count; $k++) {
+    [void]$listed.Add($keys[$k]); $c = $null; $n = $null
+    foreach ($line in [IO.File]::ReadLines($files[$k])) {
+      if ($null -eq $c -and $line.Contains('"cwd":"')) { $m = $reCwd.Match($line); if ($m.Success) { $c = $m.Groups[1].Value } }
+      if ($line.Contains('Title":"') -or $line.Contains('"agentName":"')) { $all = $reName.Matches($line); if ($all.Count) { $n = $all[$all.Count - 1].Groups[1].Value } }
+    }
+    if ($null -ne $c) { $cwd[$keys[$k]] = $c }
+    if ($null -ne $n) { $nm[$keys[$k]] = $n }
+  }
+  $kept = New-Object 'System.Collections.Generic.List[string]'
+  for ($k = 0; $k -lt $files.Count; $k++) {
+    $p = $keys[$k]; $q = $p
+    $m = $reSubFile.Match($p); if ($m.Success -and $listed.Contains($p.Substring(0, $m.Index) + '.jsonl')) { $q = $p.Substring(0, $m.Index) + '.jsonl' }
+    $cq = if ($cwd.ContainsKey($q)) { $cwd[$q] } else { '' }; $cp = if ($cwd.ContainsKey($p)) { $cwd[$p] } else { '' }
+    $nq = if ($nm.ContainsKey($q)) { $nm[$q] } else { '' }
+    if ($SkipTests -and ((Tested $nq) -or $reSandbox.IsMatch((PNorm $cq)) -or $reSandbox.IsMatch((PNorm $cp)))) { continue }
+    if ($R.Count) {
+      $c = if ($cq) { $cq } else { $cp }
+      if (-not $c) { continue }
+      $c = PNorm $c; $in = $false
+      foreach ($r1 in $R) { if ($c -ceq $r1 -or $c.StartsWith($r1 + '/', $ORD)) { $in = $true; break } }
+      if (-not $in) { continue }
+    }
+    $kept.Add($files[$k])
+  }
+  , $kept.ToArray()
+}
+
 if ($Since) {
   if (-not (Test-Path -LiteralPath $projects)) { [Console]::Error.WriteLine("no transcripts in $projects"); exit 1 }
   # in the order of their paths with / (as the .sh sorts them)
@@ -342,6 +417,7 @@ if ($Since) {
   $files = [string[]]@(Get-ChildItem -LiteralPath $projects -Filter '*.jsonl' -Recurse -File | ForEach-Object { $_.FullName })
   $keys = [string[]]@($files | ForEach-Object { $_.Substring($root.Length).Replace('\', '/') })
   [Array]::Sort($keys, $files, [StringComparer]::Ordinal)
+  if ($SkipTests -or $Project) { $files = Pick $files $keys }
   Insights $files
   exit 0
 }

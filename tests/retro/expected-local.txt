@@ -1,0 +1,58 @@
+retro	week of 2026-10-05	previous week of 2026-09-28
+axis	measure	week	previous
+cost	tasks	8	2
+cost	merged	7	2
+cost	median_per_task	1.68	—
+cost	total	25.78	6.60
+cost	coordinator	4.00	3.00
+cost	per_merged_task	3.68	—
+speed	ready_median	58	—
+speed	work_median	18	—
+speed	owner_wait_median	20	—
+speed	owner_wait_open	1	0
+quality	rework_rate	25%	—
+quality	escalated_rate	13%	—
+quality	failed_rate	13%	—
+quality	escapes	1	1
+quality	escapes_per_10_merged	1.4	—
+predictability	cost_forecasts	6	2
+predictability	cost_logged	4	2
+predictability	cost_rebuilt	2	0
+predictability	cost_in_range	50%	—
+predictability	cost_ratio_median	111%	—
+predictability	work_forecasts	5	2
+predictability	work_logged	3	0
+predictability	work_rebuilt	2	2
+predictability	work_in_range	80%	—
+predictability	work_ratio_median	108%	—
+predictability	ready_forecasts	4	2
+predictability	ready_in_range	50%	—
+predictability	ready_ratio_median	158%	—
+stability	failed_runs	1	0
+stability	guard_blocks	5	1
+stability	deny_rule_blocks	1	0
+stability	guard_around	1	0
+stability	guard_false_positives	2	1
+stability	guard_errors	1	0
+stability	refusals	0	0
+stability	tool_errors	3	0
+stability	tool_calls	14	1
+stability	tool_error_rate	—	—
+stability	cache_rewrites	1	0
+stability	cache_rewrites_per_task	0.13	—
+stability	waiting_minutes	5	0
+stability	rereads	0	0
+kind	name	tasks	rework	escalated	failed
+kind	acme-shop-checkout	1	—	—	—
+kind	hard	2	—	—	—
+kind	mechanical	1	—	—	—
+kind	ordinary	4	25%	25%	25%
+unknown result: superseded by #17 ×1
+block	deleting a protected branch	count=1 changed=0 retried=0 around=0 stopped=1
+block	deny rule	count=1 changed=0 retried=0 around=0 stopped=1
+block	push to a protected branch	count=1 changed=0 retried=1 around=0 stopped=0
+block	push while on main	count=1 changed=1 retried=0 around=0 stopped=0
+block	removing a worktree by hand (use the cleanup script)	count=1 changed=0 retried=0 around=1 stopped=0
+block	the owner's working copy is never edited by a worker (<path>); work in your worktree	count=1 changed=0 retried=0 around=0 stopped=1
+refusal	hook safety-guard.sh	count=1 changed=1 retried=0 around=0 stopped=0
+note	— too little data: under 3 tasks, merged tasks or forecasts, under 100 tool calls, or no transcripts, journal or escapes file

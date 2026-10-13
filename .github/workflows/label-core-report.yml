@@ -1,6 +1,7 @@
 name: label core reports
 # A project's coordinator files its core findings as issues titled "[core-report] ..." with its owner's
-# own account (procedures/CORE-FINDINGS.md); an outside account cannot set labels, so this adds it.
+# own account (procedures/CORE-FINDINGS.md), and its weekly retro's summaries and proposals as issues titled
+# "[self-improvement] ..." (procedures/RETRO.md); an outside account cannot set labels, so this adds them.
 # The title is only compared here, never put into a command.
 on:
   issues:
@@ -18,3 +19,18 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: gh issue edit "$NUMBER" --repo "$REPO" --add-label core-report
+  self-improvement:
+    if: startsWith(github.event.issue.title, '[self-improvement]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add the self-improvement label (created first when the repository has none)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # proposals and data from a project's weekly retro, not bug reports: kept apart from core-report
+          gh label list --repo "$REPO" --limit 500 --json name --jq '.[].name' | grep -qx self-improvement ||
+            gh label create self-improvement --repo "$REPO" --color 0E8A16 \
+              --description "A project's weekly retro: an anonymous summary or a proposal, not a bug report" || true
+          gh issue edit "$NUMBER" --repo "$REPO" --add-label self-improvement

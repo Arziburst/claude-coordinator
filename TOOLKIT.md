@@ -89,7 +89,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
-  worktree root outside `.claude/` in `BINDINGS.md`.
+  worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
+  (one-time step `worktree-roots`), so the retro counts the sessions started there.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
 
@@ -118,6 +119,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   after 7 days, max 50 per session. `--resume` restores cron tasks (not self-paced loops). Recreate the
   tick after every restart. Durable alternatives: Routines (cloud, ≥ 1 h) or Desktop scheduled tasks.
   [scheduled-tasks](https://code.claude.com/docs/en/scheduled-tasks.md)
+- A weekly job cannot live in a cron that expires after 7 days: the **weekly retro** is a due check
+  instead — *last retro* in `PROJECT.md` against the last complete week, at session start, with the daily
+  sync and on the tick where there is one ([procedures/RETRO.md](procedures/RETRO.md)).
 
 ## Safety
 - **Permission rules:** `deny` → `ask` → `allow`; a deny always wins. Compound commands are split
@@ -270,8 +274,14 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   `tests/session-insights/run.sh` (fixture transcripts: guard blocks followed by a retry, a way around,
   a change and a stop, a deny rule, refusals by another hook, the classifier, a safety check and the
   user, tool errors and a repeat, errors that are only an exit code, waits, rereads, a cache rewrite, a subagent,
-  `--since` across two sessions, CRLF, a BOM and malformed lines),
-`tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
+  `--since` across two sessions, CRLF, a BOM and malformed lines; `--until`, `--skip-tests` and `--project`
+  on `tests/retro/claude/`), `tests/retro/run.sh` (a run log with a history, a thin previous week, a week
+  with a rework, an escalation, a failed run, a lead and a subagent row, a project's own kind and an open
+  wait, a self-test and a probe left out, a kinds map, logged estimates and rebuilt forecasts, an unknown result, a sibling worktree root; its journal, escapes and transcripts; the local report and the
+  public body against their expected files, the folder's name absent from the public body, a week with too
+  little data and no transcripts, CRLF and a BOM; the public check failing on an injected path, the
+  folder's name, free text and a foreign label; the proposal check; `--new-id`; usage errors),
+`tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a real log's cost cells read by their leading number and a verifier's `done` / `pass`, a lead
 and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
 values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
 CRLF with a BOM, a missing file; `--limits` on `tests/run-stats/limits/`: trusted, guessed and previous
@@ -389,8 +399,15 @@ BOM, models priced apart),
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
   as session-tokens: a session is its transcript and its subagents', `--since` every transcript on the
-  machine, each record by its own timestamp. It only reads and prints; nothing is sent anywhere. Lines,
-  tab-separated, one kind per line, no header; nothing for a session without messages:
+  machine, each record by its own timestamp. It only reads and prints; nothing is sent anywhere. With
+  `--since`, the retro's filters: `--until <time>` (`-Until`: records before it only); `--skip-tests`
+  (`-SkipTests`: no probe or self-test session — a name with `probe`, `selftest` or `self-test` as a word
+  before its first colon, a task `#st<n>`, or a first cwd inside a `coordinator-selftest` folder; a
+  product task whose title only mentions a self-test stays); `--project <folder>` (`-Project`: only the
+  sessions whose first cwd is the folder or inside it, `\` read as `/`, case ignored, `C:/x` as `/c/x`;
+  several folders joined by `|` — the root and its worktree roots) —
+  a session judged by its last name (`customTitle` / `agentName`) and its first `cwd`, a subagent by its
+  parent's. Lines, tab-separated, one kind per line, no header; nothing for a session without messages:
   - `block <reason> count= changed= retried= around= stopped=` — per safety-guard reason (the text
     after `Blocked by safety-guard: ` up to `. If this is a false positive`, a path in parentheses as
     `(<path>)`, so no folder leaves the machine) and `deny rule` (a `Permission to use … has been
@@ -435,12 +452,50 @@ BOM, models priced apart),
   record after the result); a result whose call is not in the files read (or before `--since`) is
   skipped, and so is a line that is no record (a malformed or cut line). Exit 1 when no transcript is
   found or a prefix is ambiguous, 2 on a usage error.
+- **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)): `scripts/retro.sh <RUNS.tsv> [--week
+  <YYYY-MM-DD>] [--project <root>] [--journal <LOG.md>] [--escapes <ESCAPES.tsv>] [--no-insights]`
+  (`retro.ps1 <RUNS.tsv> -Week … -Project … -Journal … -Escapes … -NoInsights`). The week is Monday to
+  Sunday UTC holding `--week` (default: the last complete week), against the 7 days before it; the
+  project root defaults to the folder above the run log's, the journal and escapes to `LOG.md` and
+  `ESCAPES.tsv` next to it. A task is its rows as in run-stats, in the week of its latest row date; rows of
+  a task `st<n>` or `0`, or a kind or role naming probe or self-test, are left out; a task-less row is the
+  coordinator's own cost; a cost cell counts by its leading number; a result by its first word (`done`
+  and `pass` as `approved`). The transcripts: `session-insights --since <week> --until <its end>
+  --skip-tests --project <root>|<worktree roots>|<root>/.claude/worktrees` per week, the worktree roots
+  from `PROJECT.md` *Settings* *Worktree roots* next to the run log (split by `,` or `;`, relative to the
+  root). It prints, tab-separated, `retro` with the weeks, `axis measure week
+  previous` and a line per measure — *cost*: `tasks merged median_per_task total coordinator
+  per_merged_task`; *speed*: `ready_median work_median owner_wait_median owner_wait_open` (the owner wait
+  apart); *quality*: `rework_rate escalated_rate failed_rate escapes escapes_per_10_merged`;
+  *predictability*: per cost and work `_forecasts _logged _rebuilt _in_range _ratio_median`, per ready
+  `_forecasts _in_range _ratio_median` — a task's forecast is the estimate its run log row logged
+  (`estimate` for cost, `estimate_time` for work, from its lead row, else its first worker row: a range
+  `lo-hi`, in range inside it and its midpoint for the ratio; one number `n`, in range from `2n/3` to
+  `3n/2`), else rebuilt: 3 or more earlier tasks of the kind and model, the last 10 before the task's first
+  row, its range run-stats' 25th–75th percentile, min–max under 4; *stability*: `failed_runs guard_blocks deny_rule_blocks
+  guard_around guard_false_positives guard_errors refusals tool_errors tool_calls tool_error_rate
+  cache_rewrites cache_rewrites_per_task waiting_minutes rereads` — then `kind name tasks rework escalated
+  failed` per kind of the week (the project's own kinds), `unknown result: <value> ×<n>` per result of the
+  week no first word explains (local only), and the week's `block` / `refusal` lines. The public body
+  groups the kinds by `ROUTING.md`'s `## Kinds` map next to the run log (`<own kind> -> <core kind>`;
+  unmapped: `other`). Money to the cent, minutes and
+  percents whole, rounded half up from integers, the same from the .sh and the .ps1; `—` is too little
+  data (under 3 values; under 100 tool calls; no transcripts, journal or escapes file). `--public --id
+  <12 hex>` (`-Public -Id`) prints instead the anonymous Markdown body: a fixed template, numbers and the
+  allowlist only (the core's kinds or `other`, the guard's reasons and refusal sources as fixed keys, the
+  id, the dates), checked before it is printed. `--check-public <file>` (`-CheckPublic`) checks a summary
+  body — it fails on a line outside the template, a cell outside the allowlist, a `/` or `\`, or the
+  folder name of `--project`; `--check-proposal <file>` (`-CheckProposal`) checks a proposal body against
+  RETRO's template (its core file a file of the core, its two text lines with no path outside the core,
+  link, address or task number); `--new-id` (`-NewId`) prints a random id. Exit 1 when a file cannot be
+  read or a check fails, 2 on a usage error.
 - **Forecast numbers** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv>` (Windows: `scripts/run-stats.ps1`)
   prints a header and one tab-separated line per kind and model — `kind model cost_n cost_median
   cost_low cost_high time_n time_median time_low time_high ready_n ready_median ready_low ready_high` —
   over **tasks**: the rows whose task
   number agrees before its first dot (`37`, `37.1`, `37.2`) are one task, its cost and time the sums of
-  the values its rows have (cost in USD, `active` in minutes; empty, `-`, `n/a` or `in <parent>` are no
+  the values its rows have (cost in USD, a cell's leading number — `0.0648 prices` is 0.0648, `$1.20` is
+  1.20 —, `active` in minutes; empty, `-`, `n/a` or `in <parent>` are no
   value, and a subagent's row, cost `in <parent>`, adds no time — it is inside its parent's); a task
   none of whose rows has a value for a measure is left out of that measure only; rows from before the
   time columns count for cost only. A task's kind and model are its lead row's, else its first worker
@@ -455,7 +510,8 @@ BOM, models priced apart),
   (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`, and the
   ready forecast beside them. `--per-run` (`-PerRun`) groups single rows by kind, role and model instead,
   for diagnosis, without task rows and without the ready columns.
-  Columns are read by the header line (first field `date`), else in CORE §7's order. Exit 1 when the
+  Columns are read by the header line (first field `date`), else in CORE §7's order; `estimate` and
+  `estimate_time` are not read (the forecast is the medians). Exit 1 when the
   file cannot be read, 2 on a usage error.
 - **A task's time to ready and owner wait** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv> --task <n>
   --pr-json <file> --waits <file>` (`run-stats.ps1 <RUNS.tsv> -Task <n> -PrJson <file> -Waits <file>`)
@@ -465,14 +521,15 @@ BOM, models priced apart),
   `<asked> <answered>` per line in UTC (`2026-10-06T08:20:00Z 2026-10-06T08:35:00Z`; `#` comments). It
   takes the task's rows (`37`, `37.1`, … — task rows aside): `start` the earliest start, `active` the
   summed work (a subagent's row aside), kind and model as above; ready is the later of the last
-  approving verifier run's start + wall and the moment the checks were all green — per check (type,
+  approving verifier run's (result `approved…`, `done` or `pass`) start + wall and the moment the checks were all green — per check (type,
   workflow, name) its run started last counts, so a green rerun replaces a red run, and the last
   `completedAt` of those; a check not green (red, running) or verifier rows none of which approved:
   not ready, exit 1; no checks, or no `--pr-json`: the verifier alone. `wall` = ready − start − the
   owner waits inside that span (overlaps once); `wait` = merge − ready + those waits; unmerged:
   result `ready`, `wait` `<m>+` (open — append the merged row later; the last one counts). Minutes
   rounded half up from exact seconds; the row in the file's header order, missing names (`wait` in an
-  older file) appended in CORE §7's order. Exit 1 also when the task has no rows or no start, or a wait
+  older file) appended in CORE §7's order (`estimate_time` printed empty where the header has it, never
+  appended). Exit 1 also when the task has no rows or no start, or a wait
   line is no pair of UTC times.
 - **Limits: percent per dollar and the block's fit** (CORE §7a): `scripts/run-stats.sh --limits`
   (`run-stats.ps1 -Limits`, the options in each shell's form: `-Spend5h`, `-CapWeek`, …) does the

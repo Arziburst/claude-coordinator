@@ -9,10 +9,11 @@
 #                                                                   and a block's fit (below)
 # RUNS.tsv (CORE §7): tab-separated, columns by the header line when there is one (its first field `date`;
 # names task, role, kind, model, cost, result, start, wall, active), else in CORE §7's order (task 2, role 3,
-# kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14). Blank lines and lines starting
+# kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14; estimate and estimate_time, the last, are not read). Blank lines and lines starting
 # with # are skipped; CRLF and a UTF-8 BOM read as plain. A row with role `task` is a finished task's own row
 # (CORE §7: wall = its time to ready); it counts only toward ready below, never toward cost or time.
-# Values: cost in USD (a number, `$` allowed), active in minutes (a number, a trailing `m` allowed); any
+# Values: cost in USD (the cell's leading number, `$` allowed: `0.0648 prices` is 0.0648), active in minutes (a
+# number, a trailing `m` allowed); any
 # other value (empty, `-`, `n/a`, `in <parent>`) has none, and a row without the time columns has no time.
 # A TASK is the rows whose task number agrees before its first dot (37, 37.1 and 37.2 are task 37; an
 # empty or `-` task is no task): its cost and its time are the sums of the values its rows have (a
@@ -36,7 +37,7 @@
 #   result(`merged` / `ready`) start wall active wait. The task's rows (before the first dot; `task` rows
 #   aside): start = the earliest start; active = the work, its rows' active summed (a subagent's, `in
 #   <parent>`, aside); kind and model as above. Ready = the later of the last approval of a verifier row
-#   (result `approved…`: its start + wall) and the checks all green; a task with verifier rows none of which
+#   (result `approved…`, or `done` / `pass`: its start + wall) and the checks all green; a task with verifier rows none of which
 #   approved is not ready. --pr-json: `gh pr view <n> --json statusCheckRollup,mergedAt,createdAt` (- reads
 #   stdin), read as text: per check (its type, workflow and name) the run started last counts - a rerun
 #   replaces a red run -, green = a CheckRun COMPLETED with SUCCESS / NEUTRAL / SKIPPED or a StatusContext
@@ -73,7 +74,7 @@
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
 # line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
 # ready or a wait line is malformed; 2 on a usage error.
-usage() { sed -n '2,75s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,76s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -262,7 +263,7 @@ taskrow() {
       if (s >= 0 && (first < 0 || s < first)) first = s
       # the verifier approved at its run'"'"'s start + wall; the last approval counts
       if (r == "verifier") { hv = 1; w = minutes(col(cw))
-        if (col(cs) ~ /^[ \t]*approved/ && s >= 0 && w >= 0 && s + idiv(w * 6, 1000) > ver) ver = s + idiv(w * 6, 1000) } }
+        if (tolower(col(cs)) ~ /^[ \t]*(approved|done([^a-z]|$)|pass([^a-z]|$))/ && s >= 0 && w >= 0 && s + idiv(w * 6, 1000) > ver) ver = s + idiv(w * 6, 1000) } }
     END { if (bad) exit 1
       if (!n) fail("no rows in " ENVIRON["F"])
       if (first < 0) fail("no run has a start")
@@ -307,8 +308,9 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
   BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cw = 12; ca = 13 }
   # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number
   function units(v, unit,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
-    if (unit == "$") sub(/^[$]/, "", v); else sub(/m$/, "", v)
-    if (v !~ /^[0-9]+([.][0-9]+)?$/) return -1
+    # a cost: its leading number (`0.0648 prices` is 0.0648, `$1.20` 1.20); minutes: the whole value, `m` allowed
+    if (unit == "$") { sub(/^[$]/, "", v); if (!match(v, /^[0-9]+([.][0-9]+)?/)) return -1; v = substr(v, 1, RLENGTH) }
+    else { sub(/m$/, "", v); if (v !~ /^[0-9]+([.][0-9]+)?$/) return -1 }
     i = v; d = ""; if (index(v, ".")) { i = substr(v, 1, index(v, ".") - 1); d = substr(v, index(v, ".") + 1) }
     return (i + 0) * 10000 + substr(d "0000", 1, 4) }
   function col(c) { return c ? $c : "" }
