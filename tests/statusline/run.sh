@@ -52,7 +52,9 @@ run "$tmp/one"; check "the fixture: the line, statusline.json, the session's cop
 mkdir -p "$tmp/cfg[1]"; run "$tmp/cfg[1]"; check "a config path with [ ]" "$tmp/cfg[1]" yes
 
 # 20 at once, as Claude Code draws several sessions' status lines: Move-Item -Force deletes the target,
-# then moves, so another run's move in between failed this one's and left its temp file
+# then moves, so another run's move in between failed this one's and left its temp file; and Set-Content
+# straight on the session copy emptied it, then lost the write to another run holding it (about 1 round
+# in 10 under Windows PowerShell 5.1): the copy must be whole after every round
 m="$tmp/many"; mkdir -p "$m"; cm="$(winpath "$m")"; i=0
 while [ $i -lt 20 ]; do
   if [ "$kind" = ps ]; then

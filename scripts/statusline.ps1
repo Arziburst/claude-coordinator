@@ -8,24 +8,29 @@ $raw = [Console]::In.ReadToEnd()
 $i = $raw.IndexOf('{'); if ($i -gt 0) { $raw = $raw.Substring($i) }   # a BOM before the JSON breaks it
 $dir = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'coordinator'
 New-Item -ItemType Directory -Force $dir | Out-Null
-# Written to a temp file and moved over, so a reader never sees half a file. Move-Item -Force deletes the
-# target, then moves: another status line moving its own copy in between (Claude Code draws several at
-# once), or a reader holding the file open, fails the move. Three tries 20 ms apart, then the old file
-# stays for this tick; the temp file is removed whatever happened (one left by a kill mid-write is
-# deleted by session-tokens -Prune after an hour).
-$tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)
-try {
-  Set-Content -LiteralPath $tmp -Value $raw -Encoding utf8 -NoNewline -ErrorAction Stop
-  for ($n = 0; $n -lt 3; $n++) {
-    try { Move-Item -Force -LiteralPath $tmp -Destination (Join-Path $dir 'statusline.json') -ErrorAction Stop; break }
-    catch { if ($n -lt 2) { Start-Sleep -Milliseconds 20 } }
-  }
-} catch { } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp } }
+# Each file is written to a temp file and moved over, so a reader never sees half a file - nor an empty
+# one: Set-Content on the file itself empties it first, and a write that then fails (another status
+# line holds it: Claude Code draws several at once) left it empty. Move-Item -Force deletes the target,
+# then moves: another status line moving its own copy in between, or a reader holding the file open,
+# fails the move. Three tries 20 ms apart, then the old file stays for this tick (a move fails only
+# when another run's copy is there, so the first write always leaves one); the temp file is removed
+# whatever happened (one left by a kill mid-write is deleted by session-tokens -Prune after an hour).
+function Save([string]$path) {
+  $tmp = Join-Path $dir ("statusline.{0}.tmp" -f $PID)
+  try {
+    Set-Content -LiteralPath $tmp -Value $raw -Encoding utf8 -NoNewline -ErrorAction Stop
+    for ($n = 0; $n -lt 3; $n++) {
+      try { Move-Item -Force -LiteralPath $tmp -Destination $path -ErrorAction Stop; break }
+      catch { if ($n -lt 2) { Start-Sleep -Milliseconds 20 } }
+    }
+  } catch { } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp } }
+}
+Save (Join-Path $dir 'statusline.json')
 # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
 # session to draw its status line, whichever that was).
 if ($raw -match '"session_id"\s*:\s*"([^"]+)"') {
   $sdir = Join-Path $dir 'sessions'; New-Item -ItemType Directory -Force $sdir | Out-Null
-  Set-Content -LiteralPath (Join-Path $sdir ($Matches[1] + '.json')) -Value $raw -Encoding utf8 -NoNewline
+  Save (Join-Path $sdir ($Matches[1] + '.json'))
 }
 
 try { $j = $raw | ConvertFrom-Json } catch { 'Claude'; exit 0 }
