@@ -70,7 +70,7 @@ rule → ask the owner.
     approval in `PROJECT.md`, such as the swarm preset's, §3). Autopilot runs only the approved plan and
     never stretches it. Three set-up steps are part of the core, not deviations, and run without asking
     (reported in one line; Claude Code may still show a permission prompt): copying the core into a new
-    project's `coordinator/core/`, creating `coordinator/` as its own git hidden from the project's (INIT 3.4),
+    project's `coordinator/core/`, creating `coordinator/` as its own git hidden from the project's, with its files from the templates (INIT 3.4),
     and installing the core's roles (TOOLKIT).
 12. **No work before the init quiz is complete.** Until every init question that applies (§3) has a
     clear answer and the owner said yes to the summary: no workers, no changes (beyond the three set-up
@@ -119,10 +119,12 @@ its own: after step 9 the session waits.
    implement." The session's name is **the coordinator name** in `PROJECT.md` (*Settings*) —
    `<Project> Coordinator` by default, always containing the English word `Coordinator` (INIT 3.1,
    question 10): sessions find their coordinator by it, and several projects on one machine each have
-   one. Named otherwise → ask the owner to rename it (`/rename <name>`; how: TOOLKIT.md).
+   one. Named otherwise → ask the owner to rename it (`/rename <name>`; how: TOOLKIT.md) — checked once
+   step 3 has found `PROJECT.md`; before it (a new project) the name comes from the quiz.
 2. **One coordinator per project.** List this machine's sessions (`claude agents --json`); another session
    whose name contains `Coordinator` **and whose working directory is this project** runs → ask the
-   owner which one coordinates; never become a second one silently. The folder tells projects apart.
+   owner which one coordinates; never become a second one silently. The folder tells projects apart;
+   the session's own entry is the one whose `sessionId` equals `$CLAUDE_CODE_SESSION_ID`.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
    folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
    docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/`,
@@ -142,12 +144,17 @@ its own: after step 9 the session waits.
 4. **Learn the context** (read-only): the layers and journal if present; for a project in development —
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other
-   formats → [procedures/INIT.md](procedures/INIT.md).
+   formats → [procedures/INIT.md](procedures/INIT.md). In a set-up project (its quiz done, §1.12) the
+   session-start housekeeping of §4 follows — the sync, the cleanup of merged work, unfiled core
+   findings — reported in one line; a new or unfinished project gets none of it before step 9.
 5. **Open questions first:** unanswered questions in the journal are asked (§12).
-6. **The init quiz** (§3): full for a new or adopted project; for a filled one, a short per-area
+6. **The init quiz** (§3): full for a new project or an existing one without a coordinator; an older
+   coordinator → INIT *A project with an older coordinator*; a filled `PROJECT.md` → a short per-area
    confirmation asking only what changed or looks stale.
 7. **Platform and safety** ([procedures/INIT.md](procedures/INIT.md)).
-8. **Dry run** (§12a) on a new machine or a new / adopted project, then the **self-test**
+8. **Dry run's two real checks** (§12a: check-scripts, and start-worker's dry run on a task of the board or
+   a placeholder) on a new machine or a new / adopted project — the first task or batch itself then runs in
+   thought first (§12a) — then the **self-test**
    ([procedures/SELFTEST.md](procedures/SELFTEST.md)) at the core commit in use, where it has not run
    yet on this machine.
 9. **Wait** for the owner's first task or batch command (§4) — never start work on your own.
@@ -204,7 +211,7 @@ In either mode the owner may hand over a single task at any time.
 
 | Event | What runs |
 |---|---|
-| A session starts (and once a day in a session that keeps running) | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
+| A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
 | A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) |
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
 | Anything in `coordinator/` changes | a commit there at once; a push per §12b |
@@ -247,7 +254,8 @@ The continuous work:
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
-   rules live in the role file ([roles/worker.md](roles/worker.md)), not the brief. An `oracle`
+   rules live in the role file ([roles/worker.md](roles/worker.md)), never repeated in the brief's text — start-worker puts
+   the role file at the top of a session's brief (TOOLKIT *Roles*). An `oracle`
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent
    ([roles/tester.md](roles/tester.md)): create the task's working copy and branch first (the
    start-worker steps without the launch), run the tester there; it pushes its red tests, and they and
@@ -580,7 +588,7 @@ committed there at once** (local, costs nothing). **Pushed** to its remote: at s
 change; before a handoff; on the owner's word. Other unpushed commits go **at most once per 15 minutes**,
 with the next event — never a push per edit, never one a day. A push that fails (no network) stops
 nothing and is retried at the next event.
-Its one branch is always **`state`**, also the remote's default branch: `main` and `master` are
+Its working branch is always **`state`** (the self-test's `selftest/<commit>/*` evidence branches aside), also the remote's default branch: `main` and `master` are
 protected (the safety hook blocks direct pushes to them), `state` is not.
 A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
 -m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the

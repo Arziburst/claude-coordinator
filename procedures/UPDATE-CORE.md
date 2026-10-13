@@ -17,6 +17,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - every line of `PROJECT.md` / `BINDINGS.md` that now overlaps or disagrees with the new core — the
      project rule still wins, the owner decides whether to keep, adapt or drop it;
    - each upstream change that conflicts with a local edit, and the proposed resolution;
+   - **Settings the new core's checks fail:** `selftest hooks --settings` of the scratch clone on the worker
+     safety file and the coordinator's own settings files, before anything is merged — each FAIL is a change
+     the project makes with the update;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
@@ -48,7 +51,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    and on the project's coordination scripts (the wrappers that call the core: BINDINGS), and one
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
    runs until the next worker is due. Then the **full self-test** at the new commit
-   ([SELFTEST.md](SELFTEST.md)), after every update: its branches in the state repository are the
+   ([SELFTEST.md](SELFTEST.md)), after every update (a `declined` CHECKLIST line: offered, never run silently): its branches in the state repository are the
    evidence that this commit works here; its CHECKLIST line names the commit. Then
    install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
    Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*

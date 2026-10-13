@@ -80,7 +80,7 @@ reproduce, fix in a PR that names the issue, close it with the fixing commit, ke
 ([procedures/CORE-FINDINGS.md](procedures/CORE-FINDINGS.md) §4). Universal lessons go into `CORE.md` with the owner's yes (CORE §10); project lessons stay in the
 project's `coordinator/PROJECT.md`. Before a pull request: `scripts/check-core.sh` (Windows:
 `scripts\check-core.ps1`). A new or changed script keeps the one style of TOOLKIT *Scripts*. A change
-to a script's required arguments or to the output a project's wrapper reads puts a line **starting
+to a script's arguments (required, or the meaning of an optional one) or to the output a project's wrapper reads, or a core check that a project's existing files now fail, puts a line **starting
 with** `Breaking for project wrappers: <script> - <what changed, what a wrapper must do>` into its
 commit message (the squash commit's body), so "update the core" finds it with an anchored grep
 (UPDATE-CORE step 3); a message that only mentions the rule never starts a line with it.

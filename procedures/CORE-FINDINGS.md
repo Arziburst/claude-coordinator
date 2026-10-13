@@ -52,9 +52,10 @@ Signature: <core file or script>: <the error's key words>
 Before filing, in this order:
 1. **Fixed upstream?** The local core is behind upstream and a closed issue with the same signature is
    fixed in a newer commit (`gh issue list -R Arziburst/claude-coordinator --state closed --search
-   "<signature>"`) → no issue; the row becomes `fixed upstream <commit>` and the owner hears "update
+   "\"<signature>\""` — the signature as an exact phrase: an apostrophe in a git error otherwise
+   finds nothing) → no issue; the row becomes `fixed upstream <commit>` and the owner hears "update
    the core".
-2. **Already reported?** An open issue with the same signature → a comment `+1: core <commit>,
+2. **Already reported?** An open issue with the same signature (the same exact-phrase search) → a comment `+1: core <commit>,
    <environment>` instead of a new issue; the row gets that issue's number.
 3. **Rate:** at most three new issues a day from one project; the rest wait for the next day.
 4. **File** with the owner's own gh login, the title prefixed **once** with `[core-report] ` (the
@@ -65,7 +66,8 @@ Before filing, in this order:
    #<issue>`.
 
 *Show me each one first*: the owner sees the report and says yes or no per issue. *No*: the
-coordinator prints the same reports for the owner to pass on by hand (rows `discussed` → `sent <date>`).
+coordinator prints the same reports, the title already prefixed `[core-report] ` (the label workflow
+needs it), for the owner to pass on by hand (rows `discussed` → `sent <date>`).
 No gh or no access: printed the same way. Customer data and secrets never go into a report, in any mode
 (CORE §1.13).
 

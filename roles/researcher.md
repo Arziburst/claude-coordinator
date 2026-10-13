@@ -14,8 +14,10 @@ scope.
 
 1. **Sources first-hand:** official docs, the project's own repository and licence file, release notes —
    over blog posts and summaries. Note the version and date of what you read.
-2. **Data stays home:** never put customer data, secrets or the project's private code into a search or
-   an external tool; search with the error message or a generic question (CORE §1.13).
+2. **Data stays home:** never put customer data or secrets into a search or an external tool; the
+   project's private code only where your brief says the project allows it (`PROJECT.md`, CORE §1.13),
+   otherwise never, not even a fragment —
+   search with the error message or a generic question.
 3. **The result is a short catalog**, one row per candidate:
    `what | where (link, file) | licence | take / not / later | why | rough cost to adopt`.
    A licence that does not fit the project (e.g. copyleft in a closed commercial product) is "not"

@@ -17,14 +17,14 @@ is new and never asks a recorded answer again (CORE §3, [procedures/UPDATE-CORE
 | `work-mode` | #73 | project | setting | by task (a team with a board: batch) | how the owner gives work, and housekeeping on events instead of a cycle (INIT 3.1, question 12; CORE §4) → `PROJECT.md` *Settings*; a project that ran cycles keeps its recipe as the batch recipe |
 | `model-own-limits` | #21 dba3845 | project | setting | none known | which models have their own limit (e.g. Fable) and whether their spend also counts toward the weekly one, read by the owner in `/usage` (CORE §7a) → BINDINGS *Models* |
 | `state-branch` | #44 1ebe968 | project | check | run | the state repository is on its one branch `state`, also the remote's default; on `main` / `master` → the move of CORE §12b, on the owner's yes |
-| `state-private` | #12 0e9f5f0 | project | check | run | the state repository's remote is `PRIVATE` (`gh repo view --json visibility`), or local only is recorded in `PROJECT.md` |
+| `state-private` | #12 0e9f5f0 | project | check | run | the state repository's remote is `PRIVATE` (`gh repo view --json visibility`), or local only is recorded in `PROJECT.md`; its note records the visibility read (`PRIVATE` / `PUBLIC`) |
 | `statusline-verified` | #38 99e1704 | machine | check | run | the status line is installed and its `cost` line for one finished session matches `scripts/session-tokens` at list price (TOOLKIT *Usage*) |
 | `safety-hook-test` | #7 c8655e4 | machine | check | run | the hook's self-test prints `safety-guard: OK` and the worker safety file points at it (TOOLKIT *Safety*) |
 | `model-probe` | #21 dba3845 | machine | check | run | one probe per model, the ladder written to BINDINGS *Models* (CORE §7) |
 | `spend-ratio` | #21 dba3845 | project | check | run | the first limit percent per dollar, from `scripts/session-tokens --since <reset>`, written to BINDINGS *Models* (CORE §7a) |
-| `branch-protection` | #7 c8655e4 | project | check | run | the main branch on the code host requires a PR and passing checks (and a human review in the strict preset), or why not is recorded (INIT *Safety check*) |
+| `branch-protection` | #7 c8655e4 | project | check | run | the main branch on the code host requires a PR and passing checks (and a human review in the strict preset), or why not is recorded (INIT *Safety check*); its note records the repository's visibility (`PUBLIC` / `PRIVATE`) |
 | `first-real-pr-watched` | #45 c6982d5 | project | check | run | the first real PR after init is followed end to end — CI, review, merge — and the result reported: what no sandbox can show |
-| `selftest` | #48 | machine | check | run | the full self-test passes on this machine at the core commit in use ([procedures/SELFTEST.md](procedures/SELFTEST.md)): in the state repository, its branches and PR kept as evidence; it runs again after every update (UPDATE-CORE step 4), each CHECKLIST line naming the commit |
+| `selftest` | #48 | machine | check | run | the full self-test passes on this machine at the core commit in use ([procedures/SELFTEST.md](procedures/SELFTEST.md)): in the state repository, its branches and PR kept as evidence; it runs again after every update (UPDATE-CORE step 4), each CHECKLIST line naming the commit; it runs after every update, so a `declined` line is offered again at each update, never run silently |
 
 - **scope** — `project`: once per project; `machine`: once per project on each machine (its
   CHECKLIST row names the machine's `hostname`), so a new machine is asked again.
