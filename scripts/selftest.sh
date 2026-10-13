@@ -149,23 +149,40 @@ hooks)
   while [ $# -gt 0 ]; do case "$1" in --settings) [ $# -ge 2 ] || usage; file="$2"; shift 2 ;; *) usage ;; esac; done
   [ -n "$file" ] || usage
   [ -f "$file" ] || { fail "no settings file $file"; finish; }
-  # the guard's PreToolUse command (its SessionStart self-test line carries -SelfTest / --self-test)
-  n="$(grep -n 'safety-guard\.' "$file" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
+  # only the PreToolUse array counts: from its key to the bracket that closes it
+  se="$(awk '!s && /"PreToolUse"[ \t]*:/ { s = NR }
+    s { t = $0; o = gsub(/\[/, "", t); c = gsub(/\]/, "", t); d += o - c; if (o) seen = 1; if (seen && d <= 0) { print s, NR; exit } }' "$file")"
+  ps="${se% *}"; pe="${se#* }"
+  # the guard's command there (its SessionStart self-test line carries -SelfTest / --self-test)
+  n=""
+  [ -n "$se" ] && n="$(awk -v s="$ps" -v e="$pe" 'NR >= s && NR <= e && /safety-guard\./ && !/-SelfTest/ && !/--self-test/ { print NR; exit }' "$file")"
   [ -n "$n" ] || { fail "no safety-guard hook in the file"; finish; }
   pass "a safety-guard hook"
   line="$(sed -n "${n}p" "$file")"
   # a backslash that is not the JSON escape of a quote (\") is a path separator
-  if printf '%s\n' "$line" | sed 's/\\"//g' | grep -q '\\'; then
+  if printf '%s\n' "$line" | sed 's/\\"//g' | grep -q '[\]'; then
     fail "its path has backslashes: Git Bash drops them and the hook never runs"
   else pass "its path uses forward slashes"; fi
   case "$line" in *'$env:'*) fail 'its command uses $env: - bash reads it as $env and the path breaks' ;;
     *) pass 'no $env: in its command' ;; esac
-  # the hook object's own fields sit next to its command
-  near="$(sed -n "$((n > 3 ? n - 3 : 1)),$((n + 3))p" "$file")"
-  if printf '%s\n' "$near" | grep -q '"shell"[[:space:]]*:[[:space:]]*"powershell"'; then
+  # an unquoted path must be one word: a space splits it and the hook never runs
+  cmd="$(printf '%s\n' "$line" | sed 's/^[^:]*:[ \t]*"//; s/",*[ \t]*$//; s/\\"/"/g')"
+  if printf '%s\n' "$cmd" | grep -q '"[^"]*safety-guard\.\(sh\|ps1\)"'; then pass "its path is quoted or has no space"
+  else
+    word="$(printf '%s\n' "$cmd" | sed 's/safety-guard\..*//; s/.* //')"
+    case "$word" in /*|[A-Za-z]:*|'$'*|'~'*) pass "its path is quoted or has no space" ;;
+      *) fail "its path has a space and is not quoted: the hook never runs" ;; esac
+  fi
+  # the hook object's own fields sit between its braces
+  if awk -v n="$n" '{ l[NR] = $0 } END { a = n; while (a > 1 && l[a] !~ /[{]/) a--; b = n; while (b < NR && l[b] !~ /[}]/) b++
+       for (i = a; i <= b; i++) if (l[i] ~ /"shell"[ \t]*:[ \t]*"powershell"/) exit 0; exit 1 }' "$file"; then
     case "$line" in *'exit $LASTEXITCODE'*) pass 'a PowerShell shell, with exit $LASTEXITCODE passing the block through' ;;
       *) fail 'a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2) reaches Claude Code as a non-blocking error (1)' ;; esac
   else pass "no PowerShell shell around it"; fi
+  # its entry's matcher (none: every tool) must take in the PowerShell tool too
+  m="$(awk -v s="$ps" -v n="$n" 'NR >= s && NR <= n && /"matcher"[ \t]*:/ { m = $0 } END { print m }' "$file")"
+  case "$m" in ''|*PowerShell*|*'"*"'*) pass "its matcher covers the PowerShell tool" ;;
+    *) fail "its matcher leaves out PowerShell: the PowerShell tool runs unguarded" ;; esac
   finish ;;
 
 hookcheck)

@@ -213,7 +213,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   the runner (the job's `if: github.event_name != 'pull_request' ||
   github.event.pull_request.head.repo.full_name == github.repository`), and approval is required for
   all external contributors. A job skipped by `if:` counts as a passed required check, so a fork PR is
-  merged only after a person has read its code, never on CI alone. A change of visibility re-runs the
+  merged only after a person has read its code, never on CI alone. That `if:` covers `pull_request`
+  only: no job on the self-hosted runner may run on `pull_request_target`, `issue_comment` or
+  `workflow_run` and check out a PR's head — those run with the base repository's rights and are the
+  usual way a fork's code reaches a runner. A change of visibility re-runs the
   `branch-protection` and `state-private` checks (ONE-TIME).
 
 ## Checks
