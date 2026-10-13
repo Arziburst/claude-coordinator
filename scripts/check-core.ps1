@@ -6,8 +6,11 @@
 # a field's indented continuation lines are part of it), or a script under scripts/ without its other half.
 param([string]$Root = (Split-Path -Parent $PSScriptRoot))
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
-# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 $ErrorActionPreference = 'Stop'
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $Root = (Resolve-Path -LiteralPath $Root).Path
@@ -174,3 +177,4 @@ foreach ($f in $halves) {
 }
 "check-core: $files files, $($sections.Count) sections, $rules hard rules, $nfeat features, $errors errors"
 if ($errors) { exit 1 }
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

@@ -9,8 +9,11 @@
 # Exit 1 on any error, 2 on a usage error.
 param([switch]$OnlyPs1, [Parameter(DontShow)][string]$ParseFile, [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$Folders)   # -OnlyPs1, -ParseFile: internal
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
-# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 if ($Folders -and ($Folders[0] -eq '-h' -or $Folders[0] -eq '--help')) {
   Get-Content -LiteralPath $PSCommandPath -TotalCount 9 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
@@ -132,3 +135,4 @@ if ($OnlyPs1) { "#count $n $e"; exit 0 }
 "check-scripts: $n files, $e errors"
 if ($e -gt 0) { exit 1 }
 exit 0
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

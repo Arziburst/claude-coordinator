@@ -9,8 +9,11 @@
 # oracle criterion. Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
-# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 9 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
@@ -139,3 +142,4 @@ foreach ($f in $Files) {
   if ($ne) { $failed = 1 }
 }
 exit $failed
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

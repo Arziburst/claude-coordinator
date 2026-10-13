@@ -28,8 +28,11 @@ param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [
       [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session,
       [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
-# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+# code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
+# The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
+# error): the body below runs inside try, the encoding is restored in finally.
+$enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+try {
 # Native commands report on stderr (the hook's block message, git): never a terminating error, whatever
 # the caller set (GitHub's powershell shell runs with Stop)
 $ErrorActionPreference = 'Continue'
@@ -344,3 +347,4 @@ switch ($Step) {
 }
 default { Usage }
 }
+} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
