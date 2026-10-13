@@ -370,7 +370,7 @@ jobs:
             diff <(bash scripts/run-stats.sh $f --per-run) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f -PerRun)
           done
           # the time line: the transcripts' timestamps stay UTC in any zone and locale
-          for id in g1 g2 g2t g3 g4 g5; do
+          for id in g1 g2 g2t g3 g4 g5 g6; do
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/time bash scripts/session-tokens.sh $id) \
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/time TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done

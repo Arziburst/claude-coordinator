@@ -484,8 +484,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 - **Time is measured the same way, never self-reported:** a run's `start`, `wall` and `active` come
   from its transcript's timestamps (`scripts/session-tokens`, the `time` line; active leaves out every
   gap over 5 minutes between records — a limit, an answer, a sleeping machine — unless a tool call
-  spans it, from its `tool_use` to its own `tool_result`: a running build is work; a subagent working
-  while its parent is quiet counts). Per task, derived from the run log and `gh`, no file of its own:
+  spans it, from its `tool_use` to its own `tool_result`: a running build is work, up to 30 minutes a
+  gap; a call that asks a person never is; a subagent working while its parent is quiet counts). Per task, derived from the run log and `gh`, no file of its own:
   - **work** — the sum of `active` over the task's runs (worker, tester, reviewer, verifier, a lead
     and its sub-runs); a subagent's row (`in <parent>`) is already inside its parent's time, as its cost is;
   - **time to ready** — from the first run's `start` to the moment the task can merge: the later of the

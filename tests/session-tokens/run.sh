@@ -68,6 +68,9 @@ expect "time: no record with a timestamp, no time line" 0 "$t/expected-time-none
 # a 12-minute tool call is work, a 12-minute gap after a result is not, two overlapping tool calls
 # keep the time active until the later result
 expect "time: tool calls span their gaps, a gap after a result does not" 0 "$t/expected-time-tools.txt" - -- "$tm" g5
+# a 50-minute tool call gives 30 minutes of work; a question to a person (AskUserQuestion, and a tool
+# whose name ends in it) gives none, whether it waits 20 minutes or 3
+expect "time: a tool call's gap is capped at 30 minutes, a question to a person is idle" 0 "$t/expected-time-cap.txt" - -- "$tm" g6
 # the same transcript with CRLF line ends (a checkout on Windows, a copy through another tool)
 mkdir -p "$tmp/crlf/projects/-work-app"
 awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$tm/projects/-work-app/g1.jsonl" > "$tmp/crlf/projects/-work-app/g1.jsonl"

@@ -309,8 +309,11 @@ CRLF with a BOM, a missing file),
   the first; active = wall minus every gap over 5 minutes between two consecutive records (waiting for
   a limit, for an answer, a sleeping machine), so a background subagent working while its parent is
   quiet is active time. A gap inside a tool call — from a `tool_use` to its own `tool_result`, matched
-  by id, parallel calls overlapping — is work whatever its length (a long build, `gh pr checks
-  --watch`); a gap after a result keeps the 5-minute rule. Minutes rounded to the nearest, a half up;
+  by id, parallel calls overlapping — is work up to 30 minutes and idle beyond that (a long build,
+  `gh pr checks --watch`; the Bash tool stops at 10 minutes, and a subagent's own work is counted through
+  its transcript, so a longer span is waiting, a night included). A call of a tool that asks a person
+  (`AskUserQuestion`, or any tool whose name ends in it) is never active: its span is the owner's time,
+  at any length. A gap after a result keeps the 5-minute rule. Minutes rounded to the nearest, a half up;
   `start` and `end` to the second, UTC. No line when no record has a timestamp, and none with `--since`
   or `--prune`. **The order** when a run ends: read its cost (a failed read retried once with the full
   command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
