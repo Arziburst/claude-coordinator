@@ -35,9 +35,10 @@ expect() {   # expect <case> <exit code> <line>: the exit code, and the line exa
     { echo "FAIL ($1): expected exit $2 and the line '$3', got exit $RC:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 }
 # the PowerShell the .sh hands the .ps1 files to (5.1 first), or this kind's own
+# (`powershell` is Windows PowerShell 5.1 on Windows only: elsewhere it may name pwsh, as on macOS runners)
 ps1by=""
-if [ "$kind" = ps ]; then ps1by=ps; command -v powershell >/dev/null 2>&1 && ps1by=powershell
-elif command -v powershell >/dev/null 2>&1; then ps1by=powershell; elif command -v pwsh >/dev/null 2>&1; then ps1by=ps; fi
+if [ -n "$win" ] && command -v powershell >/dev/null 2>&1; then ps1by=powershell
+elif [ "$kind" = ps ] || command -v powershell >/dev/null 2>&1 || command -v pwsh >/dev/null 2>&1; then ps1by=ps; fi
 
 d="c&d [x]"; mkdir -p "$tmp/$d/sub"
 printf 'echo ok\n' > "$tmp/$d/Foo.SH"
