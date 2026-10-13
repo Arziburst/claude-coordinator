@@ -146,12 +146,21 @@ fi
 # no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
 # a base not on origin yet (a lead's integration branch before its first push): the local one too
 if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
-  rc=0; git -C "$root" ls-remote -q --exit-code --heads origin "$base" >/dev/null 2>&1 || rc=$?
+  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
+  # once: a transient DNS or network error should not stop a start
+  lsr() { err="$(git -C "$root" ls-remote -q --exit-code --heads origin "$base" 2>&1 >/dev/null)"; }
+  rc=0; lsr || rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+    echo "origin did not answer: retrying once in 3 s"; sleep 3; rc=0; lsr || rc=$?
+  fi
   if [ "$rc" -eq 0 ]; then run git -C "$root" fetch -q origin "$base"; start="origin/$base"
   elif [ "$rc" -eq 2 ] && git -C "$root" show-ref -q --verify "refs/heads/$base"; then
     echo "base $base is not on origin yet: the branch starts from the local $base"; start="$base"
   elif [ "$rc" -eq 2 ]; then echo "base $base: not on origin and no local branch" >&2; exit 1
-  else echo "cannot reach origin to read the base $base" >&2; exit 1; fi
+  else
+    err="$(printf '%s\n' "$err" | tr -d '\r' | grep -v '^ *$' | head -n 1)"
+    echo "cannot reach origin to read the base $base: $err" >&2; exit 1
+  fi
 else start="$base"; fi
 if [ -d "$wt" ]; then
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
