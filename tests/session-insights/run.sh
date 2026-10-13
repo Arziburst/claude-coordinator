@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # The session-insights cases: the fixture transcripts against their expected lines — guard blocks followed
 # by a retry, a way around, a change and a stop; a deny rule; blocks on PowerShell and on Write; tool
-# errors and a repeat, refusals that are no errors; waits on a person; rereads with --detail; a cache
-# rewrite after a pause; a subagent counted with its session and alone; --since across two sessions;
+# errors and a repeat; waits on a person; rereads with --detail; a cache
+# rewrite after a pause; refusals by other hooks, the classifier, a safety check and the user; errors
+# that are only an exit code; a subagent counted with its session and alone; --since across two sessions;
 # CRLF, a BOM and malformed lines; the error cases and their exit codes.
 #   tests/session-insights/run.sh sh              # scripts/session-insights.sh, with the bash running this file
 #   tests/session-insights/run.sh ps pwsh         # scripts/session-insights.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -48,6 +49,7 @@ expect() {
 cl="$here/claude"; mu="$here/multi"; t="$here"
 expect "blocks: retried, around, changed, stopped; a deny rule; PowerShell and Write blocks" 0 "$t/expected-b1.txt" - -- "$cl" b1
 expect "tool errors and a repeat, refusals, waits, rereads, a cache rewrite, malformed lines" 0 "$t/expected-e1.txt" - -- "$cl" e1
+expect "refusals: another hook with and without its command, the classifier, a safety check; exit codes only" 0 "$t/expected-r1.txt" - -- "$cl" r1
 expect "--detail: the reread files' paths" 0 "$t/expected-e1-detail.txt" - -- "$cl" e1 --detail
 expect "a session with its subagent" 0 "$t/expected-sub1.txt" - -- "$cl" sub1
 expect "a subagent by its agentId" 0 "$t/expected-a1.txt" - -- "$cl" a1

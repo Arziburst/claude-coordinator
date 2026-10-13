@@ -3,7 +3,8 @@
 #   powershell -File scripts/session-insights.ps1 <session-id | id prefix | a subagent's agentId | transcript.jsonl> [-Detail]   (or: pwsh -File ...)
 #   powershell -File scripts/session-insights.ps1 -Since 2026-10-05T17:00:00Z [-Detail]   every transcript from then on (UTC; or Unix seconds)
 # Tab-separated lines, no header, nothing for a session without messages: "block <reason> count= changed= retried= around= stopped="
-# per safety-guard reason and "deny rule" (what the transcript's next tool call did); "tool_error <tool> count= repeated=";
+# per safety-guard reason and "deny rule", "refusal <source>" the same for other refusals (what the next tool call did);
+# "tool_error <tool> count= repeated= exit_only=" (exit_only: errors that are only "Exit code <n>", left out of count);
 # "waiting minutes= calls=" (calls over 2 minutes that waited on a person: a permission the user decided, an *AskUserQuestion);
 # "cache write= read= rewrites=" (a message writing over half its input to the cache, a transcript's first aside);
 # "reread files= reads=" (files the Read tool read 3+ times in one transcript; -Detail adds "reread_file <path> reads=",
@@ -15,7 +16,7 @@ param([string]$Session, [string]$Since, [switch]$Detail)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if ((-not $Session -and -not $Since) -or ($Session -and $Since)) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 11 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 12 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -167,6 +168,23 @@ $reUseId = [regex]'"tool_use_id":[ \t]*"([^"]*)"'
 $reIsError = [regex]'"is_error":[ \t]*true'
 $reByUser = [regex]'"permissionDecision":[ \t]*[{][^}]*"source":[ \t]*"user'
 $reReject = [regex]'"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"'
+$reByUserNo = [regex]'"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"source":[ \t]*"user'
+$reClassifier = [regex]'"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"reasonType":[ \t]*"classifier"'
+$reSafety = [regex]'"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"reasonType":[ \t]*"safetyCheck"'
+# the hook a hook error names: the last word of its command holding a / \ or . (the script), else its first
+# word, without folders; "hook" when the command is not shown
+$reWs = [regex]'[ \t\n]+'
+function HookName([string]$b) {
+  $i = $b.IndexOf('hook error: [', $ORD); if ($i -lt 0) { return 'hook' }
+  $s = $b.Substring($i + 13); $i = $s.IndexOf(']: ', $ORD); if ($i -lt 0) { return 'hook' }
+  $s = $s.Substring(0, $i).Replace('"', '').Replace("'", '')
+  $words = @($reWs.Split($s) | Where-Object { $_ }); $w = ''
+  for ($k = $words.Count - 1; $k -ge 0; $k--) { if ($words[$k].IndexOfAny([char[]]@('/', '\', '.')) -ge 0) { $w = $words[$k]; break } }
+  if (-not $w -and $words.Count) { $w = $words[0] }
+  $w = $w.Replace('\', '/'); $i = $w.LastIndexOf('/'); if ($i -ge 0) { $w = $w.Substring($i + 1) }
+  $w = $w -replace "[`t`n`r]", ' '
+  if ($w) { "hook $w" } else { 'hook' }
+}
 $reContent = [regex]'"content":[ \t]*'
 $reText = [regex]'"text":[ \t]*"'
 $MK = 'Blocked by safety-guard: '
@@ -177,7 +195,9 @@ $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer
 $used = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $first = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $rep = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-$usage = NewMap; $calls = NewMap; $BC = NewMap; $TE = NewMap; $TR = NewMap
+$usage = NewMap; $calls = NewMap; $BC = NewMap; $TE = NewMap; $TR = NewMap; $TX = NewMap
+$ErrTools = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+function Get0($map, [string]$k) { if ($map.ContainsKey($k)) { $map[$k] } else { 0 } }
 $S = @{ na = 0; nc = 0; wt = [long]0; wn = 0; rf = 0; rr = 0 }
 $detailLines = New-Object 'System.Collections.Generic.List[string]'
 function Add($map, [string]$k, $n) { if ($map.ContainsKey($k)) { $map[$k] += $n } else { $map[$k] = $n } }
@@ -217,19 +237,30 @@ function Insights([string[]]$Files) {
           }
           $k = -1
           if ($body.StartsWith('PreToolUse:', $ORD)) { $k = $body.IndexOf($MK, $ORD) } elseif ($body.StartsWith($MK, $ORD)) { $k = 0 }
-          $reason = $null
+          # a block or a refusal: counted under its kind and reason, open until the transcript's next call
+          $kind = 'block'; $reason = $null
           if ($k -ge 0) { $reason = Why $body.Substring($k + $MK.Length) }
           elseif ($body.StartsWith('Permission to use ', $ORD) -and $body.Contains(' has been denied')) { $reason = 'deny rule' }
+          else {
+            $kind = 'refusal'
+            if ($body.StartsWith('PreToolUse:', $ORD)) { $reason = HookName (Unesc $body) }
+            elseif ($body.StartsWith("The user doesn't want to proceed", $ORD) -or $reByUserNo.IsMatch($line)) { $reason = 'user' }
+            elseif ($body.StartsWith('Permission for this action was denied by the Claude Code auto mode classifier', $ORD) -or $reClassifier.IsMatch($line)) { $reason = 'classifier' }
+            elseif ($body.StartsWith('Permission for this command was denied by a built-in', $ORD) -or $reSafety.IsMatch($line)) { $reason = 'safety check' }
+            elseif ($body.StartsWith('[Request interrupted', $ORD)) { $kind = '' }
+            elseif ($body.StartsWith('Permission ', $ORD) -or $reReject.IsMatch($line)) { $reason = 'other' }
+          }
           if ($null -ne $reason) {
-            (Counts $reason).n++
+            (Counts ($kind + "`t" + $reason)).n++
             $key = if ($null -ne $call.C) { $call.C } elseif ($null -ne $call.F) { $call.F } else { $call.I }
-            $pend.Add(@{ R = $reason; N = $nm; K = $key; T = (Targets $call.C $call.F $reason) })
-          } elseif ($body.StartsWith('PreToolUse:', $ORD) -or $body.StartsWith('Permission ', $ORD) -or $body.StartsWith("The user doesn't want to proceed", $ORD) -or
-                    $body.StartsWith('[Request interrupted', $ORD) -or $reReject.IsMatch($line)) {
-            # a refusal or an interrupt, no tool error
-          } else {
-            Add $TE $nm 1; if ($rep.Contains($id)) { Add $TR $nm 1 }
-            $perr[$nm] = if ($null -ne $call.C) { $call.C } else { $call.I }
+            $pend.Add(@{ R = ($kind + "`t" + $reason); N = $nm; K = $key; T = (Targets $call.C $call.F $reason) })
+          } elseif ($kind) {
+            [void]$ErrTools.Add($nm)
+            if ((Unesc $body).TrimEnd(' ', "`t", "`r", "`n") -cmatch '^Exit code -?[0-9]+\z') { Add $TX $nm 1 }   # nothing but the exit code: no failure shown
+            else {
+              Add $TE $nm 1; if ($rep.Contains($id)) { Add $TR $nm 1 }
+              $perr[$nm] = if ($null -ne $call.C) { $call.C } else { $call.I }
+            }
           }
         }
         [void]$calls.Remove($id); [void]$rep.Remove($id)
@@ -291,9 +322,9 @@ function Insights([string[]]$Files) {
     }
   }
   if (-not $S.na -and -not $S.nc) { return }
-  $lines = [string[]]@(foreach ($r in $BC.Keys) { $b = $BC[$r]; "block`t{0}`tcount={1} changed={2} retried={3} around={4} stopped={5}" -f $r, $b.n, $b.changed, $b.retried, $b.around, $b.stopped })
+  $lines = [string[]]@(foreach ($r in $BC.Keys) { $b = $BC[$r]; "{0}`tcount={1} changed={2} retried={3} around={4} stopped={5}" -f $r, $b.n, $b.changed, $b.retried, $b.around, $b.stopped })
   [Array]::Sort($lines, [StringComparer]::Ordinal); $lines
-  $lines = [string[]]@(foreach ($t in $TE.Keys) { $n = if ($TR.ContainsKey($t)) { $TR[$t] } else { 0 }; "tool_error`t{0}`tcount={1} repeated={2}" -f $t, $TE[$t], $n })
+  $lines = [string[]]@(foreach ($t in $ErrTools) { "tool_error`t{0}`tcount={1} repeated={2} exit_only={3}" -f $t, (Get0 $TE $t), (Get0 $TR $t), (Get0 $TX $t) })
   [Array]::Sort($lines, [StringComparer]::Ordinal); $lines
   "waiting`tminutes={0} calls={1}" -f [long][Math]::Floor(($S.wt + 30000) / 60000), $S.wn
   $W = [long]0; $R = [long]0; $rw = 0

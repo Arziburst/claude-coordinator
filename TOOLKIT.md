@@ -261,7 +261,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
   `tests/session-insights/run.sh` (fixture transcripts: guard blocks followed by a retry, a way around,
-  a change and a stop, a deny rule, tool errors and a repeat, waits, rereads, a cache rewrite, a subagent,
+  a change and a stop, a deny rule, refusals by another hook, the classifier, a safety check and the
+  user, tool errors and a repeat, errors that are only an exit code, waits, rereads, a cache rewrite, a subagent,
   `--since` across two sessions, CRLF, a BOM and malformed lines),
 `tests/run-stats/run.sh` (fixture run logs: a task's worker, tester and verifier rows summed, a lead
 and its sub-runs summed, only the last 10 tasks counted, old rows without the time columns, `-`
@@ -384,20 +385,28 @@ BOM, models priced apart),
   - `block <reason> count= changed= retried= around= stopped=` — per safety-guard reason (the text
     after `Blocked by safety-guard: ` up to `. If this is a false positive`, a path in parentheses as
     `(<path>)`, so no folder leaves the machine) and `deny rule` (a `Permission to use … has been
-    denied` result). Only results with `is_error` that start `PreToolUse:` (the hook error) or with the message count, never
-    a test printing the message. Then the same transcript's **next tool call**: `retried` — the same tool
+    denied` result). Only results with `is_error` that start `PreToolUse:` (the hook error) or with the
+    message count, never a test printing the message; probe and self-test sessions block on purpose,
+    so the retro filters them out. Then the same transcript's **next tool call**: `retried` — the same tool
     with the same command (else `file_path`, else input); `around` — another call naming one of the
     blocked call's targets: its `file_path`, and in its command `main`, `master` and the words holding a
     `/` or `\` with 2 letters or digits (`/dev/…` aside), plus the branch of `push while on <b>`, found as
     a whole word, case and `\` against `/` ignored; `stopped` — an `end_turn` or the transcript's end
     comes first; `changed` — anything else. `around` is a signal, not proof: a correct next step can
     name the same path (a `cd` into it, the cleanup script with the worktree), and a way around through a
-    variable or another spelling is `changed`.
-  - `tool_error <tool> count= repeated=` — results with `is_error` that are no refusal (a hook, a deny
-    rule, the auto-mode classifier, a safety check, the user's no — `permissionDecision` `reject`) and
-    no interrupt; `repeated` — the tool's next call had the same command (else the same input) and
-    failed again. A command exiting non-zero is an error to the transcript, so `grep` without a match
-    and a `diff` that differs count too.
+    variable or another spelling is `changed` — so the retro treats `around` as worth a look, not as a
+    finding.
+  - `refusal <source> count= changed= retried= around= stopped=` — the other refusals, with the same
+    next-call reading as blocks: `hook <script>` (another hook's `PreToolUse:` error, named by the
+    script in its command, folders left out; `hook` when the command is not shown), `classifier` (the
+    auto-mode classifier), `safety check` (Claude Code's built-in check), `user` (the user said no to a
+    permission), `other` (any other rejected permission). An interrupt is neither a refusal nor an error.
+  - `tool_error <tool> count= repeated= exit_only=` — results with `is_error` that are no block, refusal
+    or interrupt; `repeated` — the tool's next call had the same command (else the same input) and
+    failed again. A command exiting non-zero is an error to the transcript; when its whole text is
+    `Exit code <n>` (`grep` without a match, a `diff` that differs, a test returning false) it goes to
+    `exit_only`, not `count`, so `count` is failures that showed output — a failing command that prints
+    is still in `count`.
   - `waiting minutes= calls=` — calls over 2 minutes from `tool_use` to `tool_result` that waited on a
     person: a permission the user decided (the result's `permissionDecision` with a `source` starting
     `user`: `user_temporary`, `user_reject`, …) or a tool named `*AskUserQuestion`. The span includes the

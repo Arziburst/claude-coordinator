@@ -2,13 +2,19 @@ block	deny rule	count=1 changed=0 retried=0 around=0 stopped=1
 block	push to a protected branch	count=6 changed=1 retried=2 around=1 stopped=2
 block	removing a worktree by hand (use the cleanup script)	count=1 changed=0 retried=0 around=0 stopped=1
 block	the owner's working copy is never edited by a worker (<path>); work in your worktree	count=1 changed=0 retried=0 around=1 stopped=0
-tool_error	Bash	count=3 repeated=1
-tool_error	Edit	count=1 repeated=0
-tool_error	Glob	count=1 repeated=0
+refusal	classifier	count=2 changed=1 retried=1 around=0 stopped=0
+refusal	hook	count=1 changed=0 retried=0 around=0 stopped=1
+refusal	hook push-guard.ps1	count=2 changed=1 retried=1 around=0 stopped=0
+refusal	safety check	count=1 changed=1 retried=0 around=0 stopped=0
+refusal	user	count=1 changed=1 retried=0 around=0 stopped=0
+tool_error	Bash	count=4 repeated=1 exit_only=2
+tool_error	Edit	count=1 repeated=0 exit_only=0
+tool_error	Glob	count=1 repeated=0 exit_only=0
+tool_error	PowerShell	count=0 repeated=0 exit_only=1
 waiting	minutes=28 calls=3
-cache	write=118600 read=850000 rewrites=1
+cache	write=128600 read=940000 rewrites=1
 reread	files=3 reads=10
 reread_file	/work/app/a.md	reads=3
 reread_file	/work/app/src/main.c	reads=4
 reread_file	C:\work\notes.txt	reads=3
-turns	assistant=40 tool_calls=37
+turns	assistant=51 tool_calls=47

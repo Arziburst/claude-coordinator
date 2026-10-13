@@ -1,5 +1,5 @@
 block	deny rule	count=1 changed=1 retried=0 around=0 stopped=0
-tool_error	Bash	count=2 repeated=1
+tool_error	Bash	count=2 repeated=1 exit_only=0
 waiting	minutes=0 calls=0
 cache	write=400 read=20000 rewrites=0
 reread	files=0 reads=0

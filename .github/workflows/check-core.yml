@@ -444,7 +444,7 @@ jobs:
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/order TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since $since)
           done
           # session-insights: the same lines under another time zone and a German locale
-          for id in b1 e1 e0 sub1 a1; do
+          for id in b1 e1 e0 r1 sub1 a1; do
             diff <(CLAUDE_CONFIG_DIR=tests/session-insights/claude bash scripts/session-insights.sh $id --detail) \
                  <(CLAUDE_CONFIG_DIR=tests/session-insights/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 $id -Detail)
           done

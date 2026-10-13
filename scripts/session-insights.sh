@@ -15,9 +15,14 @@
 #          with 2 letters or digits, /dev/... aside; "push while on <b>": b) as a whole word, case and
 #          \ against / ignored — a signal, not proof; stopped = an end_turn or the transcript's end first;
 #          changed = anything else
-#   tool_error  <tool>  count=<n> repeated=<n>   — results with is_error true that are no refusal (a hook,
-#          a deny rule, the auto-mode classifier, a safety check, the user's no) and no interrupt;
-#          repeated = the tool's next call had the same command (else the same input) and failed again
+#   refusal  <source>  count=<n> changed=<n> retried=<n> around=<n> stopped=<n>   — the other refusals, read
+#          as blocks: "hook <script>" (another hook's error, its script's name without folders; "hook" when
+#          its command is not shown), "classifier" (auto mode), "safety check" (built in), "user" (the
+#          user's no), "other" (any other rejected permission)
+#   tool_error  <tool>  count=<n> repeated=<n> exit_only=<n>   — results with is_error true that are no
+#          block, refusal or interrupt; repeated = the tool's next call had the same command (else the same
+#          input) and failed again; exit_only = errors whose whole text is "Exit code <n>" (grep without a
+#          match, a diff that differs): left out of count, which means failures shown
 #   waiting  minutes=<m> calls=<n>   — calls over 2 minutes from tool_use to tool_result that waited on a
 #          person: a permission the user decided (the result's permissionDecision source user_*) or a
 #          tool named *AskUserQuestion; the span includes the tool's own run after the answer
@@ -30,7 +35,7 @@
 # A result whose call is not in the files read (or before --since) is skipped; so is a line that is no
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
-usage() { sed -n '2,31s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,36s/^# \{0,1\}//p' "$0"; exit 2; }
 arg=""; since=""; mode=one; detail=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -116,10 +121,20 @@ insights() {
         s = substr(s, i + j) }
       s = o s; gsub(/\t/, " ", s); sub(/[. ]+$/, "", s)
       return s == "" ? "?" : s }
-    function block(id, reason) { BC[reason]++; np++
+    # the hook a hook error names: the last word of its command holding a / \ or . (the script), else its
+    # first word, without folders; "hook" when the command is not shown
+    function hook(b,   i, s, n, W, k, w) { i = index(b, "hook error: ["); if (!i) return "hook"
+      s = substr(b, i + 13); i = index(s, "]: "); if (!i) return "hook"
+      s = substr(s, 1, i - 1); gsub("[\"" q "]", "", s); n = split(s, W, " "); w = ""
+      for (k = n; k >= 1; k--) if (W[k] ~ /[\/\\.]/) { w = W[k]; break }
+      if (w == "" && n) w = W[1]
+      gsub(/\\/, "/", w); sub(/.*\//, "", w); gsub(/[\t\n\r]/, " ", w)
+      return w == "" ? "hook" : "hook " w }
+    # a block or a refusal: counted under its kind and reason, open until the transcript s next call
+    function block(id, kind, reason) { reason = kind "\t" reason; BC[reason]++; np++
       PR[np] = reason; PN[np] = CN[id]
       PK[np] = CC[id] != NO ? CC[id] : CF[id] != NO ? CF[id] : CI[id]
-      PT[np] = targets(CC[id], CF[id], reason) }
+      PT[np] = targets(CC[id], CF[id], substr(reason, length(kind) + 2)) }
     function resolve(kind,   i) { for (i = 1; i <= np; i++) BK[PR[i], kind]++; np = 0 }
     # a transcript ends: open blocks stopped, its rereads counted
     function endfile(   k, d) { resolve("stopped")
@@ -172,7 +187,7 @@ insights() {
       }
       if ($0 ~ /"stop_reason":[ \t]*"end_turn"/) resolve("stopped")
     }
-    function result(   id, nm, st, a, r, body, g) {
+    function result(   id, nm, st, a, r, body, g, e) {
       if (!match($0, /"tool_use_id":[ \t]*"[^"]*"/)) return
       st = RSTART; id = substr($0, RSTART, RLENGTH); sub(/^"tool_use_id":[ \t]*"/, "", id); sub(/"$/, "", id)
       if (!(id in CN)) return
@@ -186,10 +201,17 @@ insights() {
           if (substr(r, 1, 1) == "\"") body = jbody(r) }
         g = 0
         if (starts(body, "PreToolUse:")) g = index(body, MK); else if (starts(body, MK)) g = 1
-        if (g) block(id, why(substr(body, g + length(MK))))
-        else if (starts(body, "Permission to use ") && index(body, " has been denied")) block(id, "deny rule")
-        else if (starts(body, "PreToolUse:") || starts(body, "Permission ") || starts(body, "The user doesn" q "t want to proceed") || starts(body, "[Request interrupted") || $0 ~ /"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"/) { }
-        else { TE[nm]++; if (id in rep) TR[nm]++; perr[nm] = CC[id] != NO ? CC[id] : CI[id] }
+        if (g) block(id, "block", why(substr(body, g + length(MK))))
+        else if (starts(body, "Permission to use ") && index(body, " has been denied")) block(id, "block", "deny rule")
+        else if (starts(body, "PreToolUse:")) block(id, "refusal", hook(unesc(body)))
+        else if (starts(body, "The user doesn" q "t want to proceed") || $0 ~ /"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"source":[ \t]*"user/) block(id, "refusal", "user")
+        else if (starts(body, "Permission for this action was denied by the Claude Code auto mode classifier") || $0 ~ /"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"reasonType":[ \t]*"classifier"/) block(id, "refusal", "classifier")
+        else if (starts(body, "Permission for this command was denied by a built-in") || $0 ~ /"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"[^}]*"reasonType":[ \t]*"safetyCheck"/) block(id, "refusal", "safety check")
+        else if (starts(body, "[Request interrupted")) { }
+        else if (starts(body, "Permission ") || $0 ~ /"permissionDecision":[ \t]*[{][^}]*"decision":[ \t]*"reject"/) block(id, "refusal", "other")
+        else { TS[nm] = 1; e = unesc(body); sub(/[ \t\r\n]+$/, "", e)
+          if (e ~ /^Exit code -?[0-9]+$/) TX[nm]++   # nothing but the exit code: no failure shown
+          else { TE[nm]++; if (id in rep) TR[nm]++; perr[nm] = CC[id] != NO ? CC[id] : CI[id] } }
       }
       delete CN[id]; delete CT[id]; delete CC[id]; delete CF[id]; delete CI[id]; delete rep[id]
     }
@@ -204,9 +226,9 @@ insights() {
       if (isR) result(); else assistant() }
     END { endfile()
       if (!na && !nc) exit
-      for (r in BC) printf "block\t%s\tcount=%d changed=%d retried=%d around=%d stopped=%d\n", r, BC[r], BK[r, "changed"], BK[r, "retried"], BK[r, "around"], BK[r, "stopped"] | "LC_ALL=C sort"
+      for (r in BC) printf "%s\tcount=%d changed=%d retried=%d around=%d stopped=%d\n", r, BC[r], BK[r, "changed"], BK[r, "retried"], BK[r, "around"], BK[r, "stopped"] | "LC_ALL=C sort"
       close("LC_ALL=C sort")
-      for (t in TE) printf "tool_error\t%s\tcount=%d repeated=%d\n", t, TE[t], TR[t] | "LC_ALL=C sort"
+      for (t in TS) printf "tool_error\t%s\tcount=%d repeated=%d exit_only=%d\n", t, TE[t], TR[t], TX[t] | "LC_ALL=C sort"
       close("LC_ALL=C sort")
       printf "waiting\tminutes=%d calls=%d\n", int((wt + 30000) / 60000), wn
       for (id in out) { W += uw[id]; R += ur[id]; if (!(id in first) && uw[id] * 2 > ui[id] + uw[id] + ur[id]) rw++ }

@@ -1,0 +1,10 @@
+refusal	classifier	count=1 changed=0 retried=1 around=0 stopped=0
+refusal	hook	count=1 changed=0 retried=0 around=0 stopped=1
+refusal	hook push-guard.ps1	count=2 changed=1 retried=1 around=0 stopped=0
+refusal	safety check	count=1 changed=1 retried=0 around=0 stopped=0
+tool_error	Bash	count=1 repeated=0 exit_only=2
+tool_error	PowerShell	count=0 repeated=0 exit_only=1
+waiting	minutes=0 calls=0
+cache	write=10000 read=90000 rewrites=0
+reread	files=0 reads=0
+turns	assistant=11 tool_calls=10
