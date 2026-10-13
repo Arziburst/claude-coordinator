@@ -1,0 +1,11 @@
+refusal	classifier	count=1 changed=1 retried=0 around=0 stopped=0
+refusal	user	count=1 changed=1 retried=0 around=0 stopped=0
+tool_error	Bash	count=3 repeated=1 exit_only=0
+tool_error	Edit	count=1 repeated=0 exit_only=0
+tool_error	Glob	count=1 repeated=0 exit_only=0
+waiting	minutes=28 calls=3
+cache	write=79200 read=640000 rewrites=1
+reread	files=2 reads=7
+reread_file	/work/app/src/main.c	reads=4
+reread_file	C:\work\notes.txt	reads=3
+turns	assistant=23 tool_calls=22

@@ -1,0 +1,8 @@
+block	deny rule	count=1 changed=0 retried=0 around=0 stopped=1
+block	push to a protected branch	count=3 changed=1 retried=1 around=1 stopped=0
+block	removing a worktree by hand (use the cleanup script)	count=1 changed=0 retried=0 around=0 stopped=1
+block	the owner's working copy is never edited by a worker (<path>); work in your worktree	count=1 changed=0 retried=0 around=1 stopped=0
+waiting	minutes=0 calls=0
+cache	write=20800 read=160000 rewrites=0
+reread	files=0 reads=0
+turns	assistant=9 tool_calls=8

@@ -537,6 +537,10 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   behind them (`scripts/run-stats <RUNS.tsv>`: every kind and model).
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
+- **The weekly retro's input** is `scripts/session-insights --since <a week ago>` (TOOLKIT *Usage*): from
+  the transcripts, where sessions lose money, time, quality or stability — guard blocks, refusals and what the
+  session did next, tool errors and repeats, waits on a person, cache rewrites, rereads — counts only,
+  its `--detail` file names never leaving the machine.
 
 ## 8. Resources, parallel work and cleanup
 

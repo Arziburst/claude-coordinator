@@ -1,0 +1,5 @@
+block	push to a protected branch	count=3 changed=0 retried=1 around=0 stopped=2
+waiting	minutes=0 calls=0
+cache	write=18600 read=50000 rewrites=0
+reread	files=1 reads=3
+turns	assistant=8 tool_calls=7

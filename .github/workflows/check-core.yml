@@ -189,6 +189,18 @@ jobs:
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
           bash tests/session-tokens/run.sh ps pwsh
+      - name: session-insights reads the fixture transcripts (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/session-insights/run.sh sh
+      - name: session-insights reads the fixture transcripts (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/session-insights/run.sh ps pwsh
+      - name: session-insights reads the fixture transcripts (PowerShell)
+        if: runner.os == 'Windows'
+        run: |
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/session-insights/run.sh ps powershell
+          bash tests/session-insights/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (bash)
         if: runner.os != 'Windows'
         run: bash tests/statusline/run.sh sh
@@ -430,4 +442,13 @@ jobs:
                  <(TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since $since)
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/order bash scripts/session-tokens.sh --since $since) \
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/order TZ=America/New_York pwsh -NoProfile -File scripts/session-tokens.ps1 -Since $since)
+          done
+          # session-insights: the same lines under another time zone and a German locale
+          for id in b1 e1 e0 r1 sub1 a1; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-insights/claude bash scripts/session-insights.sh $id --detail) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-insights/claude TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 $id -Detail)
+          done
+          for since in 2026-10-05T17:00:00Z 1791219600; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-insights/multi bash scripts/session-insights.sh --since $since) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-insights/multi TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-insights.ps1 -Since $since)
           done
