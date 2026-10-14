@@ -1,3 +1,3 @@
-window	used	since	resets	cost	ratio	basis	left	left_cap	block	fit
-five_hour	36.0	2026-10-13T03:40:00Z	2026-10-13T08:40:00Z	46.79	0.7694	trusted	83.18	76.68	61.6	does not fit
-seven_day	32.0	2026-10-12T17:00:00Z	2026-10-19T17:00:00Z	403.35	0.0793	trusted	857.50	731.39	6.3	fits
+window	used	since	resets	cost	ratio	basis	left	left_cap	block	fit	top
+five_hour	36.0	2026-10-13T03:40:00Z	2026-10-13T08:40:00Z	54.31	0.6629	trusted	96.54	89.00	59.7	does not fit	13.8
+seven_day	32.0	2026-10-12T17:00:00Z	2026-10-19T17:00:00Z	478.50	0.0669	trusted	1016.44	866.96	6.0	fits	15.7

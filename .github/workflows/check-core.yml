@@ -439,8 +439,8 @@ jobs:
           # run-stats --limits: the same lines under a decimal comma and another time zone
           l=tests/run-stats/limits
           for s in status-trusted status-fresh status-reset status-pretty; do
-            diff <(bash scripts/run-stats.sh --limits --status $l/$s.json --spend-5h $l/spend-5h.txt --spend-week $l/spend-week.txt --prices $l/prices.txt --prev-5h 0.7 --cap-5h 95 --cap-week 90 --block 80 --now 1791872400) \
-                 <(TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 -Limits -Status $l/$s.json -Spend5h $l/spend-5h.txt -SpendWeek $l/spend-week.txt -Prices $l/prices.txt -Prev5h 0.7 -Cap5h 95 -CapWeek 90 -Block 80 -Now 1791872400)
+            diff <(bash scripts/run-stats.sh --limits --status $l/$s.json --spend-5h $l/spend-5h.txt --spend-week $l/spend-week.txt --prices $l/prices.txt --prev-5h 0.7 --cap-5h 95 --cap-week 90 --block 80 --block-top 3.3 --now 1791872400) \
+                 <(TZ=America/New_York LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 -Limits -Status $l/$s.json -Spend5h $l/spend-5h.txt -SpendWeek $l/spend-week.txt -Prices $l/prices.txt -Prev5h 0.7 -Cap5h 95 -CapWeek 90 -Block 80 -BlockTop 3.3 -Now 1791872400)
           done
           # run-stats --task: the same task row under a decimal comma and another time zone
           k=tests/run-stats/task

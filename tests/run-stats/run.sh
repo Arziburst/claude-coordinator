@@ -4,10 +4,11 @@
 # without the time columns, `-` and other non-values, fewer than 4, even counts, a header in another
 # order, no header, a header only, a CRLF copy with a BOM), --per-run, one pair's line, a missing file
 # (exit 1) and usage errors (exit 2); --limits on the fixtures in limits/ (a trusted window, a fresh one
-# with a guess and with the previous ratio, a block that fits and one that does not, a window that has
-# reset and one absent, no rate_limits, a pretty-printed JSON with CRLF and a BOM, mixed models priced
-# apart with a dated id and a not-weekly one, a spend from stdin, the default status file, an unpriced
-# model, a malformed price line, missing files and usage errors); the ready columns from task rows
+# with a guess and with the previous ratio, a block that fits and one that does not, its top-rung runs at
+# 2.5 times, a window that has reset and one absent, no rate_limits, a pretty-printed JSON with CRLF and a
+# BOM, mixed models priced apart with a dated id, a not-weekly one and a top one with its share, no top
+# line, a spend from stdin, the default status file, an unpriced model, a malformed price line and a flag
+# twice, missing files and usage errors); the ready columns from task rows
 # (ready.tsv); --task on the fixtures in task/ (the checks green after the verifier and before it, a red run
 # then a green rerun, owner waits mid-task, an unmerged PR, no checks, no PR, a lead, no header and another
 # order, CRLF and a BOM, stdin, not ready on a red or running check or an unapproved verifier, errors).
@@ -46,7 +47,7 @@ run() {
     for x in "$@"; do case "$x" in --kind) a+=(-Kind) ;; --model) a+=(-Model) ;; --per-run) a+=(-PerRun) ;;
       --limits) a+=(-Limits) ;; --status) a+=(-Status) ;; --spend-5h) a+=(-Spend5h) ;; --spend-week) a+=(-SpendWeek) ;;
       --prices) a+=(-Prices) ;; --prev-5h) a+=(-Prev5h) ;; --prev-week) a+=(-PrevWeek) ;; --cap-5h) a+=(-Cap5h) ;;
-      --cap-week) a+=(-CapWeek) ;; --block) a+=(-Block) ;; --now) a+=(-Now) ;;
+      --cap-week) a+=(-CapWeek) ;; --block) a+=(-Block) ;; --block-top) a+=(-BlockTop) ;; --now) a+=(-Now) ;;
       --task) a+=(-Task) ;; --pr-json) a+=(-PrJson) ;; --waits) a+=(-Waits) ;;
       # stdin: 5.1 takes a bare - after a parameter through -File for a parameter name and fails, so -Spend5h:-
       -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek | -PrJson | -Waits) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
@@ -94,7 +95,13 @@ all=(--spend-5h spend-5h.txt --spend-week spend-week.txt --prices prices.txt)
 expect "limits: trusted windows, mixed models, a block that fits" 0 "$l/expected-trusted.txt" - -- \
   --limits --status status-trusted.json "${all[@]}" --cap-5h 95 --cap-week 90 --block 20 --now $now
 expect "limits: a block that does not fit the 5-hour cap" 0 "$l/expected-nofit.txt" - -- \
-  --limits --status status-trusted.json "${all[@]}" --cap-5h 95 --cap-week 90 --block '$80' --now $now
+  --limits --status status-trusted.json "${all[@]}" --cap-5h 95 --cap-week 90 --block '$90' --now $now
+expect "limits: the block's top-rung runs at 2.5 times - it does not fit" 0 "$l/expected-blocktop.txt" - -- \
+  --limits --status status-trusted.json "${all[@]}" --cap-5h 95 --cap-week 90 --block 20 --block-top '$30' --now $now
+expect "limits: top-rung runs only" 0 "$l/expected-toponly.txt" - -- \
+  --limits --status status-trusted.json "${all[@]}" --cap-5h 95 --cap-week 90 --block-top 8 --now $now
+expect "limits: no top line in the prices - no top share" 0 "$l/expected-notop.txt" - -- \
+  --limits --status status-trusted.json --spend-5h spend-5h.txt --prices prices-notop.txt --now $now
 expect "limits: pretty-printed JSON and a spend with CRLF and a BOM" 0 "$l/expected-trusted.txt" - -- \
   --limits --status status-crlf.json --spend-5h spend-5h.txt --spend-week spend-week-crlf.txt --prices prices.txt --cap-5h 95 --cap-week 90 --block 20 --now $now
 expect "limits: fresh windows, a guess and the previous ratio" 0 "$l/expected-fresh.txt" - -- \
@@ -111,14 +118,18 @@ expect "limits: no rate_limits (an older Claude Code)" 1 - \
 expect "limits: a spend model without a price" 1 - "run-stats: no price for claude-mystery-1 in prices.txt" -- \
   --limits --status status-trusted.json --spend-5h spend-unpriced.txt --prices prices.txt
 expect "limits: a malformed price line" 1 - \
-  "run-stats: prices-bad.txt:2: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly])" -- \
+  "run-stats: prices-bad.txt:2: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly] [top])" -- \
   --limits --status status-trusted.json --spend-5h spend-5h.txt --prices prices-bad.txt
+expect "limits: a price line with a flag twice" 1 - \
+  "run-stats: prices-flag.txt:1: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly] [top])" -- \
+  --limits --status status-trusted.json --spend-5h spend-5h.txt --prices prices-flag.txt
 expect "limits: a missing status file" 1 - "run-stats: cannot read missing.json" -- --limits --status missing.json
 expect "limits: a missing spend file" 1 - "run-stats: cannot read missing.txt" -- \
   --limits --status status-trusted.json --spend-5h missing.txt --prices prices.txt
 expect "limits: a spend without prices is a usage error" 2 '*' - -- --limits --status status-trusted.json --spend-5h spend-5h.txt
 expect "limits: two spends from stdin is a usage error" 2 '*' - -- --limits --spend-5h - --spend-week - --prices prices.txt
 expect "limits: a cap that is no number is a usage error" 2 '*' - -- --limits --cap-5h 9x
+expect "limits: a top-rung block that is no number is a usage error" 2 '*' - -- --limits --block-top x
 expect "limits: a run log with --limits is a usage error" 2 '*' - -- --limits runs.tsv
 
 # the ready columns: task rows (role task) in the forecast, never in cost or time, the last one of a task

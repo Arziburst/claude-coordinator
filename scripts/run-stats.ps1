@@ -17,16 +17,16 @@
 #     `<asked UTC> <answered UTC>` per line (the rules: run-stats.sh's top comment; -PrJson:- reads stdin).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 -Limits [-Status <file>] [-Spend5h <file|->]
 #     [-SpendWeek <file|->] [-Prices <file>] [-Prev5h <%/$>] [-PrevWeek <%/$>] [-Cap5h <%>] [-CapWeek <%>] [-Block <USD>]
-#     [-Now <Unix seconds>]   per window (five_hour, seven_day): window used since resets cost ratio basis left left_cap
-#     block fit - the limit percent per dollar, the dollars left before 100% and the cap, and whether the block fits
+#     [-BlockTop <USD>] [-Now <Unix seconds>]   per window (five_hour, seven_day): window used since resets cost ratio
+#     basis left left_cap block fit top - the limit percent per dollar, the dollars left before 100% and the cap,
+#     whether the block (its top-rung runs, -BlockTop, at 2.5 times) fits, and the `top` models' share of the cost
 #     (the inputs, the columns and the rounding: run-stats.sh's top comment). Spend: what session-tokens -Since
-#     <since> prints; prices: `<model id> <input> <output> <cache read> <cache write> [not-weekly]`, USD per million
-#     (assumed: every model, an own-limit one too, spends the 5-hour window - not measured; five_hour sums them all).
+#     <since> prints; prices: `<model id> <input> <output> <cache read> <cache write> [not-weekly] [top]`, USD per million.
 # Exit 1 when a file cannot be read (and in -Limits: no rate limits in the JSON, a malformed price line, a spend
 # model without a price; in -Task: no rows for the task, no start, not ready, a malformed wait line), 2 on a usage error.
 param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [string]$Task, [string]$PrJson, [string]$Waits,
   [switch]$Limits, [string]$Status, [string]$Spend5h, [string]$SpendWeek, [string]$Prices,
-  [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$Now)
+  [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$BlockTop, [string]$Now)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
@@ -59,7 +59,7 @@ if ($Limits) {
     if ($r.Count -gt 0) { $r[0] = $r[0].TrimStart([char]0xFEFF) }
     ,$r
   }
-  foreach ($v in @($Prev5h, $PrevWeek, $Cap5h, $CapWeek, $Block)) { if ($v -and $v -cnotmatch '^[$]?[0-9]+([.][0-9]+)?\z') { Show-Usage } }
+  foreach ($v in @($Prev5h, $PrevWeek, $Cap5h, $CapWeek, $Block, $BlockTop)) { if ($v -and $v -cnotmatch '^[$]?[0-9]+([.][0-9]+)?\z') { Show-Usage } }
   if (-not $Now) { $Now = "$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" } elseif ($Now -cnotmatch '^[0-9]+\z') { Show-Usage }
   if ($Spend5h -eq '-' -and $SpendWeek -eq '-') { Show-Usage }                 # one stdin
   if (($Spend5h -or $SpendWeek) -and -not $Prices) { Show-Usage }              # a spend needs its prices
@@ -94,18 +94,23 @@ if ($Limits) {
       $i++; $line = $line -creplace "`r$", ''
       if ($line -cmatch '^[ \t]*(#|$)') { continue }
       $f = @(($line -creplace '/', ' ').Trim(' ', "`t") -split '[ \t]+')
-      $ok = ($f.Count -eq 5 -or ($f.Count -eq 6 -and $f[5] -ceq 'not-weekly'))
+      $ok = ($f.Count -ge 5 -and $f.Count -le 7); $nw = $false; $tp = $false
+      for ($j = 5; $j -lt $f.Count -and $ok; $j++) {
+        if ($f[$j] -ceq 'not-weekly' -and -not $nw) { $nw = $true } elseif ($f[$j] -ceq 'top' -and -not $tp) { $tp = $true } else { $ok = $false }
+      }
       $pv = @(0, 0, 0, 0, 0, 0)
       for ($j = 1; $j -le 4 -and $ok; $j++) { $pv[$j] = U4 $f[$j]; if ($pv[$j] -lt 0) { $ok = $false } }
-      if (-not $ok) { [Console]::Error.WriteLine("run-stats: ${Prices}:${i}: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly])"); exit 1 }
-      $PL.Add(@{ id = $f[0]; pin = [long]$pv[1]; pout = [long]$pv[2]; prd = [long]$pv[3]; pwr = [long]$pv[4]; nw = ($f.Count -eq 6) })
+      if (-not $ok) { [Console]::Error.WriteLine("run-stats: ${Prices}:${i}: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly] [top])"); exit 1 }
+      $PL.Add(@{ id = $f[0]; pin = [long]$pv[1]; pout = [long]$pv[2]; prd = [long]$pv[3]; pwr = [long]$pv[4]; nw = $nw; tp = $tp })
     }
   }
-  # a spend in micro-USD: tokens times the price of the model's line; the week leaves not-weekly out
+  $HasTop = @($PL | Where-Object { $_.tp }).Count -gt 0
+  # a spend in micro-USD, then the `top` models' part of it: tokens times the price of the model's line; the
+  # week leaves not-weekly out
   function Spend([string]$f, [bool]$week) {
     if ($f -eq '-') { $lines = @([Console]::In.ReadToEnd() -split "`r?`n"); if ($lines.Count -gt 0) { $lines[0] = $lines[0].TrimStart([char]0xFEFF) } }
     else { $lines = Read-Lines $f }
-    [long]$T = 0
+    [long]$T = 0; [long]$TT = 0
     foreach ($line in $lines) {
       $line = $line -creplace "`r$", ''
       if ($line -cmatch '^[ \t]*(#|$)' -or $line -cnotmatch '[ \t]in=[0-9]') { continue }
@@ -119,23 +124,25 @@ if ($Limits) {
       if ($null -eq $b) { [Console]::Error.WriteLine("run-stats: no price for $m in $Prices"); exit 1 }
       if ($week -and $b.nw) { continue }
       $tok = { param($k) $n = [regex]::Match($line, '(^|[ \t])' + [regex]::Escape($k) + '([0-9]+)'); if ($n.Success) { [long]$n.Groups[2].Value } else { [long]0 } }
-      $T += (& $tok 'in=') * $b.pin + (& $tok 'out>=') * $b.pout + (& $tok 'cache_read=') * $b.prd + (& $tok 'cache_write=') * $b.pwr
+      $cc = (& $tok 'in=') * $b.pin + (& $tok 'out>=') * $b.pout + (& $tok 'cache_read=') * $b.prd + (& $tok 'cache_write=') * $b.pwr
+      $T += $cc; if ($b.tp) { $TT += $cc }
     }
-    IDiv $T 10000
+    @((IDiv $T 10000), (IDiv $TT 10000))
   }
-  $CostOf = @{ five_hour = ''; seven_day = '' }
-  if ($Spend5h) { $CostOf.five_hour = "$(Spend $Spend5h $false)" }
-  if ($SpendWeek) { $CostOf.seven_day = "$(Spend $SpendWeek $true)" }
+  $CostOf = @{ five_hour = ''; seven_day = '' }; $TopOf = @{ five_hour = [long]0; seven_day = [long]0 }
+  if ($Spend5h) { $sp = Spend $Spend5h $false; $CostOf.five_hour = "$($sp[0])"; $TopOf.five_hour = [long]$sp[1] }
+  if ($SpendWeek) { $sp = Spend $SpendWeek $true; $CostOf.seven_day = "$($sp[0])"; $TopOf.seven_day = [long]$sp[1] }
   $nowS = [long]$Now
-  "window`tused`tsince`tresets`tcost`tratio`tbasis`tleft`tleft_cap`tblock`tfit"
-  # used in 1/10000 percent, cost c in micro-USD, the ratio r in 1/10000 percent per dollar
+  "window`tused`tsince`tresets`tcost`tratio`tbasis`tleft`tleft_cap`tblock`tfit`ttop"
+  # used in 1/10000 percent, cost c and its top part in micro-USD, the ratio r in 1/10000 percent per dollar
   foreach ($x in @(@('five_hour', 18000, $Prev5h, $Cap5h), @('seven_day', 604800, $PrevWeek, $CapWeek))) {
     $w = $x[0]; $len = [long]$x[1]; $prev = $x[2]; $cap = $x[3]; $c = $CostOf[$w]
-    if (-not $UsedOf.ContainsKey($w) -or $UsedOf[$w] -eq '-') { "$w`t-`t-`t-`t-`t-`t-`t-`t-`t-`t-"; continue }
+    if (-not $UsedOf.ContainsKey($w) -or $UsedOf[$w] -eq '-') { "$w`t-`t-`t-`t-`t-`t-`t-`t-`t-`t-`t-"; continue }
     [long]$u = U4 $UsedOf[$w]; $since = '-'; $res = '-'
     if ($ResetOf[$w] -ne '-') { [long]$rs = [Math]::Floor([decimal]::Parse($ResetOf[$w], $inv)) }
     if ($ResetOf[$w] -ne '-' -and $rs -le $nowS) { $u = 0; $c = '' }   # the window has reset since the JSON was written
     elseif ($ResetOf[$w] -ne '-') { $res = Iso $rs; $since = Iso ($rs - $len) }
+    $top = if ($c -eq '' -or [long]$c -eq 0 -or -not $HasTop) { '-' } else { One (RDiv ($TopOf[$w] * 1000) ([long]$c)) }   # tenths of a percent
     $cost = if ($c -eq '') { '-' } else { Usd (RDiv ([long]$c) 10000) }
     [long]$cl = if ($c -eq '') { 0 } else { [long]$c }
     [long]$r = -1; $basis = '-'
@@ -148,12 +155,13 @@ if ($Limits) {
       $left = Usd (IDiv ([Math]::Max([long]0, 1000000 - $u) * 100) $r)
       if ($cap) { $lc = Usd (IDiv ([Math]::Max([long]0, $L4 - $u) * 100) $r) }
     }
-    if ($Block -and $r -gt 0) {
-      [long]$bc = RDiv (U4 $Block) 100; [long]$pp = $bc * $r   # in 1/1000000 percent
+    if (($Block -or $BlockTop) -and $r -gt 0) {   # the block in cents, its top-rung runs at 2.5 times
+      [long]$b4 = if ($Block) { U4 $Block } else { 0 }; [long]$t4 = if ($BlockTop) { U4 $BlockTop } else { 0 }
+      [long]$bc = RDiv ($b4 * 10 + $t4 * 25) 1000; [long]$pp = $bc * $r   # in 1/1000000 percent
       $blk = One (RDiv $pp 100000); $fit = if (100 * $u + $pp -le 100 * $L4) { 'fits' } else { 'does not fit' }
     }
     $rt = if ($r -lt 0) { '-' } else { '{0}.{1:0000}' -f (IDiv $r 10000), ($r % 10000) }
-    "$w`t$(One (RDiv $u 1000))`t$since`t$res`t$cost`t$rt`t$basis`t$left`t$lc`t$blk`t$fit"
+    "$w`t$(One (RDiv $u 1000))`t$since`t$res`t$cost`t$rt`t$basis`t$left`t$lc`t$blk`t$fit`t$top"
   }
   exit 0
 }

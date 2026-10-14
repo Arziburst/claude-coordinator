@@ -30,7 +30,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-START-03 | The coordinator's name | `<Project> Coordinator`, always containing `Coordinator`, set by the owner | START |
 | F-START-04 | The init quiz | thirteen owner questions with a recommended option, then one summary for a yes | START |
 | F-START-05 | Strictness presets | swarm / standard / strict set the owner's gates between tasks | START |
-| F-START-06 | Spend level | lean / balanced / thorough only tilts model and effort | START |
+| F-START-06 | Spend level | lean / balanced / thorough tilts model and effort and sets when the top rung runs | START |
 | F-START-07 | Settings | one table of the project's settings; a change is always a quiz | START |
 | F-START-08 | "What is your task?" | the coordinator explains its flow and the rules in effect | START |
 | F-START-09 | Restart on the same machine | the name first, the core re-read, running sessions taken over | START |
@@ -162,9 +162,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-START-06 Spend level
 - defined: CORE.md §7, PROJECT.template.md
 - entry: one-time step `spend-level`
-- promises: the level forbids no rung; it tilts the choice only between neighbouring rungs or efforts; quality checks and the risk floors never depend on it
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- promises: the level tilts the choice between neighbouring rungs or efforts and sets when the top rung runs — lean: only an escalation after a failed review; balanced: also the `hardest` kinds and research runs (the researcher role, a lead's research; the radar stays light); thorough and the strict preset: also the verifier of risk-tier work and a `hard` task that failed its review once on Opus, risk-tier execution on the top rung only when `hardest`; the top rung only within the guard rails — the plan includes it (the owner's `fable-on-plan` answers), no limit or credits message since the weekly reset, the block with its top-rung runs at 2.5× fits the weekly cap (`run-stats --limits --block-top`), the top rung's weekly cost share (the `top` column) under 50%; effort is raised before the model; quality checks and the risk floors never depend on the level
+- tested by: tests/run-stats/run.sh for the numbers the guard rails read (the `top` column, `--block-top`); the routing itself none
+- not covered: choosing the rung rests on the coordinator following the rule
 
 ### F-START-07 Settings
 - defined: CORE.md §13a, procedures/SETTINGS.md, PROJECT.template.md
@@ -535,15 +535,15 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-SPEND-01 The model ladder
 - defined: CORE.md §7, TOOLKIT.md, BINDINGS.template.md
-- entry: one-time steps `model-probe` and `model-own-limits`; a run failing with "model not available"
-- promises: the ladder is detected (auth status as a hint, one probe per model), never assumed; a missing rung takes the next one down; a model hitting its own limit leaves the ladder until the next probe
+- entry: one-time steps `model-probe`, `fable-on-plan` and `model-own-limits`; a run failing with "model not available", a model's limit or a usage-credits message
+- promises: the ladder is detected (auth status as a hint, one cheap probe per model: exit code and `is_error`, never `subtype`), never assumed; Fable stands on it only with the owner's answer that `/usage` shows its weekly row (a probe succeeds on usage credits too), asked at init and on a plan change; Fable shares the weekly limit and is never routed where it would bill usage credits; a missing rung takes the next one down; a model hitting its limit leaves the ladder until the next probe, Fable after a Fable limit or credits message until the weekly reset (Opus on the top rung meanwhile)
 - tested by: none
-- not covered: a probe costs money, so it runs only at the moments the core names
+- not covered: a probe costs money, so it runs only at the moments the core names; with usage credits on, a `-p` run past Fable's weekly share bills them without a message, so the guard on Fable's cost share is the only stop
 
 ### F-SPEND-02 Automatic routing
 - defined: CORE.md §7
 - entry: every run; the run log
-- promises: a proven kind tries one level down and reverts below 80%; a failing kind goes one level up; limits push routine work down; floors and the owner's pins are never changed
+- promises: a proven kind tries one level down and reverts below 80%; a failing kind goes one level up, onto the top rung only where the spend level and its guard rails allow; limits push routine work down; floors and the owner's pins are never changed
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -571,9 +571,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-06 Account-wide spend and the ratio
 - defined: scripts/session-tokens.sh, scripts/run-stats.sh, scripts/run-stats.ps1, CORE.md §7a, TOOLKIT.md
 - entry: `session-tokens --since <UTC time>`; `run-stats --limits`; one-time steps `spend-ratio` and `prices-file`
-- promises: every transcript on the machine counts, each message by its own timestamp; the window's start is `resets_at` minus 5 hours or 7 days, printed by `run-stats --limits` as `since`; the account's cost since then is its tokens per model at the ladder's list prices (a dated id takes its base id's price, a model without a price stops with exit 1, a `not-weekly` model is left out of the weekly sum and counted in the 5-hour one); the prices come from `coordinator/prices.txt`, which the one-time step `prices-file` creates in every project from the ladder's list prices; the ratio is used percent over that cost, `trusted` only once the window rose 10 points, else the previous ratio when given, else a `guess`; a `resets_at` already passed means the window has reset (used 0); the same numbers from the .sh and the .ps1 (fixed-point)
-- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-since.txt from a UTC time, with milliseconds, without the Z and from Unix seconds; an offset other than Z and a date alone refused; tests/session-tokens/expected-order-since.txt: the record's own timestamp before or after "message" while a tool input carries another), parity under another time zone on Linux; tests/run-stats/run.sh `--limits` (tests/run-stats/limits/expected-trusted.txt: four models priced apart, a dated id, a `not-weekly` one in the 5-hour cost and out of the weekly one, also from a pretty-printed JSON and a spend with CRLF and a BOM; tests/run-stats/limits/expected-fresh.txt: a guess and the previous ratio under 10 points; tests/run-stats/limits/expected-reset.txt: a window reset and one absent; tests/run-stats/limits/expected-status.txt: the status alone and the default status file; tests/run-stats/limits/expected-stdin.txt: a spend from stdin; no `rate_limits`, an unpriced model, a malformed price line, missing files exit 1; usage errors exit 2), through CI steps "run-stats computes the forecast numbers of the fixture run logs" (bash on Linux and macOS, PowerShell 7 on Linux, Windows PowerShell 5.1 and PowerShell 7 on Windows) and the parity step under a German locale
-- not covered: transcripts on other machines of the same account are not seen, so their spend makes the ratio too high; a 5-hour window's start is taken as `resets_at` minus 5 hours (a reset rounded to the hour counts a little before the first message); assumed: every model, an own-limit one too, spends the 5-hour window (not measured) — a `not-weekly` model is counted there, and if its spend does not count, the 5-hour ratio comes out too low; the `prices-file` step and the file's prices matching the pricing page rest on the coordinator (only the file's format is checked, by the script); the once-a-day recompute rests on the coordinator; PowerShell refuses an option without its value or an unknown one with its own error (exit 1), not the usage text
+- promises: every transcript on the machine counts, each message by its own timestamp; the window's start is `resets_at` minus 5 hours or 7 days, printed by `run-stats --limits` as `since`; the account's cost since then is its tokens per model at the ladder's list prices (a dated id takes its base id's price, a model without a price stops with exit 1, a `not-weekly` model is left out of the weekly sum and counted in the 5-hour one; Fable is never `not-weekly`); each window's line ends with the `top` models' share of its cost (`-` without a cost or a `top` line); `--block-top` counts the block's top-rung runs at 2.5× its estimate; the prices come from `coordinator/prices.txt`, which the one-time step `prices-file` creates in every project from the ladder's list prices; the ratio is used percent over that cost, `trusted` only once the window rose 10 points, else the previous ratio when given, else a `guess`; a `resets_at` already passed means the window has reset (used 0); the same numbers from the .sh and the .ps1 (fixed-point)
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected-since.txt from a UTC time, with milliseconds, without the Z and from Unix seconds; an offset other than Z and a date alone refused; tests/session-tokens/expected-order-since.txt: the record's own timestamp before or after "message" while a tool input carries another), parity under another time zone on Linux; tests/run-stats/run.sh `--limits` (tests/run-stats/limits/expected-trusted.txt: five models priced apart, a dated id, a `not-weekly` one in the 5-hour cost and out of the weekly one, a `top` one and its share, also from a pretty-printed JSON and a spend with CRLF and a BOM; tests/run-stats/limits/expected-blocktop.txt and tests/run-stats/limits/expected-toponly.txt: the block's top-rung runs at 2.5×; tests/run-stats/limits/expected-notop.txt: no `top` line, no share; a flag twice on a price line exits 1; tests/run-stats/limits/expected-fresh.txt: a guess and the previous ratio under 10 points; tests/run-stats/limits/expected-reset.txt: a window reset and one absent; tests/run-stats/limits/expected-status.txt: the status alone and the default status file; tests/run-stats/limits/expected-stdin.txt: a spend from stdin; no `rate_limits`, an unpriced model, a malformed price line, missing files exit 1; usage errors exit 2), through CI steps "run-stats computes the forecast numbers of the fixture run logs" (bash on Linux and macOS, PowerShell 7 on Linux, Windows PowerShell 5.1 and PowerShell 7 on Windows) and the parity step under a German locale
+- not covered: transcripts on other machines of the same account are not seen, so their spend makes the ratio too high; a 5-hour window's start is taken as `resets_at` minus 5 hours (a reset rounded to the hour counts a little before the first message); a `not-weekly` model (none known today) is counted in the 5-hour window, assumed, and if its spend did not count there the 5-hour ratio would come out too low; the `prices-file` step and the file's prices matching the pricing page rest on the coordinator (only the file's format is checked, by the script); the once-a-day recompute rests on the coordinator; the 2.5× for top-rung runs is a margin from the list-price ratio, not a measured burn rate; PowerShell refuses an option without its value or an unknown one with its own error (exit 1), not the usage text
 
 ### F-SPEND-07 Status files pruned
 - defined: scripts/session-tokens.sh, TOOLKIT.md
@@ -707,7 +707,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-UPDATE-04 One-time steps
 - defined: ONE-TIME.md, procedures/UPDATE-CORE.md, CORE.md §3
-- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `model-own-limits`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
+- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `model-own-limits`, `fable-on-plan`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
 - promises: each project's checklist records which steps ran; an update offers only the steps added since, so an older project is asked instead of getting defaults silently; settings are asked as a quiz
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule

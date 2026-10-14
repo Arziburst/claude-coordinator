@@ -81,8 +81,9 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    and the risky merges; *strict* for client work reviewed by people. In every preset a worker works on
    its own inside its task and returns a finished PR. Then: which rows, if any, this project overrides.
    With it, the **spend level** (CORE §7): *balanced* (recommended) · *lean* when limits are tight or the
-   plan is small · *thorough* when mistakes cost more than tokens. It leans model and effort choices,
-   never removes a check or a rung.
+   plan is small · *thorough* when mistakes cost more than tokens. It leans model and effort choices and
+   sets when the top rung (Fable) is used — lean: only to escalate after a failed review; balanced: also
+   the hardest tasks and research; thorough: also verifying risky work — never removes a check.
 2. **What we build:** the product, for whom, the current milestone and what "done" means for it —
    proposed from the README, the board, a plan document.
 3. **Who is who:** solo or team; who owns the scope; who accepts work, how and where (the owner, QA, a
@@ -108,7 +109,12 @@ words. Keep a list of open questions; an unclear answer goes back on it.
 7. **Production** — only if the project has one: real users or money; the backup before an
    irreversible change (command, destination); release flags for what acts on real users.
 8. **Budget:** usage caps (default: weekly 90%, short window 95%, over only with permission). The
-   models are not asked: the ladder is detected (CORE §7) and shown in 3.2.
+   ladder is detected (CORE §7) and shown in 3.2, with two questions a probe cannot answer (one-time
+   step `fable-on-plan`): "does `/usage` show a *Current week (Fable)* row? are usage credits on?" —
+   explain: on Max and premium Team / Enterprise seats Fable shares the weekly limit, burns it faster and
+   may use up to half of it; on Pro and standard seats it runs on paid usage credits only, and a probe
+   succeeds there too when credits are on. No row → Fable stays off the ladder; credits on → the
+   coordinator says that the guard rail on Fable's weekly share is then the only stop (CORE §7).
 9. **Status line** — only when this Claude Code has none (no `statusLine` in the user or project
    settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
    coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
@@ -173,7 +179,7 @@ and commit format (from history; none → the template's); coding standards (lin
 per-worker isolation (working copies, ports, databases, containers; the worktree roots outside
 `.claude/worktrees`, one-time step `worktree-roots`); the project's own task kinds mapped to the core's
 (`ROUTING.md` `## Kinds`, one-time step `kinds-map`, proposed from the run log); shared resources; serial
-identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one probe per model, list prices — written also as `coordinator/prices.txt`, the prices file of `scripts/run-stats --limits`, one-time step `prices-file`; a price not on the pricing page is asked); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
+identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one cheap probe per model, Fable counted only with the owner's answers of question 8; list prices — written also as `coordinator/prices.txt`, the prices file of `scripts/run-stats --limits`, with `top` after Fable when it is the top rung, one-time step `prices-file`; a price not on the pricing page is asked); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
 (code host, tracker, design, database, hosting, docs, browser) — propose the matching servers, the owner
 decides what is connected and with which rights; whether git, a code host and a tracker exist
 (missing → [SOURCES.md](SOURCES.md) §3). Existing rules in other formats are merged as *Details of the
