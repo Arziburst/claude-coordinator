@@ -50,8 +50,8 @@ worker (BINDINGS) and the phrase that ends your report.
    re-armed after each wakeup. Gone `done` anyway: the worker's report falls back to the coordinator
    (roles/worker.md step 5), which resumes you by your full id with that report (TOOLKIT *Pause and resume*).
    Your own report goes to the address your brief names, with the fallback of roles/worker.md step 5.
-   Told to pause: your workers finish their step, push and go idle; one you must stop, you stop and
-   later resume by its **full** session id, recorded before the stop (TOOLKIT *Pause and resume*).
+   Told to pause: your workers finish their step, push and go idle; one you must stop, you stop by its
+   short id and later resume by its **full** session id, recorded before the stop (TOOLKIT *Pause and resume*).
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
    sub-contract: it reviews the sub-branch's change — the diff, the code, the worker's outputs attached
@@ -66,12 +66,13 @@ worker (BINDINGS) and the phrase that ends your report.
    failure goes back to the worker like a finding — and merge
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
-   (`git merge-base --is-ancestor`), remove its worker in step 6's order (`claude stop`, read its cost, then `claude rm` the session),
+   (`git merge-base --is-ancestor`), remove its worker in step 6's order (`claude stop`, read its cost, then `claude rm` the session, by its short id),
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8; never
    `--force`, which the safety guard blocks).
 6. **Spend.** When each worker, tester or verifier run ends, in this order: **stop** its session —
-   `claude stop <id>`, so Claude Code writes the session's own totals to its transcript (TOOLKIT
-   *Usage*); a subagent has no session to stop —, then **read** its tokens,
+   `claude stop <id>` by the **short** id (`id` in `claude agents --json`; stop and rm refuse the full
+   `sessionId`, which only `--resume` takes — TOOLKIT *Workers*), so Claude Code writes the session's
+   own totals to its transcript (TOOLKIT *Usage*); a subagent has no session to stop —, then **read** its tokens,
    cost and time (the `time` line: `start`, `wall`, `active`, from its transcript; never a run's own
    account of how long it took) — Windows `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/session-tokens.ps1
    <id>`, elsewhere `bash <core>/scripts/session-tokens.sh <id>` (never a worker's own count; a failed
@@ -86,8 +87,8 @@ worker (BINDINGS) and the phrase that ends your report.
    the full id Claude Code sets in every session; its cost and time count in the budget check below. It
    lags by the turn in progress (on your first turn zero or only part of it: "not yet", not your cost; TOOLKIT *Usage*).
    **Then** delete that run's status
-   file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude rm` the
-   session. A run over twice its estimate, or the total heading past
+   file (`~/.claude/coordinator/sessions/<sessionId>.json`, TOOLKIT *Usage*); **only then** `claude rm <id>`
+   the session (the short id) and check that `claude agents --json --all` no longer lists it. A run over twice its estimate, or the total heading past
    the parent budget → start nothing new; tell the coordinator
    the numbers, what is left and the options (continue, cut scope, stronger or cheaper model).
 7. **Finish.** Open the PR the parent contract names, from the integration branch, and return the

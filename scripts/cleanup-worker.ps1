@@ -3,8 +3,10 @@
 # clean, every commit is on the remote and a merged PR has exactly the pushed head (a reused branch name
 # with newer commits does not count) (CORE section 8). Otherwise report and change nothing.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
+# -Session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
-# 3 a check failed, nothing changed.
+# 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
+# after claude rm - the worktree and branch are left as is.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -16,6 +18,11 @@ function StopHere([string]$m) { [Console]::Error.WriteLine("$m - left as is"); e
 function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')"; $global:LASTEXITCODE = 0 } else { & $exe @a }
 }
+# Agents: claude agents --json --all as one string ($LASTEXITCODE its exit); Objects: one session object
+# per item; Field: an object's string value (read as text, the same as cleanup-worker.sh)
+function Agents { $r = @(& claude agents --json --all 2>$null | ForEach-Object { "$_" }); $r -join "`n" }
+function Objects([string]$json) { @(($json -replace "[`r`n]", '') -split '}') }
+function Field([string]$o, [string]$k) { $m = [regex]::Match($o, '"' + $k + '": *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
 if (-not $Worktree) { [Console]::Error.WriteLine('usage: -Worktree <path> [-Session <id>] [-DryRun]'); exit 1 }
 # a flag where a value belongs (-Session --dry-run): a usage error, never a session or path of that name
 foreach ($v in @(@('Worktree', $Worktree), @('Session', $Session))) {
@@ -77,14 +84,45 @@ if ($heads -notcontains $up) {
 }
 if (-not $u) { "its remote branch is gone (deleted after the merge): the merged PR's head contains $short" }
 
+$id = ''
 if ($Session) {
-  Run claude @('stop', $Session)
-  Run claude @('rm', $Session)
+  # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
+  # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
+  $id = $Session
+  if ($Session -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+    $id = ''
+    foreach ($o in (Objects (Agents))) { if ((Field $o 'sessionId') -ceq $Session) { $id = Field $o 'id'; break } }
+    if (-not $id) { $id = $Session.Substring(0, 8) }
+    "session ${Session}: job id $id"
+  }
+  # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
+  Run claude @('stop', $id)
+  if ($DryRun) { "[dry-run] claude rm $id" }
+  else {
+    $out = @(& claude rm $id 2>&1 | ForEach-Object { "$_" })
+    $rc = $LASTEXITCODE
+    if ($out.Count) { $out }
+    # removed only when the listing no longer has it; no listing at all: the rm's exit code decides
+    $raw = Agents
+    $kept = $false
+    if ($LASTEXITCODE -eq 0) { foreach ($o in (Objects $raw)) { if ((Field $o 'id') -ceq $id) { $kept = $true; break } } }
+    elseif ($rc -ne 0) { $kept = $true }
+    if ($kept) {
+      if ($rc -eq 0) { $why = 'it exited 0, the session is still listed' }
+      else {
+        $why = @($out | ForEach-Object { $_.Trim() } | Where-Object { $_ }) | Select-Object -First 1
+        if (-not $why) { $why = "exit $rc" }
+      }
+      [Console]::Error.WriteLine("SESSION KEPT: $id (claude rm failed: $why)")
+      [Console]::Error.WriteLine("worktree $Worktree and branch $branch left as is: remove the session (claude rm $id), then run this again")
+      exit 4
+    }
+  }
 }
 Run git @('-C', $root, 'worktree', 'remove', $Worktree)
 if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("REMOVE FAILED: git worktree remove $Worktree"); exit 1 }
 Run git @('-C', $root, 'branch', '-d', $branch)
 if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
-"cleaned: $(if ($Session) { $Session } else { 'no session' }) $Worktree"
+"cleaned: $(if ($id) { $id } else { 'no session' }) $Worktree"
 exit 0
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

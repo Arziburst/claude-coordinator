@@ -125,16 +125,21 @@ the report notes the interruption and the resume time.
    - The coordinator marks it ready (`gh pr ready`), squash-merges it (`gh pr merge --squash --match-head-commit <the commit the verdict names>`, never
      `--delete-branch`), checks `gh pr view --json state` → `MERGED`, stops the worker (`claude stop`), reads
      its spend and deletes its status file (step 6's order), and runs **cleanup-worker** on the
-     worker's worktree (it must report cleaned: a merged PR with the pushed head). A merge refused by
+     worker's worktree with `--session` (its short id or full `sessionId`; it must report cleaned: a
+     merged PR with the pushed head, the session gone — `SESSION KEPT`, exit 4, is a FAIL). A merge refused by
      the auto mode's classifier goes to the owner as the exact `! gh pr merge …` command (TOOLKIT
      *Modes*); the step continues once `state` is `MERGED`.
    - Nothing is pushed to or merged into the state branch.
-6. **Verify and clean up:** for every `selftest` session, in this order: `claude stop <id>`, read its
+6. **Verify and clean up:** for every `selftest` session (each `#st…` and probe session too), in this
+   order — `<id>` is the **short** id (`id` in `claude agents --json`; stop and rm refuse the full
+   `sessionId`, which only `--resume` takes, TOOLKIT *Workers*): `claude stop <id>`, read its
    cost with `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is
    retried once, never left as `n/a`; it now comes from the record the stop wrote — a read still
    showing `out>=` had none, a crash: read as before and noted in the report), delete its status file
    (TOOLKIT *Usage*), then `claude rm <id>` (each its own command); then `selftest verify --project
-   <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (clean, merged worktrees are
+   <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (a session
+   is any that `claude agents --json --all` lists, `done` too, named with `selftest` or `probe:` or
+   starting with `#st`; the FAIL names each with its short id; clean, merged worktrees are
    removed), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
    is deleted.**
 7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost (the sum of

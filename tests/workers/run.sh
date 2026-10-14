@@ -16,9 +16,31 @@ mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_LOG"
-# --bg: remember the folder and the session name; agents --json: list the names started so far
+# --bg: remember the folder and the session name; agents --json: list the names started so far, then
+# the sessions of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>` per line, pretty-printed as the
+# real listing; a `done` one with --all only)
+S="$STUB_LOG.sessions"
 if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
-if [ "${1:-}" = agents ]; then printf '[%s]\n' "$(sed 's/\\/\\\\/g; s/"/\\"/g; s/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"; fi
+if [ "${1:-}" = agents ]; then
+  all=""; case " $* " in *" --all "*) all=1 ;; esac
+  a="$(sed 's/\\/\\\\/g; s/"/\\"/g; s/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"
+  b="$(awk -v all="$all" '$3 != "done" || all { n = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n)
+    printf "%s{\n    \"id\": \"%s\",\n    \"sessionId\": \"%s\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"\n  }", (c++ ? ",\n  " : ""), $1, $2, n, $3 }' "$S" 2>/dev/null)"
+  printf '[%s%s%s]\n' "$a" "$([ -n "$a" ] && [ -n "$b" ] && echo ,)" "$b"
+fi
+# stop / rm: as Claude Code 2.1.296 - the short job id only, a full sessionId is no job; rm fails with
+# $STUB_RM_FAIL and keeps the session listed; a stopped (done) session refuses the stop
+if [ "${1:-}" = stop ] || [ "${1:-}" = rm ]; then
+  st="$(awk -v i="$2" '$1 == i { print $3; exit }' "$S" 2>/dev/null)"
+  [ -n "$st" ] || { echo "No job matching '$2'. Run claude agents to list jobs." >&2; exit 1; }
+  if [ "$1" = stop ]; then
+    [ "$st" = done ] && { echo "$2 is not running" >&2; exit 1; }
+    awk -v i="$2" '$1 == i { $3 = "done" } { print }' "$S" > "$S.new" && mv "$S.new" "$S"; echo "stopped $2"
+  else
+    [ -n "${STUB_RM_FAIL:-}" ] && { echo "$STUB_RM_FAIL" >&2; exit 1; }
+    awk -v i="$2" '$1 != i' "$S" > "$S.new" && mv "$S.new" "$S"; echo "removed $2"
+  fi
+fi
 exit 0
 EOF
 cat > "$tmp/bin/gh" <<'EOF'
@@ -401,6 +423,45 @@ STUB_HEADS="$h4" check 0 "cleanup: the remote branch pruned after the merge" -- 
 expect_in "cleaned: s4"
 expect_in "remote branch is gone"
 git -C "$tmp/repo" config --unset fetch.prune
+
+# --- the session's two ids (#151): stop / rm take the short job id, a full sessionId is mapped to it
+# through claude agents --json --all; a session still listed after rm is reported, never `cleaned` ---
+mk() {   # mk <branch>: a worktree with one commit, pushed with -u; its path in $w, its head in $h
+  w="$tmp/repo/.claude/worktrees/$1"
+  git -C "$tmp/repo" worktree add -q -b "$1" "$w" main && g -C "$w" commit -q --allow-empty -m "$1" &&
+    git -C "$w" push -q -u origin "$1" 2>/dev/null
+  h="$(git -C "$w" rev-parse HEAD)"
+}
+SS="$STUB_LOG.sessions"
+mk 17-fix
+# the listing gives the job id (here not the sessionId's first 8 characters, so the mapping is proven)
+sid=5f0e1d2c-1111-4222-8333-444455556666
+printf '%s %s %s %s\n' a1b2c3d4 "$sid" running "#17 worker: Fix" > "$SS"
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 0 "cleanup: a full sessionId, dry run" -- cleanup --worktree "$w" --session "$sid" --dry-run
+expect_in "[dry-run] claude rm a1b2c3d4"
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: the dry run stopped or removed a session"; fail=1; }
+STUB_HEADS="$h" check 0 "cleanup: a full sessionId mapped to its job id" -- cleanup --worktree "$w" --session "$sid"
+expect_in "session $sid: job id a1b2c3d4"
+expect_in "cleaned: a1b2c3d4"
+grep -qx "stop a1b2c3d4" "$STUB_LOG" && grep -qx "rm a1b2c3d4" "$STUB_LOG" || { echo "FAIL: the job id was not stopped and removed:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+grep -q a1b2c3d4 "$SS" && { echo "FAIL: the session is still listed"; fail=1; }
+[ -d "$w" ] && { echo "FAIL: the worktree is still there"; fail=1; }
+# a full sessionId the listing does not have: its first 8 characters
+mk 18-fix
+STUB_HEADS="$h" check 0 "cleanup: an unlisted full sessionId, dry run" -- cleanup --worktree "$w" --session 9abcdef0-1111-4222-8333-444455556666 --dry-run
+expect_in "[dry-run] claude rm 9abcdef0"
+# claude rm fails and the session stays listed (stopped already, so the stop fails too): SESSION KEPT,
+# exit 4, the worktree and branch left as is; after the session is gone, the same command cleans
+printf '%s %s %s %s\n' 2be9934b 2be9934b-aaaa-4bbb-8ccc-dddddddddddd done "#18 worker: Fix" > "$SS"
+STUB_RM_FAIL="Error: cannot remove 2be9934b" STUB_HEADS="$h" check 4 "cleanup: claude rm fails" -- cleanup --worktree "$w" --session 2be9934b-aaaa-4bbb-8ccc-dddddddddddd
+expect_in "SESSION KEPT: 2be9934b (claude rm failed: Error: cannot remove 2be9934b)"
+case "$LAST" in *cleaned*) echo "FAIL: cleaned although the session is still listed"; fail=1 ;; esac
+[ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify refs/heads/18-fix || { echo "FAIL: the worktree or branch was removed although the session is kept"; fail=1; }
+grep -q 2be9934b "$SS" || { echo "FAIL: the stub lost the session"; fail=1; }
+STUB_HEADS="$h" check 0 "cleanup: run again once rm works" -- cleanup --worktree "$w" --session 2be9934b
+expect_in "cleaned: 2be9934b"
+[ -s "$SS" ] && { echo "FAIL: the session is still listed"; fail=1; }
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

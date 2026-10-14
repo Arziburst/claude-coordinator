@@ -22,10 +22,17 @@ here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
 win=""; command -v cygpath >/dev/null 2>&1 && { win=1; core="$(cygpath -m "$core")"; }
 
-# a stub claude first on PATH: `claude agents --json` lists no session
+# a stub claude first on PATH: `claude agents --json` lists no session; with --all (the stopped,
+# `done` sessions too) $STUB_AGENTS_ALL when set
 mkdir -p "$tmp/bin"
-printf '#!/usr/bin/env bash\necho "[]"\n' > "$tmp/bin/claude"
-printf "'[]'\n" > "$tmp/bin/claude.ps1"
+cat > "$tmp/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in *" --all "*) [ -n "${STUB_AGENTS_ALL:-}" ] && { printf '%s\n' "$STUB_AGENTS_ALL"; exit 0; } ;; esac
+echo "[]"
+EOF
+cat > "$tmp/bin/claude.ps1" <<'EOF'
+if ($args -contains '--all' -and $env:STUB_AGENTS_ALL) { $env:STUB_AGENTS_ALL } else { '[]' }
+EOF
 chmod +x "$tmp/bin/claude"; export PATH="$tmp/bin:$PATH"
 
 # P <path>: the path as this kind is given it (the .ps1 on Windows: C:/...); the flags as it names them
@@ -104,8 +111,18 @@ is "clean refused: the origin's t3 kept" [ "$(refs "$o" refs/heads)" = "refs/hea
 is "clean refused: main kept" [ "$(git -C "$r" rev-parse main)" = "$m" ]
 is "clean refused: the untracked file kept" [ -f "$r/junk.txt" ]
 
-# merged now: clean --keep resets the sandbox and keeps it
+# merged now, but a stopped (`done`) self-test session is still listed (claude agents --json --all only):
+# clean --keep refuses, nothing reset (#151)
 git -C "$r" fetch -q origin t3 2>/dev/null; g -C "$r" merge -q --no-edit FETCH_HEAD
+m="$(git -C "$r" rev-parse main)"
+export STUB_AGENTS_ALL='[{"id":"2be9934b","sessionId":"2be9934b-aaaa-4bbb-8ccc-dddddddddddd","name":"#st2 worker: PR","state":"done"},{"id":"5c6d7e8f","name":"other","state":"done"}]'
+st clean --sandbox "$(P "$d")" --keep
+expect "clean --keep, a done session left" 1 "FAIL clean: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b)"
+expect "clean --keep, a done session left" 1 "sandbox kept for inspection: $(P "$d")"
+is "a done session left: main not reset" [ "$(git -C "$r" rev-parse main)" = "$m" ]
+unset STUB_AGENTS_ALL
+
+# merged now: clean --keep resets the sandbox and keeps it
 st clean --sandbox "$(P "$d")" --keep
 expect "clean --keep" 0 "PASS clean: no worktree left"
 expect "clean --keep" 0 "PASS clean: every branch on the origin is merged into main"

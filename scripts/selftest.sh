@@ -65,6 +65,15 @@ kept_why() {
     [ "$(git -C "$d/remote.git" rev-parse -q --verify refs/heads/main)" = "$i" ] || { echo "main is not at the first commit"; return; }
   [ -z "$(untracked "$r")" ] || echo "changed or untracked files in the repo"
 }
+# the self-test sessions claude agents --json --all still lists, in any state (a done one too): a name
+# with `selftest` or `probe:`, or starting with `#st`; `<name> (<id>)` joined by `, `, nothing when none
+st_sessions() {
+  claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | while IFS= read -r o; do
+    nm="$(printf '%s\n' "$o" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')"
+    case "$nm" in '#st'*|*selftest*|*probe:*)
+      printf '%s (%s)\n' "$nm" "$(printf '%s\n' "$o" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p')" ;; esac
+  done | awk 'NR > 1 { printf ", " } { printf "%s", $0 }'
+}
 
 case "$step" in
 scripts)
@@ -199,8 +208,8 @@ clean)
   done
   [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
   if command -v claude >/dev/null 2>&1; then
-    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
+    n="$(st_sessions)"
+    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
   else skip "no claude: sessions not checked"; fi
   if [ -n "$state" ]; then
     if n="$(gh api "repos/$state/branches" --paginate --jq '.[].name' 2>/dev/null)"; then
@@ -493,8 +502,8 @@ prepare|verify)
     [ -n "$n" ] && pass "PR #$n merged into $base" || fail "no merged PR from selftest/$c/task-1 into $base"
   else skip "PR flow: not checked (no --state-repo)"; fi
   if command -v claude >/dev/null 2>&1; then
-    n="$(claude agents --json 2>/dev/null | grep -o '"name": *"[^"]*selftest[^"]*"' | sed 's/^"name": *"//; s/"$//')"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left: $(printf '%s\n' "$n" | paste -sd ' ' -)"
+    n="$(st_sessions)"
+    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
   else skip "no claude: sessions not checked"; fi
   finish ;;
 
