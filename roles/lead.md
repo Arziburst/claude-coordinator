@@ -77,7 +77,7 @@ worker (BINDINGS) and the phrase that ends your report.
    line a second time. **Your own session** is read the same way at each stage (each run's end, before
    each start, before the report) by `$CLAUDE_CODE_SESSION_ID` (PowerShell: `$env:CLAUDE_CODE_SESSION_ID`),
    the full id Claude Code sets in every session; its cost and time count in the budget check below. It
-   lags by the turn in progress (zero on your first turn: "not yet", not your cost; TOOLKIT *Usage*).
+   lags by the turn in progress (on your first turn zero or only part of it: "not yet", not your cost; TOOLKIT *Usage*).
    **Then** delete that run's status
    file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude stop` and
    `claude rm` the session. A run over twice its estimate, or the total heading past
