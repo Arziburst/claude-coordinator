@@ -5,6 +5,11 @@
 # One line per model and a "total" line, summed from the transcripts and their subagents, each message
 # once (output is a LOWER BOUND); for one session (not a subagent) a "cost" line from ~/.claude/coordinator/sessions/<id>.json
 # (cumulative, list price). The status file's token fields are the last request's, so they are ignored.
+# After a normal stop Claude Code appends to the transcript a "cost-state" record with the session's own totals,
+# subagents included (2.1.296; an internal name). When the LAST one has no assistant message after it, the model and
+# total lines come from it - out=<n> (exact) instead of out>=, and thinking=<n> at the end (not in the total) - and the
+# cost line is its totalCostUSD (before the status file's); otherwise (none, or the session ran after it) as above.
+# -Since always sums the messages.
 # Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC>" from the records' timestamps
 # (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes, but a gap inside a tool call
 # is work up to 30 minutes and one inside only a question to a person, a tool named *AskUserQuestion, is idle at any
@@ -18,7 +23,7 @@ param([string]$Session, [string]$Since, [switch]$Prune)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 12 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 17 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -193,6 +198,46 @@ function CountUsage([string[]]$Files) {
   Line 'total' $t
 }
 function Line($n, $v) { "{0}`t{1}`tin={2} out>={3} cache_read={4} cache_write={5}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3] }
+# the session's own totals from its transcript: Claude Code appends a "cost-state" record (totalCostUSD, and
+# modelUsage: one flat object per model) when its process exits normally, a stop included (seen on 2.1.296; the
+# name is internal). The LAST record counts, and only when no assistant message comes after it (the session has
+# not run since). Returns the model lines (exact output, and thinking), the total line and the cost line; $null
+# when there is no such record, or it holds no modelUsage. Keys in any order; the line is read as text, as the .sh.
+$reCostState = [regex]'"type":[ \t]*"cost-state"'
+$reModelUsage = [regex]'"modelUsage":[ \t]*[{]'
+$reEntry = [regex]'\G[ \t\r,]*"([^"]*)":[ \t]*[{]([^{}]*)[}]'   # "<name>":{...} with no object inside
+$reTotalCost = [regex]'"totalCostUSD":[ \t]*([0-9.eE+-]+)'
+$reRecNum = @('inputTokens', 'outputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens', 'thinkingTokens') |
+  ForEach-Object { [regex]('"' + $_ + '":[ \t]*([0-9]+)') }
+function Record([string]$file) {
+  $rec = $null; $after = $false
+  foreach ($line in [IO.File]::ReadLines($file)) {
+    if (-not $line) { continue }
+    if ($line.Contains('"cost-state"') -and $reCostState.IsMatch($line)) { $rec = $line; $after = $false; continue }
+    # an assistant message after the record (looked for only while it matters)
+    if ($null -ne $rec -and -not $after -and $line.Contains('"assistant"') -and $line.Contains('"usage"') -and
+        ($line.Contains('"type":"assistant"') -or $reAssistant.IsMatch($line)) -and ($line.Contains('"usage":{') -or $reUsage.IsMatch($line))) { $after = $true }
+  }
+  if ($null -eq $rec -or $after) { return $null }
+  $mu = $reModelUsage.Match($rec); if (-not $mu.Success) { return $null }
+  $per = New-Object 'System.Collections.Generic.Dictionary[string,long[]]' ([StringComparer]::Ordinal)
+  $pos = $mu.Index + $mu.Length
+  while ($true) {
+    $e = $reEntry.Match($rec, $pos); if (-not $e.Success) { break }
+    $pos = $e.Index + $e.Length; $m = $e.Groups[1].Value; $o = $e.Groups[2].Value
+    if (-not $per.ContainsKey($m)) { $per[$m] = [long[]]@(0, 0, 0, 0, 0) }
+    for ($k = 0; $k -lt 5; $k++) { $g = $reRecNum[$k].Match($o); if ($g.Success) { $per[$m][$k] += [long]$g.Groups[1].Value } }
+  }
+  $t = [long[]]@(0, 0, 0, 0, 0)
+  $names = [string[]]@($per.Keys); [Array]::Sort($names, [StringComparer]::Ordinal)   # as LC_ALL=C sort
+  $out = New-Object 'System.Collections.Generic.List[string]'
+  foreach ($n in $names) { $v = $per[$n]; for ($k = 0; $k -lt 5; $k++) { $t[$k] += $v[$k] }; $out.Add((RecLine $n $v)) }
+  $out.Add((RecLine 'total' $t))
+  $c = $reTotalCost.Match($rec)
+  if ($c.Success) { $out.Add(("cost`t`${0:0.0000}" -f [double]$c.Groups[1].Value)) }
+  , $out
+}
+function RecLine($n, $v) { "{0}`t{1}`tin={2} out={3} cache_read={4} cache_write={5} thinking={6}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3], $v[4] }
 
 if ($Since) {
   if (-not (Test-Path -LiteralPath $projects)) { [Console]::Error.WriteLine("no transcripts in $projects"); exit 1 }
@@ -237,13 +282,17 @@ elseif (-not (Test-Path -LiteralPath (Join-Path $dir "$Session.json") -PathType 
   if ($found.Count -eq 1) { $sid = $found[0] }
 }
 $status = Join-Path $dir "$sid.json"
+$rec = $null
 if ($main) {
   $files = @($main)
   $sub = Join-Path ($main -replace '\.jsonl$', '') 'subagents'
   if (Test-Path -LiteralPath $sub) { $files += Get-ChildItem -LiteralPath $sub -Filter '*.jsonl' -File | ForEach-Object { $_.FullName } }
-  CountUsage $files
+  # the session's own record (its subagents included) when it has stopped since it last ran; else the sums
+  $rec = Record $main
+  if ($null -ne $rec) { $rec } else { CountUsage $files }
 } elseif (-not (Test-Path -LiteralPath $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
-if (Test-Path -LiteralPath $status) {
+# the record's cost when it has one, else the status file's
+if ((Test-Path -LiteralPath $status) -and -not ($null -ne $rec -and @($rec | Where-Object { $_.StartsWith('cost') }).Count)) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
   if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
 }

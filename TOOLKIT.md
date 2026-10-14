@@ -94,7 +94,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
   (one-time step `worktree-roots`), so the retro counts the sessions started there.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
-- After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
+- After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`;
+  with `--session`, first `claude stop <id>`, read its spend (session-tokens: the stop wrote its totals)
+  and delete its status file (*Usage*) — cleanup-worker then stops (a no-op) and removes it.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
@@ -351,7 +353,20 @@ BOM, models priced apart),
   transcript in `~/.claude/projects/`, subagents included — input and cache counts exact, **output a
   lower bound** (the transcript keeps the count from before a message finished) — and a `cost` line:
   the status line's `cost.total_cost_usd` for that session (cumulative, at API list price; on a
-  subscription for comparing runs; needs the status line installed). The status JSON's
+  subscription for comparing runs; needs the status line installed). **After a normal stop** (`claude
+  stop <id>`, idle or mid-tool-call, or the process exiting) Claude Code appends to the session's own
+  transcript a `cost-state` record with its totals — `totalCostUSD` (equal to the status file's cost to
+  the last digit) and `modelUsage` per model, subagents' requests included; a resumed session restores
+  and accumulates them, so a later record holds the whole total (measured on 2.1.296; the docs describe
+  it — [cost-tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking): "saves the session's
+  totals to its transcript when the process exits normally" — the record's name is internal). When the
+  transcript's **last** such record has no assistant message after it, session-tokens takes the model
+  and `total` lines from it — `out=<n>` (**exact**) instead of `out>=`, and `thinking=<n>` at the end
+  of the line (shown, not added to the total) — and the `cost` line from its `totalCostUSD` (before the
+  status file's). Otherwise (no record: a crash, a session still running; or one that ran after its
+  stop) the lines are summed as above. The `time` line always comes from the timestamps, `--since`
+  always sums the messages, and a subagent read by its `agentId` has no record of its own. A wrapper
+  that parses `out>=` must accept `out=`. The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
   session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
   per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
@@ -372,10 +387,13 @@ BOM, models priced apart),
   (`AskUserQuestion`, or any tool whose name ends in it) is never active: its span is the owner's time,
   at any length. A gap after a result keeps the 5-minute rule. Minutes rounded to the nearest, a half up;
   `start` and `end` to the second, UTC. No line when no record has a timestamp, and none with `--since`
-  or `--prune`. **The order** when a run ends: read its cost (a failed read retried once with the full
-  command, never left as `n/a`), then delete that worker's `sessions/<id>.json` (the `cost` line comes
-  from it), then `claude stop` / `claude rm` (session-tokens still reads a removed session's
-  transcript, but not its cost line). The status line writes a file for every
+  or `--prune`. **The order** when a run ends: `claude stop <id>` (its process exits normally and
+  writes the `cost-state` record), then read its tokens, cost and time (now from the record; a failed
+  read retried once with the full command, never left as `n/a`), then delete that worker's
+  `sessions/<id>.json`, then `claude rm <id>` (session-tokens still reads a removed session's
+  transcript, but not a status file's cost line). A read that still shows `out>=` after the stop has
+  no record (the process crashed or was killed): it is the summed reading as before, and the run's
+  report notes it. The status line writes a file for every
   session on the machine, other projects' too, so at every session start run `session-tokens.sh --prune`
   / `session-tokens.ps1 -Prune` (deletes files older than 7 × 24 hours, and the status line's
   `coordinator/statusline.*.tmp` older than an hour, left when it was killed mid-write; on Windows only
@@ -584,10 +602,12 @@ BOM, models priced apart),
   Then: add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
   approves the write) the script's absolute path in the core copy (`/ABSOLUTE/PATH` = `<project>/coordinator/core`;
   the user settings serve every project, so one project's copy is used for all):
-  Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\""}`
+  Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\"", "refreshInterval": 10}`
   (`powershell` instead of `pwsh` where PowerShell 7 is missing); macOS / Linux
-  `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh"}`. It
-  appears after the next response.
+  `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh", "refreshInterval": 10}`. It
+  appears after the next response. `refreshInterval` (seconds, minimum 1) also re-runs the script on a
+  timer, so a session waiting with no events (a coordinator waiting on its workers) keeps its status
+  file fresh.
 - API-key setups have no such data: budget by cost (`--max-budget-usd` on headless jobs) instead.
 
 ## Platform notes

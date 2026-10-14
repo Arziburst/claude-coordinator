@@ -1,0 +1,5 @@
+claude-haiku-5-5	654	in=4 out=50 cache_read=0 cache_write=600 thinking=10
+claude-opus-5-5	2806	in=6 out=200 cache_read=600 cache_write=2000 thinking=120
+total	3460	in=10 out=250 cache_read=600 cache_write=2600 thinking=130
+cost	$0.0568
+time	wall=60m active=0m start=2026-10-12T10:00:00Z end=2026-10-12T11:00:05Z

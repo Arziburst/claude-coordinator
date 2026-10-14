@@ -63,14 +63,18 @@ worker (BINDINGS) and the phrase that ends your report.
    failure goes back to the worker like a finding — and merge
    main into it when the coordinator says main moved. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
-   (`git merge-base --is-ancestor`), remove its worker — after reading its cost (step 6): `claude stop` and `claude rm` the session,
+   (`git merge-base --is-ancestor`), remove its worker in step 6's order (`claude stop`, read its cost, then `claude rm` the session),
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8; never
    `--force`, which the safety guard blocks).
-6. **Spend.** When each worker, tester or verifier run ends, in this order: **read** its tokens,
+6. **Spend.** When each worker, tester or verifier run ends, in this order: **stop** its session —
+   `claude stop <id>`, so Claude Code writes the session's own totals to its transcript (TOOLKIT
+   *Usage*); a subagent has no session to stop —, then **read** its tokens,
    cost and time (the `time` line: `start`, `wall`, `active`, from its transcript; never a run's own
    account of how long it took) — Windows `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/session-tokens.ps1
    <id>`, elsewhere `bash <core>/scripts/session-tokens.sh <id>` (never a worker's own count; a failed
-   read is retried once with that full command, never left as `n/a`). A **subagent** run (a tester or
+   read is retried once with that full command, never left as `n/a`; after the stop the model lines show
+   `out=` from that record — a read still showing `out>=` had no record, a crash: it is read as before and
+   the run's entry notes it). A **subagent** run (a tester or
    verifier through the Agent tool) is read the same way by the `agentId` its result gives: tokens per
    model, no `cost` line — its cost is those tokens at list price (TOOLKIT *Usage*), reported as
    `cost: $<x> (in lead)`, since your own session's total already contains it; never add it to your own
@@ -79,8 +83,8 @@ worker (BINDINGS) and the phrase that ends your report.
    the full id Claude Code sets in every session; its cost and time count in the budget check below. It
    lags by the turn in progress (on your first turn zero or only part of it: "not yet", not your cost; TOOLKIT *Usage*).
    **Then** delete that run's status
-   file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude stop` and
-   `claude rm` the session. A run over twice its estimate, or the total heading past
+   file (`~/.claude/coordinator/sessions/<id>.json`, TOOLKIT *Usage*); **only then** `claude rm` the
+   session. A run over twice its estimate, or the total heading past
    the parent budget → start nothing new; tell the coordinator
    the numbers, what is left and the options (continue, cut scope, stronger or cheaper model).
 7. **Finish.** Open the PR the parent contract names, from the integration branch, and return the

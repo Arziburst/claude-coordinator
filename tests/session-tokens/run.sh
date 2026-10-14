@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The session-tokens cases: the fixtures against their expected lines (the time line included), the
-# error cases and their exit codes, --prune on status files and status-line temp files with set ages, a
-# missing projects folder, a config path with [ ] in it.
+# The session-tokens cases: the fixtures against their expected lines (the time line included, a
+# stopped session's cost-state record), the error cases and their exit codes, --prune on status files
+# and status-line temp files with set ages, a missing projects folder, a config path with [ ] in it.
 #   tests/session-tokens/run.sh sh              # scripts/session-tokens.sh, with the bash running this file
 #   tests/session-tokens/run.sh ps pwsh         # scripts/session-tokens.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
@@ -75,6 +75,19 @@ expect "time: a tool call's gap is capped at 30 minutes, a question to a person 
 mkdir -p "$tmp/crlf/projects/-work-app"
 awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$tm/projects/-work-app/g1.jsonl" > "$tmp/crlf/projects/-work-app/g1.jsonl"
 expect "time: CRLF line ends" 0 "$t/expected-time-gap.txt" - -- "$tmp/crlf" g1
+# the cost-state record Claude Code appends at a normal stop: its numbers (exact out, thinking, its cost
+# before the status file's), the last of several, none after an assistant message, two models with keys
+# in another order (its subagent's messages not added again), a subagent by its agentId (no record)
+st="$here/state"
+expect "cost-state: a stopped session's record" 0 "$t/expected-state-one.txt" - -- "$st" c1
+expect "cost-state: the last of several records counts" 0 "$t/expected-state-last.txt" - -- "$st" c2
+expect "cost-state: an assistant message after the record, the sums" 0 "$t/expected-state-after.txt" - -- "$st" c3
+expect "cost-state: two models, keys in another order, spaces" 0 "$t/expected-state-models.txt" - -- "$st" c4
+expect "cost-state: a subagent of a stopped session, the sums" 0 "$t/expected-state-agent.txt" - -- "$st" c4s
+# the same records with CRLF line ends and a UTF-8 BOM
+mkdir -p "$tmp/crlf2/projects/-work-app"
+awk 'NR == 1 { printf "\357\273\277" } { sub(/\r$/, ""); printf "%s\r\n", $0 }' "$st/projects/-work-app/c2.jsonl" > "$tmp/crlf2/projects/-work-app/c2.jsonl"
+expect "cost-state: CRLF line ends and a BOM" 0 "$t/expected-state-last.txt" - -- "$tmp/crlf2" c2
 printf 'cost\t$0.1000\n' > "$tmp/cost-ab1.txt"; printf 'cost\t$0.4182\n' > "$tmp/cost-s1.txt"
 expect "a status file only, by its full id" 0 "$tmp/cost-ab1.txt" - -- "$here/edge" ab1
 # no projects folder, the status file there: the cost line

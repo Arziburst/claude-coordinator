@@ -425,6 +425,11 @@ jobs:
             diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge bash scripts/session-tokens.sh $id) \
                  <(CLAUDE_CONFIG_DIR=tests/session-tokens/edge LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
           done
+          # the cost-state record: its cost read the same under a decimal comma
+          for id in c1 c2 c3 c4; do
+            diff <(CLAUDE_CONFIG_DIR=tests/session-tokens/state bash scripts/session-tokens.sh $id) \
+                 <(CLAUDE_CONFIG_DIR=tests/session-tokens/state LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/session-tokens.ps1 $id)
+          done
           # run-stats: the same numbers under a locale with a decimal comma
           for f in tests/run-stats/*.tsv; do
             diff <(bash scripts/run-stats.sh $f) <(LC_ALL=de_DE.UTF-8 pwsh -NoProfile -File scripts/run-stats.ps1 $f)
