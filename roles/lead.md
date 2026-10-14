@@ -16,7 +16,9 @@ worker (BINDINGS) and the phrase that ends your report.
    its source, is a question to the coordinator before planning.
 2. **Plan sub-contracts.** Split the work into sub-contracts in the CONTRACT.md format, numbered
    `<task>.<n>`; together their criteria cover every criterion of the parent; their `touches` do not
-   overlap, or they run one after another. Each passes `<core>/scripts/check-contract` (Windows: the full
+   overlap, or they run one after another. Each keeps the two default `non_goals` lines of CONTRACT.md
+   (no changes beyond the fix …; do not weaken or loosen tests …) — check-contract fails without them —
+   and passes `<core>/scripts/check-contract` (Windows: the full
    `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/check-contract.ps1` command). Each gets a model and
    effort from the routing and a cost estimate (`budget.cost`, CORE §7a). The estimates plus your own
    share must fit the parent's `budget.cost` — your own session is often 30–100% of your workers' sum
