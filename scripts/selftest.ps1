@@ -84,6 +84,20 @@ function KeptWhy([string]$d) {
   if (@(Untracked $r).Count -gt 0) { return 'changed or untracked files in the repo' }
   ''
 }
+# the self-test sessions claude agents --json --all still lists, in any state (a done one too): a name
+# with `selftest` or `probe:`, or starting with `#st`; `<name> (<id>)` joined by `, `, '' when none
+function StSessions {
+  $json = (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", ''
+  $n = foreach ($o in ($json -split '}')) {
+    $m = [regex]::Match($o, '"name": *"([^"]*)"')
+    if (-not $m.Success) { continue }
+    $nm = $m.Groups[1].Value
+    if ($nm.StartsWith('#st', [StringComparison]::Ordinal) -or $nm.Contains('selftest') -or $nm.Contains('probe:')) {
+      "$nm ($([regex]::Match($o, '"id": *"([^"]*)"').Groups[1].Value))"
+    }
+  }
+  @($n) -join ', '
+}
 function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::GetTempPath() }; $d = Join-Path $parent ('coordinator-selftest.' + [IO.Path]::GetRandomFileName().Replace('.', '')); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 
 switch ($Step) {
@@ -251,9 +265,8 @@ switch ($Step) {
   }
   if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
   if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $json = "$(& claude agents --json 2>$null)"
-    $n = @([regex]::Matches($json, '"name":\s*"([^"]*selftest[^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-    if ($n.Count -eq 0) { Pass 'no self-test session left' } else { Fail "sessions left: $($n -join ' ')" }
+    $n = StSessions
+    if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
   } else { Skip 'no claude: sessions not checked' }
   if ($StateRepo) {
     $n = @(& gh api "repos/$StateRepo/branches" --paginate --jq '.[].name' 2>$null)
@@ -480,9 +493,8 @@ switch ($Step) {
     if ($n) { Pass "PR #$n merged into $base" } else { Fail "no merged PR from selftest/$Core/task-1 into $base" }
   } else { Skip 'PR flow: not checked (no -StateRepo)' }
   if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $json = "$(& claude agents --json 2>$null)"
-    $n = @([regex]::Matches($json, '"name":\s*"([^"]*selftest[^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-    if ($n.Count -eq 0) { Pass 'no self-test session left' } else { Fail "sessions left: $($n -join ' ')" }
+    $n = StSessions
+    if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
   } else { Skip 'no claude: sessions not checked' }
   Finish
 }

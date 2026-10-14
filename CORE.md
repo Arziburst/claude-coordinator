@@ -422,7 +422,8 @@ never assumed (below).
   asked at init and on a plan change (a new `subscriptionType`, or the owner says so): "does `/usage` show
   a *Current week (Fable)* row? are usage credits on?" (one-time step `fable-on-plan`; kept in BINDINGS
   *Models*). *Available:* one probe per model in the cheap form (TOOLKIT *Usage*: no tools, no MCP, a
-  one-line system prompt — about $0.016 on Fable, $0.0002 on Haiku); a non-zero exit or `"is_error": true`
+  one-line system prompt — Haiku ≈ $0.0005–0.0012, Fable ≈ $0.016–0.12, set mostly by the prompt
+  cache); a non-zero exit or `"is_error": true`
   means not available (never `subtype`: it can say `success` on an error) — at init, when the hint changes,
   once a week, and after any run that fails with "model not available" or a model's limit. In `-p` mode
   Claude Code bills a Fable request to usage credits without asking when they are on ([model-config](https://code.claude.com/docs/en/model-config),

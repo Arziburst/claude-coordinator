@@ -17,14 +17,16 @@ here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
 win=""; command -v cygpath >/dev/null 2>&1 && { win=1; core="$(cygpath -m "$core")"; }
 
-# a stub claude first on PATH: `claude agents --json` prints $STUB_AGENTS, else an empty list
+# a stub claude first on PATH: `claude agents --json` prints $STUB_AGENTS, else an empty list; with
+# --all (the stopped, `done` sessions too) $STUB_AGENTS_ALL when set
 mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+case " $* " in *" --all "*) [ -n "${STUB_AGENTS_ALL:-}" ] && { printf '%s\n' "$STUB_AGENTS_ALL"; exit 0; } ;; esac
 printf '%s\n' "${STUB_AGENTS:-[]}"
 EOF
 cat > "$tmp/bin/claude.ps1" <<'EOF'
-if ($env:STUB_AGENTS) { $env:STUB_AGENTS } else { '[]' }
+if ($args -contains '--all' -and $env:STUB_AGENTS_ALL) { $env:STUB_AGENTS_ALL } elseif ($env:STUB_AGENTS) { $env:STUB_AGENTS } else { '[]' }
 EOF
 chmod +x "$tmp/bin/claude"; export PATH="$tmp/bin:$PATH"
 
@@ -99,10 +101,33 @@ git -C "$s2" worktree add -q "$w2/base" selftest/c7/base; g -C "$w2/base" merge 
 st verify --project "$p2" --state "$s2" --core c7; expect "verify under a non-ASCII folder" 0 "PASS verify: no worktree left"
 n=$((n + 1)); [ ! -e "$w2/st1" ] && [ ! -e "$w2/base" ] || { echo "FAIL (verify under a non-ASCII folder): the merged worktrees are still there"; fail=1; }
 
-# the sessions claude agents still lists: their names, unquoted, in both versions
+# the sessions claude agents still lists: their names, unquoted, and ids, in both versions
 export STUB_AGENTS='[{"id":"a1","name":"selftest-st1"},{"id":"b2","name":"other"},{"id":"c3","name":"selftest-task-1"}]'
-st verify --project "$p2" --state "$s2" --core c7; expect "sessions left" 1 "FAIL verify: sessions left: selftest-st1 selftest-task-1"
-unset STUB_AGENTS
+st verify --project "$p2" --state "$s2" --core c7; expect "sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): selftest-st1 (a1), selftest-task-1 (c3)"
+# a stopped (`done`) session is listed only with --all, as the real listing prints it; a `#st` name
+# without `selftest` and a `probe:` name count too (#151)
+export STUB_AGENTS='[]' STUB_AGENTS_ALL='[
+  {
+    "id": "2be9934b",
+    "sessionId": "2be9934b-aaaa-4bbb-8ccc-dddddddddddd",
+    "name": "#st2 worker: PR",
+    "state": "done"
+  },
+  {
+    "id": "5c6d7e8f",
+    "sessionId": "5c6d7e8f-aaaa-4bbb-8ccc-dddddddddddd",
+    "name": "#12 worker: stuff",
+    "state": "done"
+  },
+  {
+    "id": "77aa88bb",
+    "sessionId": "77aa88bb-aaaa-4bbb-8ccc-dddddddddddd",
+    "name": "probe: push",
+    "state": "done"
+  }
+]'
+st verify --project "$p2" --state "$s2" --core c7; expect "done sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b), probe: push (77aa88bb)"
+unset STUB_AGENTS STUB_AGENTS_ALL
 
 echo "selftest prepare ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

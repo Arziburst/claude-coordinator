@@ -8,6 +8,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Background session per worker:** `claude --bg --name "#<task> worker: <title>" --model <model> --permission-mode <mode> "<brief>"`
   — prints an id; `claude agents [--json]`, `claude logs <id>`, `claude attach <id>`, `claude stop <id>`,
   `claude respawn <id>`, `claude rm <id>`. `--bg` cannot be combined with `-p`.
+  **Two ids** (measured on 2.1.296, Windows): these commands take the **short** job id — `id` in
+  `claude agents --json`, the one `claude --bg` prints in `claude stop <id>` (so far always the first 8
+  characters of `sessionId`); `claude stop` and `claude rm` refuse the full `sessionId` ("No job
+  matching '<uuid>'", exit 1, the session stays listed). Only `claude --bg --resume` takes the **full**
+  `sessionId` (*Pause and resume*). `claude agents --json --all` lists the stopped (`done`) sessions too.
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
@@ -66,8 +71,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Pause and resume a session** (a core update, the owner's request, a cap — CORE §9; measured on
   2.1.296): a session that only has to wait is told to finish its step, commit, push, report and go idle;
   a SendMessage ("continue") wakes it. To stop it outright, first record its **full** session id
-  (`sessionId` in `claude agents --json` — a stopped session is no longer listed), then `claude stop <id>`.
-  Resume it with `claude --bg --resume <full session id> "<message>"`, from any **trusted** folder (an
+  (`sessionId` in `claude agents --json` — a stopped session is listed only with `--all`), then stop it
+  by its **short** id: `claude stop <id>` (`id` in the same listing; stop and rm refuse the full id,
+  *Workers*). Resume takes the other one: `claude --bg --resume <full session id> "<message>"`, from any **trusted** folder (an
   untrusted one is refused: "Workspace not trusted"; a session not stopped but still idle in the
   background is not resumed but copied under a new id — stop it first): the same id,
   worktree, name, model, permission mode, settings (the guard) and history — the subscription is renewed
@@ -97,6 +103,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`;
   with `--session`, first `claude stop <id>`, read its spend (session-tokens: the stop wrote its totals)
   and delete its status file (*Usage*) — cleanup-worker then stops (a no-op) and removes it.
+  `--session` takes the short id or the full `sessionId` (mapped to its short id through `claude agents
+  --json --all`, else its first 8 characters); a session still listed after `claude rm` is reported as
+  `SESSION KEPT: <id> (claude rm failed: <its message>)`, exit 4, the worktree and branch left as is —
+  never `cleaned`.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
@@ -347,8 +357,12 @@ BOM, models priced apart),
   [Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan);
   the limits are shared across models, [errors](https://code.claude.com/docs/en/errors)). Probe a model
   in the cheap form: `claude -p --model <id> --tools "" --strict-mcp-config --system-prompt "Reply with
-  the single word ok." --output-format json "ok"` (measured: about $0.016 on Fable, $0.0002 on Haiku; the
-  bare `claude -p --model <id> "ok"` loads the full system prompt and tools — on Arx $0.47 on Fable).
+  the single word ok." --output-format json "ok"`. Its cost is a range, set mostly by the prompt cache: a
+  cold first call writes the whole prompt to the cache, and the folder's CLAUDE.md files and the auto
+  memory add to that prompt even with `--system-prompt` (measured on 2.1.296: Haiku ≈ $0.0005–0.0012,
+  Sonnet ≈ $0.024, Opus ≈ $0.050, Fable ≈ $0.016–0.12; Haiku from an empty temp folder wrote 4347
+  cache tokens against 2402 from a repo folder — an empty folder is not reliably cheaper). The bare
+  `claude -p --model <id> "ok"` loads the full system prompt and tools — on Arx $0.47 on Fable.
   Not available: a non-zero exit or `"is_error": true`; never test `subtype`, which can say `success` on
   an error. A success does not prove the plan includes the model: in `-p` mode a Fable request is billed
   to usage credits without asking when they are on, and fails with an API error when they are off
@@ -396,11 +410,12 @@ BOM, models priced apart),
   (`AskUserQuestion`, or any tool whose name ends in it) is never active: its span is the owner's time,
   at any length. A gap after a result keeps the 5-minute rule. Minutes rounded to the nearest, a half up;
   `start` and `end` to the second, UTC. No line when no record has a timestamp, and none with `--since`
-  or `--prune`. **The order** when a run ends: `claude stop <id>` (its process exits normally and
-  writes the `cost-state` record), then read its tokens, cost and time (now from the record; a failed
-  read retried once with the full command, never left as `n/a`), then delete that worker's
-  `sessions/<id>.json`, then `claude rm <id>` (session-tokens still reads a removed session's
-  transcript, but not a status file's cost line). A read that still shows `out>=` after the stop has
+  or `--prune`. **The order** when a run ends: `claude stop <id>` (the short id, *Workers*; its process
+  exits normally and writes the `cost-state` record), then read its tokens, cost and time (now from the
+  record; a failed read retried once with the full command, never left as `n/a`), then delete that
+  worker's `sessions/<sessionId>.json`, then `claude rm <id>` (the short id again; session-tokens still
+  reads a removed session's transcript, but not a status file's cost line), and check that `claude
+  agents --json --all` no longer lists it. A read that still shows `out>=` after the stop has
   no record (the process crashed or was killed): it is the summed reading as before, and the run's
   report notes it. The status line writes a file for every
   session on the machine, other projects' too, so at every session start run `session-tokens.sh --prune`

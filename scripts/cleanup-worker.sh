@@ -4,8 +4,11 @@
 # pushed head (a reused branch name with newer commits does not count) (CORE §8).
 # Otherwise report and change nothing.
 #   scripts/cleanup-worker.sh --worktree <path> [--session <id>] [--dry-run]
+# --session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with --dry-run); 1 usage error or a failed removal;
-# 3 a check failed, nothing changed (Windows: cleanup-worker.ps1, the same checks and codes).
+# 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
+# after claude rm - the worktree and branch are left as is (Windows: cleanup-worker.ps1, the same checks
+# and codes).
 set -euo pipefail
 
 session="" wt="" dry=0
@@ -24,6 +27,10 @@ done
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 stop_here() { echo "$1 - left as is" >&2; exit 3; }
+is_uuid() { local re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; [[ "$1" =~ $re ]]; }
+# objects <claude agents --json output>: one session object per line; field <key> <object>: its string value
+objects() { printf '%s' "$1" | tr -d '\r\n' | tr '}' '\n'; echo; }
+field() { printf '%s\n' "$2" | sed -n "s/.*\"$1\": *\"\\([^\"]*\\)\".*/\\1/p"; }
 
 # The main repository is found from the worktree itself, so this runs from any folder.
 [ -d "$wt" ] || stop_here "NO WORKTREE: $wt does not exist (check the path)"
@@ -68,10 +75,38 @@ if ! printf '%s\n' "$heads" | grep -qx "$up"; then
 fi
 [ -n "$u" ] || echo "its remote branch is gone (deleted after the merge): the merged PR's head contains ${up:0:7}"
 
+id=""
 if [ -n "$session" ]; then
-  run claude stop "$session" || true
-  run claude rm "$session" || true
+  # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
+  # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
+  id="$session"
+  if is_uuid "$session"; then
+    raw="$(claude agents --json --all 2>/dev/null)" || true
+    id="$(objects "$raw" | while IFS= read -r o; do [ "$(field sessionId "$o")" = "$session" ] && { field id "$o"; break; }; done || true)"
+    [ -n "$id" ] || id="$(printf '%s' "$session" | cut -c1-8)"
+    echo "session $session: job id $id"
+  fi
+  # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
+  run claude stop "$id" || true
+  if [ "$dry" = 1 ]; then echo "[dry-run] claude rm $id"
+  else
+    rc=0; out="$(claude rm "$id" 2>&1)" || rc=$?
+    [ -z "$out" ] || printf '%s\n' "$out"
+    # removed only when the listing no longer has it; no listing at all: the rm's exit code decides
+    lrc=0; raw="$(claude agents --json --all 2>/dev/null)" || lrc=$?
+    kept=""
+    if [ "$lrc" = 0 ]; then
+      kept="$(objects "$raw" | while IFS= read -r o; do [ "$(field id "$o")" = "$id" ] && { echo y; break; }; done || true)"
+    elif [ "$rc" != 0 ]; then kept=y; fi
+    if [ -n "$kept" ]; then
+      if [ "$rc" = 0 ]; then why="it exited 0, the session is still listed"
+      else why="$(printf '%s\n' "$out" | tr -d '\r' | sed '/^[[:space:]]*$/d' | head -n 1)"; why="${why:-exit $rc}"; fi
+      echo "SESSION KEPT: $id (claude rm failed: $why)" >&2
+      echo "worktree $wt and branch $branch left as is: remove the session (claude rm $id), then run this again" >&2
+      exit 4
+    fi
+  fi
 fi
 run git -C "$root" worktree remove "$wt" || { echo "REMOVE FAILED: git worktree remove $wt" >&2; exit 1; }
 run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"
-echo "cleaned: ${session:-no session} ${wt}"
+echo "cleaned: ${id:-no session} ${wt}"
