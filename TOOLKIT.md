@@ -67,7 +67,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   2.1.296): a session that only has to wait is told to finish its step, commit, push, report and go idle;
   a SendMessage ("continue") wakes it. To stop it outright, first record its **full** session id
   (`sessionId` in `claude agents --json` — a stopped session is no longer listed), then `claude stop <id>`.
-  Resume it with `claude --bg --resume <full session id> "<message>"`, from any folder: the same id,
+  Resume it with `claude --bg --resume <full session id> "<message>"`, from any **trusted** folder (an
+  untrusted one is refused: "Workspace not trusted"; a session not stopped but still idle in the
+  background is not resumed but copied under a new id — stop it first): the same id,
   worktree, name, model, permission mode, settings (the guard) and history — the subscription is renewed
   (SendMessage `notify_when_idle`) and its cost read by the same id. Never a short id (it starts a
   **copy** under a new id in the current folder, without the name: in the owner's working copy, that is a
@@ -395,9 +397,12 @@ BOM, models priced apart),
   by the CLI), so a worker's self-reported tokens are a guess; but every session knows its own full id
   (`CLAUDE_CODE_SESSION_ID` in its environment), so `session-tokens "$CLAUDE_CODE_SESSION_ID"` (PowerShell:
   `$env:CLAUDE_CODE_SESSION_ID`) prints its own tokens, cost and time — a lead reads itself that way. That
-  reading lags by the current turn (measured on 2.1.296: the turn's message reaches the transcript after the
-  tool call returns, the status line after the response): on the first turn it is all zero, later it lacks
-  the turn in progress — read it at stage boundaries and take a zero first reading as "not yet".
+  reading never holds the whole turn in progress (measured on 2.1.296, macOS and Windows): the tokens come
+  from the transcript, which gets a message only after its tool calls return (zero at a session's first
+  call); the cost comes from the status file, which the status line refreshes after each model response —
+  so on the first turn it is zero or only the first responses (Windows: $0.0039 of a $0.0062 turn), and
+  later it lags by the rest of the turn. Read it at stage boundaries; a zero or small first reading is
+  "not yet".
 - **Where sessions lose money, time, quality or stability** (CORE §7a, the weekly retro's input):
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
