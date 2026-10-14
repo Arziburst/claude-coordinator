@@ -29,4 +29,6 @@ touches: [a.txt, b.txt]
 The coordinator's self-test (procedures/SELFTEST.md); <c> is the core commit under test, filled in by
 the coordinator. No PR inside the block. Split into st1.1 (a.txt) and st1.2 (b.txt), one worker each,
 branches selftest/<c>/st1.<n> from selftest/<c>/st1; merge each into selftest/<c>/st1 after the
-verifier approves; end with the report phrase "selftest st1 done".
+verifier approves; end with the report phrase "selftest st1 done". Commit messages are exactly
+"selftest: st1.<n>" (the workers) and "selftest: merge st1.<n>" (the lead's merges) — never the
+project's own message format or an issue number from its history.
