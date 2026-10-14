@@ -94,7 +94,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
   (one-time step `worktree-roots`), so the retro counts the sessions started there.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
-- After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`.
+- After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`;
+  with `--session`, first `claude stop <id>`, read its spend (session-tokens: the stop wrote its totals)
+  and delete its status file (*Usage*) — cleanup-worker then stops (a no-op) and removes it.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
