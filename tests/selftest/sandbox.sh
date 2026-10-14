@@ -6,8 +6,8 @@
 #     marker, the repo's path and remote.git stay; only main, at the first commit, in both; no worktree;
 #     nothing untracked but settings.local.json - and sandbox --in then reuses it;
 #   - clean (with or without --keep) refuses a branch not merged into main (in a worktree, or only on
-#     the origin) and keeps the sandbox, nothing reset; --keep refuses a marker without the first
-#     commit (a sandbox from an older core);
+#     the origin) and keeps the sandbox, nothing reset; --keep adopts a marker without the first commit
+#     (a sandbox from an older core: main's single root commit is recorded) and refuses one with two roots;
 #   - sandbox refuses a kept sandbox that is not clean, and a folder that is not a sandbox;
 #   - plain clean still removes the folder; sandbox --keep is a usage error;
 #   - a relative --in is made absolute: from another folder the kept sandbox fetches, resets, is reused.
@@ -134,12 +134,23 @@ st sandbox --in "$(P "$a")"
 expect "sandbox on a changed file" 1 "FAIL sandbox: $(P "$d") already exists and is not clean (changed or untracked files in the repo): run selftest clean $SB $(P "$d") [$KP] first"
 git -C "$r" checkout -q -- README.md
 
-# a sandbox from an older core: its marker records no first commit
+# a sandbox from an older core: its marker records no first commit. sandbox refuses it; clean --keep
+# adopts it (main's single root commit, on the origin too, is recorded), resets it and keeps it
 : > "$d/.coordinator-selftest"
-st clean --sandbox "$(P "$d")" --keep
-expect "clean --keep, an older marker" 1 "FAIL clean: no first commit recorded in $(P "$d")/.coordinator-selftest (a sandbox from an older core): run selftest clean $SB $(P "$d") without $KP"
 st sandbox --in "$(P "$a")"
 expect "sandbox, an older marker" 1 "FAIL sandbox: $(P "$d") already exists and is not clean (no first commit recorded in its .coordinator-selftest): run selftest clean $SB $(P "$d") [$KP] first"
+st clean --sandbox "$(P "$d")" --keep
+expect "clean --keep adopts an older marker" 0 "PASS clean: recorded the first commit $(git -C "$r" rev-parse --short "$i") of a sandbox from an older core"
+is "the older marker now records the first commit" grep -qx "initial $i" "$d/.coordinator-selftest"
+st sandbox --in "$(P "$a")"
+expect "sandbox reuses an adopted sandbox" 0 "PASS sandbox: reusing the kept sandbox $(P "$d")"
+# an older marker and two root commits on main: no first commit to adopt, nothing changed
+: > "$d/.coordinator-selftest"
+git -C "$r" checkout -q --orphan other && g -C "$r" commit -q --allow-empty -m other
+git -C "$r" checkout -q main && g -C "$r" merge -q --no-edit --allow-unrelated-histories other && git -C "$r" branch -q -D other
+st clean --sandbox "$(P "$d")" --keep
+expect "clean --keep, an older marker and two roots" 1 "FAIL clean: no first commit recorded in $(P "$d")/.coordinator-selftest and none found (a sandbox from an older core): run selftest clean $SB $(P "$d") without $KP"
+is "two roots: the marker untouched" [ ! -s "$d/.coordinator-selftest" ]
 st clean --sandbox "$(P "$d")"
 expect "plain clean" 0 "PASS clean: sandbox removed"
 is "plain clean removes the folder" [ ! -e "$d" ]

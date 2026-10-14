@@ -203,7 +203,20 @@ switch ($Step) {
   if ($Keep) {
     # -Keep resets the sandbox to its first commit (the marker records it), so it needs both repositories
     $i = Initial $d
-    if (-not $i) { Fail "no first commit recorded in $d/$marker (a sandbox from an older core): run selftest clean -Sandbox $d without -Keep"; Finish }
+    if (-not $i) {
+      # a sandbox kept by an older core records no first commit: main's single root commit, when its
+      # origin has it too, is that commit - recorded now, so the sandbox is reset and kept, not removed
+      $roots = @(& git -C $r rev-list --max-parents=0 main 2>$null | Where-Object { $_ })
+      $found = $false
+      if ($roots.Count -eq 1) { & git -C $o cat-file -e "$($roots[0])^{commit}" 2>$null; $found = $LASTEXITCODE -eq 0 }
+      if ($found) {
+        $i = $roots[0]
+        try { [IO.File]::WriteAllText((Resolve-Path -LiteralPath (Join-Path $d $marker)).Path, "initial $i`n") } catch { Fail "cannot write $d/$marker"; Finish }
+        Pass "recorded the first commit $(& git -C $r rev-parse --short $i) of a sandbox from an older core"
+      } else {
+        Fail "no first commit recorded in $d/$marker and none found (a sandbox from an older core): run selftest clean -Sandbox $d without -Keep"; Finish
+      }
+    }
     $ok = "$(& git -C $r rev-parse --git-dir 2>$null)" -ceq '.git' -and "$(& git -C $o rev-parse --is-bare-repository 2>$null)" -ceq 'true'
     if ($ok) { & git -C $r cat-file -e "$i^{commit}" 2>$null; $ok = $LASTEXITCODE -eq 0 }
     if (-not $ok) { Fail "$d has no repo and remote.git with its first commit ${i}: nothing changed"; Finish }
