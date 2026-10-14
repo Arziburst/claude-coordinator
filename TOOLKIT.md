@@ -341,12 +341,21 @@ BOM, models priced apart),
 ## Usage and limits
 - **Model ladder** (CORE §7): `claude auth status` gives the login method (`authMethod`) and
   `subscriptionType` (e.g. `max`; seen on 2.1.296, not in the docs, so a hint); the status line gives
-  the 5-hour and weekly use on Pro / Max only, with no per-model entry. Probe a model with
-  `claude -p --model <id> "ok" --output-format json`: a non-zero exit or an error result means not
-  available. A probe loads the full system prompt and tools, so it is not free (on Arx at list price:
-  Fable $0.47, Opus $0.18, Sonnet $0.09, Haiku $0.005). A model's own limit shows only as a message ("You've hit your Opus
-  limit"); switching family keeps working. List prices: the Claude pricing page, copied into BINDINGS.
-  [model-config](https://code.claude.com/docs/en/model-config.md)
+  the 5-hour and weekly use on Pro / Max only, with no per-model window; `/usage` shows a *Current week
+  (Fable)* row when the plan includes Fable (Max and premium Team / Enterprise seats: Fable draws from the
+  weekly limit, faster than other models, up to 50% of it; Pro and standard seats: usage credits only —
+  [Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan);
+  the limits are shared across models, [errors](https://code.claude.com/docs/en/errors)). Probe a model
+  in the cheap form: `claude -p --model <id> --tools "" --strict-mcp-config --system-prompt "Reply with
+  the single word ok." --output-format json "ok"` (measured: about $0.016 on Fable, $0.0002 on Haiku; the
+  bare `claude -p --model <id> "ok"` loads the full system prompt and tools — on Arx $0.47 on Fable).
+  Not available: a non-zero exit or `"is_error": true`; never test `subtype`, which can say `success` on
+  an error. A success does not prove the plan includes the model: in `-p` mode a Fable request is billed
+  to usage credits without asking when they are on, and fails with an API error when they are off
+  ([model-config](https://code.claude.com/docs/en/model-config), *Fable and usage credits*) — so Fable
+  counts as available only with the owner's answer that `/usage` shows its row (CORE §7). A model's limit
+  shows only as a message ("You've hit your Opus limit", a Fable limit or usage-credits message);
+  switching family keeps working. List prices: the Claude pricing page, copied into BINDINGS.
 - **Tokens and cost per run** (CORE §7 run log): `scripts/session-tokens.sh <session-id>` (Windows:
   `scripts/session-tokens.ps1`; the 8-character id that `claude --bg` and `claude agents` print works
   as a prefix) when the run ends. It prints one line per model and a `total` line summed from the
@@ -565,21 +574,24 @@ BOM, models priced apart),
   (`-` reads stdin, for one of them; Windows PowerShell 5.1 takes it only as `-Spend5h:-`); `--prices
   <file>`, needed with a spend — the ladder's list prices from BINDINGS *Models*, one model per line,
   `<model id> <input> <output> <cache read> <cache write>` in USD per million tokens (cache write at the
-  1-hour price; `$` and ` / ` allowed, `#` comments; e.g. `claude-opus-5-5 $5 / $25 / $0.50 / $10`), then
-  `not-weekly` for a model with its own limit whose spend does not count toward the weekly one (assumed:
-  every model, an own-limit one too, spends the 5-hour window — not measured — so `five_hour` sums them
-  all); the project keeps it as `coordinator/prices.txt` (one-time step `prices-file`); a spend
+  1-hour price; `$` and ` / ` allowed, `#` comments; e.g. `claude-opus-5-5 $5 / $25 / $0.50 / $10`), then,
+  in any order, `top` after the top rung's model when it stands above the strong one (Fable), and
+  `not-weekly` after a model with its own limit whose spend does not count toward the weekly one (none
+  known today; never Fable, which shares the weekly limit — every model spends both windows, so
+  `five_hour` sums them all); the project keeps it as `coordinator/prices.txt` (one-time step `prices-file`); a spend
   model takes its own id's line, else the longest id it starts with, else exit 1; `--prev-5h` /
   `--prev-week <% per $>` (the last window's ratio); `--cap-5h` / `--cap-week <%>` (the project's caps,
-  §9); `--block <USD>` (the block's estimate). Two steps: first without a spend, for each window's
+  §9); `--block <USD>` (the block's estimate without its top-rung runs) and `--block-top <USD>` (the
+  estimate of its top-rung runs, counted at 2.5×, CORE §7). Two steps: first without a spend, for each window's
   `since`; then `session-tokens --since <since>` per window into a file, and again with the spends. It
   prints a header and a tab-separated line per window, `window used since resets cost ratio basis left
-  left_cap block fit`: used percent (one decimal); the window's start and its reset (UTC); the account's
+  left_cap block fit top`: used percent (one decimal); the window's start and its reset (UTC); the account's
   list-price cost since the start (to the cent; `seven_day` without `not-weekly` models); the ratio in
   percent per dollar (four decimals) and its basis — `trusted` (the window has risen ≥ 10 points: used
   over cost), `previous` (under 10, `--prev-*` given), `guess` (under 10: used over cost), `-` (none); the
   dollars left before 100% and before the cap (rounded down); the block's percent and `fits` / `does
-  not fit` within the cap (100% without one). Fixed-point arithmetic, so the `.sh` and the `.ps1` print
+  not fit` within the cap (100% without one); the `top` models' share of the window's cost in percent,
+  one decimal (`-` without a cost or a `top` line; CORE §7's guard rail (c) reads `seven_day`'s). Fixed-point arithmetic, so the `.sh` and the `.ps1` print
   the same. A window missing from the JSON prints `-`; a `resets_at` already passed means the window has
   reset (used 0, no cost, the ratio only from `--prev-*`). Exit 1 when a file cannot be read, the JSON has
   no `rate_limits` (an API key, an older Claude Code: budget by cost), a price line is malformed or a

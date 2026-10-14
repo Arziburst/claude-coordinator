@@ -309,7 +309,8 @@ The continuous work:
 The coordinator **proposes**, the owner approves every proposal before it becomes work (§1.11):
 - **Research before building** when a feature is new, the approach unclear, the choice costly to
   reverse, or others solved it (open source, libraries, mods, reference apps, docs). Propose in one line
-  what and why, with the model (cheap for surveys, expensive for hard analysis); on the owner's yes (or
+  what and why, with the model (from the balanced spend level up the top rung, within its guard rails,
+  §7; lean: light for surveys, strong for hard analysis); on the owner's yes (or
   a kind `PROJECT.md` pre-approves) start the read-only **researcher** role
   ([roles/researcher.md](roles/researcher.md)): it returns a short catalog with each candidate's
   **licence** and a take / not / later advice. Delivered where `PROJECT.md` says; the owner decides row
@@ -404,30 +405,69 @@ never assumed (below).
 | `trivial`: docs, small tooling, mechanical edits, research summaries, small reviews | light | low–medium |
 | `ordinary`: product work | strong | medium |
 | `hard`: hard or risky (architecture, money, security, concurrency, rendering, input) | strong | high |
-| `hardest`: the hardest problems, unexplained failures | top | xhigh–max |
+| `hardest`: the hardest problems, unexplained failures | top (by the spend level, below) | xhigh–max |
 
 - **The ladder** (`BINDINGS.md`, *Models*): the available models, cheapest first, each on a rung — e.g.
   light Haiku / Sonnet, strong Opus, top Fable; on a plan without Fable the top rung is Opus; where the block forecast (§7a)
   shows ordinary work on Opus would not fit the limits, strong is Sonnet and Opus moves to top. A missing rung takes the
-  next one down. A model with its own limit (Fable on some plans) spares the main one.
-- **Detected, not asked:** the coordinator learns what it needs. *Hint, free, at every start:*
+  next one down. **Fable spares nothing:** on Max and premium Team / Enterprise seats it draws from the
+  plan's regular weekly limit and uses it faster than other models, up to 50% of the weekly limit on
+  Fable — beyond that, usage credits or another model; on Pro and standard Team / Enterprise seats it runs
+  only on pay-as-you-go usage credits ([Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan));
+  the 5-hour and weekly limits are shared across all models ([errors](https://code.claude.com/docs/en/errors)).
+  **A Fable run never goes where it would bill usage credits.**
+- **Detected, then confirmed:** the coordinator learns what it can. *Hint, free, at every start:*
   `claude auth status` — the login method and `subscriptionType` (e.g. `max`; undocumented, so a hint,
-  never proof). *Available:* one probe per model (`claude -p --model <m> "ok" --output-format json`, TOOLKIT *Usage*: a non-zero exit or an error result
-  means not available; it loads the full
-  prompt, ≈ $0.75 at list price for four models) at init, when the hint changes, once a week, and after
-  any run that fails with "model not available" or a model's own limit ("You've hit your Opus limit")
-  — that model leaves the ladder until the next probe. *Price:* from the run log and the status line (§7a) — limit
-  percent per run, so a plan change shows up in the numbers and the ladder follows without a rule change.
+  never proof). *Answers:* a probe cannot tell an included model from a paid one (below), so the owner is
+  asked at init and on a plan change (a new `subscriptionType`, or the owner says so): "does `/usage` show
+  a *Current week (Fable)* row? are usage credits on?" (one-time step `fable-on-plan`; kept in BINDINGS
+  *Models*). *Available:* one probe per model in the cheap form (TOOLKIT *Usage*: no tools, no MCP, a
+  one-line system prompt — about $0.016 on Fable, $0.0002 on Haiku); a non-zero exit or `"is_error": true`
+  means not available (never `subtype`: it can say `success` on an error) — at init, when the hint changes,
+  once a week, and after any run that fails with "model not available" or a model's limit. In `-p` mode
+  Claude Code bills a Fable request to usage credits without asking when they are on ([model-config](https://code.claude.com/docs/en/model-config),
+  *Fable and usage credits*), so for Fable a success means available only **together with** the owner's
+  answer that `/usage` shows the Fable row; without it Fable is off the ladder, whatever the probe said.
+  With credits on, a run past Fable's weekly share would bill them silently, so guard rail (c) below is
+  the only stop — the coordinator tells the owner so when it records the answer.
+  *Limit messages:* "You've hit your Opus limit" or "model not available" takes that model off the ladder
+  until the next probe; a "Fable limit reached" or a usage-credits message takes Fable off until the
+  weekly reset (§7a, `run-stats --limits`'s `resets`), Opus standing on the top rung meanwhile. *Price:*
+  from the run log and the status line (§7a) — limit percent per run, so a plan change shows up in the
+  numbers and the ladder follows without a rule change.
 - **Spend level** (`PROJECT.md`, set at init next to the strictness): **lean**, **balanced** (default)
-  or **thorough**. It does not forbid any rung — a lean project still sends the hardest problem to the
-  top rung, a thorough one still sends a typo to the light one. It sets **which way to lean** when two
-  neighbouring rungs or efforts both fit (lean: the lower; balanced: the table; thorough: the higher)
-  and how routing moves (below).
+  or **thorough**. It never removes a check, and a thorough project still sends a typo to the light rung.
+  It sets **which way to lean** when two neighbouring rungs or efforts both fit (lean: the lower;
+  balanced: the table; thorough: the higher), how routing moves (below), and **when the top rung is used**
+  — raising effort comes before raising the model (Anthropic: Opus for most coding work; Fable for
+  demanding reasoning, long-horizon agentic work and multistep research, or where Opus at higher effort
+  still falls short; "tuning effort is often a better lever than switching models",
+  [choosing a model](https://platform.claude.com/docs/en/about-claude/models/choosing-a-model); at list
+  price Fable is 2.5× Opus on input and output, 1.25× on cache reads):
+  - **lean:** the top rung only for an escalation after a failed review (`escalate_to`, below); a
+    `hardest` task runs on strong at xhigh–max;
+  - **balanced:** also the `hardest` kinds and research runs — the researcher role on a question of §4b
+    *Research before building*, and a lead's research sub-run — Fable being Anthropic's pick for
+    multistep research, questions about the Claude platform itself above all (the radar's one reference
+    per block stays light, §4b);
+  - **thorough**, and the strict preset at any level: also the independent verification (the verifier)
+    of risk-tier work (§5, the owner's critical zones) and a `hard` task that already failed its review
+    once on Opus; risk-tier work itself runs on the top rung only when the task is `hardest` — otherwise
+    on Opus with high effort, as the floor says;
+  - everything else stays on strong or light, as the table and the routing say.
+  **Guard rails — the top rung only while:** (a) the plan includes it (the owner's answer above) and no
+  "limit reached" or usage-credits message came since the last weekly reset; (b) `scripts/run-stats
+  --limits` with the block's top-rung runs as `--block-top` — counted at 2.5× their estimate: the list
+  price ratio, and Fable uses the limits faster — prints `fits` for `seven_day` within the project's cap
+  before its reset; (c) the top rung's share of the week's list-price cost (the `top` column of the
+  `seven_day` line; its model marked `top` in the prices file, TOOLKIT *Usage*) stays under 50.0. One
+  failing → the run goes to Opus at the highest effort its kind allows, and the report names the guard.
 - **Floors, at every level:** risk-tier work (§5) runs on Opus with high effort, or on the top rung with
   high where Opus is missing; the quality checks (contract, oracles, independent review, green CI) never
   depend on the level.
 - A worker failing on a usage limit restarts on another model; one failing review for a reason a stronger
-  model would fix restarts on its contract's `escalate_to` — **once per contract**; a stuck run (a
+  model would fix restarts on its contract's `escalate_to` — **once per contract**, the top rung only
+  within the guard rails above (else Opus at max); a stuck run (a
   `blocked` report) is helped or split (§4) and spends no escalation. If the escalated run
   fails its review too (or gets stuck), nothing restarts again: the owner gets both reports and the
   options — split the task, rewrite the contract, the top rung, or drop it (§12).
@@ -468,7 +508,8 @@ never assumed (below).
     step `kinds-map`), which the retro's public summary reads; a pin names a kind or an area;
   - a level is a model or effort step on the ladder, effort first: one level down from strong/high is
     strong/medium, then strong/low, then the next lighter model at high; one level up is the reverse —
-    so "revert" always means the one previous state; routing never uses a model the ladder lacks.
+    so "revert" always means the one previous state; routing never uses a model the ladder lacks, and
+    moves a kind onto the top rung only where the spend level and the guard rails above allow it.
   Each change is one line in the next report and the journal; "model report" shows `ROUTING.md` with
   the numbers behind it.
 - Keep this table current; the ladder in `BINDINGS.md` holds the exact ids.
@@ -495,10 +536,12 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   arithmetic from the status file, those spends and the ladder's prices (`coordinator/prices.txt`,
   one-time step `prices-file`), never by hand (TOOLKIT *Usage*). That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
-  it gets its own ratio. A model's own limit (above) is tracked apart: whether its spend also counts
-  toward the weekly limit is asked once (the owner sees it in `/usage`) and kept in BINDINGS *Models*;
-  the account's weekly cost is summed with or without that model accordingly. Assumed: every model, an
-  own-limit one too, spends the 5-hour window (not measured), so the 5-hour cost sums them all.
+  it gets its own ratio. Every model's spend counts toward both windows — Fable's too, and faster than
+  other models' (§7), which is why the block's top-rung runs go in as `--block-top`, at 2.5× their
+  estimate. The status line has no per-model window; `run-stats --limits` prints the top rung's share of
+  each window's list-price cost (`top`), the guard rail (c) of §7. A model with its own limit outside the
+  weekly one (none known today; Fable is not one) would be marked `not-weekly` in the prices file and
+  left out of the weekly sum.
 - **Time is measured the same way, never self-reported:** a run's `start`, `wall` and `active` come
   from its transcript's timestamps (`scripts/session-tokens`, the `time` line; active leaves out every
   gap over 5 minutes between records — a limit, an answer, a sleeping machine — unless a tool call

@@ -17,7 +17,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 |---|---|---|---|---|
 | **Strictness** (CORE §3) | `<fill>` | `<fill>` | `<date>` | swarm · standard · strict — asked first; sets which tasks run, parallel workers, who merges, review, new tasks, production writes, autopilot, reports |
 | Overrides of the preset (row and value) | `<fill>` | `<fill>` | `<date>` | none |
-| **Spend level** (CORE §7) | `<fill>` | `<fill>` | `<date>` | **balanced** · lean · thorough — which way model and effort choices lean; never removes a check or a rung |
+| **Spend level** (CORE §7) | `<fill>` | `<fill>` | `<date>` | **balanced** · lean · thorough — which way model and effort choices lean and when the top rung is used (CORE §7); never removes a check |
 | Autopilot and tick (CORE §9) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm on, a tick every ~30 min · standard, strict off — work on the owner's task or batch command |
 | **Work mode** (CORE §4) | `<fill>` | `<fill>` | `<date>` | **by task** — the owner names a task, then the next (solo work) · batch — a batch command runs the recipe below over the tracker (a team, a board) |
 | Language: conversation / artifacts | `<fill>` | `<fill>` | `<date>` | owner's language / English |

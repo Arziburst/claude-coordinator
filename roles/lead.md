@@ -20,7 +20,8 @@ worker (BINDINGS) and the phrase that ends your report.
    (no changes beyond the fix …; do not weaken or loosen tests …) — check-contract fails without them —
    and passes `<core>/scripts/check-contract` (Windows: the full
    `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/check-contract.ps1` command). Each gets a model and
-   effort from the routing and a cost estimate (`budget.cost`, CORE §7a). The estimates plus your own
+   effort from the routing (a research sub-run — the researcher role — is routed as research: the top
+   rung from the balanced spend level up, within its guard rails, CORE §7) and a cost estimate (`budget.cost`, CORE §7a). The estimates plus your own
    share must fit the parent's `budget.cost` — your own session is often 30–100% of your workers' sum
    (measured: $14.7 against a $6–8 guess; $36.7, about all its workers together), not a small
    overhead: plan for it, and read it at each stage (step 6). If they do not fit, send the plan with the numbers to the

@@ -1,4 +1,5 @@
 claude-fable-1	2121000	in=1000 out>=20000 cache_read=2000000 cache_write=100000
 claude-opus-5-5	41102000	in=2000 out>=100000 cache_read=40000000 cache_write=1000000
 claude-sonnet-5-5	10555000	in=5000 out>=50000 cache_read=10000000 cache_write=500000
-total	53778000	in=8000 out>=170000 cache_read=52000000 cache_write=1600000
+claude-solo-1	2121000	in=1000 out>=20000 cache_read=2000000 cache_write=100000
+total	55899000	in=9000 out>=190000 cache_read=54000000 cache_write=1700000
