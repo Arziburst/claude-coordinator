@@ -117,7 +117,8 @@ the report notes the interruption and the resume time.
    client's or a team's organization: only on the owner's yes):
    - A worker (`#st2 worker: selftest PR`, start-worker with the flags above, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
-     file, commits, pushes and opens a **draft** PR into `selftest/<c>/base`. Its brief says to push
+     file, commits it as exactly `selftest: task-1` (never the project's own message format or an issue
+     number from its history), pushes and opens a **draft** PR into `selftest/<c>/base`. Its brief says to push
      **without** `-u` (`git push origin selftest/<c>/task-1`) on purpose, so every run proves
      cleanup-worker's fallback to `origin/<branch>` (roles/worker.md pushes with `-u`).
    - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
