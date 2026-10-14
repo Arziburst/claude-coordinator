@@ -1,0 +1,4 @@
+claude-haiku-5-5	1014	in=5 out>=9 cache_read=500 cache_write=500
+total	1014	in=5 out>=9 cache_read=500 cache_write=500
+cost	$0.0071
+time	wall=30m active=0m start=2026-10-12T12:00:00Z end=2026-10-12T12:30:02Z

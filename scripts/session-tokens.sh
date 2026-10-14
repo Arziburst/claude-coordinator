@@ -13,6 +13,12 @@
 #   cost     $<usd>   — one session only: the CLI's own cumulative cost at list price, from the status
 #            line's per-session file ~/.claude/coordinator/sessions/<id>.json; absent if never drawn,
 #            and for a subagent (its tokens are already counted in its parent session's lines)
+#   After a normal stop (claude stop, an exit) Claude Code appends to the transcript a "cost-state"
+#   record with the session's own totals, subagents included (2.1.296; the name is internal). When the
+#   transcript's LAST such record has no assistant message after it, the model and total lines come
+#   from it: out=<n> (exact) instead of out>=, and thinking=<n> at the end (not added to the total);
+#   the cost line is its totalCostUSD (before the status file's). Otherwise (no record, or the session
+#   ran after it: a crash, a resume) the lines above. --since always sums the messages.
 #   time     wall=<m>m active=<m>m start=<UTC> end=<UTC>   — one session or subagent only, the last line:
 #            the timestamps of every record in the files counted above (the transcript and its
 #            subagents', as one set; a subagent working while the transcript is quiet is active time);
@@ -25,7 +31,7 @@
 # The status file's token fields are the LAST request's usage, not the session's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text.
 set -eu
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,26s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 dir="$cfg/coordinator/sessions"
@@ -113,6 +119,34 @@ span() {
     # minutes, rounded to the nearest, a half up
     END { if (n) printf "time\twall=%.0fm active=%.0fm start=%sZ end=%sZ\n", int((prev - first + 30000) / 60000), int((prev - first - idle + 30000) / 60000), start, end }'
 }
+# the session's own totals from the transcript on stdin: Claude Code appends a "cost-state" record
+# (totalCostUSD, and modelUsage: one flat object per model) when its process exits normally, a stop
+# included (seen on 2.1.296; the name is internal). The LAST record counts, and only when no assistant
+# message comes after it (the session has not run since). Prints the model lines (exact output, and
+# thinking), the total line and the cost line; nothing when there is no such record, or it holds no
+# modelUsage. Keys in any order; the line is read as text.
+record() {
+  LC_ALL=C awk '
+    function num(o, k,   t) { if (!match(o, "\"" k "\":[ \t]*[0-9]+")) return 0
+                              t = substr(o, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); return t + 0 }
+    /"type":[ \t]*"cost-state"/ { rec = $0; after = 0; next }
+    /"type":[ \t]*"assistant"/ && /"usage":[ \t]*[{]/ { after = 1 }
+    function line(n, i, o, r, w, t) { return sprintf("%s\t%.0f\tin=%.0f out=%.0f cache_read=%.0f cache_write=%.0f thinking=%.0f", n, i + o + r + w, i, o, r, w, t) }
+    END { if (rec == "" || after || !match(rec, /"modelUsage":[ \t]*[{]/)) exit
+      s = substr(rec, RSTART + RLENGTH)
+      # each model: "<name>":{...} with no object inside
+      while (match(s, /^[ \t\r,]*"[^"]*":[ \t]*[{][^{}]*[}]/)) {
+        o = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+        m = o; sub(/^[ \t\r,]*"/, "", m); m = substr(m, 1, index(m, "\"") - 1); seen[m] = 1
+        MI[m] += num(o, "inputTokens"); MO[m] += num(o, "outputTokens"); MR[m] += num(o, "cacheReadInputTokens")
+        MW[m] += num(o, "cacheCreationInputTokens"); MT[m] += num(o, "thinkingTokens") }
+      for (m in seen) { print line(m, MI[m], MO[m], MR[m], MW[m], MT[m]) | "LC_ALL=C sort"
+        I += MI[m]; O += MO[m]; R += MR[m]; W += MW[m]; T += MT[m] }
+      close("LC_ALL=C sort")
+      print line("total", I, O, R, W, T)
+      if (match(rec, /"totalCostUSD":[ \t]*[0-9.eE+-]+/)) {
+        t = substr(rec, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t } }'
+}
 case "$arg" in
   --prune)
     [ $# -eq 1 ] || exit 2
@@ -171,13 +205,18 @@ elif [ ! -f "$dir/$arg.json" ] && [ -d "$dir" ]; then
   [ -z "$found" ] || sid="$(basename "$found" .json)"
 fi
 status="$dir/$sid.json"
+rec=""
 if [ -n "$main" ] && [ -f "$main" ]; then
   sub="${main%.jsonl}/subagents"
-  { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | count
+  # the session's own record (its subagents included) when it has stopped since it last ran; else the sums
+  rec="$(record < "$main")"
+  if [ -n "$rec" ]; then printf '%s\n' "$rec"
+  else { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | count; fi
 elif [ ! -f "$status" ]; then
   echo "no transcript or status file for $arg" >&2; exit 1
 fi
-if [ -f "$status" ]; then
+# the record's cost when it has one, else the status file's
+if [ -f "$status" ] && ! printf '%s\n' "$rec" | grep -q '^cost'; then
   awk '{ s = s $0 }
     END { if (match(s, /"total_cost_usd"[ \t]*:[ \t]*[0-9.eE+-]+/)) {
             t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t } }' "$status"

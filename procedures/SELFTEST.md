@@ -128,11 +128,12 @@ the report notes the interruption and the resume time.
      the auto mode's classifier goes to the owner as the exact `! gh pr merge …` command (TOOLKIT
      *Modes*); the step continues once `state` is `MERGED`.
    - Nothing is pushed to or merged into the state branch.
-6. **Verify and clean up:** for every `selftest` session, in this order: read its cost with
-   `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is retried once,
-   never left as `n/a`), delete its status file (TOOLKIT *Usage*), then `claude stop` and `claude rm`
-   (each its own command); then `selftest verify --project <root> --state <root>/coordinator
-   --core <c> [--state-repo <owner/name>]` — no session or worktree left (clean, merged worktrees are
+6. **Verify and clean up:** for every `selftest` session, in this order: `claude stop <id>`, read its
+   cost with `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is
+   retried once, never left as `n/a`; it now comes from the record the stop wrote — a read still
+   showing `out>=` had none, a crash: read as before and noted in the report), delete its status file
+   (TOOLKIT *Usage*), then `claude rm <id>` (each its own command); then `selftest verify --project
+   <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (clean, merged worktrees are
    removed), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
    is deleted.**
 7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost (the sum of

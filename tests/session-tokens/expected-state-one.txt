@@ -1,0 +1,4 @@
+claude-haiku-5-5	1067	in=10 out=57 cache_read=0 cache_write=1000 thinking=40
+total	1067	in=10 out=57 cache_read=0 cache_write=1000 thinking=40
+cost	$0.0123
+time	wall=0m active=0m start=2026-10-12T08:00:00Z end=2026-10-12T08:00:04Z

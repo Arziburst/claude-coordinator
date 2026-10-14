@@ -92,7 +92,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
 | F-SPEND-09 | Estimates and forecasts | contract estimates from medians, block forecast against the limits, analysis after | SPEND |
 | F-SPEND-10 | Caps and autopilot budget | short and long window caps stop new work | SPEND |
-| F-SPEND-11 | A lead's cost order | read the cost, then delete the status file, then stop and remove | SPEND |
+| F-SPEND-11 | A lead's cost order | stop, read the cost, delete the status file, then remove | SPEND |
 | F-SPEND-12 | Task time | work, time to ready and owner wait from transcript timestamps; forecasts leave owner waits out | SPEND |
 | F-SPEND-13 | Session insights | guard blocks, refusals and what followed, tool errors, waits, cache rewrites and rereads from transcripts, the retro's input | SPEND |
 | F-SPEND-14 | The weekly retro | the coordinator measured week against week on cost, speed, quality, predictability and stability; top three proposals; an anonymous summary as the owner chose | SPEND |
@@ -557,16 +557,16 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-04 session-tokens
 - defined: scripts/session-tokens.sh, scripts/session-tokens.ps1, TOOLKIT.md
 - entry: `session-tokens <session id or prefix or transcript>`
-- promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; for one session or subagent a last `time` line (F-SPEND-12); an ambiguous prefix fails and lists ids only, never project folders
-- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected.txt, tests/session-tokens/expected-s2.txt, each with its time line; a usage object in a tool input before the message's own, tests/session-tokens/expected-tool-usage.txt; a tool input with keys differing only by case, tests/session-tokens/expected-case-keys.txt; an ambiguous prefix of transcripts and of status files only; a status file without a projects folder; a config path with `[ ]`), CI step "session-tokens counts the fixture exactly" (bash, Windows PowerShell 5.1 and PowerShell 7, parity on Linux)
-- not covered: output tokens are a lower bound by design; the lines are read as text: a message's id and model are the first `"id":"msg_…"` and `"model"` on the line, which a tool input could hold first only if a message listed `content` before them (not seen in real transcripts)
+- promises: one line per model and a total, each message counted once, subagents included; a `cost` line from the session's status file; after a normal stop (the transcript's last `cost-state` record with no assistant message after it) the model and total lines from that record instead — `out=` exact and `thinking=` at the end — and the cost line from its `totalCostUSD`, ahead of the status file; for one session or subagent a last `time` line (F-SPEND-12); an ambiguous prefix fails and lists ids only, never project folders
+- tested by: tests/session-tokens/run.sh (tests/session-tokens/expected.txt, tests/session-tokens/expected-s2.txt, each with its time line; the cost-state record: one record ahead of a stale status file, tests/session-tokens/expected-state-one.txt; the last of several, tests/session-tokens/expected-state-last.txt, also with CRLF line ends and a BOM; an assistant message after the record falls back to the sums, tests/session-tokens/expected-state-after.txt; two models with keys in another order, tests/session-tokens/expected-state-models.txt; a usage object in a tool input before the message's own, tests/session-tokens/expected-tool-usage.txt; a tool input with keys differing only by case, tests/session-tokens/expected-case-keys.txt; an ambiguous prefix of transcripts and of status files only; a status file without a projects folder; a config path with `[ ]`), CI step "session-tokens counts the fixture exactly" (bash, Windows PowerShell 5.1 and PowerShell 7, parity on Linux)
+- not covered: the `cost-state` record and its keys are Claude Code's internal format (seen on 2.1.296), checked against fixtures, not against a live stop: if a later Claude Code drops or renames it, the summed lines (`out>=`, the status file's cost) come back on their own; without a record (a crash, a running session) output tokens are a lower bound by design; the lines are read as text: a message's id and model are the first `"id":"msg_…"` and `"model"` on the line, which a tool input could hold first only if a message listed `content` before them (not seen in real transcripts)
 
 ### F-SPEND-05 Subagent cost
 - defined: scripts/session-tokens.sh, roles/lead.md, TOOLKIT.md
 - entry: `session-tokens <agentId>`
-- promises: a subagent is found by its agentId or a unique prefix; its tokens print without a cost line; its cost is reported as part of its parent and counted once
-- tested by: tests/session-tokens/expected-agent.txt through tests/session-tokens/run.sh (also under a config path with `[ ]`)
-- not covered: none known
+- promises: a subagent is found by its agentId or a unique prefix; its tokens print without a cost line; its cost is reported as part of its parent and counted once — its parent's `cost-state` record already holds its requests, and its own transcript, which has no record, is summed
+- tested by: tests/session-tokens/expected-agent.txt through tests/session-tokens/run.sh (also under a config path with `[ ]`); a subagent of a stopped session, tests/session-tokens/expected-state-agent.txt, while its parent's record lines do not add it again, tests/session-tokens/expected-state-models.txt
+- not covered: that the record includes subagents' requests is measured on 2.1.296 (the record's total equals the status file's), not checked by a test
 
 ### F-SPEND-06 Account-wide spend and the ratio
 - defined: scripts/session-tokens.sh, scripts/run-stats.sh, scripts/run-stats.ps1, CORE.md §7a, TOOLKIT.md
@@ -606,7 +606,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SPEND-11 A lead's cost order
 - defined: roles/lead.md, TOOLKIT.md
 - entry: a lead's run ending
-- promises: the cost is read with the full command first (retried once, never `n/a`), then the status file is deleted, then the session stopped and removed; the lead's own session is read the same way by `$CLAUDE_CODE_SESSION_ID` at each stage and before its report (its line carries a real cost and time, never `n/a`), and the coordinator's later read of it is the number that counts
+- promises: the session is stopped first (so its transcript gets its own totals), then the cost is read with the full command (retried once, never `n/a`; a read still showing `out>=` is a crash, read as before and noted), then the status file is deleted, then the session removed; the lead's own session is read the same way by `$CLAUDE_CODE_SESSION_ID` at each stage and before its report (its line carries a real cost and time, never `n/a`), and the coordinator's later read of it is the number that counts
 - tested by: SELFTEST step 6
 - not covered: none known
 
