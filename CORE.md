@@ -275,7 +275,7 @@ The continuous work:
    `ListAgents` once, never re-subscribe in a loop, wait for its report; one gone `done` (its
    worker's report fell back to you) is resumed by its full id with that report (TOOLKIT *Pause and
    resume*). **Renamed** (by the owner, or
-   after a restart) → tell every running session the new name, one SendMessage each; the roles'
+   after a restart) → tell every running session of this project (§1.17) the new name, one SendMessage each; the roles'
    fallback to the project's Coordinator is only the net. Answer workers
    point first; only owner decisions go to the owner; a worker near its context limit or stuck → help
    or split. Long CI logs, PR threads, diffs or docs go to the **scout**
@@ -294,7 +294,7 @@ The continuous work:
    voiced in acceptance are handled per `PROJECT.md`.
 7. **Integrate** per `PROJECT.md` (§1.6, §1.7): one change at a time; a broken main line first; rule
    changes every session follows go **first in the queue** (still through review and merge, §1.1) and
-   are announced to every running session once merged.
+   are announced to every running session of this project (§1.17) once merged.
 8. **Clean up** (§8).
 9. **Book-keep and report** (§11, §12).
 
@@ -579,7 +579,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   marked `guess`; a kind with no task rows yet gets the coordinator's own ready estimate, marked `guess`.
 - **Block forecast:** the plan shows the block's estimate in cost and limit percent against
   what is left before the caps (§9), the 5-hour window included (`scripts/run-stats --limits --block
-  <USD>` with the caps: per window its percent, the dollars left and whether it fits), and in time: the longest chain of
+  <USD>` - the block without its top-rung runs - and `--block-top <USD>` for those runs (§7), with the
+  caps: per window its percent, the dollars left and whether it fits), and in time: the longest chain of
   its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
   median time to ready (a task waits for its dependency to be ready, not just worked), marked `rough`.
   It does not fit → a smaller block, or the owner decides (over a cap only with permission).

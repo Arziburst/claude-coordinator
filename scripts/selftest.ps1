@@ -451,6 +451,10 @@ switch ($Step) {
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if ($h.onFailure -is [string] -and $h.onFailure -ceq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
   else { Fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)' }
+  # SendMessage (CORE section 1.17): the guard reads its `to` only when the matcher takes that tool in
+  $hitS = $true
+  if (-not ($matcher -ceq '' -or $matcher -ceq '*' -or $matcher -ceq '.*')) { try { $hitS = 'SendMessage' -cmatch "^(?:$matcher)$" } catch { $hitS = $false } }
+  if ($hitS) { Pass 'its matcher covers SendMessage' } else { Skip "its matcher leaves out SendMessage: a message to another project's session is not guarded (CORE 1.17)" }
   # the owner's working copy (TOOLKIT Safety): with env COORD_PROTECTED_ROOT the guard keeps the edit
   # tools out of it - so the root is an absolute path to a folder here, and the matcher takes in each
   # edit tool (none, "", "*" and ".*" match every tool; otherwise the whole name must match it)

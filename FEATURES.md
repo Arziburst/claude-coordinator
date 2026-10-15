@@ -28,7 +28,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-START-01 | The one start sequence | every session runs the same nine steps and then waits | START |
 | F-START-02 | One coordinator per project | a second coordinator session in the same folder is raised, never joined silently | START |
 | F-START-03 | The coordinator's name | `<Project> Coordinator`, always containing `Coordinator`, set by the owner | START |
-| F-START-04 | The init quiz | thirteen owner questions with a recommended option, then one summary for a yes | START |
+| F-START-04 | The init quiz | fourteen owner questions with a recommended option, then one summary for a yes | START |
 | F-START-05 | Strictness presets | swarm / standard / strict set the owner's gates between tasks | START |
 | F-START-06 | Spend level | lean / balanced / thorough tilts model and effort and sets when the top rung runs | START |
 | F-START-07 | Settings | one table of the project's settings; a change is always a quiz | START |
@@ -151,7 +151,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - entry: step 6 of the start sequence; a new or adopted project
 - promises: no worker and no change before every applicable question is answered and the summary gets a yes (§1.12); each question is multiple choice with the recommendation first; what the project already shows is confirmed in one table, not asked
 - tested by: none
-- not covered: the quiz's wording is not checked against the thirteen questions
+- not covered: the quiz's wording is not checked against the fourteen questions
 
 ### F-START-05 Strictness presets
 - defined: CORE.md §3, PROJECT.template.md
@@ -386,7 +386,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-01 Protected branches guarded
 - defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, TOOLKIT.md, CORE.md §1, procedures/INIT.md, PROJECT.template.md
 - entry: every Bash or PowerShell tool call (PreToolUse); the list: env `COORD_PROTECTED_BRANCHES`, one-time step `protected-branches`
-- promises: the protected branches are main, master and the names of `COORD_PROTECTED_BRANCHES` (a list adds to main and master, never replaces them; names split at spaces and / or commas, each once, each matched whole and literally with letter case ignored — no patterns, so `release/1.0` is not `release/1x0`; empty or unset: main master; a list replaces that default); a push, force-push or delete of any of them is blocked, and the block names the branch, in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
+- promises: the protected branches are main, master and the names of `COORD_PROTECTED_BRANCHES` (a list adds to main and master, never replaces them; names split at spaces and / or commas, each once, each matched whole and literally with letter case ignored — no patterns, so `release/1.0` is not `release/1x0`; empty or unset: main master); a push, force-push or delete of any of them is blocked, and the block names the branch, in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
 - tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt (also with `COORD_PROTECTED_BRANCHES` set: `dev` in every form while `develop` and `dev-fix` pass, main and master still blocked with only `dev` listed, names with a dot, a plus or an asterisk matched literally, comma lists, unset and only separators as main master), CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
 - not covered: deliberate evasion (eval, quoting inside a name, aliases, a branch name in a variable) is out of scope by design
 
@@ -421,7 +421,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-06 The guard through Claude Code
 - defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, TOOLKIT.md
 - entry: `selftest hooks --settings <file>`, `selftest hookcheck --session <id>`; SELFTEST step 2a
-- promises: a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked (the coordinator's only where they hold the guard: without one the probe is a SKIP); a single-quoted path with a space counts as quoted; the protected branches are reported (`protected branches: main master (default)` when `COORD_PROTECTED_BRANCHES` is unset) and, when set, each listed name must be blocked by this core's guard as a push to that protected branch; `hookcheck` fails on a session prefix of several transcripts and on a pattern or path character in the id
+- promises: a matcher that leaves out SendMessage is a SKIP (messages to another project's sessions unguarded, offered to the owner by an update); a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked (the coordinator's only where they hold the guard: without one the probe is a SKIP); a single-quoted path with a space counts as quoted; the protected branches are reported (`protected branches: main master (default)` when `COORD_PROTECTED_BRANCHES` is unset) and, when set, each listed name must be blocked by this core's guard as a push to that protected branch; `hookcheck` fails on a session prefix of several transcripts and on a pattern or path character in the id
 - tested by: tests/selftest/hooks.sh (tests/selftest/hooks/expected.txt: every settings file in tests/selftest/hooks, among them a minified one, two PreToolUse entries, a matcher written after its hooks, a matcher `.*`, a trailing comma, a single-quoted path, and `COORD_PROTECTED_BRANCHES` lists separated by spaces or commas and with a name the guard cannot block; read with jq and with the awk reader; a step given another step's parameter is a usage error; an ambiguous or patterned hookcheck id), tests/selftest/claude, CI steps "selftest - the guard's settings" (bash with and without jq, Windows PowerShell 5.1 and pwsh, PowerShell 7 on Linux, parity on Linux)
 - not covered: hooks load at session start, so a fixed file is proven only in a new session
 
@@ -715,7 +715,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-UPDATE-04 One-time steps
 - defined: ONE-TIME.md, procedures/UPDATE-CORE.md, CORE.md §3
-- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `model-own-limits`, `fable-on-plan`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
+- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `kinds-map`, `worktree-roots`, `self-improvement`, `model-own-limits`, `fable-on-plan`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `protected-root`, `protected-branches`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
 - promises: each project's checklist records which steps ran; an update offers only the steps added since, so an older project is asked instead of getting defaults silently; settings are asked as a quiz
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
