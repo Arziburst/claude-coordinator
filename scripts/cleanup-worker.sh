@@ -9,8 +9,9 @@
 # 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
 # after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
 # session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
-# the worktree itself) - nothing is stopped, removed or changed (CORE §1.17); a session the listing does
-# not have is handled as before (Windows: cleanup-worker.ps1, the same checks and codes).
+# the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
+# changed (CORE §1.17); a session the listing does not have is handled as before (Windows:
+# cleanup-worker.ps1, the same checks and codes).
 set -euo pipefail
 
 session="" wt="" dry=0
@@ -100,7 +101,8 @@ if [ -n "$session" ]; then
     echo "session $session: job id $id"
   fi
   # only this project's sessions (CORE §1.17): a listed session whose working folder is outside the
-  # repository's main checkout (its .claude/worktrees included) and the worktree is left alone
+  # repository's main checkout (its .claude/worktrees included) and the worktree (with the folder whose
+  # .claude/worktrees holds it) is left alone
   scwd="$(objects "$raw" | while IFS= read -r o; do [ "$(field id "$o")" = "$id" ] && { field cwd "$o"; break; }; done || true)"
   if [ -n "$scwd" ]; then
     # each folder also as it lies on disk (links resolved; on Windows an 8.3 name in its long form)
@@ -108,15 +110,18 @@ if [ -n "$session" ]; then
     phys() { (cd -P -- "$1" 2>/dev/null && pwd $pw) || true; }
     sc="$(printf '%s' "$scwd" | sed 's#\\\\#\\#g')"
     top="$(git -C "$wt" rev-parse --path-format=absolute --show-toplevel 2>/dev/null)" || top=""
-    own=""
+    own="" dirs=()
+    for d in "$root" "$root/.claude/worktrees" "$top" "$wt" "$(phys "$root")" "$(phys "$wt")"; do
+      [ -n "$d" ] || continue
+      d="$(canon "$d")"; dirs+=("$d")
+      # the folder whose .claude/worktrees holds the worktree (a state repository's worktree started
+      # from the project root, as the self-test does)
+      case "$d/" in ?*/.claude/worktrees/?*) dirs+=("${d%%/.claude/worktrees/*}") ;; esac
+    done
     for c in "$sc" "$(phys "$sc")"; do
       [ -n "$c" ] || continue
       c="$(canon "$c")"
-      for d in "$root" "$root/.claude/worktrees" "$top" "$wt" "$(phys "$root")" "$(phys "$wt")"; do
-        [ -n "$d" ] || continue
-        d="$(canon "$d")"
-        case "$c/" in "$d/"*) own=1; break 2 ;; esac
-      done
+      for d in "${dirs[@]}"; do case "$c/" in "$d/"*) own=1; break 2 ;; esac; done
     done
     if [ -z "$own" ]; then
       echo "SESSION FOREIGN: $id ($sc): not this project's session - nothing done" >&2

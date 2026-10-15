@@ -501,6 +501,16 @@ grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a session of another fo
 printf 'f0e1d2c3\t%s\n' "$rp$(case "$rp" in *\\*) printf '\\' ;; *) printf / ;; esac)" > "$SS.cwd"
 STUB_HEADS="$h" check 0 "cleanup: a session in the repository's root" -- cleanup --worktree "$w" --session f0e1d2c3
 expect_in "cleaned: f0e1d2c3"
+# the self-test's shape: a worktree under another folder's .claude/worktrees (a state repository's,
+# started from the project root), the session in that folder - its folder is the project's
+mkdir -p "$tmp/project2"
+w="$tmp/project2/.claude/worktrees/22-fix"
+git -C "$tmp/repo" worktree add -q -b 22-fix "$w" main && g -C "$w" commit -q --allow-empty -m 22-fix && git -C "$w" push -q -u origin 22-fix 2>/dev/null
+h="$(git -C "$w" rev-parse HEAD)"
+printf '%s %s %s %s\n' 5e1f7e57 5e1f7e57-1111-4222-8333-444455556666 running "#st1 worker: selftest" > "$SS"
+printf '5e1f7e57\t%s\n' "$(native "$tmp/project2")" > "$SS.cwd"
+STUB_HEADS="$h" check 0 "cleanup: the session in the folder that holds the worktree" -- cleanup --worktree "$w" --session 5e1f7e57
+expect_in "cleaned: 5e1f7e57"
 # the same root in another letter case is the root where letter case in paths is ignored (Windows, macOS)
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
   mk 21-fix

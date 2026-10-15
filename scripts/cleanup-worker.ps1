@@ -8,8 +8,8 @@
 # 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
 # after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
 # session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
-# the worktree itself) - nothing is stopped, removed or changed (CORE section 1.17); a session the
-# listing does not have is handled as before.
+# the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
+# changed (CORE section 1.17); a session the listing does not have is handled as before.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -111,7 +111,8 @@ if ($Session) {
     "session ${Session}: job id $id"
   }
   # only this project's sessions (CORE section 1.17): a listed session whose working folder is outside
-  # the repository's main checkout (its .claude/worktrees included) and the worktree is left alone
+  # the repository's main checkout (its .claude/worktrees included) and the worktree (with the folder whose
+  # .claude/worktrees holds it) is left alone
   $scwd = ''
   foreach ($o in $listing) { if ((Field $o 'id') -ceq $id) { $scwd = Field $o 'cwd'; break } }
   if ($scwd) {
@@ -119,7 +120,15 @@ if ($Session) {
     # each folder also in its full form (on Windows an 8.3 name in its long form)
     function Full([string]$p) { try { if (Test-Path -LiteralPath $p) { return [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $p).ProviderPath) } } catch { }; '' }
     $top = "$(git -C $Worktree rev-parse --path-format=absolute --show-toplevel 2>$null)".Trim()
-    $dirs = @($root, "$root/.claude/worktrees", $top, $Worktree, (Full $root), (Full $Worktree)) | Where-Object { $_ } | ForEach-Object { Canon $_ }
+    $dirs = @()
+    foreach ($d in @($root, "$root/.claude/worktrees", $top, $Worktree, (Full $root), (Full $Worktree))) {
+      if (-not $d) { continue }
+      $d = Canon $d; $dirs += $d
+      # the folder whose .claude/worktrees holds the worktree (a state repository's worktree started
+      # from the project root, as the self-test does)
+      $k = "$d/".IndexOf('/.claude/worktrees/', [StringComparison]::Ordinal)
+      if ($k -gt 0 -and "$d/".Length -gt $k + 19) { $dirs += $d.Substring(0, $k) }
+    }
     foreach ($c in @($sc, (Full $sc))) {
       if (-not $c) { continue }
       $c = Canon $c

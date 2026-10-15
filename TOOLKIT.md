@@ -109,8 +109,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   --json --all`, else its first 8 characters); a session still listed after `claude rm` is reported as
   `SESSION KEPT: <id> (claude rm failed: <its message>)`, exit 4, the worktree and branch left as is —
   never `cleaned`. A session the listing places outside the project (its `cwd` not under the
-  repository's main checkout or the worktree) is never touched: `SESSION FOREIGN: <id> (<cwd>): not this
-  project's session - nothing done`, exit 5 (CORE §1.17).
+  repository's main checkout, the worktree or the folder whose `.claude/worktrees` holds it) is never
+  touched: `SESSION FOREIGN: <id> (<cwd>): not this project's session - nothing done`, exit 5 (CORE
+  §1.17).
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
