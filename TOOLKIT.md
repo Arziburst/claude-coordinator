@@ -103,6 +103,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`;
   with `--session`, first `claude stop <id>`, read its spend (session-tokens: the stop wrote its totals)
   and delete its status file (*Usage*) — cleanup-worker then stops (a no-op) and removes it.
+  A worker's worktree that cleanup-worker leaves as NOT CLEAN only for untracked files: list them to
+  the owner, never remove them yourself and never `--force` (they may be work that never reached the
+  PR). A detached scratch worktree (a verifier reading another commit) is different — it holds only
+  that run's artefacts: `git -C <it> clean -ffdx`, then `git worktree remove <it>` (roles/verifier.md).
   `--session` takes the short id or the full `sessionId` (mapped to its short id through `claude agents
   --json --all`, else its first 8 characters); a session still listed after `claude rm` is reported as
   `SESSION KEPT: <id> (claude rm failed: <its message>)`, exit 4, the worktree and branch left as is —
