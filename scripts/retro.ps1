@@ -303,6 +303,8 @@ function GKey([string]$r) {
     'recursive removal of /, a drive or home' { return 'remove-root' }
     'recursive removal of the project or a folder that holds it' { return 'remove-project' }
   }
+  if ($r.StartsWith('push to a protected branch (', $ORD)) { return 'push-protected' }
+  if ($r.StartsWith('deleting a protected branch (', $ORD)) { return 'delete-protected' }
   if ($r.StartsWith('push while on ', $ORD)) { return 'push-while-on-protected' }
   if ($r.StartsWith('project rule file cannot be read', $ORD)) { return 'project-rules-unreadable' }
   if ($r.StartsWith('project rule cannot be read', $ORD)) { return 'project-rule-unreadable' }

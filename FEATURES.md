@@ -61,7 +61,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
 | F-WORKERS-09 | Messages between sessions | the name is the address; renames are announced | WORKERS |
 | F-WORKERS-10 | A run cut by a usage limit | pause to the reset, then respawn and say "continue" | WORKERS |
-| F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of main / master are blocked | SAFE |
+| F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of the protected branches (main / master by default) are blocked | SAFE |
 | F-SAFE-02 | Destructive removals guarded | removing `/`, a drive, home or a worktree by hand is blocked | SAFE |
 | F-SAFE-03 | The guard parses like a shell | quotes, continuations, `$(…)`, `bash -c` and heredocs are understood | SAFE |
 | F-SAFE-04 | Unreadable input blocks | input that is not a JSON object blocks; a BOM is dropped | SAFE |
@@ -384,10 +384,10 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ## SAFE
 
 ### F-SAFE-01 Protected branches guarded
-- defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, TOOLKIT.md, CORE.md §1
-- entry: every Bash or PowerShell tool call (PreToolUse)
-- promises: a push, force-push or delete of main or master is blocked in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
-- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt, CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
+- defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, TOOLKIT.md, CORE.md §1, procedures/INIT.md, PROJECT.template.md
+- entry: every Bash or PowerShell tool call (PreToolUse); the list: env `COORD_PROTECTED_BRANCHES`, one-time step `protected-branches`
+- promises: the protected branches are `COORD_PROTECTED_BRANCHES` (names split at spaces and / or commas, each matched whole and literally with letter case ignored — no patterns, so `release/1.0` is not `release/1x0`; empty or unset: main master; a list replaces that default); a push, force-push or delete of any of them is blocked, and the block names the branch, in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
+- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt (also with `COORD_PROTECTED_BRANCHES` set: `dev` in every form while `develop` and `dev-fix` pass, names with a dot, a plus or an asterisk matched literally, comma lists, unset and only separators as main master), CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
 - not covered: deliberate evasion (eval, quoting inside a name, aliases, a branch name in a variable) is out of scope by design
 
 ### F-SAFE-02 Destructive removals guarded
@@ -414,21 +414,21 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-05 The guard's self-test
 - defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
 - entry: `--self-test` / `-SelfTest` at session start; one-time step `safety-hook-test`
-- promises: the self-test prints `safety-guard: OK` only when a push to main blocks and a work-branch push passes (a guard that blocks everything, as a syntax error does, fails it), or the session is told to fix it before starting workers
+- promises: the self-test prints `safety-guard: OK` only when a push to the first protected branch (main by default) blocks and a work-branch push passes (a guard that blocks everything, as a syntax error does, fails it), or the session is told to fix it before starting workers
 - tested by: CI steps for the guard (the self-test runs in each), tests/safety-guard/run.sh (the self-test of the guard and of a copy that blocks every call)
 - not covered: it calls the guard directly, so it cannot see a harness that drops the block (F-SAFE-06)
 
 ### F-SAFE-06 The guard through Claude Code
 - defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, TOOLKIT.md
 - entry: `selftest hooks --settings <file>`, `selftest hookcheck --session <id>`; SELFTEST step 2a
-- promises: a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked (the coordinator's only where they hold the guard: without one the probe is a SKIP); a single-quoted path with a space counts as quoted; `hookcheck` fails on a session prefix of several transcripts and on a pattern or path character in the id
-- tested by: tests/selftest/hooks.sh (tests/selftest/hooks/expected.txt: every settings file in tests/selftest/hooks, among them a minified one, two PreToolUse entries, a matcher written after its hooks, a matcher `.*`, a trailing comma and a single-quoted path; read with jq and with the awk reader; a step given another step's parameter is a usage error; an ambiguous or patterned hookcheck id), tests/selftest/claude, CI steps "selftest - the guard's settings" (bash with and without jq, Windows PowerShell 5.1 and pwsh, PowerShell 7 on Linux, parity on Linux)
+- promises: a settings file whose guard runs under a PowerShell shell without the exit pass-through, with a backslash path or with `$env:` fails; a probe session told to push to main shows the block, and a non-blocking hook error or no hook at all is a FAIL; both the workers' and the coordinator's own settings are checked (the coordinator's only where they hold the guard: without one the probe is a SKIP); a single-quoted path with a space counts as quoted; the protected branches are reported (`protected branches: main master (default)` when `COORD_PROTECTED_BRANCHES` is unset) and, when set, each listed name must be blocked by this core's guard as a push to that protected branch; `hookcheck` fails on a session prefix of several transcripts and on a pattern or path character in the id
+- tested by: tests/selftest/hooks.sh (tests/selftest/hooks/expected.txt: every settings file in tests/selftest/hooks, among them a minified one, two PreToolUse entries, a matcher written after its hooks, a matcher `.*`, a trailing comma, a single-quoted path, and `COORD_PROTECTED_BRANCHES` lists separated by spaces or commas and with a name the guard cannot block; read with jq and with the awk reader; a step given another step's parameter is a usage error; an ambiguous or patterned hookcheck id), tests/selftest/claude, CI steps "selftest - the guard's settings" (bash with and without jq, Windows PowerShell 5.1 and pwsh, PowerShell 7 on Linux, parity on Linux)
 - not covered: hooks load at session start, so a fixed file is proven only in a new session
 
 ### F-SAFE-07 Deny rules
 - defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
 - entry: the worker safety file; the strict preset; the cautious override
-- promises: the baseline denies protected-branch writes in shell and PowerShell forms (a push or a force push to main or master with further arguments too) and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
+- promises: the baseline denies protected-branch writes in shell and PowerShell forms (a push or a force push to main or master with further arguments too; a project listing more branches in `COORD_PROTECTED_BRANCHES` adds the same rules for each, INIT) and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
 - tested by: none
 - not covered: MCP tools are covered by deny rules only, not by the hook
 

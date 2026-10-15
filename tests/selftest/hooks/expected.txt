@@ -7,6 +7,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == bashonly.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -17,7 +18,50 @@ PASS hooks: no PowerShell shell around it
 FAIL hooks: its matcher leaves out PowerShell: the PowerShell tool runs unguarded
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
+== branches.json (exit 0)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master dev release/1.0
+PASS hooks: the guard blocks a push to main
+PASS hooks: the guard blocks a push to master
+PASS hooks: the guard blocks a push to dev
+PASS hooks: the guard blocks a push to release/1.0
+selftest hooks: 11 pass, 0 fail, 1 skipped
+== branchesbad.json (exit 1)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: dev -x
+PASS hooks: the guard blocks a push to dev
+FAIL hooks: the guard does not block a push to -x as a protected branch (exit 0)
+selftest hooks: 8 pass, 1 fail, 1 skipped
+== branchescomma.json (exit 0)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main develop staging
+PASS hooks: the guard blocks a push to main
+PASS hooks: the guard blocks a push to develop
+PASS hooks: the guard blocks a push to staging
+selftest hooks: 10 pass, 0 fail, 1 skipped
 == comment.json (exit 0)
 PASS hooks: a safety-guard hook
 PASS hooks: its path uses forward slashes
@@ -27,6 +71,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == envvar.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -37,6 +82,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == good.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -47,6 +93,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == matcherafter.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -57,6 +104,7 @@ PASS hooks: no PowerShell shell around it
 FAIL hooks: its matcher leaves out PowerShell: the PowerShell tool runs unguarded
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == matcherall.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -67,6 +115,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == minified.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -77,6 +126,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == noblock.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -87,6 +137,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 FAIL hooks: no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == post.json (exit 1)
 FAIL hooks: no safety-guard hook in the file
@@ -101,6 +152,7 @@ PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 PASS hooks: COORD_PROTECTED_ROOT is an absolute path to a folder
 PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
+protected branches: main master (default)
 selftest hooks: 9 pass, 0 fail, 0 skipped
 == protectedempty.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -111,6 +163,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == protectedmatcher.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -122,6 +175,7 @@ PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 PASS hooks: COORD_PROTECTED_ROOT is an absolute path to a folder
 FAIL hooks: its matcher leaves out Edit, Write, MultiEdit, NotebookEdit: those edit tools reach the working copy unguarded
+protected branches: main master (default)
 selftest hooks: 8 pass, 1 fail, 0 skipped
 == protectedmissing.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -133,6 +187,7 @@ PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 FAIL hooks: COORD_PROTECTED_ROOT is not a folder on this machine: C:/nonexistent-coordinator-root
 PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
+protected branches: main master (default)
 selftest hooks: 8 pass, 1 fail, 0 skipped
 == protectedpartial.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -144,6 +199,7 @@ PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 PASS hooks: COORD_PROTECTED_ROOT is an absolute path to a folder
 FAIL hooks: its matcher leaves out MultiEdit, NotebookEdit: those edit tools reach the working copy unguarded
+protected branches: main master (default)
 selftest hooks: 8 pass, 1 fail, 0 skipped
 == protectedrelative.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -155,6 +211,7 @@ PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 FAIL hooks: COORD_PROTECTED_ROOT is not an absolute path: projects/app
 PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
+protected branches: main master (default)
 selftest hooks: 8 pass, 1 fail, 0 skipped
 == shell.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -165,6 +222,7 @@ FAIL hooks: a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == shellexit.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -175,6 +233,7 @@ PASS hooks: a PowerShell shell, with exit $LASTEXITCODE passing the block throug
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == shellfar.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -185,6 +244,7 @@ FAIL hooks: a PowerShell shell without "; exit $LASTEXITCODE": the block (exit 2
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == singlequote.json (exit 0)
 PASS hooks: a safety-guard hook
@@ -195,6 +255,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped
 == space.json (exit 1)
 PASS hooks: a safety-guard hook
@@ -205,6 +266,7 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 6 pass, 1 fail, 1 skipped
 == trailingcomma.json (exit 1)
 FAIL hooks: the settings file is not valid JSON (Claude Code would not load it)
@@ -218,4 +280,5 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
+protected branches: main master (default)
 selftest hooks: 7 pass, 0 fail, 1 skipped

@@ -34,6 +34,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Self-improvement summaries (procedures/RETRO.md) | `<fill>` | `<fill>` | `<date>` | **show me first** (the first week always) · send · only me — whether the weekly retro sends its anonymous summary of numbers to claude-coordinator |
 | Self-improvement id | `<fill>` | `<fill>` | `<date>` | 12 random hex digits from `scripts/retro --new-id`, made once, never derived from a name |
 | Worktree roots | `<fill>` | `<fill>` | `<date>` | none — the workers' worktrees are under `.claude/worktrees`; else every `--worktree-root` the project gives start-worker, relative to the project root where it can be (`../<project>-wt`), split by `,` — the retro counts sessions started there |
+| Protected branches (CORE §1.9, TOOLKIT *Safety*) | `<fill>` | `<fill>` | `<date>` | the repository's default branch, the branches protected on the code host, and `main` / `master` where they exist (INIT 3.1, question 14) — exact names, no patterns; written to the worker safety file's `env` `COORD_PROTECTED_BRANCHES` and its push deny rules; unset there: `main master` |
 | Last retro (week of) | `<fill>` | `<fill>` | `<date>` | none yet — the weekly retro sets it (procedures/RETRO.md) |
 
 ## Project

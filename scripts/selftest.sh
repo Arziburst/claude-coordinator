@@ -335,6 +335,7 @@ hooks)
   function keep(path, v,    m, e, h) {
     m = split(path, P, SUBSEP)
     if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_ROOT") { R = v; return }
+    if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_BRANCHES") { B = v; return }
     if (m < 5 || P[2] != "hooks" || P[3] != "PreToolUse" || substr(P[4], 1, 1) != "\001") return
     e = substr(P[4], 2) + 0
     if (m == 5 && P[5] == "matcher") M[e] = v
@@ -372,20 +373,25 @@ hooks)
   }
   { all = (NR > 1) ? all "\n" $0 : $0 }
   END {
-    s = all; n = length(s); i = 1; ge = ""; R = ""
+    s = all; n = length(s); i = 1; ge = ""; R = ""; B = ""
     ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
     ws(); if (i <= n) exit 3
-    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R }
+    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R; print B }
   }'
   # a UTF-8 BOM before the JSON is dropped
   json="$(B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }' "$file")"
-  ok="" g="" root=""
+  ok="" g="" root="" pbs=""
   if command -v jq >/dev/null 2>&1; then
     printf '%s\n' "$json" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1 &&
       g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1
     # env.COORD_PROTECTED_ROOT: the owner's working copy, kept from edit tools (TOOLKIT Safety)
     [ -n "$ok" ] && root="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_ROOT | strings | gsub("[\n\r\t]"; " ")')"
-  else g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1 && root="$(printf '%s\n' "$g" | sed -n 5p)"; fi
+    # env.COORD_PROTECTED_BRANCHES: the branches the guard protects (TOOLKIT Safety)
+    [ -n "$ok" ] && pbs="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_BRANCHES | strings | gsub("[\n\r\t]"; " ")')"
+  else
+    g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1 && root="$(printf '%s\n' "$g" | sed -n 5p)" &&
+      pbs="$(printf '%s\n' "$g" | sed -n 6p)"
+  fi
   [ -n "$ok" ] || { fail "the settings file is not valid JSON (Claude Code would not load it)"; finish; }
   [ -n "$g" ] || { fail "no safety-guard hook in the file"; finish; }
   pass "a safety-guard hook"
@@ -437,6 +443,22 @@ hooks)
     done
     if [ -z "$miss" ]; then pass "its matcher covers Edit, Write, MultiEdit and NotebookEdit"
     else fail "its matcher leaves out $miss: those edit tools reach the working copy unguarded"; fi
+  fi
+  # the protected branches (TOOLKIT Safety): env COORD_PROTECTED_BRANCHES, names split at spaces and / or
+  # commas; unset, empty or only separators: main master. Each listed name: a push to it, fed to this
+  # core's guard with the file's value, must be blocked as a push to that protected branch
+  names=(); set -f; for b in ${pbs//,/ }; do names+=("$b"); done; set +f
+  if [ ${#names[@]} = 0 ]; then echo "protected branches: main master (default)"
+  else
+    echo "protected branches: ${names[*]}"
+    for b in "${names[@]}"; do
+      err="$(printf '{"tool_input":{"command":"git push origin %s"}}' "$b" |
+        COORD_PROTECTED_BRANCHES="$pbs" bash "$core/scripts/hooks/safety-guard.sh" 2>&1 >/dev/null)"; rc=$?
+      case "$rc:$err" in
+        "2:Blocked by safety-guard: push to a protected branch ($b)."*) pass "the guard blocks a push to $b" ;;
+        *) fail "the guard does not block a push to $b as a protected branch (exit $rc)" ;;
+      esac
+    done
   fi
   finish ;;
 

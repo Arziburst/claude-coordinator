@@ -23,14 +23,17 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   [SOURCES.md](SOURCES.md) §3. Then install the core's roles into
   `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no question.
 - **Safety check:**
-  - **Branch protection on the code host** — the main branch requires a PR, passing checks and (in the
+  - **Branch protection on the code host** — each protected branch (`PROJECT.md` *Protected
+    branches*, question 14; not only the default branch) requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it
     (or record why it cannot be, e.g. the plan does not offer it). A **self-hosted runner** on a public
     repository: fork PRs never reach it and every external contributor needs approval, or the
     repository stays private (TOOLKIT *CI*). A change of the repository's visibility re-runs this check.
   - **Worker safety settings** (`settings.example.json`, Windows `settings.example.windows.json` → a
     file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
-    which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (plus, where
+    which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches — the
+    examples' main / master rules, repeated for every other branch of *Protected branches*, and that
+    list in its `env` `COORD_PROTECTED_BRANCHES` (names separated by spaces; TOOLKIT *Safety*) — (plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`) and the safety hook,
     whose self-test must pass before any worker starts. Its `env` `COORD_PROTECTED_ROOT` is filled
     with the project root (the owner's working copy, absolute, forward slashes): with the edit tools
@@ -162,6 +165,15 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     then the owner picks the mode, [RETRO.md](RETRO.md)) · *send it* · *only me — the weekly retro runs,
     nothing leaves this machine*. Recorded in `PROJECT.md` *Settings* with the anonymous id
     (`scripts/retro --new-id`, random, never derived from a name); the weekly retro runs in every mode.
+14. **Protected branches — which branches does no worker ever push to, force-push or delete?** The
+    recommended answer is prefilled from the research: the repository's default branch, the branches
+    protected on the code host (where a gh login exists: `gh api repos/{owner}/{repo}/branches --jq
+    '.[] | select(.protected) | .name'`) and `main` / `master` where they exist. Exact names, no
+    patterns (`release/1.0`, not `release/*`); the list replaces the default `main master`, so those
+    two stay in it where they exist; the state repository's `state` is never one of them (CORE §12b).
+    Options: *the found list* (recommended) · *`main master` only* · the owner's own list. Recorded in
+    `PROJECT.md` *Settings* (*Protected branches*) and written to the worker safety file (*Safety
+    check*): `env` `COORD_PROTECTED_BRANCHES` and the push deny rules for each listed branch.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the

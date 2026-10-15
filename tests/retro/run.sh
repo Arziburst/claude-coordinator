@@ -68,7 +68,7 @@ n=$((n + 1)); if grep -q '^| trivial | 1 |' "$tmp/public.md" && grep -q '^| othe
 n=$((n + 1)); if grep -q 'superseded' "$tmp/public.md"; then bad "an unknown result in the public body"; else echo "ok   an unknown result stays out of the public body"; fi
 n=$((n + 1)); if grep -q '^| predictability | cost_logged | 4 | 2 |' "$tmp/public.md" && grep -q '^| predictability | work_rebuilt | 2 | 2 |' "$tmp/public.md"; then echo "ok   logged and rebuilt forecasts counted apart"; else bad "the logged and rebuilt counts"; fi
 expect "the local report keeps the project's kinds and lists an unknown result" 0 any - -- "$runs" --week 2026-10-07 --project "$P"
-grep -q '^kind	mechanical	1	' "$tmp/out" && grep -q '^unknown result: superseded by #17 ×1$' "$tmp/out" && grep -q '^block	deleting a protected branch	' "$tmp/out" ||
+grep -q '^kind	mechanical	1	' "$tmp/out" && grep -q '^unknown result: superseded by #17 ×1$' "$tmp/out" && grep -q '^block	deleting a protected branch (main)	' "$tmp/out" ||
   bad "the local report: its own kind mechanical, the unknown result and the sibling worktree's block"
 # a week with too little data, no transcripts, no journal and no escapes file (a run log alone in its folder)
 mkdir -p "$tmp/bare/coordinator" && cp "$here/coordinator/RUNS.tsv" "$tmp/bare/coordinator/"

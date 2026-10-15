@@ -9,11 +9,17 @@
 # Windows PowerShell 5.1 or PowerShell 7; nothing to install.
 param([switch]$SelfTest)
 
+# The protected branches: COORD_PROTECTED_BRANCHES, names separated by spaces and/or commas (TOOLKIT.md
+# *Safety*); each is compared whole and literally (no patterns: . + * / are plain characters), letter
+# case ignored. Empty or unset: main master.
+$PROT = @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Object { $_ })   # as safety-guard.sh splits them
+if ($PROT.Count -eq 0) { $PROT = @('main', 'master') }
+
 if ($SelfTest) {
-  # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
-  # everything is not working either
+  # a push to the first protected branch (main by default) must block (exit 2) and a work-branch push
+  # must pass (exit 0): a guard that blocks everything is not working either
   $exe = (Get-Process -Id $PID).Path
-  '{"tool_input":{"command":"git push --force origin main"}}' |
+  ('{"tool_input":{"command":"git push --force origin ' + $PROT[0] + '"}}') |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
   $blocked = $LASTEXITCODE
   '{"tool_input":{"command":"git push origin 12-fix"}}' |
@@ -427,7 +433,8 @@ $WT = '(^|[/\\])\.claude([/\\]worktrees([/\\][^/\\]+)?)?$'   # a worktree, the w
 $script:dir = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
 $script:ovDir = ''; $script:ovBranch = ''   # a checkout / switch earlier in this command: dir and branch
 
-function IsProtected([string]$x) { $x -match '^(main|master)$' }
+# one of the protected branches ($PROT, above): the whole name, literally, letter case ignored
+function IsProtected([string]$x) { foreach ($b in $PROT) { if ($x -ieq $b) { return $true } }; $false }
 # A path relative to a base; "?" when it cannot be known (variables). . and ./ are the base itself.
 function Compose([string]$b, [string]$p) {
   while ($p.StartsWith('./') -or $p.StartsWith('.\')) { $p = $p.Substring(2) }
@@ -473,7 +480,7 @@ function PushSeg([string]$dd, [string[]]$a) {
     if ($r -eq '' -or $r -eq ':') { Block 'push of all matching branches (incl. protected ones)' }
     if ($r.Contains(':')) { $dst = $r.Substring($r.IndexOf(':') + 1); if (-not $dst) { $dst = $r.Substring(0, $r.IndexOf(':')) } } else { $dst = $r }
     $dst = NormRef $dst
-    if (IsProtected $dst) { Block 'push to a protected branch' }
+    if (IsProtected $dst) { Block "push to a protected branch ($dst)" }
     if (IsCurrent $dst) { $cur = $true }
   }
   if ($refs -eq 0 -and $tags) { return }   # tags only: not a branch push
@@ -489,13 +496,13 @@ function BranchSeg([string[]]$a) {
     if ($t -eq '--delete') { $del = $true } elseif ($t.StartsWith('--')) { } elseif ($t.StartsWith('-')) { if ($t -match 'd') { $del = $true } } else { $names += $t }
   }
   if (-not $del) { return }
-  foreach ($t in $names) { if (IsProtected (NormRef $t)) { Block 'deleting a protected branch' } }
+  foreach ($t in $names) { $n = NormRef $t; if (IsProtected $n) { Block "deleting a protected branch ($n)" } }
 }
 function UpdRefSeg([string[]]$a) {
   $del = $false; $names = @()
   foreach ($t in $a) { if ($t -eq '-d' -or $t -eq '--delete') { $del = $true } elseif (-not $t.StartsWith('-')) { $names += $t } }
   if (-not $del) { return }
-  foreach ($t in $names) { if (IsProtected (NormRef $t)) { Block 'deleting a protected branch' } }
+  foreach ($t in $names) { $n = NormRef $t; if (IsProtected $n) { Block "deleting a protected branch ($n)" } }
 }
 # git checkout / switch: a later bare push in the same directory pushes that branch.
 function CheckoutSeg([string]$dd, [string[]]$a) {

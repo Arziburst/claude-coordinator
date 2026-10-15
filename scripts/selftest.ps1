@@ -425,6 +425,30 @@ switch ($Step) {
     if ($miss.Count -eq 0) { Pass 'its matcher covers Edit, Write, MultiEdit and NotebookEdit' }
     else { Fail "its matcher leaves out $($miss -join ', '): those edit tools reach the working copy unguarded" }
   }
+  # the protected branches (TOOLKIT Safety): env COORD_PROTECTED_BRANCHES, names split at spaces and / or
+  # commas; unset, empty or only separators: main master. Each listed name: a push to it, fed to this
+  # core's guard with the file's value, must be blocked as a push to that protected branch
+  $pbs = ''
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_BRANCHES -is [string]) { $pbs = $cfg.env.COORD_PROTECTED_BRANCHES -replace '[\r\n\t]', ' ' }
+  $names = @($pbs -split '[ \t\n,]+' | Where-Object { $_ })   # as bash splits them: spaces, tabs, line breaks, commas
+  if ($names.Count -eq 0) { 'protected branches: main master (default)' }
+  else {
+    "protected branches: $($names -join ' ')"
+    $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
+    $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
+    $oldPb = $env:COORD_PROTECTED_BRANCHES; $env:COORD_PROTECTED_BRANCHES = $pbs
+    foreach ($b in $names) {
+      [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"git push origin ' + $b + '"}}')
+      # stdin from a file, not a PowerShell pipe (as in the scripts step)
+      if ($env:OS -eq 'Windows_NT') { $err = @(& cmd /d /s /c "`"$exe`" -NoProfile -ExecutionPolicy Bypass -File `"$hook`" < `"$jf`" 2>&1 >nul") }
+      else { $err = @(Get-Content -Raw -LiteralPath $jf | & $exe -NoProfile -File $hook 2>&1 | ForEach-Object { "$_" }) }
+      $rc = $LASTEXITCODE
+      if ($rc -eq 2 -and ($err -join "`n").StartsWith("Blocked by safety-guard: push to a protected branch ($b).", [StringComparison]::Ordinal)) { Pass "the guard blocks a push to $b" }
+      else { Fail "the guard does not block a push to $b as a protected branch (exit $rc)" }
+    }
+    $env:COORD_PROTECTED_BRANCHES = $oldPb
+    Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
+  }
   Finish
 }
 'hookcheck' {
