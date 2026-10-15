@@ -539,7 +539,8 @@ function seg(toks, nt, depth, qm, pp,    j, t, line, k, m, inner, lt, line2) {
   OUT = OUT (pp ? "\001|\t" : "") line "\n"   # a first word \001| : this command reads the previous one through |
   # a word with a backslash is also checked as the shell reads it unquoted (git push origin ma\in);
   # the command as written is checked too, so this only adds a check
-  if (qm && line2 != line) OUT = OUT (pp ? "\001|\t" : "") line2 "\n"
+  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
+  if (qm && ENVIRON["SG_TOOL"] != "PowerShell" && line2 != line) OUT = OUT (pp ? "\001|\t" : "") line2 "\n"
   inner = startproc(toks, nt); if (inner != "") scan(inner, depth + 1, qm)
   if (!isshell(toks, nt)) return
   j = SHJ
@@ -603,7 +604,7 @@ END {
   if (FAIL) { OUT = ""; scan(all, 0, 0) }
   printf "%s", OUT
 }'
-segments=$(printf '%s' "$cmd" | awk "$SCAN_AWK")
+segments=$(printf '%s' "$cmd" | SG_TOOL="$tool" awk "$SCAN_AWK")
 
 # --- helpers (case-insensitive matching: GIT PUSH ORIGIN MAIN counts) ---
 shopt -s nocasematch

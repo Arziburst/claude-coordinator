@@ -394,7 +394,8 @@ function Seg($list, [int]$depth, [bool]$qm, [bool]$pp) {
   $script:segs.Add($clean); $script:pipes.Add($pp)
   # a word with a backslash is also checked as the shell reads it unquoted (git push origin ma\in);
   # the command as written is checked too, so this only adds a check
-  if ($qm) {
+  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
+  if ($qm -and $tool -ne 'PowerShell') {
     $un = New-Object string[] $clean.Count; $diff = $false
     for ($j = 0; $j -lt $clean.Count; $j++) { $un[$j] = Unesc $clean[$j]; if ($un[$j] -cne $clean[$j]) { $diff = $true } }
     if ($diff) { $script:segs.Add($un); $script:pipes.Add($pp) }
