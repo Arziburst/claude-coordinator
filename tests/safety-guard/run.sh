@@ -159,6 +159,19 @@ sess allow "the listing cannot be read: a message to another folder's session" '
 printf '[{"id": "b0000001", "cwd": ' > "$tmp/agents-bad.json"
 sess allow "a listing cut short: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-bad.json"
 sess block "the listing read again: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}'
+# a listing that writes non-ASCII as \uXXXX: an own session in a Cyrillic folder of the project stays own,
+# another project's session with a Cyrillic name is still found (the .sh decoded them as ?)
+mkdir -p "$tmp/work/Проект"
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/Проект/\\u041f\\u0440\\u043e\\u0435\\u043a\\u0442/g; s/Координатор/\\u041a\\u043e\\u043e\\u0440\\u0434\\u0438\\u043d\\u0430\\u0442\\u043e\\u0440/g'; }
+printf '[{"id": "c0000001", "cwd": "%s", "sessionId": "c0000001-0000-4000-8000-000000000001", "name": "own"},\n {"id": "c0000002", "cwd": "%s", "sessionId": "c0000002-0000-4000-8000-000000000001", "name": "%s"}]\n' \
+  "$(esc "$(native "$tmp/work/Проект")")" "$(esc "$(native "$tmp/other")")" "$(esc "Координатор")" > "$tmp/agents-esc.json"
+sess allow "an escaped Cyrillic folder of the project: own" '{"tool_name":"Bash","tool_input":{"command":"claude stop c0000001"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-esc.json"
+sess block "an escaped Cyrillic name of another project's session" '{"tool_name":"SendMessage","tool_input":{"to":"Координатор","message":"x"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-esc.json"
+# a line before the JSON (a notice) or a UTF-8 BOM: the listing is still read, by both versions
+{ echo "Update available"; cat "$SG_AGENTS"; } > "$tmp/agents-notice.json"
+{ printf '\357\273\277'; cat "$SG_AGENTS"; } > "$tmp/agents-bom.json"
+sess block "a notice line before the listing" '{"tool_name":"Bash","tool_input":{"command":"claude stop b0000001"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-notice.json"
+sess block "a BOM before the listing" '{"tool_name":"Bash","tool_input":{"command":"claude stop b0000001"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-bom.json"
 : > "$SG_CLAUDE_LOG"
 sess allow "a git command" '{"tool_name":"Bash","tool_input":{"command":"git status && claude --version"},"cwd":"@CWD@"}'
 sess allow "an edit" '{"tool_name":"Write","tool_input":{"file_path":"x.txt","content":"x"},"cwd":"@CWD@"}'
