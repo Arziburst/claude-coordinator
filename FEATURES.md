@@ -61,7 +61,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
 | F-WORKERS-09 | Messages between sessions | the name is the address; renames are announced | WORKERS |
 | F-WORKERS-10 | A run cut by a usage limit | pause to the reset, then respawn and say "continue" | WORKERS |
-| F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of the protected branches (main / master by default) are blocked | SAFE |
+| F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of main / master and the listed branches are blocked | SAFE |
 | F-SAFE-02 | Destructive removals guarded | removing `/`, a drive, home or a worktree by hand is blocked | SAFE |
 | F-SAFE-03 | The guard parses like a shell | quotes, continuations, `$(…)`, `bash -c` and heredocs are understood | SAFE |
 | F-SAFE-04 | Unreadable input blocks | input that is not a JSON object blocks; a BOM is dropped | SAFE |
@@ -386,8 +386,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-01 Protected branches guarded
 - defined: scripts/hooks/safety-guard.sh, scripts/hooks/safety-guard.ps1, TOOLKIT.md, CORE.md §1, procedures/INIT.md, PROJECT.template.md
 - entry: every Bash or PowerShell tool call (PreToolUse); the list: env `COORD_PROTECTED_BRANCHES`, one-time step `protected-branches`
-- promises: the protected branches are `COORD_PROTECTED_BRANCHES` (names split at spaces and / or commas, each matched whole and literally with letter case ignored — no patterns, so `release/1.0` is not `release/1x0`; empty or unset: main master; a list replaces that default); a push, force-push or delete of any of them is blocked, and the block names the branch, in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
-- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt (also with `COORD_PROTECTED_BRANCHES` set: `dev` in every form while `develop` and `dev-fix` pass, names with a dot, a plus or an asterisk matched literally, comma lists, unset and only separators as main master), CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
+- promises: the protected branches are main, master and the names of `COORD_PROTECTED_BRANCHES` (a list adds to main and master, never replaces them; names split at spaces and / or commas, each once, each matched whole and literally with letter case ignored — no patterns, so `release/1.0` is not `release/1x0`; empty or unset: main master; a list replaces that default); a push, force-push or delete of any of them is blocked, and the block names the branch, in every refspec form (quoted, `+`, `src:dst`, `:main`, `refs/heads/`, `~N`), as are `--all`, `--mirror`, a bare push while on a protected branch (also after `checkout --track origin/main` or `checkout -`), `git branch -D`, `git update-ref -d`; work branches, tag pushes and a push after `git checkout main <file>` (a file restore) pass
+- tested by: tests/safety-guard/run.sh, tests/safety-guard/cases.txt (also with `COORD_PROTECTED_BRANCHES` set: `dev` in every form while `develop` and `dev-fix` pass, main and master still blocked with only `dev` listed, names with a dot, a plus or an asterisk matched literally, comma lists, unset and only separators as main master), CI steps "safety-guard blocks and allows the shared cases" (bash with and without jq, Windows PowerShell 5.1, PowerShell 7)
 - not covered: deliberate evasion (eval, quoting inside a name, aliases, a branch name in a variable) is out of scope by design
 
 ### F-SAFE-02 Destructive removals guarded
@@ -414,7 +414,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-05 The guard's self-test
 - defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
 - entry: `--self-test` / `-SelfTest` at session start; one-time step `safety-hook-test`
-- promises: the self-test prints `safety-guard: OK` only when a push to the first protected branch (main by default) blocks and a work-branch push passes (a guard that blocks everything, as a syntax error does, fails it), or the session is told to fix it before starting workers
+- promises: the self-test prints `safety-guard: OK` only when a push to main blocks and a work-branch push passes (a guard that blocks everything, as a syntax error does, fails it), or the session is told to fix it before starting workers
 - tested by: CI steps for the guard (the self-test runs in each), tests/safety-guard/run.sh (the self-test of the guard and of a copy that blocks every call)
 - not covered: it calls the guard directly, so it cannot see a harness that drops the block (F-SAFE-06)
 

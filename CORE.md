@@ -57,7 +57,7 @@ rule → ask the owner.
 8. **Product experience is the owner's.** Look, feel and use: summarize, ask concrete questions, play the
    answer back, get a yes, record it, then write the task. Ask ahead so no worker waits.
 9. **Safety — guard the irreversible, not the routine.** Never push, force-push to or delete the
-   protected branches (PROJECT.md; main and master by default); never delete anyone's unpushed work;
+   protected branches (main and master, plus those PROJECT.md lists); never delete anyone's unpushed work;
    never weaken OS or account security; never grant trust or permission consents for the owner; stop
    external apps only through their own exit. Routine work on
    a work branch — merging main, resolving conflicts, rebasing, force-pushing *its own* branch with
@@ -710,7 +710,7 @@ change; before a handoff; on the owner's word. Other unpushed commits go **at mo
 with the next event — never a push per edit, never one a day. A push that fails (no network) stops
 nothing and is retried at the next event.
 Its working branch is always **`state`** (the self-test's `selftest/<commit>/*` evidence branches aside), also the remote's default branch: the protected
-branches (PROJECT.md; main and master by default) are blocked for direct pushes by the safety hook,
+branches (main and master, plus those PROJECT.md lists) are blocked for direct pushes by the safety hook,
 `state` is not (and is never listed among them).
 A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
 -m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the

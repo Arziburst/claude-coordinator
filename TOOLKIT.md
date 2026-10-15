@@ -157,8 +157,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
   rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
-  pushing, force-pushing or deleting the protected branches (`COORD_PROTECTED_BRANCHES`, next bullet;
-  main / master by default — in any refspec form:
+  pushing, force-pushing or deleting the protected branches (main / master and those of `COORD_PROTECTED_BRANCHES`,
+  next bullet — in any refspec form:
   quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
   `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
   following `git checkout` / `switch` (with `--track origin/main` and `-` too; `git checkout main
@@ -204,8 +204,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   --session <id>` reads the transcript of a session told to push to `main` — the block, or the
   non-blocking error, or no hook at all. So the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`: a
-  push to the first protected branch — `main` by default — must block and a work-branch push must
-  pass, so a guard that blocks everything — a
+  push to `main` must block and a work-branch push must pass, so a guard that blocks everything — a
   syntax error does — fails too); a failure there means: fix before starting workers.
   That self-test calls the guard directly, never through Claude Code, so it cannot see a shell wrapper
   or a path the harness breaks — only `hookcheck` on a real session can.
@@ -219,19 +218,21 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
   any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
-- **Which branches are protected:** `"env": {"COORD_PROTECTED_BRANCHES": "main master"}` in the worker
-  safety file — names separated by spaces and / or commas (`main, master, dev, release/1.0`). Each name
-  is matched whole and literally, letter case ignored: no patterns or globs (`release/1.0` is not
+- **Which branches are protected:** `main` and `master` always, plus the names in `"env":
+  {"COORD_PROTECTED_BRANCHES": "dev release/1.0"}` in the worker safety file — separated by spaces and
+  / or commas (`dev, release/1.0`). A list **adds to** main and master, never replaces them (a setting
+  cannot unprotect main); a name given twice, or in another letter case, counts once. Each name is
+  matched whole and literally, letter case ignored: no patterns or globs (`release/1.0` is not
   `release/1x0`, `release/*` is only a branch named so). Every check of the guard above covers each
-  listed name, and the block names it (`push to a protected branch (dev)`, `deleting a protected
-  branch (dev)`, `push while on dev`). Empty or unset: `main master`; a list **replaces** that default,
-  so a project keeps `main` and `master` in it where they exist. The list is the project's *Protected
-  branches* setting (`PROJECT.md`, asked in the init quiz, one-time step `protected-branches`). The
-  static push deny rules of the settings examples name `main` and `master` only: a project listing
-  more branches adds the same rules for each (`Bash(git push origin <b>)`, `… <b> *`, and the `--force`,
-  `-f`, `--force-with-lease` and `PowerShell(…)` forms) — INIT writes them with the env entry.
-  `selftest hooks --settings` reports the list (`protected branches: … (default)` when unset) and,
-  when it is set, checks per listed branch that this core's guard blocks a push to it.
+  protected branch, and the block names it (`push to a protected branch (dev)`, `deleting a protected
+  branch (dev)`, `push while on dev`). Empty or unset: `main` and `master` only. The names are the
+  project's *Protected branches* setting (`PROJECT.md`, asked in the init quiz, one-time step
+  `protected-branches`). The static push deny rules of the settings examples name `main` and `master`
+  only: a project listing more branches adds the same rules for each (`Bash(git push origin <b>)`,
+  `… <b> *`, and the `--force`, `-f`, `--force-with-lease` and `PowerShell(…)` forms) — INIT writes
+  them with the env entry. `selftest hooks --settings` reports the protected branches (`protected
+  branches: main master (default)` when no name is set) and, when names are set, checks per protected
+  branch — main and master included — that this core's guard blocks a push to it.
 - **The owner's working copy and the edit tools:** a worker started from the project folder
   (`start-worker` from the repository's root, EnterWorktree) works in its own copy under
   `.claude/worktrees/`, but an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` with an absolute path can

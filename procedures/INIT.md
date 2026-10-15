@@ -168,9 +168,9 @@ words. Keep a list of open questions; an unclear answer goes back on it.
 14. **Protected branches — which branches does no worker ever push to, force-push or delete?** The
     recommended answer is prefilled from the research: the repository's default branch, the branches
     protected on the code host (where a gh login exists: `gh api repos/{owner}/{repo}/branches --jq
-    '.[] | select(.protected) | .name'`) and `main` / `master` where they exist. Exact names, no
-    patterns (`release/1.0`, not `release/*`); the list replaces the default `main master`, so those
-    two stay in it where they exist; the state repository's `state` is never one of them (CORE §12b).
+    '.[] | select(.protected) | .name'`) — `main` and `master` are always protected and need no listing:
+    the list adds to them, never replaces them. Exact names, no patterns (`release/1.0`, not
+    `release/*`); the state repository's `state` is never one of them (CORE §12b).
     Options: *the found list* (recommended) · *`main master` only* · the owner's own list. Recorded in
     `PROJECT.md` *Settings* (*Protected branches*) and written to the worker safety file (*Safety
     check*): `env` `COORD_PROTECTED_BRANCHES` and the push deny rules for each listed branch.

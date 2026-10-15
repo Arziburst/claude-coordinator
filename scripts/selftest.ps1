@@ -425,13 +425,15 @@ switch ($Step) {
     if ($miss.Count -eq 0) { Pass 'its matcher covers Edit, Write, MultiEdit and NotebookEdit' }
     else { Fail "its matcher leaves out $($miss -join ', '): those edit tools reach the working copy unguarded" }
   }
-  # the protected branches (TOOLKIT Safety): env COORD_PROTECTED_BRANCHES, names split at spaces and / or
-  # commas; unset, empty or only separators: main master. Each listed name: a push to it, fed to this
-  # core's guard with the file's value, must be blocked as a push to that protected branch
+  # the protected branches (TOOLKIT Safety): main, master and the names of env COORD_PROTECTED_BRANCHES
+  # (split at spaces and / or commas, each once, letter case ignored). With names set, each protected
+  # branch: a push to it, fed to this core's guard with the file's value, must be blocked as a push to
+  # that protected branch
   $pbs = ''
   if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_BRANCHES -is [string]) { $pbs = $cfg.env.COORD_PROTECTED_BRANCHES -replace '[\r\n\t]', ' ' }
-  $names = @($pbs -split '[ \t\n,]+' | Where-Object { $_ })   # as bash splits them: spaces, tabs, line breaks, commas
-  if ($names.Count -eq 0) { 'protected branches: main master (default)' }
+  $listed = @($pbs -split '[ \t\n,]+' | Where-Object { $_ })   # as bash splits them: spaces, tabs, line breaks, commas
+  $names = @('main', 'master'); foreach ($b in $listed) { if ($names -notcontains $b) { $names += $b } }
+  if ($listed.Count -eq 0) { 'protected branches: main master (default)' }
   else {
     "protected branches: $($names -join ' ')"
     $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'

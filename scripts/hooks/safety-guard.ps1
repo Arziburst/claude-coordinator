@@ -9,17 +9,19 @@
 # Windows PowerShell 5.1 or PowerShell 7; nothing to install.
 param([switch]$SelfTest)
 
-# The protected branches: COORD_PROTECTED_BRANCHES, names separated by spaces and/or commas (TOOLKIT.md
-# *Safety*); each is compared whole and literally (no patterns: . + * / are plain characters), letter
-# case ignored. Empty or unset: main master.
-$PROT = @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Object { $_ })   # as safety-guard.sh splits them
-if ($PROT.Count -eq 0) { $PROT = @('main', 'master') }
+# The protected branches: main, master and the names in COORD_PROTECTED_BRANCHES (separated by spaces
+# and/or commas; TOOLKIT.md *Safety*) - a list adds to main and master, never replaces them. Each is
+# compared whole and literally (no patterns: . + * / are plain characters), letter case ignored.
+$PROT = @('main', 'master')
+foreach ($b in @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Object { $_ })) {   # as safety-guard.sh splits them
+  if ($PROT -notcontains $b) { $PROT += $b }   # once each (-notcontains ignores letter case)
+}
 
 if ($SelfTest) {
-  # a push to the first protected branch (main by default) must block (exit 2) and a work-branch push
-  # must pass (exit 0): a guard that blocks everything is not working either
+  # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
+  # everything is not working either
   $exe = (Get-Process -Id $PID).Path
-  ('{"tool_input":{"command":"git push --force origin ' + $PROT[0] + '"}}') |
+  '{"tool_input":{"command":"git push --force origin main"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
   $blocked = $LASTEXITCODE
   '{"tool_input":{"command":"git push origin 12-fix"}}' |

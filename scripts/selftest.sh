@@ -444,11 +444,17 @@ hooks)
     if [ -z "$miss" ]; then pass "its matcher covers Edit, Write, MultiEdit and NotebookEdit"
     else fail "its matcher leaves out $miss: those edit tools reach the working copy unguarded"; fi
   fi
-  # the protected branches (TOOLKIT Safety): env COORD_PROTECTED_BRANCHES, names split at spaces and / or
-  # commas; unset, empty or only separators: main master. Each listed name: a push to it, fed to this
-  # core's guard with the file's value, must be blocked as a push to that protected branch
-  names=(); set -f; for b in ${pbs//,/ }; do names+=("$b"); done; set +f
-  if [ ${#names[@]} = 0 ]; then echo "protected branches: main master (default)"
+  # the protected branches (TOOLKIT Safety): main, master and the names of env COORD_PROTECTED_BRANCHES
+  # (split at spaces and / or commas, each once, letter case ignored). With names set, each protected
+  # branch: a push to it, fed to this core's guard with the file's value, must be blocked as a push to
+  # that protected branch
+  names=(main master); shopt -s nocasematch; set -f
+  for b in ${pbs//,/ }; do
+    for x in "${names[@]}"; do case "$b" in "$x") continue 2 ;; esac; done
+    names+=("$b")
+  done
+  set +f; shopt -u nocasematch
+  if [ -z "$(printf '%s' "$pbs" | tr -d ', \t')" ]; then echo "protected branches: main master (default)"
   else
     echo "protected branches: ${names[*]}"
     for b in "${names[@]}"; do

@@ -11,17 +11,21 @@
 # Works on macOS (bash 3.2, BSD awk / sed), Linux and Windows (Git Bash); jq is used when present.
 # Same rules as safety-guard.ps1, both checked against tests/safety-guard/cases.txt.
 
-# The protected branches: COORD_PROTECTED_BRANCHES, names separated by spaces and/or commas (TOOLKIT.md
-# *Safety*); each is compared whole and literally (no patterns: . + * / are plain characters), letter
-# case ignored. Empty or unset: main master.
-prot=(); pbs="${COORD_PROTECTED_BRANCHES:-}"
-set -f; for b in ${pbs//,/ }; do prot+=("$b"); done; set +f
-[ ${#prot[@]} -gt 0 ] || prot=(main master)
+# The protected branches: main, master and the names in COORD_PROTECTED_BRANCHES (separated by spaces
+# and/or commas; TOOLKIT.md *Safety*) - a list adds to main and master, never replaces them. Each is
+# compared whole and literally (no patterns: . + * / are plain characters), letter case ignored.
+prot=(main master); pbs="${COORD_PROTECTED_BRANCHES:-}"
+shopt -s nocasematch; set -f
+for b in ${pbs//,/ }; do
+  for p in "${prot[@]}"; do case "$b" in "$p") continue 2 ;; esac; done   # once each
+  prot+=("$b")
+done
+set +f; shopt -u nocasematch
 
 if [ "${1:-}" = "--self-test" ]; then
-  # a push to the first protected branch (main by default) must block (exit 2) and a work-branch push
-  # must pass (exit 0): a guard that blocks everything (a syntax error also exits 2) is not working either
-  out=$(printf '{"tool_input":{"command":"git push --force origin %s"}}' "${prot[0]}" | bash "$0" 2>/dev/null; echo $?)
+  # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
+  # everything (a syntax error also exits 2) is not working either
+  out=$(printf '%s' '{"tool_input":{"command":"git push --force origin main"}}' | bash "$0" 2>/dev/null; echo $?)
   ok=$(printf '%s' '{"tool_input":{"command":"git push origin 12-fix"}}' | bash "$0" 2>/dev/null; echo $?)
   if [ "$out" = "2" ] && [ "$ok" = "0" ]; then echo "safety-guard: OK"; exit 0; fi
   echo "safety-guard: NOT WORKING — STOP: do not start workers until it is fixed (TOOLKIT.md)."

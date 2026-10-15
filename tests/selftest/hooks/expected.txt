@@ -44,10 +44,12 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
-protected branches: dev -x
+protected branches: main master dev -x
+PASS hooks: the guard blocks a push to main
+PASS hooks: the guard blocks a push to master
 PASS hooks: the guard blocks a push to dev
 FAIL hooks: the guard does not block a push to -x as a protected branch (exit 0)
-selftest hooks: 8 pass, 1 fail, 1 skipped
+selftest hooks: 10 pass, 1 fail, 1 skipped
 == branchescomma.json (exit 0)
 PASS hooks: a safety-guard hook
 PASS hooks: its path uses forward slashes
@@ -57,11 +59,12 @@ PASS hooks: no PowerShell shell around it
 PASS hooks: its matcher covers the PowerShell tool
 PASS hooks: onFailure "block": a guard that fails to run blocks
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
-protected branches: main develop staging
+protected branches: main master develop staging
 PASS hooks: the guard blocks a push to main
+PASS hooks: the guard blocks a push to master
 PASS hooks: the guard blocks a push to develop
 PASS hooks: the guard blocks a push to staging
-selftest hooks: 10 pass, 0 fail, 1 skipped
+selftest hooks: 11 pass, 0 fail, 1 skipped
 == comment.json (exit 0)
 PASS hooks: a safety-guard hook
 PASS hooks: its path uses forward slashes

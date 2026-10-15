@@ -7,7 +7,7 @@
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
 # An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset),
 # an optional 5th CLAUDE_PROJECT_DIR (without one: the cwd's first folder; -: unset), an optional 6th
-# COORD_PROTECTED_BRANCHES (without one or -: unset, so main master). A cwd of dev is a repo on branch dev.
+# COORD_PROTECTED_BRANCHES (without one or -: unset; main and master are protected either way). A cwd of dev is a repo on branch dev.
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
 # (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
@@ -569,7 +569,8 @@ allow	send:work	a0000002
 allow	send:work	Nobody Here
 allow	send:work/.claude/worktrees/12-fix/src	#13 worker: Own
 # --- configurable protected branches (#163): the 6th column is COORD_PROTECTED_BRANCHES (none or -: unset,
-# main master); names split at spaces and / or commas, each matched whole and literally, letter case ignored ---
+# main master); its names are protected besides main and master, split at spaces and / or commas, each
+# matched whole and literally, letter case ignored ---
 block	work	git push origin dev	-	@PROJECT@	dev
 block	work	git push --force origin dev	-	@PROJECT@	dev
 block	work	git push -f origin dev	-	@PROJECT@	dev
@@ -603,8 +604,10 @@ allow	work	git push origin dev-fix	-	@PROJECT@	dev
 allow	work	git push origin dev/x	-	@PROJECT@	dev
 allow	work	git branch -D develop	-	@PROJECT@	dev
 allow	dev	git push origin HEAD:12-fix	-	@PROJECT@	dev
-# the list replaces the default: a project that keeps main / master protected lists them too (INIT)
-allow	work	git push origin main	-	@PROJECT@	dev
+# a list adds to main and master, never replaces them
+block	work	git push origin main	-	@PROJECT@	dev
+block	work	git push --force origin master	-	@PROJECT@	dev
+block	work	git branch -D main	-	@PROJECT@	dev
 # unset, empty or only separators: main master, as before
 allow	work	git push origin dev	-	@PROJECT@	-
 allow	dev	git push	-	@PROJECT@	-
@@ -621,7 +624,7 @@ allow	work	git push origin staging	-	@PROJECT@	main,master,dev
 block	work	git push origin staging	-	@PROJECT@	main, dev ,staging
 block	work	git push origin main	-	@PROJECT@	main, dev ,staging
 block	work	git branch -D dev	-	@PROJECT@	main, dev ,staging
-allow	work	git push origin master	-	@PROJECT@	main, dev ,staging
+block	work	git push origin master	-	@PROJECT@	main, dev ,staging
 # names with . / + * match literally (no patterns, no globs)
 block	work	git push origin release/1.0	-	@PROJECT@	main master release/1.0
 block	work	git push origin HEAD:refs/heads/release/1.0	-	@PROJECT@	main master release/1.0
