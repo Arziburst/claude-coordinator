@@ -40,7 +40,8 @@ case "${OSTYPE:-}" in msys*|cygwin*) os=win ;; darwin*) os=mac ;; *) os="" ;; es
 canon() {
   local x
   x="$(printf '%s' "$1" | sed 's#\\\\#/#g' | tr '\\' '/')"
-  [ -n "$os" ] && x="$(printf '%s' "$x" | tr 'A-Z' 'a-z')"
+  # [:upper:]: in a UTF-8 locale also Ü or Д (APFS and NTFS fold them too), in C the ASCII letters
+  [ -n "$os" ] && x="$(printf '%s' "$x" | tr '[:upper:]' '[:lower:]')"
   while :; do case "$x" in ?*/) x="${x%/}" ;; *) break ;; esac; done
   if [ "$os" = win ]; then case "$x" in /[a-z]|/[a-z]/*) x="${x:1:1}:${x:2}" ;; esac; fi
   printf '%s' "$x"
@@ -93,8 +94,12 @@ id=""
 if [ -n "$session" ]; then
   # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
   # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
+  # ids are lower-case hex in the listing: a sessionId or job id typed in upper case is the same session
+  case "$session" in *[!0-9A-Fa-f-]*) ;; *) session="$(printf '%s' "$session" | tr 'A-F' 'a-f')" ;; esac
   id="$session"
-  raw="$(claude agents --json --all 2>/dev/null)" || raw=""
+  # no claude on PATH: nothing can be stopped or removed - the session is reported kept (exit 4)
+  has_claude=1; command -v claude >/dev/null 2>&1 || has_claude=""
+  raw=""; [ -n "$has_claude" ] && { raw="$(claude agents --json --all 2>/dev/null)" || raw=""; }
   if is_uuid "$session"; then
     id="$(objects "$raw" | while IFS= read -r o; do [ "$(field sessionId "$o")" = "$session" ] && { field id "$o"; break; }; done || true)"
     [ -n "$id" ] || id="$(printf '%s' "$session" | cut -c1-8)"
@@ -129,13 +134,14 @@ if [ -n "$session" ]; then
     fi
   fi
   # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
-  run claude stop "$id" || true
+  [ -n "$has_claude" ] && { run claude stop "$id" || true; }
   if [ "$dry" = 1 ]; then echo "[dry-run] claude rm $id"
   else
-    rc=0; out="$(claude rm "$id" 2>&1)" || rc=$?
+    if [ -n "$has_claude" ]; then rc=0; out="$(claude rm "$id" 2>&1)" || rc=$?
+    else rc=127; out="claude: command not found"; fi
     [ -z "$out" ] || printf '%s\n' "$out"
     # removed only when the listing no longer has it; no listing at all: the rm's exit code decides
-    lrc=0; raw="$(claude agents --json --all 2>/dev/null)" || lrc=$?
+    lrc=127; [ -n "$has_claude" ] && { lrc=0; raw="$(claude agents --json --all 2>/dev/null)" || lrc=$?; }
     kept=""
     if [ "$lrc" = 0 ]; then
       kept="$(objects "$raw" | while IFS= read -r o; do [ "$(field id "$o")" = "$id" ] && { echo y; break; }; done || true)"

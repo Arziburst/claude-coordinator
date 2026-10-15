@@ -521,5 +521,43 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
   expect_in "cleaned: 0a0b0c0d" ;;
 esac
 
+# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink, a
+# non-ASCII letter in another case, no claude on PATH ---
+# a full sessionId typed in upper case is the listed session: here a foreign one, so nothing is removed
+mk 23-fix
+printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#23 worker: Fix" > "$SS"
+printf 'f0e1d2c3\t%s\n' "$(native "$tmp/other")" > "$SS.cwd"
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 5 "cleanup: a full sessionId in upper case" -- cleanup --worktree "$w" --session F0E1D2C3-1111-4222-8333-444455556666
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+[ -d "$w" ] || { echo "FAIL: an upper-case sessionId removed the worktree"; fail=1; }
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: an upper-case sessionId stopped or removed a session"; fail=1; }
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
+  # the listing gives the session's folder through a symlink to the repository (macOS: /tmp is one): own
+  ln -s "$tmp/repo" "$tmp/repo-link"
+  printf 'f0e1d2c3\t%s\n' "$tmp/repo-link" > "$SS.cwd"
+  STUB_HEADS="$h" check 0 "cleanup: the session's folder through a symlink" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+  expect_in "[dry-run] claude rm f0e1d2c3" ;;
+esac
+case "$(uname -s)" in Darwin)
+  # a non-ASCII letter in another case is the same folder on APFS (in a UTF-8 locale, as a session runs)
+  git clone -q "$tmp/remote.git" "$tmp/Ü/proj" 2>/dev/null
+  w="$tmp/Ü/proj/.claude/worktrees/24-fix"
+  git -C "$tmp/Ü/proj" worktree add -q -b 24-fix "$w" origin/main && g -C "$w" commit -q --allow-empty -m 24-fix && git -C "$w" push -q -u origin 24-fix 2>/dev/null
+  h="$(git -C "$w" rev-parse HEAD)"
+  printf 'f0e1d2c3\t%s\n' "$(native "$tmp")/ü/proj" > "$SS.cwd"
+  LC_ALL=en_US.UTF-8 STUB_HEADS="$h" check 0 "cleanup: a non-ASCII letter in another case" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+  expect_in "[dry-run] claude rm f0e1d2c3" ;;
+esac
+# no claude on PATH (only where the stub is the only claude): nothing can be removed - SESSION KEPT, exit 4
+nocl="$tmp/nocl"; mkdir -p "$nocl"; cp "$tmp/bin/gh" "$tmp/bin/gh.ps1" "$nocl/"
+p2="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$tmp/bin" | paste -sd: -)"
+if ! PATH="$nocl:$p2" command -v claude >/dev/null 2>&1; then
+  mk 25-fix
+  PATH="$nocl:$p2" STUB_HEADS="$h" check 4 "cleanup: no claude on PATH" -- cleanup --worktree "$w" --session 0d0d0d0d
+  expect_in "SESSION KEPT: 0d0d0d0d (claude rm failed: claude: command not found)"
+  [ -d "$w" ] || { echo "FAIL: no claude on PATH, the worktree was removed"; fail=1; }
+fi
+
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

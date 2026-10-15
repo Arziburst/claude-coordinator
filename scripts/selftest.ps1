@@ -86,13 +86,65 @@ function KeptWhy([string]$d) {
 }
 # AbsPath <dir>: the folder as an absolute path; as given when it cannot be resolved
 function AbsPath([string]$d) { try { (Resolve-Path -LiteralPath $d -ErrorAction Stop).ProviderPath } catch { $d } }
+# PhysPath <dir>: the same folder as it lies on disk (links and junctions resolved, as safety-guard.ps1
+# walks them, #121; an 8.3 name in its long form), nothing when it does not exist: a run's session lists
+# its cwd in that form (/private/tmp, not /tmp, on macOS), which Resolve-Path does not give
+$isWinP = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
+function LinkTarget([string]$p) {
+  try { $it = Get-Item -LiteralPath $p -Force -ErrorAction Stop } catch { return '' }
+  if (-not $it.LinkType) { return '' }   # another reparse point (a cloud file ...) is a plain folder
+  $t = $null
+  if ($it.PSObject.Properties['LinkTarget']) { $t = $it.LinkTarget }   # PowerShell 7
+  if (-not $t) { $t = @($it.Target)[0] }                                # Windows PowerShell 5.1
+  ([string]$t).Replace('\', '/') -replace '^//\?/|^/\?\?/', ''
+}
+# @(<the existing folder, physical>, <the rest as written>), or $null
+function PhysDir([string]$p) {
+  $p = $p.Replace('\', '/')
+  if ($isWinP) { $p = $p -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
+  if ($p -notmatch '^([A-Za-z]:|/)') { $p = (Get-Location).ProviderPath.Replace('\', '/') + '/' + $p }
+  if ($p -match '^[A-Za-z]:') { $root = $p.Substring(0, 2) + '/'; $p = $p.Substring(2) }
+  elseif ($isWinP) { return $null } else { $root = '/' }
+  $segs = $p.Split('/'); $cur = $root
+  for ($i = 0; $i -lt $segs.Count; $i++) {
+    $s = $segs[$i]
+    if ($s -eq '' -or $s -eq '.') { continue }
+    if ($s -eq '..') {
+      $k = $cur.LastIndexOf('/'); $cur = if ($k -lt $root.Length) { $root } else { $cur.Substring(0, $k) }
+      continue
+    }
+    $cand = if ($cur.EndsWith('/')) { $cur + $s } else { "$cur/$s" }
+    $a = [int][IO.DirectoryInfo]::new($cand).Attributes
+    $t = if ($a -ne -1 -and ($a -band 1024)) { LinkTarget $cand } else { '' }   # a reparse point: a symlink or a junction
+    if ($t) {
+      if (++$script:hops -le 40) {
+        if ($t -notmatch '^([A-Za-z]:|/)') { $t = "$cur/$t" }
+        $r = PhysDir $t
+        if ($null -ne $r -and -not $r[1]) { $cur = $r[0]; continue }
+      }
+      # a loop, or it does not lead to an existing folder
+    } elseif ($a -ne -1 -and ($a -band 16)) {
+      # an 8.3 name (RUNNER~1) in its long form, as git and cd -P give it: GetFullPath expands it
+      $cur = if ($isWinP -and $s.Contains('~')) { [IO.Path]::GetFullPath($cand).Replace('\', '/') } else { $cand }
+      continue
+    }
+    # not there, or not a folder: the rest as written
+    return @($cur, ('/' + ($segs[$i..($segs.Count - 1)] -join '/')))
+  }
+  @($cur, '')
+}
+function PhysPath([string]$d) {
+  $script:hops = 0; $r = $null
+  try { $r = PhysDir ((AbsPath $d)) } catch { }
+  if ($null -ne $r -and -not $r[1] -and (Test-Path -LiteralPath $d)) { $r[0] }
+}
 # OwnRoots <project> <state>: the folders whose sessions are this run's - the project root and the state
 # repository (their .claude/worktrees are inside them) and the worktree roots the state repository's
 # PROJECT.md names (its Settings row "Worktree roots", read as the retro reads it: relative to the root,
 # split by , or ;; none / - / <fill> for none)
 function OwnRoots([string]$project, [string]$state) {
   $b = (AbsPath $project).Replace('\', '/').TrimEnd('/')
-  $b; AbsPath $state
+  $b; PhysPath $project; AbsPath $state; PhysPath $state
   $pmd = Join-Path $state 'PROJECT.md'
   if (-not (Test-Path -LiteralPath $pmd -PathType Leaf)) { return }
   foreach ($line in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $pmd).ProviderPath)) {
@@ -111,7 +163,7 @@ function OwnRoots([string]$project, [string]$state) {
         }
         $w0 = if ($w0) { "$b0/$w0" } else { $b0 }
       }
-      $w0
+      $w0; PhysPath $w0
     }
   }
 }
@@ -148,7 +200,7 @@ function Sessions([string[]]$roots) {
   $x = @(StSessions $roots)
   foreach ($l in $x) { if ($l.StartsWith('F ', [StringComparison]::Ordinal)) { 'SKIP foreign self-test session ' + $l.Substring(2) } }
   $n = @($x | Where-Object { $_.StartsWith('O ', [StringComparison]::Ordinal) } | ForEach-Object { $_.Substring(2) }) -join ', '
-  if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
+  if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): $n" }
 }
 function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::GetTempPath() }; $d = Join-Path $parent ('coordinator-selftest.' + [IO.Path]::GetRandomFileName().Replace('.', '')); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 
@@ -316,7 +368,7 @@ switch ($Step) {
     if ($LASTEXITCODE -ne 0) { $b += " $x" }
   }
   if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
-  Sessions @(AbsPath $d)
+  Sessions @((AbsPath $d), (PhysPath $d))
   if ($StateRepo) {
     $n = @(& gh api "repos/$StateRepo/branches" --paginate --jq '.[].name' 2>$null)
     if ($LASTEXITCODE -ne 0) { Fail "cannot list the branches of $StateRepo" }
