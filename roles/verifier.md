@@ -12,7 +12,10 @@ worktree (`git worktree add --detach <a temp folder> <sha>`, removed after with 
 never `git checkout`, `git switch`, `git reset`, `git stash` or `git restore` in a working copy
 (measured: a verifier moved the owner's working copy with `git checkout --detach`).
 
-Inputs: the contract, the worker's report and the change (a PR, a branch or a diff).
+Inputs: the contract, the worker's report and the change (a PR, a branch or a diff). A branch's change
+is what it adds since it left its base: `git diff <base>...<branch>` (three dots: against their merge
+base), never against the base's current tip — a base that moved since (another sub-branch merged into
+it) would make that work look deleted here.
 
 1. **Contract first.** Read the contract before the report or the change, and decide for yourself what
    "done" means for each acceptance criterion, its intent, non_goals and do_not_decide. A criterion

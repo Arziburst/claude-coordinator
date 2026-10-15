@@ -54,12 +54,15 @@ worker (BINDINGS) and the phrase that ends your report.
    short id and later resume by its **full** session id, recorded before the stop (TOOLKIT *Pause and resume*).
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
-   sub-contract: it reviews the sub-branch's change — the diff, the code, the worker's outputs attached
+   sub-contract: it reviews the sub-branch's change — the diff against its merge base (`git diff
+   <integration branch>...<sub-branch>`, named in its brief), the code, the worker's outputs attached
    on the reviewed commit — since it works in your worktree and cannot build or test in the
    worker's (the build and test oracles run in step 5); findings go back to the same worker until there is no Blocker or Major. A failed
    review that a stronger model would fix → restart on the sub-contract's `escalate_to`, once; if
    that run fails too, start nothing more for it and tell the coordinator, with both reports.
-5. **Integrate on your branch only.** Merge each approved sub-branch into the integration branch
+5. **Integrate on your branch only.** Merge only a sub-branch whose verdict approves the exact commit
+   you merge — you never override a reject, even one you judge an artefact: it goes back to the worker,
+   or to the verifier for a re-review with the right diff, or to the coordinator. Merge each approved sub-branch into the integration branch
    (a local merge and a push, no PR of its own) — exactly the commit its verdict approved (`git merge
    <sha>`; a newer commit on the sub-branch goes back to the verifier first); right after it, run
    the sub-contract's build and test oracles and the definition-of-done checks there yourself — a
