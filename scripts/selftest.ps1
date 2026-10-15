@@ -439,8 +439,12 @@ switch ($Step) {
     $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     $oldPb = $env:COORD_PROTECTED_BRANCHES; $env:COORD_PROTECTED_BRANCHES = $pbs
+    # a neutral folder outside any repository: the probe must not depend on the branch this test runs on
+    # (on a protected branch the guard would block every push as "push while on <branch>")
+    $nd = Join-Path ([IO.Path]::GetTempPath()) ('selftest-nd.' + [IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $nd | Out-Null; $ndj = $nd.Replace('\', '/'); Push-Location -LiteralPath $nd
     foreach ($b in $names) {
-      [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"git push origin ' + $b + '"}}')
+      [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"git push origin ' + $b + '"},"cwd":"' + $ndj + '"}')
       # stdin from a file, not a PowerShell pipe (as in the scripts step)
       if ($env:OS -eq 'Windows_NT') { $err = @(& cmd /d /s /c "`"$exe`" -NoProfile -ExecutionPolicy Bypass -File `"$hook`" < `"$jf`" 2>&1 >nul") }
       else { $err = @(Get-Content -Raw -LiteralPath $jf | & $exe -NoProfile -File $hook 2>&1 | ForEach-Object { "$_" }) }
@@ -448,8 +452,9 @@ switch ($Step) {
       if ($rc -eq 2 -and ($err -join "`n").StartsWith("Blocked by safety-guard: push to a protected branch ($b).", [StringComparison]::Ordinal)) { Pass "the guard blocks a push to $b" }
       else { Fail "the guard does not block a push to $b as a protected branch (exit $rc)" }
     }
-    $env:COORD_PROTECTED_BRANCHES = $oldPb
+    $env:COORD_PROTECTED_BRANCHES = $oldPb; Pop-Location
     Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $nd -ErrorAction SilentlyContinue
   }
   Finish
 }
