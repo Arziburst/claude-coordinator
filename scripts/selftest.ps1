@@ -84,19 +84,71 @@ function KeptWhy([string]$d) {
   if (@(Untracked $r).Count -gt 0) { return 'changed or untracked files in the repo' }
   ''
 }
-# the self-test sessions claude agents --json --all still lists, in any state (a done one too): a name
-# with `selftest` or `probe:`, or starting with `#st`; `<name> (<id>)` joined by `, `, '' when none
-function StSessions {
-  $json = (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", ''
-  $n = foreach ($o in ($json -split '}')) {
-    $m = [regex]::Match($o, '"name": *"([^"]*)"')
-    if (-not $m.Success) { continue }
-    $nm = $m.Groups[1].Value
-    if ($nm.StartsWith('#st', [StringComparison]::Ordinal) -or $nm.Contains('selftest') -or $nm.Contains('probe:')) {
-      "$nm ($([regex]::Match($o, '"id": *"([^"]*)"').Groups[1].Value))"
+# AbsPath <dir>: the folder as an absolute path; as given when it cannot be resolved
+function AbsPath([string]$d) { try { (Resolve-Path -LiteralPath $d -ErrorAction Stop).ProviderPath } catch { $d } }
+# OwnRoots <project> <state>: the folders whose sessions are this run's - the project root and the state
+# repository (their .claude/worktrees are inside them) and the worktree roots the state repository's
+# PROJECT.md names (its Settings row "Worktree roots", read as the retro reads it: relative to the root,
+# split by , or ;; none / - / <fill> for none)
+function OwnRoots([string]$project, [string]$state) {
+  $b = (AbsPath $project).Replace('\', '/').TrimEnd('/')
+  $b; AbsPath $state
+  $pmd = Join-Path $state 'PROJECT.md'
+  if (-not (Test-Path -LiteralPath $pmd -PathType Leaf)) { return }
+  foreach ($line in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $pmd).ProviderPath)) {
+    $cells = $line.TrimEnd("`r").Split('|'); if ($cells.Count -lt 3 -or $cells[1] -cnotmatch '^[ \t]*[*]*Worktree roots[*]*[ \t]*\z') { continue }
+    foreach ($x0 in $cells[2].Replace('`', '').Split([char[]]@(',', ';'))) {
+      $x0 = $x0.Trim(' ', "`t"); $y0 = AsciiLower $x0
+      if (-not $x0 -or $x0 -eq '-' -or $y0 -ceq 'none' -or $y0 -ceq 'n/a' -or $x0 -cmatch '^<.*>\z') { continue }
+      $w0 = $x0.Replace('\', '/')
+      if (-not ($w0.StartsWith('/') -or $w0 -cmatch '^[A-Za-z]:')) {
+        $b0 = $b
+        while ($true) {
+          if ($w0.StartsWith('../')) { $b0 = $b0.Substring(0, [Math]::Max(0, $b0.LastIndexOf('/'))); $w0 = $w0.Substring(3) }
+          elseif ($w0.StartsWith('./')) { $w0 = $w0.Substring(2) }
+          elseif ($w0 -ceq '..') { $b0 = $b0.Substring(0, [Math]::Max(0, $b0.LastIndexOf('/'))); $w0 = '' }
+          else { break }
+        }
+        $w0 = if ($w0) { "$b0/$w0" } else { $b0 }
+      }
+      $w0
     }
   }
-  @($n) -join ', '
+}
+# lower case for A-Z only, as awk does in the C locale
+function AsciiLower([string]$s) { [regex]::Replace($s, '[A-Z]', { param($m) $m.Value.ToLowerInvariant() }) }
+# a path compared: \ read as /, repeated / as one, lower case, C:/x as /c/x, no trailing /
+function NormPath([string]$p) {
+  $p = AsciiLower ($p.Replace('\', '/') -replace '/+', '/')
+  if ($p -cmatch '^[a-z]:(/|\z)') { $p = '/' + $p.Substring(0, 1) + $p.Substring(2) }
+  if ($p.EndsWith('/')) { $p = $p.Substring(0, $p.Length - 1) }
+  $p
+}
+# StSessions <folders>: the self-test sessions claude agents --json --all still lists, in any state (a
+# done one too): a name with `selftest` or `probe:`, or starting with `#st`. One whose cwd is one of the
+# folders or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project self-testing on
+# this machine, #158) or without a cwd is not: `F <id> (<cwd>)`
+function StSessions([string[]]$roots) {
+  $nr = @($roots | Where-Object { $_ } | ForEach-Object { NormPath $_ })
+  # the value of a string field, its \\ read as one backslash
+  function Field([string]$o, [string]$k) { $m = [regex]::Match($o, '"' + $k + '": *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value.Replace('\\', '\') } else { '' } }
+  $json = (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", ''
+  foreach ($o in ($json -split '}')) {
+    $nm = Field $o 'name'
+    if (-not ($nm.StartsWith('#st', [StringComparison]::Ordinal) -or $nm.Contains('selftest') -or $nm.Contains('probe:'))) { continue }
+    $c = Field $o 'cwd'; $id = Field $o 'id'; $in = $false
+    if ($c) { $n = NormPath $c; foreach ($t in $nr) { if ($n -ceq $t -or $n.StartsWith("$t/", [StringComparison]::Ordinal)) { $in = $true } } }
+    if ($in) { "O $nm ($id)" } else { "F $id ($(if ($c) { $c } else { 'no cwd' }))" }
+  }
+}
+# Sessions <folders>: the session check of verify and clean; another folder's self-test sessions are
+# named (SKIP foreign ...), never counted and never advised for removal
+function Sessions([string[]]$roots) {
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Skip 'no claude: sessions not checked'; return }
+  $x = @(StSessions $roots)
+  foreach ($l in $x) { if ($l.StartsWith('F ', [StringComparison]::Ordinal)) { 'SKIP foreign self-test session ' + $l.Substring(2) } }
+  $n = @($x | Where-Object { $_.StartsWith('O ', [StringComparison]::Ordinal) } | ForEach-Object { $_.Substring(2) }) -join ', '
+  if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
 }
 function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::GetTempPath() }; $d = Join-Path $parent ('coordinator-selftest.' + [IO.Path]::GetRandomFileName().Replace('.', '')); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 
@@ -264,10 +316,7 @@ switch ($Step) {
     if ($LASTEXITCODE -ne 0) { $b += " $x" }
   }
   if (-not $b) { Pass 'every branch on the origin is merged into main' } else { Fail "branches on the origin not merged into main:$b" }
-  if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $n = StSessions
-    if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
-  } else { Skip 'no claude: sessions not checked' }
+  Sessions @(AbsPath $d)
   if ($StateRepo) {
     $n = @(& gh api "repos/$StateRepo/branches" --paginate --jq '.[].name' 2>$null)
     if ($LASTEXITCODE -ne 0) { Fail "cannot list the branches of $StateRepo" }
@@ -492,10 +541,7 @@ switch ($Step) {
     $n = & gh pr list -R $StateRepo --state merged --head "selftest/$Core/task-1" --base $base --json number --jq '.[0].number' 2>$null
     if ($n) { Pass "PR #$n merged into $base" } else { Fail "no merged PR from selftest/$Core/task-1 into $base" }
   } else { Skip 'PR flow: not checked (no -StateRepo)' }
-  if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $n = StSessions
-    if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (claude rm <id> each): $n" }
-  } else { Skip 'no claude: sessions not checked' }
+  Sessions @(OwnRoots $Project $State)
   Finish
 }
 default { Usage }
