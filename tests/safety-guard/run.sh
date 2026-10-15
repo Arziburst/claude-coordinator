@@ -56,6 +56,40 @@ export SG_LINK="$(winpath m "$tmp/links/work")" SG_LINK_W="$(winpath w "$tmp/lin
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath); @PROJECT@ the project's folder (C:/... in Git Bash)
 export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "$HOME")"
+# Sessions (CORE §1.17): a stub claude first on PATH (claude.ps1 for PowerShell on Windows, handing over
+# to it) prints $tmp/agents.json for `claude agents --json --all` and logs every call; SG_AGENTS_FAIL
+# makes it fail. The listing, its folders as the real one gives them (as they lie on disk; on Windows
+# C:\...): a0000001 in the project work, a0000002 in its worktree, a0000003 under work-wt (a worktree root
+# that work/coordinator/PROJECT.md names), b0000001 in another folder, b0000002 in work-old (a folder
+# whose name starts with the project's), b0000003 in another folder with a0000001's name.
+mkdir -p "$tmp/bin" "$tmp/other" "$tmp/work-old" "$tmp/work-wt/14-x" "$tmp/work/coordinator"
+cat > "$tmp/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SG_CLAUDE_LOG"
+[ -z "${SG_AGENTS_FAIL:-}" ] || { echo "claude: cannot list the sessions" >&2; exit 1; }
+[ "${1:-}" = agents ] && cat "$SG_AGENTS"
+exit 0
+EOF
+printf '%s\n' "& bash (Join-Path \$PSScriptRoot 'claude') @args" 'exit $LASTEXITCODE' > "$tmp/bin/claude.ps1"
+chmod +x "$tmp/bin/claude"
+export PATH="$tmp/bin:$PATH" SG_AGENTS="$tmp/agents.json" SG_CLAUDE_LOG="$tmp/claude.log"
+: > "$SG_CLAUDE_LOG"
+printf '| Setting | This project |\n|---|---|\n| Worktree roots | `../work-wt` |\n' > "$tmp/work/coordinator/PROJECT.md"
+native() { (cd -P -- "$1" && case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pwd -W | tr '/' '\\' ;; *) pwd -P ;; esac); }
+{
+  printf '['
+  k=0
+  for s in "a0000001 work #12 worker: Fix" "a0000002 work/.claude/worktrees/12-fix #13 worker: Own" \
+    "a0000003 work-wt/14-x #14 worker: Wt" "b0000001 other Other Coordinator" "b0000002 work-old #15 worker: Old" \
+    "b0000003 other #12 worker: Fix"; do
+    id="${s%% *}"; r="${s#* }"; d="${r%% *}"; nm="${r#* }"
+    cw="$(native "$tmp/$d" | sed 's/\\/\\\\/g')"
+    [ $k = 0 ] || printf ','
+    k=1
+    printf '\n  {\n    "id": "%s",\n    "cwd": "%s",\n    "kind": "background",\n    "startedAt": 1791042522505,\n    "sessionId": "%s-0000-4000-8000-000000000001",\n    "name": "%s",\n    "state": "done"\n  }' "$id" "$cw" "$id" "$nm"
+  done
+  printf '\n]\n'
+} > "$SG_AGENTS"
 # letter case in paths: ignored on Windows and macOS (the expectation "fold" is block there), kept on Linux
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block ;; *) fold=allow ;; esac
 # the cases' placeholders, replaced in the command and the COORD_PROTECTED_ROOT columns (after \n and \t
@@ -73,12 +107,12 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
   [ "$expect" = fold ] && expect=$fold
   cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"   # a checkout with CRLF line ends
   n=$((n + 1))
-  # the branch column: [ps:|edit:|write:|multiedit:|notebook:]<cwd under the temporary folder>; ps: is a
-  # PowerShell tool call, the others an edit tool's call with the command column as its file path; the
-  # project (CLAUDE_PROJECT_DIR) is the cwd's first folder
+  # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
+  # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
+  # the command column as its file path; the project (CLAUDE_PROJECT_DIR) is the cwd's first folder
   tool=Bash
   case "$branch" in
-    ps:*) tool=PowerShell ;; edit:*) tool=Edit ;; write:*) tool=Write ;; multiedit:*) tool=MultiEdit ;; notebook:*) tool=NotebookEdit ;;
+    ps:*) tool=PowerShell ;; edit:*) tool=Edit ;; write:*) tool=Write ;; multiedit:*) tool=MultiEdit ;; notebook:*) tool=NotebookEdit ;; send:*) tool=SendMessage ;;
   esac
   branch="${branch#*:}"
   dir="$(winpath m "$tmp/$branch")"; export SG_PROJECT="$(winpath m "$tmp/${branch%%/*}")"
@@ -86,7 +120,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
   export SG_PROJECT_U="$(printf '%s' "$SG_PROJECT" | awk '/^[A-Za-z]:\// { $0 = "/" tolower(substr($0, 1, 1)) substr($0, 3) } { printf "%s", $0 }')"
   export SG_PROJECT_UP="$(printf '%s' "$SG_PROJECT" | tr '[:lower:]' '[:upper:]')"
   # the 4th column: COORD_PROTECTED_ROOT; for an edit tool @PROJECT@ when there is none, - for unset
-  case "$tool" in Bash|PowerShell) ;; *) [ -n "$root" ] || root=@PROJECT@ ;; esac
+  case "$tool" in Bash|PowerShell|SendMessage) ;; *) [ -n "$root" ] || root=@PROJECT@ ;; esac
   [ "$root" = - ] && root=""
   root="$(printf '%s' "$root" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')"
@@ -100,6 +134,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
       else if (tool == "Write") ti = "{\"file_path\":\"" $0 "\",\"content\":\"x\"}"
       else if (tool == "MultiEdit") ti = "{\"file_path\":\"" $0 "\",\"edits\":[{\"old_string\":\"a\",\"new_string\":\"b\"}]}"
       else if (tool == "NotebookEdit") ti = "{\"notebook_path\":\"" $0 "\",\"new_source\":\"x\",\"cell_id\":\"c1\"}"
+      else if (tool == "SendMessage") ti = "{\"to\":\"" $0 "\",\"message\":\"x\"}"
       else ti = "{\"command\":\"" $0 "\"}"
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
   printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" "$@" >/dev/null 2>&1
@@ -108,6 +143,26 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
   [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
+
+# Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
+# (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
+CMD=("$@")
+sess() {   # sess <expect> <what> <tool call JSON> [env assignments...]
+  local expect="$1" what="$2" js="$3" rc got d; shift 3; n=$((n + 1)); d="$(winpath m "$tmp/work")"
+  printf '%s' "$js" | sed "s#@CWD@#$d#" | env CLAUDE_PROJECT_DIR="$d" "$@" "${CMD[@]}" >/dev/null 2>&1; rc=$?
+  got=allow; [ "$rc" = 2 ] && got=block
+  [ "$got" = "$expect" ] || { echo "FAIL (sessions) expected $expect, got $got (exit $rc): $what"; fail=1; }
+}
+sess allow "the listing cannot be read: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}' SG_AGENTS_FAIL=1
+sess allow "the listing cannot be read: a message to another folder's session" '{"tool_name":"SendMessage","tool_input":{"to":"Other Coordinator","message":"x"},"cwd":"@CWD@"}' SG_AGENTS_FAIL=1
+printf '[{"id": "b0000001", "cwd": ' > "$tmp/agents-bad.json"
+sess allow "a listing cut short: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}' SG_AGENTS="$tmp/agents-bad.json"
+sess block "the listing read again: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}'
+: > "$SG_CLAUDE_LOG"
+sess allow "a git command" '{"tool_name":"Bash","tool_input":{"command":"git status && claude --version"},"cwd":"@CWD@"}'
+sess allow "an edit" '{"tool_name":"Write","tool_input":{"file_path":"x.txt","content":"x"},"cwd":"@CWD@"}'
+n=$((n + 1))
+[ -s "$SG_CLAUDE_LOG" ] && { echo "FAIL (sessions) claude was called for a call that names no session:"; sed 's/^/    /' "$SG_CLAUDE_LOG"; fail=1; }
 
 # The input itself: a BOM before the JSON is read through; what is not a JSON object blocks.
 raw() {   # raw <expect> <what> <stdin bytes, printf format>

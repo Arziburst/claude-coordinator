@@ -7,8 +7,11 @@
 # --session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with --dry-run); 1 usage error or a failed removal;
 # 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
-# after claude rm - the worktree and branch are left as is (Windows: cleanup-worker.ps1, the same checks
-# and codes).
+# after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
+# session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
+# the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
+# changed (CORE §1.17); a session the listing does not have is handled as before (Windows:
+# cleanup-worker.ps1, the same checks and codes).
 set -euo pipefail
 
 session="" wt="" dry=0
@@ -31,6 +34,17 @@ is_uuid() { local re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{
 # objects <claude agents --json output>: one session object per line; field <key> <object>: its string value
 objects() { printf '%s' "$1" | tr -d '\r\n' | tr '}' '\n'; echo; }
 field() { printf '%s\n' "$2" | sed -n "s/.*\"$1\": *\"\\([^\"]*\\)\".*/\\1/p"; }
+# a folder in one form for comparing: / separators (a JSON \\ is one \), none trailing, Git Bash's /c/x
+# as c:/x, lower case where letter case in paths is ignored (Windows, macOS)
+case "${OSTYPE:-}" in msys*|cygwin*) os=win ;; darwin*) os=mac ;; *) os="" ;; esac
+canon() {
+  local x
+  x="$(printf '%s' "$1" | sed 's#\\\\#/#g' | tr '\\' '/')"
+  [ -n "$os" ] && x="$(printf '%s' "$x" | tr 'A-Z' 'a-z')"
+  while :; do case "$x" in ?*/) x="${x%/}" ;; *) break ;; esac; done
+  if [ "$os" = win ]; then case "$x" in /[a-z]|/[a-z]/*) x="${x:1:1}:${x:2}" ;; esac; fi
+  printf '%s' "$x"
+}
 
 # The main repository is found from the worktree itself, so this runs from any folder.
 [ -d "$wt" ] || stop_here "NO WORKTREE: $wt does not exist (check the path)"
@@ -80,11 +94,39 @@ if [ -n "$session" ]; then
   # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
   # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
   id="$session"
+  raw="$(claude agents --json --all 2>/dev/null)" || raw=""
   if is_uuid "$session"; then
-    raw="$(claude agents --json --all 2>/dev/null)" || true
     id="$(objects "$raw" | while IFS= read -r o; do [ "$(field sessionId "$o")" = "$session" ] && { field id "$o"; break; }; done || true)"
     [ -n "$id" ] || id="$(printf '%s' "$session" | cut -c1-8)"
     echo "session $session: job id $id"
+  fi
+  # only this project's sessions (CORE §1.17): a listed session whose working folder is outside the
+  # repository's main checkout (its .claude/worktrees included) and the worktree (with the folder whose
+  # .claude/worktrees holds it) is left alone
+  scwd="$(objects "$raw" | while IFS= read -r o; do [ "$(field id "$o")" = "$id" ] && { field cwd "$o"; break; }; done || true)"
+  if [ -n "$scwd" ]; then
+    # each folder also as it lies on disk (links resolved; on Windows an 8.3 name in its long form)
+    pw=-P; [ "$os" = win ] && pw=-W
+    phys() { (cd -P -- "$1" 2>/dev/null && pwd $pw) || true; }
+    sc="$(printf '%s' "$scwd" | sed 's#\\\\#\\#g')"
+    top="$(git -C "$wt" rev-parse --path-format=absolute --show-toplevel 2>/dev/null)" || top=""
+    own="" dirs=()
+    for d in "$root" "$root/.claude/worktrees" "$top" "$wt" "$(phys "$root")" "$(phys "$wt")"; do
+      [ -n "$d" ] || continue
+      d="$(canon "$d")"; dirs+=("$d")
+      # the folder whose .claude/worktrees holds the worktree (a state repository's worktree started
+      # from the project root, as the self-test does)
+      case "$d/" in ?*/.claude/worktrees/?*) dirs+=("${d%%/.claude/worktrees/*}") ;; esac
+    done
+    for c in "$sc" "$(phys "$sc")"; do
+      [ -n "$c" ] || continue
+      c="$(canon "$c")"
+      for d in "${dirs[@]}"; do case "$c/" in "$d/"*) own=1; break 2 ;; esac; done
+    done
+    if [ -z "$own" ]; then
+      echo "SESSION FOREIGN: $id ($sc): not this project's session - nothing done" >&2
+      exit 5
+    fi
   fi
   # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
   run claude stop "$id" || true

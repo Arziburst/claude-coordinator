@@ -54,13 +54,13 @@ function dec(x,    m, P, k, p, c, o) {
   return o
 }
 # prints the decoded text of a raw string piece by piece (no long concatenations)
-function emit(all,    m, P, i, p, c, r, v, h, k) {
+function emit(all, ol,    m, P, i, p, c, r, v, h, k) {
   m = split(all, P, "\\"); printf "%s", P[1]
   for (i = 2; i <= m; i++) {
     p = P[i]
     if (p == "") { printf "\\"; i++; if (i <= m) printf "%s", P[i]; continue }
     c = substr(p, 1, 1); r = substr(p, 2)
-    if (c == "n") c = "\n"; else if (c == "t") c = "\t"; else if (c == "r") c = "\r"; else if (c == "b" || c == "f") c = " "
+    if (c == "n") c = ol ? " " : "\n"; else if (c == "t") c = "\t"; else if (c == "r") c = ol ? " " : "\r"; else if (c == "b" || c == "f") c = " "
     else if (c == "u") {
       v = 0; h = tolower(substr(p, 2, 4)); r = substr(p, 6)
       for (k = 1; k <= 4; k++) v = v * 16 + index("0123456789abcdef", substr(h, k, 1)) - 1
@@ -94,6 +94,7 @@ function val(path,    c, k) {
     else if (path == SUBSEP "tool_name") TOOL = k
     else if (path == SUBSEP "tool_input" SUBSEP "file_path") FP = k
     else if (path == SUBSEP "tool_input" SUBSEP "notebook_path") NP = k
+    else if (path == SUBSEP "tool_input" SUBSEP "to") TO = k
     return 1
   }
   if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) { i += RLENGTH; return 1 }
@@ -101,21 +102,22 @@ function val(path,    c, k) {
 }
 { all = (NR > 1) ? all "\n" $0 : $0 }
 END {
-  s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""; FP = ""; NP = ""
+  s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""; FP = ""; NP = ""; TO = ""
   ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
   ws(); if (i <= n) exit 3
-  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(FP); printf "\n"; emit(NP); printf "\n"; emit(CMD); printf "."
+  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(FP); printf "\n"; emit(NP); printf "\n"; emit(TO, 1); printf "\n"; emit(CMD); printf "."
 }'
-fp="" np=""
+fp="" np="" to=""
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$input" | jq -e 'type == "object"' >/dev/null 2>&1 || unreadable
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
   tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)
+  [ "$tool" = SendMessage ] && to=$(printf '%s' "$input" | jq -r '.tool_input.to // empty | strings | gsub("[\n\r]"; " ")' 2>/dev/null)
 else
   both=$(printf '%s' "$input" | awk "$JSON_AWK") || unreadable
   both="${both%.}"; cwd="${both%%$nl*}"; both="${both#*$nl}"; tool="${both%%$nl*}"; both="${both#*$nl}"
-  fp="${both%%$nl*}"; both="${both#*$nl}"; np="${both%%$nl*}"; cmd="${both#*$nl}"
+  fp="${both%%$nl*}"; both="${both#*$nl}"; np="${both%%$nl*}"; both="${both#*$nl}"; to="${both%%$nl*}"; cmd="${both#*$nl}"
 fi
 
 # A path in one form for comparing (its canon form): / separators, none repeated or trailing, lower case
@@ -203,6 +205,150 @@ PHYSICAL_PATH_END
   done
 }
 
+# --- own sessions only (CORE §1.17): claude stop / rm / respawn / attach <id>, claude --resume <id> and
+# the SendMessage tool are blocked for a session whose working folder is outside the project ---
+# The sessions come from `claude agents --json --all`, read only for those calls; a session it does not
+# list, or a listing that cannot be read, passes (nothing to tell it by). The project's folders:
+# CLAUDE_PROJECT_DIR, the top of the repository the call works in and that repository's main checkout
+# (their .claude/worktrees inside them), and the worktree roots of <folder>/coordinator/PROJECT.md
+# (its Settings row "Worktree roots", as scripts/retro reads it); each as written and as it lies on disk,
+# whole path segments compared (<root>-old is another folder), letter case ignored on Windows and macOS.
+# AGENTS_AWK: four lines per session of the listing (id, sessionId, cwd, name), escapes decoded
+AGENTS_AWK='
+function dec(x,    o, c, k, h, v) {
+  o = ""
+  while ((k = index(x, "\\")) > 0) {
+    o = o substr(x, 1, k - 1); c = substr(x, k + 1, 1); x = substr(x, k + 2)
+    if (c == "u") { h = tolower(substr(x, 1, 4)); x = substr(x, 5); v = 0
+      for (k = 1; k <= 4; k++) v = v * 16 + index("0123456789abcdef", substr(h, k, 1)) - 1
+      c = (v > 31 && v < 128) ? sprintf("%c", v) : "?" }
+    else if (c == "n" || c == "r" || c == "t" || c == "b" || c == "f") c = " "
+    o = o c
+  }
+  return o x
+}
+{ all = (NR > 1) ? all "\n" $0 : $0 }
+END {
+  s = all; n = length(s); i = 1; dep = 0; key = ""
+  while (i <= n) {
+    c = substr(s, i, 1)
+    if (c == "\"") {
+      r = substr(s, i); if (!match(r, /^"([^"\\]|\\.)*"/)) exit 3
+      t = substr(r, 2, RLENGTH - 2); i += RLENGTH
+      j = i; while (j <= n && index(" \t\r\n", substr(s, j, 1))) j++
+      if (substr(s, j, 1) == ":") { key = (dep == 2) ? t : ""; i = j + 1; continue }
+      if (dep == 2 && key != "") V[key] = dec(t)
+      key = ""; continue
+    }
+    if (c == "{" || c == "[") { dep++; if (dep == 2) split("", V) }
+    else if (c == "}" || c == "]") {
+      if (dep == 2 && c == "}") printf "%s\n%s\n%s\n%s\n", V["id"], V["sessionId"], V["cwd"], V["name"]
+      dep--
+    } else if (c == ",") key = ""
+    i++
+  }
+}'
+agents_read=0; ag_ids=(); ag_sids=(); ag_cwds=(); ag_names=()
+read_agents() {
+  local raw a b c d
+  [ $agents_read = 1 ] && return 0; agents_read=1
+  command -v claude >/dev/null 2>&1 || return 0
+  raw=$(claude agents --json --all 2>/dev/null) || return 0
+  while IFS= read -r a && IFS= read -r b && IFS= read -r c && IFS= read -r d; do
+    ag_ids+=("$a"); ag_sids+=("$b"); ag_cwds+=("$c"); ag_names+=("$d")
+  done <<AGENTS_END
+$(printf '%s' "$raw" | awk "$AGENTS_AWK")
+AGENTS_END
+}
+case "${OSTYPE:-}" in msys*|cygwin*|darwin*) sm="" ;; *) sm=keep ;; esac   # letter case kept on Linux
+owns_read=0; owns=()
+own_forms() {
+  local c out common r w l; local raw=() rel=()
+  [ $owns_read = 1 ] && return 0; owns_read=1
+  [ -n "${CLAUDE_PROJECT_DIR:-}" ] && raw+=("$CLAUDE_PROJECT_DIR")
+  c="${cwd:-${CLAUDE_PROJECT_DIR:-}}"
+  if [ -n "$c" ] && out=$(git -C "$c" rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>/dev/null); then
+    raw+=("${out%%$nl*}")
+    common="${out#*$nl}"
+    case "$common" in */.git) raw+=("${common%/.git}") ;; esac
+  fi
+  for r in "${raw[@]}"; do
+    [ -f "$r/coordinator/PROJECT.md" ] || continue
+    r="$(printf '%s' "$r" | tr '\\' '/')"; r="${r%/}"
+    while IFS= read -r w; do
+      [ -n "$w" ] || continue
+      w="$(printf '%s' "$w" | tr '\\' '/')"
+      case "$w" in /*|[A-Za-z]:*) ;; *) w="$r/$w" ;; esac   # .. is taken out by the canon form
+      rel+=("$w")
+    done <<ROOTS_END
+$(LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
+  $2 ~ /^[ \t]*[*]*Worktree roots[*]*[ \t]*$/ { v = $3; gsub(/`/, "", v); n = split(v, a, /[,;]/)
+    for (i = 1; i <= n; i++) { x = a[i]; sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); y = tolower(x)
+      if (x != "" && x != "-" && y != "none" && y != "n/a" && x !~ /^<.*>$/) print x } }' "$r/coordinator/PROJECT.md")
+ROOTS_END
+  done
+  raw+=("${rel[@]}")
+  [ ${#raw[@]} -gt 0 ] || return 0
+  while IFS= read -r l; do
+    l="${l#.}"; case "$l" in ''|.) continue ;; esac   # / or nothing is no project folder
+    owns+=("$l")
+  done <<OWNS_END
+$(canon_all "$sm" "${raw[@]}"; physical "$sm" "${raw[@]}")
+OWNS_END
+}
+is_own() {   # is_own <a session's cwd>: inside one of the project's folders
+  local f o
+  while IFS= read -r f; do
+    f="${f#.}"; [ -n "$f" ] || continue
+    for o in "${owns[@]}"; do case "$f/" in "$o/"*) return 0 ;; esac; done
+  done <<IS_OWN_END
+$(canon_all "$sm" "$1"; physical "$sm" "$1")
+IS_OWN_END
+  return 1
+}
+# session_check <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id;
+# send - a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it
+# names are all outside the project (a name an own session has too passes: it may be meant for that one)
+session_check() {
+  local what="$1" a="$2" how="$3" k own=0 foreign="" re nm="" ci
+  [ -n "$a" ] || return 0
+  ci=$(shopt -p nocasematch); shopt -u nocasematch
+  re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  [ "$how" = send ] && case "$a" in *' ['*']') nm="${a% \[*}" ;; esac
+  read_agents
+  k=0
+  while [ $k -lt ${#ag_ids[@]} ]; do
+    if [ "$how" = send ]; then
+      if [ "${ag_names[$k]}" = "$a" ] || [ "${ag_ids[$k]}" = "$a" ] || [ "${ag_sids[$k]}" = "$a" ] ||
+        { [ -n "$nm" ] && [ "${ag_names[$k]}" = "$nm" ]; }; then :; else k=$((k + 1)); continue; fi
+    elif [[ $a =~ $re ]]; then [ "${ag_sids[$k]}" = "$a" ] || { k=$((k + 1)); continue; }
+    else [ "${ag_ids[$k]}" = "$a" ] || { k=$((k + 1)); continue; }; fi
+    own_forms
+    [ ${#owns[@]} -gt 0 ] || { eval "$ci"; return 0; }   # no project folder known: nothing to tell it by
+    if [ -n "${ag_cwds[$k]}" ] && ! is_own "${ag_cwds[$k]}"; then foreign="${ag_cwds[$k]}"; else own=1; fi
+    k=$((k + 1))
+  done
+  eval "$ci"
+  [ $own = 0 ] && [ -n "$foreign" ] || return 0
+  echo "Blocked by safety-guard: $what a session of another project ($foreign). Ask the owner." >&2
+  exit 2
+}
+# claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+claude_seg() {
+  local t verb="" nx=0
+  for t in "$@"; do
+    if [ $nx = 1 ]; then nx=0; session_check "claude --resume" "$t" id; continue; fi
+    case "$t" in
+      --resume|-r) nx=1 ;;
+      --resume=*) session_check "claude --resume" "${t#--resume=}" id ;;
+      -*) ;;
+      *) if [ -z "$verb" ]; then
+           case "$t" in stop|rm|respawn|attach) verb="$t" ;; *) verb=- ;; esac
+         elif [ "$verb" != - ]; then session_check "claude $verb" "$t" id; fi ;;
+    esac
+  done
+}
+
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
@@ -246,6 +392,8 @@ EDIT_FORMS_END
       fi ;;
   esac
 fi
+# a message to another session (CORE §1.17): its address looked up in the listing
+[ "$tool" = SendMessage ] && session_check "a message to" "$to" send
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 cmd="${cmd//$cr$nl/$nl}"; cmd="${cmd//\\$nl/}"; cmd="${cmd//\`$nl/ }"
 # Comment lines (a "#" at the start of a line) do not count for the project patterns.
@@ -723,6 +871,7 @@ while IFS="$tab" read -r -a T; do
     rm|remove-item|ri|del|erase|rd|rmdir) rm_seg "$w" "${A[@]:$((i + 1))}" ;;
     find) find_seg "${A[@]:$((i + 1))}" ;;
     get-childitem|gci|ls|dir|get-item|gi) list_seg "${A[@]:$((i + 1))}" ;;
+    claude) claude_seg "${A[@]:$((i + 1))}" ;;
   esac
 done <<SAFETY_GUARD_SEGMENTS_END
 $segments

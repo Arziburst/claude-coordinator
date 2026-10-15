@@ -513,3 +513,57 @@ allow	write:work	@PROJECT@/.claude/worktrees/12-fix/a.txt	@LINK@
 allow	edit:work	@PROJECT@/out-link/a.txt	@LINK@/src
 allow	edit:work	@PROJECT@/dangling/a.txt	@LINK@/src
 allow	edit:work	@PROJECT@/loopa/a.txt	@LINK@/src
+# --- own sessions only (CORE §1.17): the sessions of the stub claude in tests/safety-guard/run.sh -
+# a0000001 in work, a0000002 in its worktree, a0000003 under work-wt (a worktree root of
+# work/coordinator/PROJECT.md), b0000001 in another folder, b0000002 in work-old, b0000003 elsewhere with
+# a0000001's name; sessionIds <id>-0000-4000-8000-000000000001 ---
+allow	work	claude stop a0000001
+allow	work	claude rm a0000002
+allow	work	claude respawn a0000003
+allow	work	claude attach a0000001
+allow	work/.claude/worktrees/12-fix/src	claude rm a0000001
+block	work	claude stop b0000001
+block	work	claude rm b0000001
+block	work	claude respawn b0000001
+block	work	claude attach b0000001
+block	work	claude rm a0000001 b0000001
+# a folder whose name starts with the project's is another folder
+block	work	claude rm b0000002
+block	work	claude stop b0000003
+# --resume takes the full sessionId (a short id is looked up as an id)
+block	work	claude --bg --resume b0000001-0000-4000-8000-000000000001
+block	work	claude --resume b0000001-0000-4000-8000-000000000001 --name x
+block	work	claude -r b0000001-0000-4000-8000-000000000001
+block	work	claude --resume=b0000001-0000-4000-8000-000000000001
+block	work	claude --resume b0000001
+allow	work	claude --bg --resume a0000001-0000-4000-8000-000000000001
+allow	work	claude --resume a0000003-0000-4000-8000-000000000001
+# the wrappers and forms the guard already reads
+block	work	claude.exe rm b0000001
+block	work	/usr/local/bin/claude stop b0000001
+block	work	cd .claude/worktrees/12-fix && claude rm b0000001
+block	work	claude stop a0000001 && claude rm b0000001
+block	work	bash -c "claude rm b0000001"
+block	work	timeout 30 claude stop b0000001
+block	work	CLAUDE RM b0000001
+block	ps:work	claude rm b0000001
+block	ps:work	& claude stop b0000001; claude rm b0000001
+allow	ps:work	claude rm a0000002
+# a session the listing does not have, a read-only command, an id in a variable: not looked up
+allow	work	claude rm c9999999
+allow	work	claude logs b0000001
+allow	work	claude agents --json --all
+allow	work	claude rm $id
+allow	work	claude --bg --name "#12 worker: Fix" --model opus "rm b0000001"
+# SendMessage: its to by name (also with a [ref]), id or sessionId; a name an own session has too passes
+allow	send:work	#13 worker: Own
+allow	send:work	#14 worker: Wt
+allow	send:work	#12 worker: Fix
+block	send:work	Other Coordinator
+block	send:work	Other Coordinator [r3f]
+block	send:work	#15 worker: Old
+block	send:work	b0000001
+block	send:work	b0000002-0000-4000-8000-000000000001
+allow	send:work	a0000002
+allow	send:work	Nobody Here
+allow	send:work/.claude/worktrees/12-fix/src	#13 worker: Own
