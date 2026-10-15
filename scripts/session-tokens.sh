@@ -145,7 +145,8 @@ record() {
       close("LC_ALL=C sort")
       print line("total", I, O, R, W, T)
       if (match(rec, /"totalCostUSD":[ \t]*[0-9.eE+-]+/)) {
-        t = substr(rec, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t } }'
+        # + 1e-12: a midpoint such as 1.89075 (1.8907499... as a double) rounds half up, as the .ps1 does
+        t = substr(rec, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t + 1e-12 } }'
 }
 case "$arg" in
   --prune)
@@ -217,9 +218,10 @@ elif [ ! -f "$status" ]; then
 fi
 # the record's cost when it has one, else the status file's
 if [ -f "$status" ] && ! printf '%s\n' "$rec" | grep -q '^cost'; then
-  awk '{ s = s $0 }
+  # LC_ALL=C: under a decimal-comma locale the BSD awk reads 0.0071 as 0; + 1e-12 as above
+  LC_ALL=C awk '{ s = s $0 }
     END { if (match(s, /"total_cost_usd"[ \t]*:[ \t]*[0-9.eE+-]+/)) {
-            t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t } }' "$status"
+            t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t + 1e-12 } }' "$status"
 fi
 if [ -n "$main" ] && [ -f "$main" ]; then
   { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | span

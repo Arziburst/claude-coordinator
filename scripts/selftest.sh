@@ -72,6 +72,13 @@ abspath() {
   a="$(cd "$1" 2>/dev/null && pwd)" || { printf '%s\n' "$1"; return; }
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$a"; else printf '%s\n' "$a"; fi
 }
+# physpath <dir>: the same folder as it lies on disk (links resolved, cd -P), nothing when it cannot be
+# entered: a run's session lists its cwd in that form (/private/tmp, not /tmp, on macOS)
+physpath() {
+  local a
+  a="$(cd -P "$1" 2>/dev/null && pwd -P)" || return 0
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$a"; else printf '%s\n' "$a"; fi
+}
 # own_roots <project> <state>: the folders whose sessions are this run's, one per line - the project root
 # and the state repository (their .claude/worktrees are inside them) and the worktree roots the state
 # repository's PROJECT.md names (its Settings row "Worktree roots", read as the retro reads it: relative
@@ -79,7 +86,7 @@ abspath() {
 own_roots() {
   local b w x
   b="$(abspath "$1" | tr '\\' '/')"; b="${b%/}"
-  printf '%s\n' "$b"; abspath "$2"
+  printf '%s\n' "$b"; physpath "$1"; abspath "$2"; physpath "$2"
   [ -f "$2/PROJECT.md" ] || return 0
   LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
     $2 ~ /^[ \t]*[*]*Worktree roots[*]*[ \t]*$/ { v = $3; gsub(/`/, "", v); n = split(v, a, /[,;]/)
@@ -93,7 +100,7 @@ own_roots() {
          while :; do case "$w" in ../*) x="${x%/*}"; w="${w#../}" ;; ./*) w="${w#./}" ;; ..) x="${x%/*}"; w="" ;; *) break ;; esac; done
          w="$x${w:+/$w}" ;;
     esac
-    printf '%s\n' "$w"
+    printf '%s\n' "$w"; physpath "$w"
   done
 }
 # st_sessions <folders>: the self-test sessions claude agents --json --all still lists, in any state (a
@@ -127,7 +134,7 @@ sessions() {
   x="$(st_sessions "$1")"
   printf '%s\n' "$x" | sed -n 's/^F /SKIP foreign self-test session /p'
   n="$(printf '%s\n' "$x" | sed -n 's/^O //p' | awk 'NR > 1 { printf ", " } { printf "%s", $0 }')"
-  [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
+  [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): $n"
 }
 
 case "$step" in
@@ -262,7 +269,7 @@ clean)
     git -C "$r" merge-base --is-ancestor "$(git -C "$d/remote.git" rev-parse "refs/heads/$x")" main 2>/dev/null || b="$b $x"
   done
   [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
-  sessions "$(abspath "$d")"
+  sessions "$(abspath "$d"; physpath "$d")"
   if [ -n "$state" ]; then
     if n="$(gh api "repos/$state/branches" --paginate --jq '.[].name' 2>/dev/null)"; then
       n="$(printf '%s\n' "$n" | grep '^selftest/')"

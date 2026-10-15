@@ -23,7 +23,12 @@ function Run([string]$exe, [string[]]$a) {
 }
 # Agents: claude agents --json --all as one string ($LASTEXITCODE its exit); Objects: one session object
 # per item; Field: an object's string value (read as text, the same as cleanup-worker.sh)
-function Agents { $r = @(& claude agents --json --all 2>$null | ForEach-Object { "$_" }); $r -join "`n" }
+# no claude on PATH: nothing can be stopped or removed - the session is reported kept (exit 4), as the .sh
+$hasClaude = [bool](Get-Command claude -ErrorAction SilentlyContinue)
+function Agents {
+  if (-not $hasClaude) { $global:LASTEXITCODE = 127; return '' }
+  $r = @(& claude agents --json --all 2>$null | ForEach-Object { "$_" }); $r -join "`n"
+}
 function Objects([string]$json) { @(($json -replace "[`r`n]", '') -split '}') }
 function Field([string]$o, [string]$k) { $m = [regex]::Match($o, '"' + $k + '": *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
 # a folder in one form for comparing: / separators (a JSON \\ is one \), none trailing, Git Bash's /c/x
@@ -36,6 +41,51 @@ function Canon([string]$x) {
   while ($x.Length -gt 1 -and $x.EndsWith('/')) { $x = $x.Substring(0, $x.Length - 1) }
   if ($isWin -and $x -cmatch '^/[a-z](/|$)') { $x = $x.Substring(1, 1) + ':' + $x.Substring(2) }
   $x
+}
+# A path as it lies on disk, as safety-guard.ps1 walks it (#121): links (symlinks, junctions) resolved a
+# folder at a time, then the rest as written; PhysDir gives @(<the existing folder>, <the rest>) or $null.
+function LinkTarget([string]$p) {
+  try { $it = Get-Item -LiteralPath $p -Force -ErrorAction Stop } catch { return '' }
+  if (-not $it.LinkType) { return '' }   # another reparse point (a cloud file ...) is a plain folder
+  $t = $null
+  if ($it.PSObject.Properties['LinkTarget']) { $t = $it.LinkTarget }   # PowerShell 7
+  if (-not $t) { $t = @($it.Target)[0] }                                # Windows PowerShell 5.1
+  ([string]$t).Replace('\', '/') -replace '^//\?/|^/\?\?/', ''
+}
+# @(<the existing folder, physical>, <the rest as written>), or $null
+function PhysDir([string]$p) {
+  $p = $p.Replace('\', '/')
+  if ($isWin) { $p = $p -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
+  if ($p -notmatch '^([A-Za-z]:|/)') { $p = (Get-Location).ProviderPath.Replace('\', '/') + '/' + $p }
+  if ($p -match '^[A-Za-z]:') { $root = $p.Substring(0, 2) + '/'; $p = $p.Substring(2) }
+  elseif ($isWin) { return $null } else { $root = '/' }
+  $segs = $p.Split('/'); $cur = $root
+  for ($i = 0; $i -lt $segs.Count; $i++) {
+    $s = $segs[$i]
+    if ($s -eq '' -or $s -eq '.') { continue }
+    if ($s -eq '..') {
+      $k = $cur.LastIndexOf('/'); $cur = if ($k -lt $root.Length) { $root } else { $cur.Substring(0, $k) }
+      continue
+    }
+    $cand = if ($cur.EndsWith('/')) { $cur + $s } else { "$cur/$s" }
+    $a = [int][IO.DirectoryInfo]::new($cand).Attributes
+    $t = if ($a -ne -1 -and ($a -band 1024)) { LinkTarget $cand } else { '' }   # a reparse point: a symlink or a junction
+    if ($t) {
+      if (++$script:hops -le 40) {
+        if ($t -notmatch '^([A-Za-z]:|/)') { $t = "$cur/$t" }
+        $r = PhysDir $t
+        if ($null -ne $r -and -not $r[1]) { $cur = $r[0]; continue }
+      }
+      # a loop, or it does not lead to an existing folder
+    } elseif ($a -ne -1 -and ($a -band 16)) {
+      # an 8.3 name (RUNNER~1) in its long form, as git and cd -P give it: GetFullPath expands it
+      $cur = if ($isWin -and $s.Contains('~')) { [IO.Path]::GetFullPath($cand).Replace('\', '/') } else { $cand }
+      continue
+    }
+    # not there, or not a folder: the rest as written
+    return @($cur, ('/' + ($segs[$i..($segs.Count - 1)] -join '/')))
+  }
+  @($cur, '')
 }
 if (-not $Worktree) { [Console]::Error.WriteLine('usage: -Worktree <path> [-Session <id>] [-DryRun]'); exit 1 }
 # a flag where a value belongs (-Session --dry-run): a usage error, never a session or path of that name
@@ -102,6 +152,8 @@ $id = ''
 if ($Session) {
   # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
   # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
+  # ids are lower-case hex in the listing: a sessionId or job id typed in upper case is the same session
+  if ($Session -match '^[0-9A-Fa-f-]+$') { $Session = $Session.ToLowerInvariant() }
   $id = $Session
   $listing = Objects (Agents)
   if ($Session -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
@@ -117,8 +169,14 @@ if ($Session) {
   foreach ($o in $listing) { if ((Field $o 'id') -ceq $id) { $scwd = Field $o 'cwd'; break } }
   if ($scwd) {
     $sc = $scwd.Replace('\\', '\'); $own = $false
-    # each folder also in its full form (on Windows an 8.3 name in its long form)
-    function Full([string]$p) { try { if (Test-Path -LiteralPath $p) { return [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $p).ProviderPath) } } catch { }; '' }
+    # each folder also as it lies on disk: links resolved (Resolve-Path keeps a symlink on macOS and
+    # Linux, where the .sh's cd -P resolves it), on Windows an 8.3 name in its long form
+    function Full([string]$p) {
+      $script:hops = 0; $r = $null
+      try { $r = PhysDir $p } catch { }
+      if ($null -ne $r -and -not $r[1]) { return $r[0] }
+      try { if (Test-Path -LiteralPath $p) { return [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $p).ProviderPath) } } catch { }; ''
+    }
     $top = "$(git -C $Worktree rev-parse --path-format=absolute --show-toplevel 2>$null)".Trim()
     $dirs = @()
     foreach ($d in @($root, "$root/.claude/worktrees", $top, $Worktree, (Full $root), (Full $Worktree))) {
@@ -141,11 +199,11 @@ if ($Session) {
     }
   }
   # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
-  Run claude @('stop', $id)
+  if ($hasClaude) { Run claude @('stop', $id) }
   if ($DryRun) { "[dry-run] claude rm $id" }
   else {
-    $out = @(& claude rm $id 2>&1 | ForEach-Object { "$_" })
-    $rc = $LASTEXITCODE
+    if ($hasClaude) { $out = @(& claude rm $id 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE }
+    else { $out = @('claude: command not found'); $rc = 127 }
     if ($out.Count) { $out }
     # removed only when the listing no longer has it; no listing at all: the rm's exit code decides
     $raw = Agents
