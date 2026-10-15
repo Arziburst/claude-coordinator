@@ -40,8 +40,10 @@ case "${OSTYPE:-}" in msys*|cygwin*) os=win ;; darwin*) os=mac ;; *) os="" ;; es
 canon() {
   local x
   x="$(printf '%s' "$1" | sed 's#\\\\#/#g' | tr '\\' '/')"
-  # [:upper:]: in a UTF-8 locale also Ü or Д (APFS and NTFS fold them too), in C the ASCII letters
-  [ -n "$os" ] && x="$(printf '%s' "$x" | tr '[:upper:]' '[:lower:]')"
+  # also Ü or Д (APFS and NTFS fold them too): macOS tr folds them in a UTF-8 locale; Git Bash's GNU tr
+  # folds ASCII only in any locale, its gawk folds them in a UTF-8 one (C.UTF-8 is built into Git Bash)
+  if [ "$os" = win ]; then x="$(printf '%s\n' "$x" | LC_ALL=C.UTF-8 awk '{ print tolower($0) }')"
+  elif [ -n "$os" ]; then x="$(printf '%s' "$x" | tr '[:upper:]' '[:lower:]')"; fi
   while :; do case "$x" in ?*/) x="${x%/}" ;; *) break ;; esac; done
   if [ "$os" = win ]; then case "$x" in /[a-z]|/[a-z]/*) x="${x:1:1}:${x:2}" ;; esac; fi
   printf '%s' "$x"
