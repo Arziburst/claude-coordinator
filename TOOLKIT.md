@@ -257,7 +257,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   and SendMessage reach every session on the machine; the coordinator and every role act only on those
   whose `cwd` (`claude agents --json --all`) is inside the project root, its state repository or its
   worktree roots. Three layers: the rule itself; the scripts' own checks (`cleanup-worker` refuses a
-  foreign session: `SESSION FOREIGN`, exit 5); and the guard as a backstop — a shell command running one
+  foreign session: `SESSION FOREIGN`, exit 5); and the guard as a backstop, in the sessions whose settings
+  hold it (workers and leads; the coordinator only where the owner put it in its own) — a shell command running one
   of those verbs (in any form it already reads: wrappers, `bash -c`, `.exe`, a path) or a SendMessage
   call (its `to` by name, also with a `[ref]`, id or `sessionId`; SendMessage in the matcher) is looked
   up in the listing, and a session outside `CLAUDE_PROJECT_DIR`, the repository's top and main checkout

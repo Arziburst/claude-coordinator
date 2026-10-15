@@ -58,7 +58,9 @@ worker (BINDINGS) and the phrase that ends your report.
    <integration branch>...<sub-branch>`, named in its brief), the code, the worker's outputs attached
    on the reviewed commit — since it works in your worktree and cannot build or test in the
    worker's (the build and test oracles run in step 5); findings go back to the same worker until there is no Blocker or Major. A failed
-   review that a stronger model would fix → restart on the sub-contract's `escalate_to`, once; if
+   review that a stronger model would fix → restart on the sub-contract's `escalate_to`, once — on the top
+   rung only after the coordinator, asked with the run's estimate, confirms its guard rails pass (CORE §7;
+   else Opus at its highest effort: the guard rails are the coordinator's numbers, §7a); if
    that run fails too, start nothing more for it and tell the coordinator, with both reports.
 5. **Integrate on your branch only.** Merge only a sub-branch whose verdict approves the exact commit
    you merge — you never override a reject, even one you judge an artefact: it goes back to the worker,

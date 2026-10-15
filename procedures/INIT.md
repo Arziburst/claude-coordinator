@@ -280,8 +280,8 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
   2. **The local core's rules.** Re-read `coordinator/core/CORE.md` (and the procedures from there)
      and follow them, not the upstream text the link pointed to: the project is pinned to its copy;
      a newer upstream is only the one line of CORE §2 step 3.
-  3. **Take over the running sessions** of this project (`claude agents --json`, its folder and its
-     `.claude/worktrees/`): subscribe to each (`notify_when_idle`, CORE §4 *Control*) — the old
+  3. **Take over the running sessions** of this project (`claude agents --json`, its folder, its
+     `.claude/worktrees/` and the *Worktree roots* of `PROJECT.md`, CORE §1.17): subscribe to each (`notify_when_idle`, CORE §4 *Control*) — the old
      session's subscriptions died with it — and match each to its task in the journal and the board.
   4. Then the open questions and one "still so?" per section instead of the quiz; no dry run or
      self-test when the machine and the core commit are the same (CHECKLIST says so).

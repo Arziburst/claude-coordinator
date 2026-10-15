@@ -74,6 +74,9 @@ the report notes the interruption and the resume time.
      not require it there, TOOLKIT *New machine*) → the second probe is not started; the report says
      `SKIP probe (own settings): no guard there`. Putting the guard there is the owner's choice
      (CORE §1.16), offered once, never made by the coordinator.
+   - **Probe names:** each probe session is named `probe: …` (`--name "probe: push"`, `"probe: push (own
+     settings)"`, `"probe: edit"`): `selftest verify` and `clean` find the self-test's sessions by that name
+     (or `selftest`, or a `#st` task), and the retro leaves them out.
    - **The edit probe**, when the worker safety file sets `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*): a
      third probe session on the light model, started from the project root with `--settings <worker
      safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt` containing x; do not
