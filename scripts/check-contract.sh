@@ -8,7 +8,7 @@
 #   - an acceptance item not led by `criterion:`; a criterion without `check`, with a check other than
 #     oracle / review / owner, or an `oracle` check without `how` (a criterion with no nameable check is
 #     a planning gap, CONTRACT.md); an empty, blank or null `how` is none;
-#   - non_goals without the two default lines (no changes beyond the fix …, do not weaken … tests …;
+#   - non_goals without the two default lines (no changes beyond … — this contract's acceptance, or "the fix" in an older contract —, do not weaken … tests …;
 #     a line commented out does not count).
 #   - a file that cannot be read: `<file>: cannot read`.
 # WARN — allowed, but say why in the brief:
@@ -106,7 +106,7 @@ for f in "$@"; do
         ng = ""; gm = split(txt["non_goals"], G, "\n")
         for (k = 1; k <= gm; k++) { t = G[k]; if (t ~ /^[ \t]*#/) continue; sub(/[ \t]+#.*$/, "", t); ng = ng "\n" t }
         ng = tolower(ng)
-        if (index(ng, "beyond the fix") == 0) err("non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)")
+        if (index(ng, "no changes beyond") == 0) err("non_goals lacks the default (no changes beyond this contract\047s acceptance, its diagnostics and its tests)")
         if (index(ng, "weaken") == 0) err("non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)")
       }
       b = "\n" txt["budget"]

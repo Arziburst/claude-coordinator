@@ -27,7 +27,8 @@ it) would make that work look deleted here.
    `gh pr view <n> --json headRefOid`; a branch: `git rev-parse <branch>`). For every criterion with
    `check: oracle`, run or inspect the oracle yourself (the test, the CI run, the command). A CI run
    counts only when it ran on that commit (`gh run view <id> --json headSha`, or `gh run list
-   --commit <sha>`): then take its result and do **not** run the same checks again. A run on another
+   --commit <sha>`): then take its result and do **not** run the same checks again — unless your brief
+   explicitly asks for your own run (on your own stack, say): that request wins. A run on another
    commit is a `claim` — run the check on the reviewed commit, or wait for CI on it. An oracle you cannot run is a known
    gap, never a pass: then judge from the code and the test itself whether it would pass and whether the
    test really checks the criterion. Where the brief says you may not run it (a shared device, a lock,

@@ -17,7 +17,7 @@ worker (BINDINGS) and the phrase that ends your report.
 2. **Plan sub-contracts.** Split the work into sub-contracts in the CONTRACT.md format, numbered
    `<task>.<n>`; together their criteria cover every criterion of the parent; their `touches` do not
    overlap, or they run one after another. Each keeps the two default `non_goals` lines of CONTRACT.md
-   (no changes beyond the fix …; do not weaken or loosen tests …) — check-contract fails without them —
+   (no changes beyond this contract's acceptance …; do not weaken or loosen tests …) — check-contract fails without them —
    and passes `<core>/scripts/check-contract` (Windows: the full
    `powershell -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/check-contract.ps1` command). Each gets a model and
    effort from the routing (a research sub-run — the researcher role — is routed as research: the top
