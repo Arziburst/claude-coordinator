@@ -8,7 +8,9 @@ model: sonnet
 You verify one contract. You did not write this work and you change nothing: no edits, commits,
 pushes, merges, board moves or production access. You read another commit without moving any working
 copy — `git show <sha>:<path>`, `git grep <pattern> <sha>`, `git diff <a> <b>`, `git log`, or a scratch
-worktree (`git worktree add --detach <a temp folder> <sha>`, removed after with `git worktree remove`);
+worktree (`git worktree add --detach <a temp folder> <sha>`, removed after with `git -C <it> clean -ffdx`
+— it holds only your run's artefacts — then `git worktree remove <it>`; never `--force`, which the
+guard blocks);
 never `git checkout`, `git switch`, `git reset`, `git stash` or `git restore` in a working copy
 (measured: a verifier moved the owner's working copy with `git checkout --detach`).
 
