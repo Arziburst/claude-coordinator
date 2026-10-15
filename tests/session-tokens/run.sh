@@ -88,6 +88,23 @@ expect "cost-state: a subagent of a stopped session, the sums" 0 "$t/expected-st
 mkdir -p "$tmp/crlf2/projects/-work-app"
 awk 'NR == 1 { printf "\357\273\277" } { sub(/\r$/, ""); printf "%s\r\n", $0 }' "$st/projects/-work-app/c2.jsonl" > "$tmp/crlf2/projects/-work-app/c2.jsonl"
 expect "cost-state: CRLF line ends and a BOM" 0 "$t/expected-state-last.txt" - -- "$tmp/crlf2" c2
+# a decimal-comma locale (de_DE, ru_RU: the BSD awk on macOS reads 0.0071 as 0 there): the same lines
+for loc in de_DE.UTF-8 ru_RU.UTF-8; do
+  export LC_ALL="$loc"
+  expect "cost-state cost under $loc" 0 "$t/expected-state-one.txt" - -- "$st" c1
+  expect "a status file's cost under $loc" 0 "$t/expected-state-after.txt" - -- "$st" c3
+  unset LC_ALL
+done
+# a cost at a rounding midpoint: half up, as the .ps1 rounds (1.89075 is 1.8907499... as a double)
+mkdir -p "$tmp/mid/projects/-w" "$tmp/mid/coordinator/sessions"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"go"},"uuid":"u1","sessionId":"m1","timestamp":"2026-10-12T10:00:00.000Z"}' \
+  '{"type":"cost-state","sessionId":"m1","totalCostUSD":1.89075,"modelUsage":{"claude-haiku-5-5":{"inputTokens":1,"outputTokens":2}}}' > "$tmp/mid/projects/-w/m1.jsonl"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"go"},"uuid":"u1","sessionId":"m2","timestamp":"2026-10-12T10:00:00.000Z"}' > "$tmp/mid/projects/-w/m2.jsonl"
+printf '{"session_id":"m2","cost":{"total_cost_usd":0.03125}}\n' > "$tmp/mid/coordinator/sessions/m2.json"
+for c in 'm1 $1.8908' 'm2 $0.0313'; do
+  n=$((n + 1)); run "$tmp/mid" "${c%% *}"
+  grep -qxF "cost$(printf '\t')${c#* }" "$tmp/out" || { bad "a cost at a rounding midpoint (${c%% *}): want cost ${c#* }"; sed 's/^/  got: /' "$tmp/out"; }
+done
 printf 'cost\t$0.1000\n' > "$tmp/cost-ab1.txt"; printf 'cost\t$0.4182\n' > "$tmp/cost-s1.txt"
 expect "a status file only, by its full id" 0 "$tmp/cost-ab1.txt" - -- "$here/edge" ab1
 # no projects folder, the status file there: the cost line

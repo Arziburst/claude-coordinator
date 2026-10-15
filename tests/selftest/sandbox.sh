@@ -124,7 +124,7 @@ if [ -n "$win" ]; then J() { cygpath -w "$1" | sed 's/\\/\\\\/g'; }; else J() { 
 foreign='{"id":"f1","cwd":"'"$(J "$a")"'","name":"#st1 lead: selftest c7","state":"done"},{"id":"f2","cwd":"'"$(J "$d-old")"'","name":"probe: push","state":"done"}'
 export STUB_AGENTS_ALL='[{"id":"2be9934b","cwd":"'"$(J "$r/.claude/worktrees/st2")"'","sessionId":"2be9934b-aaaa-4bbb-8ccc-dddddddddddd","name":"#st2 worker: PR","state":"done"},{"id":"5c6d7e8f","cwd":"'"$(J "$r")"'","name":"other","state":"done"},'"$foreign]"
 st clean --sandbox "$(P "$d")" --keep
-expect "clean --keep, a done session left" 1 "FAIL clean: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b)"
+expect "clean --keep, a done session left" 1 "FAIL clean: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st2 worker: PR (2be9934b)"
 expect "clean --keep, a done session left" 1 "sandbox kept for inspection: $(P "$d")"
 expect "clean --keep, a foreign session" 1 "SKIP foreign self-test session f1 ($(P2 "$a"))"
 expect "clean --keep, a <dir>-old session" 1 "SKIP foreign self-test session f2 ($(P2 "$d-old"))"
