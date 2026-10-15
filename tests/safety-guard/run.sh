@@ -5,20 +5,20 @@
 # Exit 1 if any verdict differs from the expected one.
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
-unset COORD_PROTECTED_ROOT   # set per case (the 4th column of cases.txt); empty is the same as unset
+unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 acl=""   # a deny file whose read an NTFS permission denies (Git Bash): the permission is taken back first
 finish() { [ -z "$acl" ] || MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' icacls "$acl" /remove:d "${USERNAME:-}" >/dev/null 2>&1; rm -rf "$tmp"; }
 trap finish EXIT
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -"$1" "$2"; else printf '%s' "$2"; fi; }   # Git Bash -> C:/... or C:\...
-# The cwd repositories: main and work (that branch checked out; in each, the branch before it is the
-# other kind: 12-fix before main, main before work, for git checkout -), and on work with other deny
+# The cwd repositories: main, work and dev (that branch checked out; in each, the branch before it is the
+# other kind: 12-fix before main, main before work and dev, for git checkout -), and on work with other deny
 # files: crlf (saved with CRLF), blank (blank and whitespace-only lines), bad (a pattern that cannot be read),
 # bom (saved with a UTF-8 BOM), utf16 (UTF-16 with its BOM, as Windows PowerShell 5.1's > writes it),
 # utf16nul (UTF-16 without a BOM: NUL bytes).
-for b in main work crlf blank bad bom utf16 utf16nul; do
-  r="$tmp/$b"; br=$b; [ "$b" = main ] || br=work
+for b in main work dev crlf blank bad bom utf16 utf16nul; do
+  r="$tmp/$b"; br=work; case "$b" in main|dev) br=$b ;; esac
   git init -q -b "$br" "$r" && git -C "$r" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
   before=main; [ "$br" = main ] && before=12-fix
   git -C "$r" branch "$before" && git -C "$r" checkout -q "$before" && git -C "$r" checkout -q "$br"
@@ -102,10 +102,11 @@ function subst(s) {
   s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); s = rep(s, "@LINK_W@", ENVIRON["SG_LINK_W"])
   s = rep(s, "@LINK@", ENVIRON["SG_LINK"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
 }'
-while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
+while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
   case "$expect" in ''|'#'*) continue ;; esac
   [ "$expect" = fold ] && expect=$fold
-  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"   # a checkout with CRLF line ends
+  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"   # a checkout with CRLF line ends
+  [ "$pbr" = - ] && pbr=""   # the 6th column: COORD_PROTECTED_BRANCHES; none or -: unset (main master)
   n=$((n + 1))
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
@@ -137,11 +138,11 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir; do
       else if (tool == "SendMessage") ti = "{\"to\":\"" $0 "\",\"message\":\"x\"}"
       else ti = "{\"command\":\"" $0 "\"}"
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
-  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" "$@" >/dev/null 2>&1
+  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "$@" >/dev/null 2>&1
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through

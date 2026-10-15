@@ -108,8 +108,8 @@ jobs:
         shell: powershell
         run: |
           $h = 'tests/selftest/hooks'
-          foreach ($f in @('good', 'shellexit', 'comment', 'minified', 'twoentries', 'matcherall', 'singlequote', 'protectedempty')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 0) { "$f.json must pass"; exit 1 } }
-          foreach ($f in @('shell', 'backslash', 'envvar', 'post', 'shellfar', 'space', 'bashonly', 'noblock', 'matcherafter', 'trailingcomma', 'protectedmatcher', 'protectedpartial', 'protectedrelative', 'protectedmissing')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 1) { "$f.json must fail"; exit 1 } }
+          foreach ($f in @('good', 'shellexit', 'comment', 'minified', 'twoentries', 'matcherall', 'singlequote', 'protectedempty', 'branches', 'branchescomma')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 0) { "$f.json must pass"; exit 1 } }
+          foreach ($f in @('shell', 'backslash', 'envvar', 'post', 'shellfar', 'space', 'bashonly', 'noblock', 'matcherafter', 'trailingcomma', 'protectedmatcher', 'protectedpartial', 'protectedrelative', 'protectedmissing', 'branchesbad')) { .\scripts\selftest.ps1 hooks -Settings "$h/$f.json"; if ($LASTEXITCODE -ne 1) { "$f.json must fail"; exit 1 } }
           # protected.json with its @CORE@ as this checkout's folder (an absolute path to a folder)
           $p = Join-Path $env:RUNNER_TEMP 'protected.json'
           [IO.File]::WriteAllText($p, [IO.File]::ReadAllText("$PWD\$h\protected.json").Replace('@CORE@', $PWD.Path.Replace('\', '/')))

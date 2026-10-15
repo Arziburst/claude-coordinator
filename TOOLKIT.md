@@ -157,7 +157,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
   rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
-  pushing, force-pushing or deleting the protected branches (main / master — in any refspec form:
+  pushing, force-pushing or deleting the protected branches (main / master and those of `COORD_PROTECTED_BRANCHES`,
+  next bullet — in any refspec form:
   quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
   `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
   following `git checkout` / `switch` (with `--track origin/main` and `-` too; `git checkout main
@@ -217,6 +218,21 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
   any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
+- **Which branches are protected:** `main` and `master` always, plus the names in `"env":
+  {"COORD_PROTECTED_BRANCHES": "dev release/1.0"}` in the worker safety file — separated by spaces and
+  / or commas (`dev, release/1.0`). A list **adds to** main and master, never replaces them (a setting
+  cannot unprotect main); a name given twice, or in another letter case, counts once. Each name is
+  matched whole and literally, letter case ignored: no patterns or globs (`release/1.0` is not
+  `release/1x0`, `release/*` is only a branch named so). Every check of the guard above covers each
+  protected branch, and the block names it (`push to a protected branch (dev)`, `deleting a protected
+  branch (dev)`, `push while on dev`). Empty or unset: `main` and `master` only. The names are the
+  project's *Protected branches* setting (`PROJECT.md`, asked in the init quiz, one-time step
+  `protected-branches`). The static push deny rules of the settings examples name `main` and `master`
+  only: a project listing more branches adds the same rules for each (`Bash(git push origin <b>)`,
+  `… <b> *`, and the `--force`, `-f`, `--force-with-lease` and `PowerShell(…)` forms) — INIT writes
+  them with the env entry. `selftest hooks --settings` reports the protected branches (`protected
+  branches: main master (default)` when no name is set) and, when names are set, checks per protected
+  branch — main and master included — that this core's guard blocks a push to it.
 - **The owner's working copy and the edit tools:** a worker started from the project folder
   (`start-worker` from the repository's root, EnterWorktree) works in its own copy under
   `.claude/worktrees/`, but an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` with an absolute path can
@@ -252,7 +268,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   read, a name an own session shares, and an id hidden in a variable or a script pass the guard — the
   rule and the scripts' checks are the main defence.
 - **Deny rules** in `settings.example.json` are the swarm and standard baseline: the protected branches only
-  (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
+  (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools; main and master
+  in the examples, plus the same rules for every other branch the project lists in
+  `COORD_PROTECTED_BRANCHES`).
   Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans
   merge); the cautious override also adds
   `Read(**/.env*)` and the **stack candidates** the owner picks at init (never imposed), per kind:

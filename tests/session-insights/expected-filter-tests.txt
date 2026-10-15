@@ -1,4 +1,4 @@
-block	deleting a protected branch	count=1 changed=0 retried=0 around=0 stopped=1
+block	deleting a protected branch (main)	count=1 changed=0 retried=0 around=0 stopped=1
 block	deny rule	count=1 changed=0 retried=0 around=0 stopped=1
 block	push to a protected branch	count=1 changed=0 retried=1 around=0 stopped=0
 block	push while on main	count=1 changed=1 retried=0 around=0 stopped=0

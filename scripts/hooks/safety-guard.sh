@@ -11,6 +11,17 @@
 # Works on macOS (bash 3.2, BSD awk / sed), Linux and Windows (Git Bash); jq is used when present.
 # Same rules as safety-guard.ps1, both checked against tests/safety-guard/cases.txt.
 
+# The protected branches: main, master and the names in COORD_PROTECTED_BRANCHES (separated by spaces
+# and/or commas; TOOLKIT.md *Safety*) - a list adds to main and master, never replaces them. Each is
+# compared whole and literally (no patterns: . + * / are plain characters), letter case ignored.
+prot=(main master); pbs="${COORD_PROTECTED_BRANCHES:-}"
+shopt -s nocasematch; set -f
+for b in ${pbs//,/ }; do
+  for p in "${prot[@]}"; do case "$b" in "$p") continue 2 ;; esac; done   # once each
+  prot+=("$b")
+done
+set +f; shopt -u nocasematch
+
 if [ "${1:-}" = "--self-test" ]; then
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
   # everything (a syntax error also exits 2) is not working either
@@ -573,7 +584,8 @@ RE_TILDE='^~[^/\\]+$'   # ~name: a user's home (bash only: PowerShell takes ~tmp
 dir="${cwd:-${CLAUDE_PROJECT_DIR:-.}}"   # where the next command runs (follows cd / Set-Location)
 ov_dir=""; ov_branch=""                  # a checkout / switch earlier in this command: dir and branch
 
-is_protected() { case "$1" in main|master) return 0 ;; esac; return 1; }
+# one of the protected branches (prot, above): the whole name, literally, letter case ignored
+is_protected() { local b; for b in "${prot[@]}"; do case "$1" in "$b") return 0 ;; esac; done; return 1; }
 # A path relative to a base; "?" when it cannot be known (variables). . and ./ are the base itself.
 compose() {
   local p="$2"
@@ -624,7 +636,7 @@ push_seg() {
     case "$r" in ''|:) block "push of all matching branches (incl. protected ones)" ;; esac
     case "$r" in *:*) dst="${r#*:}"; [ -z "$dst" ] && dst="${r%%:*}" ;; *) dst="$r" ;; esac
     dst=$(norm_ref "$dst")
-    is_protected "$dst" && block "push to a protected branch"
+    is_protected "$dst" && block "push to a protected branch ($dst)"
     is_current "$dst" && cur=1
   done
   [ $refs = 0 ] && [ $tags = 1 ] && return   # tags only: not a branch push
@@ -640,13 +652,13 @@ branch_seg() {
     case "$t" in --delete) del=1 ;; --*) ;; -*d*) del=1 ;; -*) ;; *) names+=("$t") ;; esac
   done
   [ $del = 1 ] || return
-  for t in "${names[@]}"; do is_protected "$(norm_ref "$t")" && block "deleting a protected branch"; done
+  for t in "${names[@]}"; do t="$(norm_ref "$t")"; is_protected "$t" && block "deleting a protected branch ($t)"; done
 }
 updref_seg() {
   local del=0 t; local names=()
   for t in "$@"; do case "$t" in -d|--delete) del=1 ;; -*) ;; *) names+=("$t") ;; esac; done
   [ $del = 1 ] || return
-  for t in "${names[@]}"; do is_protected "$(norm_ref "$t")" && block "deleting a protected branch"; done
+  for t in "${names[@]}"; do t="$(norm_ref "$t")"; is_protected "$t" && block "deleting a protected branch ($t)"; done
 }
 # git checkout / switch: a later bare push in the same directory pushes that branch.
 checkout_seg() {
