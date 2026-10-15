@@ -11,7 +11,7 @@
 #   - sandbox refuses a kept sandbox that is not clean, and a folder that is not a sandbox;
 #   - plain clean still removes the folder; sandbox --keep is a usage error;
 #   - a relative --in is made absolute: from another folder the kept sandbox fetches, resets, is reused.
-# The sessions are checked with a stub claude that lists none (the real one is never called).
+# The sessions are checked with a stub claude (the real one is never called): only those in the sandbox count.
 #   tests/selftest/sandbox.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/sandbox.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
@@ -37,6 +37,8 @@ chmod +x "$tmp/bin/claude"; export PATH="$tmp/bin:$PATH"
 
 # P <path>: the path as this kind is given it (the .ps1 on Windows: C:/...); the flags as it names them
 P() { if [ "$kind" = ps ] && [ -n "$win" ]; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+# P2 <path>: a session's cwd as either version prints it (Claude Code lists C:\... on Windows), / for \
+P2() { if [ -n "$win" ]; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 if [ "$kind" = ps ]; then SB=-Sandbox KP=-Keep; else SB=--sandbox KP=--keep; fi
 # st <selftest.sh arguments>: one run of this kind, its output in $LAST (backslashes as /), its exit code in $RC
 st() {
@@ -115,15 +117,27 @@ is "clean refused: the untracked file kept" [ -f "$r/junk.txt" ]
 # clean --keep refuses, nothing reset (#151)
 git -C "$r" fetch -q origin t3 2>/dev/null; g -C "$r" merge -q --no-edit FETCH_HEAD
 m="$(git -C "$r" rev-parse main)"
-export STUB_AGENTS_ALL='[{"id":"2be9934b","sessionId":"2be9934b-aaaa-4bbb-8ccc-dddddddddddd","name":"#st2 worker: PR","state":"done"},{"id":"5c6d7e8f","name":"other","state":"done"}]'
+# Each listed with its cwd as the real listing gives it (Windows: C:\..., each \ doubled in the JSON):
+# only a session inside the sandbox counts; one in another folder, or in one that only shares the
+# sandbox's name as a prefix (`<dir>-old`), is a SKIP line, not counted, not advised for removal (#158)
+if [ -n "$win" ]; then J() { cygpath -w "$1" | sed 's/\\/\\\\/g'; }; else J() { printf '%s\n' "$1"; }; fi
+foreign='{"id":"f1","cwd":"'"$(J "$a")"'","name":"#st1 lead: selftest c7","state":"done"},{"id":"f2","cwd":"'"$(J "$d-old")"'","name":"probe: push","state":"done"}'
+export STUB_AGENTS_ALL='[{"id":"2be9934b","cwd":"'"$(J "$r/.claude/worktrees/st2")"'","sessionId":"2be9934b-aaaa-4bbb-8ccc-dddddddddddd","name":"#st2 worker: PR","state":"done"},{"id":"5c6d7e8f","cwd":"'"$(J "$r")"'","name":"other","state":"done"},'"$foreign]"
 st clean --sandbox "$(P "$d")" --keep
 expect "clean --keep, a done session left" 1 "FAIL clean: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b)"
 expect "clean --keep, a done session left" 1 "sandbox kept for inspection: $(P "$d")"
+expect "clean --keep, a foreign session" 1 "SKIP foreign self-test session f1 ($(P2 "$a"))"
+expect "clean --keep, a <dir>-old session" 1 "SKIP foreign self-test session f2 ($(P2 "$d-old"))"
 is "a done session left: main not reset" [ "$(git -C "$r" rev-parse main)" = "$m" ]
 unset STUB_AGENTS_ALL
 
-# merged now: clean --keep resets the sandbox and keeps it
+# merged now: clean --keep resets the sandbox and keeps it - only foreign self-test sessions are listed:
+# they do not stop it (their SKIP lines printed)
+export STUB_AGENTS_ALL="[$foreign]"
 st clean --sandbox "$(P "$d")" --keep
+unset STUB_AGENTS_ALL
+expect "clean --keep, only foreign sessions" 0 "PASS clean: no self-test session left"
+expect "clean --keep, only foreign sessions" 0 "SKIP foreign self-test session f1 ($(P2 "$a"))"
 expect "clean --keep" 0 "PASS clean: no worktree left"
 expect "clean --keep" 0 "PASS clean: every branch on the origin is merged into main"
 expect "clean --keep" 0 "PASS clean: only main, at the first commit $(git -C "$r" rev-parse --short "$i"), in the repo and its origin; nothing untracked"

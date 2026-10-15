@@ -141,7 +141,10 @@ the report notes the interruption and the resume time.
    <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (a session
    is any that `claude agents --json --all` lists, `done` too, named with `selftest` or `probe:` or
    starting with `#st`; the FAIL names each with its short id; clean, merged worktrees are
-   removed), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
+   removed; only a session whose `cwd` is inside the run's own folders counts — the project root, the
+   state repository, the worktree roots of `PROJECT.md` (for `clean`: the sandbox) — while another
+   project's on the same machine gets a line `SKIP foreign self-test session <id> (<cwd>)` and is never
+   advised for removal), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
    is deleted.**
 7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost (the sum of
    step 6). A line in `coordinator/CHECKLIST.md`: `selftest`, the core commit, `hostname`, `done` or
