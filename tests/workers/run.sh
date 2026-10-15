@@ -18,14 +18,17 @@ cat > "$tmp/bin/claude" <<'EOF'
 printf '%s\n' "$*" >> "$STUB_LOG"
 # --bg: remember the folder and the session name; agents --json: list the names started so far, then
 # the sessions of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>` per line, pretty-printed as the
-# real listing; a `done` one with --all only)
+# real listing; a `done` one with --all only), each with the working folder $STUB_LOG.sessions.cwd gives
+# it (`<id><tab><cwd>` per line; none: no cwd field)
 S="$STUB_LOG.sessions"
 if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
 if [ "${1:-}" = agents ]; then
   all=""; case " $* " in *" --all "*) all=1 ;; esac
   a="$(sed 's/\\/\\\\/g; s/"/\\"/g; s/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"
-  b="$(awk -v all="$all" '$3 != "done" || all { n = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n)
-    printf "%s{\n    \"id\": \"%s\",\n    \"sessionId\": \"%s\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"\n  }", (c++ ? ",\n  " : ""), $1, $2, n, $3 }' "$S" 2>/dev/null)"
+  [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
+  b="$(awk -v all="$all" 'FILENAME == ARGV[1] { k = index($0, "\t"); if (k) cw[substr($0, 1, k - 1)] = substr($0, k + 1); next }
+    $3 != "done" || all { n = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); w = cw[$1]; gsub(/\\/, "\\\\", w)
+    printf "%s{\n    \"id\": \"%s\",\n%s    \"sessionId\": \"%s\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"\n  }", (m++ ? ",\n  " : ""), $1, (w == "" ? "" : "    \"cwd\": \"" w "\",\n"), $2, n, $3 }' "$S.cwd" "$S" 2>/dev/null)"
   printf '[%s%s%s]\n' "$a" "$([ -n "$a" ] && [ -n "$b" ] && echo ,)" "$b"
 fi
 # stop / rm: as Claude Code 2.1.296 - the short job id only, a full sessionId is no job; rm fails with
@@ -384,7 +387,8 @@ expect_in "got the flag --dry-run"
 STUB_HEADS="$head" check 0 "cleanup: dry run" -- cleanup --worktree "$wt" --session s1 --dry-run
 expect_in "[dry-run]"
 [ -d "$wt" ] || { echo "FAIL: the dry run removed the worktree"; fail=1; }
-[ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
+# it reads the listing (the session's folder, CORE §1.17), and stops or removes nothing
+grep -v -x 'agents --json --all' "$STUB_LOG" | grep -q . && { echo "FAIL: the dry run called claude beyond the listing:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 STUB_HEADS="$head" check 0 "cleanup: merged" -- cleanup --worktree "$wt" --session s1
 expect_in "cleaned: s1"
 [ -d "$wt" ] && { echo "FAIL: the worktree is still there"; fail=1; }
@@ -462,6 +466,49 @@ grep -q 2be9934b "$SS" || { echo "FAIL: the stub lost the session"; fail=1; }
 STUB_HEADS="$h" check 0 "cleanup: run again once rm works" -- cleanup --worktree "$w" --session 2be9934b
 expect_in "cleaned: 2be9934b"
 [ -s "$SS" ] && { echo "FAIL: the session is still listed"; fail=1; }
+
+# --- own sessions only (CORE §1.17): a session the listing gives a working folder outside the project
+# (the repository's main checkout, its .claude/worktrees, the worktree) is never stopped or removed:
+# SESSION FOREIGN, exit 5, the worktree and branch kept. The folders as the real listing gives them: as
+# they lie on disk, on Windows in the C:\... form ---
+native() { (cd -P -- "$1" && case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pwd -W | tr '/' '\\' ;; *) pwd -P ;; esac); }
+mkdir -p "$tmp/other" "$tmp/repo-old"
+rp="$(native "$tmp/repo")"
+mk 19-fix
+printf '%s %s %s %s\n' c0ffee01 c0ffee01-1111-4222-8333-444455556666 running "#19 worker: Fix" > "$SS"
+printf 'c0ffee01\t%s\n' "$(native "$w")" > "$SS.cwd"
+STUB_HEADS="$h" check 0 "cleanup: a session in the worktree" -- cleanup --worktree "$w" --session c0ffee01
+expect_in "cleaned: c0ffee01"
+mk 20-fix
+for f in other repo-old; do
+  : > "$STUB_LOG"
+  printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#20 worker: Fix" > "$SS"
+  fw="$(native "$tmp/$f")"; printf 'f0e1d2c3\t%s\n' "$fw" > "$SS.cwd"
+  STUB_HEADS="$h" check 5 "cleanup: a session in $f" -- cleanup --worktree "$w" --session f0e1d2c3
+  expect_in "SESSION FOREIGN: f0e1d2c3 ($fw): not this project's session - nothing done"
+  case "$LAST" in *cleaned*) echo "FAIL: cleaned a session of another folder"; fail=1 ;; esac
+  grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a session of another folder was stopped or removed:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+  [ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify refs/heads/20-fix || { echo "FAIL: the worktree or branch was removed for a foreign session"; fail=1; }
+  grep -q f0e1d2c3 "$SS" || { echo "FAIL: the stub lost the foreign session"; fail=1; }
+done
+# by its full sessionId, and in a dry run
+STUB_HEADS="$h" check 5 "cleanup: a foreign session by its full sessionId" -- cleanup --worktree "$w" --session f0e1d2c3-1111-4222-8333-444455556666
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+STUB_HEADS="$h" check 5 "cleanup: a foreign session, dry run" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a session of another folder was stopped or removed"; fail=1; }
+# launched from the repository's root (the usual case), its folder written with a trailing separator
+printf 'f0e1d2c3\t%s\n' "$rp$(case "$rp" in *\\*) printf '\\' ;; *) printf / ;; esac)" > "$SS.cwd"
+STUB_HEADS="$h" check 0 "cleanup: a session in the repository's root" -- cleanup --worktree "$w" --session f0e1d2c3
+expect_in "cleaned: f0e1d2c3"
+# the same root in another letter case is the root where letter case in paths is ignored (Windows, macOS)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
+  mk 21-fix
+  printf '%s %s %s %s\n' 0a0b0c0d 0a0b0c0d-1111-4222-8333-444455556666 running "#21 worker: Fix" > "$SS"
+  printf '0a0b0c0d\t%s\n' "$(printf '%s' "$rp" | tr '[:lower:]' '[:upper:]')" > "$SS.cwd"
+  STUB_HEADS="$h" check 0 "cleanup: the root in another letter case" -- cleanup --worktree "$w" --session 0a0b0c0d
+  expect_in "cleaned: 0a0b0c0d" ;;
+esac
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

@@ -103,6 +103,10 @@ rule → ask the owner.
     Claude Code permission rules and branch protection change only by the owner, or by the coordinator
     with the owner's explicit yes to the exact change; folder trust and one-time consents never by the
     coordinator (§1.9).
+17. **Own sessions only.** The coordinator and every role act only on sessions of their own project — a
+    session whose working folder is inside the project root, its state repository or its worktree
+    roots. A session of another folder is never stopped, removed, respawned, resumed or attached, and
+    never sent an instruction; one that gets in the way is reported to the owner.
 
 **Definitions:**
 - **The owner's yes** — explicit, in this conversation, to this exact proposal. A past yes does not carry

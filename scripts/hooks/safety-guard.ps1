@@ -34,6 +34,7 @@ if (-not $d) { [Console]::Error.WriteLine('Blocked by safety-guard: the tool cal
 $cmd = [string]$d.tool_input.command
 $cwd = [string]$d.cwd
 $tool = [string]$d.tool_name
+$to = if ($d.tool_input.to -is [string]) { $d.tool_input.to -replace '[\r\n]', ' ' } else { '' }
 
 # A path in one form for comparing: / separators, none repeated or trailing, lower case (-Keep: the
 # letter case kept), . and x/.. taken out (by the text: /a/b/.. is /a; .. above the root stays at the
@@ -113,6 +114,106 @@ function Physical([string]$p, [switch]$Keep) {
   Canon ($r[0] + $r[1]) -Keep:$Keep
 }
 
+# --- own sessions only (CORE section 1.17): claude stop / rm / respawn / attach <id>, claude --resume
+# <id> and the SendMessage tool are blocked for a session whose working folder is outside the project ---
+# The sessions come from `claude agents --json --all`, read only for those calls; a session it does not
+# list, or a listing that cannot be read, passes (nothing to tell it by). The project's folders:
+# CLAUDE_PROJECT_DIR, the top of the repository the call works in and that repository's main checkout
+# (their .claude/worktrees inside them), and the worktree roots of <folder>/coordinator/PROJECT.md
+# (its Settings row "Worktree roots", as scripts/retro reads it); each as written and as it lies on disk,
+# whole path segments compared (<root>-old is another folder), letter case ignored on Windows and macOS.
+$smKeep = -not (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)
+$script:agents = $null
+function ReadAgents {   # each session as @(id, sessionId, cwd, name)
+  if ($null -ne $script:agents) { return }
+  $script:agents = @()
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { return }
+  # its output is UTF-8 (a folder or a name in Cyrillic), whatever the console's code page
+  $enc = $null; try { $enc = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+  try { $out = @(& claude agents --json --all 2>$null | ForEach-Object { "$_" }); $rc = $LASTEXITCODE }
+  catch { $rc = 1 }
+  finally { if ($enc) { try { [Console]::OutputEncoding = $enc } catch { } } }
+  if ($rc -ne 0) { return }
+  try { $list = ConvertFrom-Json -InputObject ($out -join "`n") -ErrorAction Stop } catch { return }
+  foreach ($s in $list) { if ($null -ne $s) { $script:agents += , @([string]$s.id, [string]$s.sessionId, [string]$s.cwd, [string]$s.name) } }
+}
+$script:owns = $null
+function OwnForms {
+  if ($null -ne $script:owns) { return }
+  $script:owns = @(); $rs = @()
+  if ($env:CLAUDE_PROJECT_DIR) { $rs += $env:CLAUDE_PROJECT_DIR }
+  $c = if ($cwd) { $cwd } else { $env:CLAUDE_PROJECT_DIR }
+  if ($c) {
+    $out = @(git -C $c rev-parse --path-format=absolute --show-toplevel --git-common-dir 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $out.Count -ge 2) {
+      $rs += $out[0]
+      if ($out[1] -match '/\.git$') { $rs += $out[1].Substring(0, $out[1].Length - 5) }
+    }
+  }
+  $more = @()
+  foreach ($r in $rs) {
+    $pm = "$r/coordinator/PROJECT.md"
+    if (-not (Test-Path -LiteralPath $pm -PathType Leaf)) { continue }
+    $b = $r.Replace('\', '/').TrimEnd('/')
+    foreach ($line in [IO.File]::ReadAllLines($pm)) {
+      $cells = $line.Split('|'); if ($cells.Count -lt 3 -or $cells[1] -cnotmatch '^[ \t]*[*]*Worktree roots[*]*[ \t]*\z') { continue }
+      foreach ($x in $cells[2].Replace('`', '').Split([char[]]@(',', ';'))) {
+        $x = $x.Trim(' ', "`t"); $y = $x.ToLowerInvariant()
+        if (-not $x -or $x -eq '-' -or $y -ceq 'none' -or $y -ceq 'n/a' -or $x -cmatch '^<.*>\z') { continue }
+        $w = $x.Replace('\', '/')
+        if ($w -notmatch '^(/|[A-Za-z]:)') { $w = "$b/$w" }   # .. is taken out by Canon
+        $more += $w
+      }
+    }
+  }
+  foreach ($r in ($rs + $more)) {
+    $f = Canon $r -Keep:$smKeep; if ($f -and $f -ne '.') { $script:owns += $f }   # / or nothing is no project folder
+    $ph = Physical $r -Keep:$smKeep; if ($ph -and $ph -ne '.') { $script:owns += $ph }
+  }
+}
+function IsOwn([string]$p) {   # a session's cwd inside one of the project's folders
+  $forms = @(Canon $p -Keep:$smKeep); $ph = Physical $p -Keep:$smKeep; if ($null -ne $ph) { $forms += $ph }
+  foreach ($f in $forms) {
+    if (-not $f) { continue }
+    foreach ($o in $script:owns) { if ("$f/".StartsWith("$o/", [StringComparison]::Ordinal)) { return $true } }
+  }
+  $false
+}
+# SessionCheck <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id; send -
+# a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it names are
+# all outside the project (a name an own session has too passes: it may be meant for that one)
+function SessionCheck([string]$what, [string]$a, [string]$how) {
+  if (-not $a) { return }
+  $nm = ''; if ($how -eq 'send' -and $a -cmatch '^(.*) \[.*\]\z') { $nm = $Matches[1] }
+  $uuid = $a -cmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z'
+  ReadAgents
+  $own = $false; $foreign = ''
+  foreach ($s in $script:agents) {
+    if ($how -eq 'send') { $hit = ($s[3] -ceq $a) -or ($s[0] -ceq $a) -or ($s[1] -ceq $a) -or ($nm -and $s[3] -ceq $nm) }
+    elseif ($uuid) { $hit = $s[1] -ceq $a } else { $hit = $s[0] -ceq $a }
+    if (-not $hit) { continue }
+    OwnForms
+    if ($script:owns.Count -eq 0) { return }   # no project folder known: nothing to tell it by
+    if ($s[2] -and -not (IsOwn $s[2])) { $foreign = $s[2] } else { $own = $true }
+  }
+  if (-not $own -and $foreign) {
+    [Console]::Error.WriteLine("Blocked by safety-guard: $what a session of another project ($foreign). Ask the owner.")
+    exit 2
+  }
+}
+# claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+function ClaudeSeg([string[]]$a) {
+  $verb = ''; $nx = $false
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; SessionCheck 'claude --resume' $t 'id'; continue }
+    if ($t -eq '--resume' -or $t -eq '-r') { $nx = $true }
+    elseif ($t -like '--resume=*') { SessionCheck 'claude --resume' $t.Substring(9) 'id' }
+    elseif ($t.StartsWith('-')) { }
+    elseif (-not $verb) { $verb = if ($t -match '^(stop|rm|respawn|attach)$') { $t } else { '-' } }
+    elseif ($verb -ne '-') { SessionCheck "claude $verb" $t 'id' }
+  }
+}
+
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
@@ -146,6 +247,8 @@ if ($env:COORD_PROTECTED_ROOT -and $tool -cmatch '^(Edit|Write|MultiEdit|Noteboo
     }
   }
 }
+# a message to another session (CORE section 1.17): its address looked up in the listing
+if ($tool -ceq 'SendMessage') { SessionCheck 'a message to' $to 'send' }
 # Line continuations: backslash-newline (bash) and backtick-newline (PowerShell) join the lines.
 $cmd = $cmd.Replace("`r`n", "`n").Replace("\`n", '').Replace('`' + "`n", ' ')
 # Comment lines (a "#" at the start of a line) do not count for the project patterns.
@@ -594,6 +697,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^(rm|remove-item|ri|del|erase|rd|rmdir)$' { RmSeg $cw $rest }
     '^find$' { FindSeg $rest }
     '^(get-childitem|gci|ls|dir|get-item|gi)$' { ListSeg $rest }
+    '^claude$' { ClaudeSeg $rest }
   }
 }
 

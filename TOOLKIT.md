@@ -13,6 +13,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   characters of `sessionId`); `claude stop` and `claude rm` refuse the full `sessionId` ("No job
   matching '<uuid>'", exit 1, the session stays listed). Only `claude --bg --resume` takes the **full**
   `sessionId` (*Pause and resume*). `claude agents --json --all` lists the stopped (`done`) sessions too.
+  These commands, `--resume` and SendMessage reach **any** session on the machine, other projects'
+  included: act only on sessions whose `cwd` is inside the project (CORE §1.17; the layers: *Safety*).
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
@@ -106,7 +108,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `--session` takes the short id or the full `sessionId` (mapped to its short id through `claude agents
   --json --all`, else its first 8 characters); a session still listed after `claude rm` is reported as
   `SESSION KEPT: <id> (claude rm failed: <its message>)`, exit 4, the worktree and branch left as is —
-  never `cleaned`.
+  never `cleaned`. A session the listing places outside the project (its `cwd` not under the
+  repository's main checkout or the worktree) is never touched: `SESSION FOREIGN: <id> (<cwd>): not this
+  project's session - nothing done`, exit 5 (CORE §1.17).
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
@@ -203,9 +207,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
   variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
   protection on the code host is the real wall; the hook is not hardened against these on purpose.
-  Hooks see only the tools their matcher names (the guard: the shell tools and the edit tools, next
-  bullet) — **MCP tools are covered by deny rules only** (the settings examples
-  deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
+  Hooks see only the tools their matcher names (the guard: the shell tools, the edit tools — next
+  bullet — and SendMessage, *Own sessions only* below) — **MCP tools are covered by deny rules only**
+  (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
   any other server that can write to a protected branch). Whether hooks run in
   `bypassPermissions` *(unconfirmed)*. [hooks](https://code.claude.com/docs/en/hooks.md)
 - **The owner's working copy and the edit tools:** a worker started from the project folder
@@ -228,6 +232,20 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   has no `COORD_PROTECTED_ROOT`. **The limit:** it guards the edit tools only — a shell command such as
   `echo x > <root>/file` or `cp` still writes there, and a symlink is not followed; it protects against
   a mistake, not intent (the worker's brief and branch protection remain the rules).
+- **Own sessions only (CORE §1.17):** `claude stop / rm / respawn / attach <id>`, `claude --resume <id>`
+  and SendMessage reach every session on the machine; the coordinator and every role act only on those
+  whose `cwd` (`claude agents --json --all`) is inside the project root, its state repository or its
+  worktree roots. Three layers: the rule itself; the scripts' own checks (`cleanup-worker` refuses a
+  foreign session: `SESSION FOREIGN`, exit 5); and the guard as a backstop — a shell command running one
+  of those verbs (in any form it already reads: wrappers, `bash -c`, `.exe`, a path) or a SendMessage
+  call (its `to` by name, also with a `[ref]`, id or `sessionId`; SendMessage in the matcher) is looked
+  up in the listing, and a session outside `CLAUDE_PROJECT_DIR`, the repository's top and main checkout
+  or the `Worktree roots` of `<root>/coordinator/PROJECT.md` is blocked (`Blocked by safety-guard: claude
+  rm a session of another project (<cwd>). Ask the owner.`), whole path segments compared, as written
+  and as on disk. Only those calls run `claude agents` (measured on Windows, 2.1.300: about 0.5-0.7 s
+  more per such call). **The limit:** a session the listing does not have, a listing that cannot be
+  read, a name an own session shares, and an id hidden in a variable or a script pass the guard — the
+  rule and the scripts' checks are the main defence.
 - **Deny rules** in `settings.example.json` are the swarm and standard baseline: the protected branches only
   (shell and PowerShell forms, force and mirror pushes, and the GitHub MCP write tools).
   Add `gh pr merge*` / `gh pr ready*` and the production MCP write tools in the strict preset (humans

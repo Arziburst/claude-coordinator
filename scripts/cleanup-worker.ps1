@@ -6,7 +6,10 @@
 # -Session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
 # 3 a check failed, nothing changed; 4 SESSION KEPT: claude agents --json --all still lists the session
-# after claude rm - the worktree and branch are left as is.
+# after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
+# session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
+# the worktree itself) - nothing is stopped, removed or changed (CORE section 1.17); a session the
+# listing does not have is handled as before.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -23,6 +26,17 @@ function Run([string]$exe, [string[]]$a) {
 function Agents { $r = @(& claude agents --json --all 2>$null | ForEach-Object { "$_" }); $r -join "`n" }
 function Objects([string]$json) { @(($json -replace "[`r`n]", '') -split '}') }
 function Field([string]$o, [string]$k) { $m = [regex]::Match($o, '"' + $k + '": *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
+# a folder in one form for comparing: / separators (a JSON \\ is one \), none trailing, Git Bash's /c/x
+# as c:/x, lower case where letter case in paths is ignored (Windows, macOS)
+$isWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
+$fold = $isWin -or $IsMacOS
+function Canon([string]$x) {
+  $x = $x.Replace('\\', '/').Replace('\', '/')
+  if ($fold) { $x = $x.ToLowerInvariant() }
+  while ($x.Length -gt 1 -and $x.EndsWith('/')) { $x = $x.Substring(0, $x.Length - 1) }
+  if ($isWin -and $x -cmatch '^/[a-z](/|$)') { $x = $x.Substring(1, 1) + ':' + $x.Substring(2) }
+  $x
+}
 if (-not $Worktree) { [Console]::Error.WriteLine('usage: -Worktree <path> [-Session <id>] [-DryRun]'); exit 1 }
 # a flag where a value belongs (-Session --dry-run): a usage error, never a session or path of that name
 foreach ($v in @(@('Worktree', $Worktree), @('Session', $Session))) {
@@ -89,11 +103,33 @@ if ($Session) {
   # stop / rm take the short job id (`id` in claude agents --json); they refuse a full sessionId ("No job
   # matching", 2.1.296), so a full one is mapped through the listing, else to its first 8 characters
   $id = $Session
+  $listing = Objects (Agents)
   if ($Session -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
     $id = ''
-    foreach ($o in (Objects (Agents))) { if ((Field $o 'sessionId') -ceq $Session) { $id = Field $o 'id'; break } }
+    foreach ($o in $listing) { if ((Field $o 'sessionId') -ceq $Session) { $id = Field $o 'id'; break } }
     if (-not $id) { $id = $Session.Substring(0, 8) }
     "session ${Session}: job id $id"
+  }
+  # only this project's sessions (CORE section 1.17): a listed session whose working folder is outside
+  # the repository's main checkout (its .claude/worktrees included) and the worktree is left alone
+  $scwd = ''
+  foreach ($o in $listing) { if ((Field $o 'id') -ceq $id) { $scwd = Field $o 'cwd'; break } }
+  if ($scwd) {
+    $sc = $scwd.Replace('\\', '\'); $own = $false
+    # each folder also in its full form (on Windows an 8.3 name in its long form)
+    function Full([string]$p) { try { if (Test-Path -LiteralPath $p) { return [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $p).ProviderPath) } } catch { }; '' }
+    $top = "$(git -C $Worktree rev-parse --path-format=absolute --show-toplevel 2>$null)".Trim()
+    $dirs = @($root, "$root/.claude/worktrees", $top, $Worktree, (Full $root), (Full $Worktree)) | Where-Object { $_ } | ForEach-Object { Canon $_ }
+    foreach ($c in @($sc, (Full $sc))) {
+      if (-not $c) { continue }
+      $c = Canon $c
+      foreach ($d in $dirs) { if ("$c/".StartsWith("$d/", [StringComparison]::Ordinal)) { $own = $true; break } }
+      if ($own) { break }
+    }
+    if (-not $own) {
+      [Console]::Error.WriteLine("SESSION FOREIGN: $id (${sc}): not this project's session - nothing done")
+      exit 5
+    }
   }
   # a session stopped already (the order in TOOLKIT *Usage*) may refuse the stop: that is fine
   Run claude @('stop', $id)
