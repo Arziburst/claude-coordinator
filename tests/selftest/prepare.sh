@@ -110,7 +110,7 @@ J() { D "$1" | sed 's/\\/\\\\/g'; }
 B() { if [ -n "$win" ]; then J "$1"; else printf '%s\n' "$1" | sed 's|/|\\\\|g'; fi; }
 # their names, unquoted, and ids, in both versions
 export STUB_AGENTS='[{"id":"a1","cwd":"'"$(J "$p2")"'","name":"selftest-st1"},{"id":"b2","cwd":"'"$(J "$p2")"'","name":"other"},{"id":"c3","cwd":"'"$(J "$p2")"'","name":"selftest-task-1"}]'
-st verify --project "$p2" --state "$s2" --core c7; expect "sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): selftest-st1 (a1), selftest-task-1 (c3)"
+st verify --project "$p2" --state "$s2" --core c7; expect "sessions left" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): selftest-st1 (a1), selftest-task-1 (c3)"
 # a stopped (`done`) session is listed only with --all, as the real listing prints it; a `#st` name
 # without `selftest` and a `probe:` name count too (#151)
 export STUB_AGENTS='[]' STUB_AGENTS_ALL='[
@@ -136,7 +136,7 @@ export STUB_AGENTS='[]' STUB_AGENTS_ALL='[
     "state": "done"
   }
 ]'
-st verify --project "$p2" --state "$s2" --core c7; expect "done sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b), probe: push (77aa88bb)"
+st verify --project "$p2" --state "$s2" --core c7; expect "done sessions left" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st2 worker: PR (2be9934b), probe: push (77aa88bb)"
 # only the run's own sessions count (#158): a cwd in the project root, in a worktree under it written
 # Windows-style, in a worktree root the state repository's PROJECT.md names (relative to the root). Another
 # project's session and one in a folder that only shares the root's name as a prefix (`<root>-old`) are
@@ -150,7 +150,7 @@ foreign='{"id":"f1","cwd":"'"$(J "$tmp/other")"'","name":"#st1 lead: selftest c7
   {"id":"n1","cwd":"'"$(J "$tmp/other")"'","name":"#12 worker: stuff"}'
 export STUB_AGENTS_ALL="[$own, $foreign]"
 st verify --project "$p2" --state "$s2" --core c7
-expect "own and foreign sessions" 1 "FAIL verify: sessions left (claude rm <id> each): #st1 lead: selftest c7 (a1), #st2 worker: PR (w1), probe: push (r1)"
+expect "own and foreign sessions" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st1 lead: selftest c7 (a1), #st2 worker: PR (w1), probe: push (r1)"
 expect "own and foreign sessions: another project's" 1 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
 expect "own and foreign sessions: <root>-old" 1 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
 n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q 'n1' || { echo "FAIL (own and foreign sessions): n1 is not a self-test session"; fail=1; }
@@ -159,6 +159,14 @@ st verify --project "$p2" --state "$s2" --core c7
 expect "only foreign sessions" 0 "PASS verify: no self-test session left"
 expect "only foreign sessions" 0 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
 expect "only foreign sessions" 0 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
+# the project given through a symlink (macOS: /tmp and /var are links), the session's cwd as it lies on
+# disk, as a real session lists it: still the run's own, never a SKIP and a PASS
+if [ -z "$win" ]; then
+  ln -s "$p2" "$tmp/p2link"
+  export STUB_AGENTS_ALL='[{"id":"a1","cwd":"'"$(J "$(cd -P "$p2" && pwd -P)")"'","name":"#st1 lead: selftest c7"}]'
+  st verify --project "$tmp/p2link" --state "$tmp/p2link/coordinator" --core c7
+  expect "the project through a symlink, the session's folder on disk" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st1 lead: selftest c7 (a1)"
+fi
 unset STUB_AGENTS STUB_AGENTS_ALL
 
 echo "selftest prepare ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
