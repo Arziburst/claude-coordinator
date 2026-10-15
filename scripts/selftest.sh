@@ -65,14 +65,69 @@ kept_why() {
     [ "$(git -C "$d/remote.git" rev-parse -q --verify refs/heads/main)" = "$i" ] || { echo "main is not at the first commit"; return; }
   [ -z "$(untracked "$r")" ] || echo "changed or untracked files in the repo"
 }
-# the self-test sessions claude agents --json --all still lists, in any state (a done one too): a name
-# with `selftest` or `probe:`, or starting with `#st`; `<name> (<id>)` joined by `, `, nothing when none
+# abspath <dir>: the folder as an absolute path (Windows: C:/..., as cygpath -m gives it, not the shell's
+# /c/... or /tmp/...); as given when it cannot be entered
+abspath() {
+  local a
+  a="$(cd "$1" 2>/dev/null && pwd)" || { printf '%s\n' "$1"; return; }
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$a"; else printf '%s\n' "$a"; fi
+}
+# own_roots <project> <state>: the folders whose sessions are this run's, one per line - the project root
+# and the state repository (their .claude/worktrees are inside them) and the worktree roots the state
+# repository's PROJECT.md names (its Settings row "Worktree roots", read as the retro reads it: relative
+# to the root, split by , or ;; none / - / <fill> for none)
+own_roots() {
+  local b w x
+  b="$(abspath "$1" | tr '\\' '/')"; b="${b%/}"
+  printf '%s\n' "$b"; abspath "$2"
+  [ -f "$2/PROJECT.md" ] || return 0
+  LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
+    $2 ~ /^[ \t]*[*]*Worktree roots[*]*[ \t]*$/ { v = $3; gsub(/`/, "", v); n = split(v, a, /[,;]/)
+      for (i = 1; i <= n; i++) { x = a[i]; sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); y = tolower(x)
+        if (x != "" && x != "-" && y != "none" && y != "n/a" && x !~ /^<.*>$/) print x } }' "$2/PROJECT.md" |
+  while IFS= read -r w; do
+    w="$(printf '%s' "$w" | tr '\\' '/')"
+    case "$w" in
+      /* | [A-Za-z]:*) ;;
+      *) x="$b"
+         while :; do case "$w" in ../*) x="${x%/*}"; w="${w#../}" ;; ./*) w="${w#./}" ;; ..) x="${x%/*}"; w="" ;; *) break ;; esac; done
+         w="$x${w:+/$w}" ;;
+    esac
+    printf '%s\n' "$w"
+  done
+}
+# st_sessions <folders>: the self-test sessions claude agents --json --all still lists, in any state (a
+# done one too): a name with `selftest` or `probe:`, or starting with `#st`. One whose cwd is one of the
+# folders (one per line) or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project
+# self-testing on this machine, #158) or without a cwd is not: `F <id> (<cwd>)`. Paths are compared with
+# \ read as /, repeated / as one, in lower case, C:/x as /c/x, without a trailing /
 st_sessions() {
-  claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | while IFS= read -r o; do
-    nm="$(printf '%s\n' "$o" | sed -n 's/.*"name": *"\([^"]*\)".*/\1/p')"
-    case "$nm" in '#st'*|*selftest*|*probe:*)
-      printf '%s (%s)\n' "$nm" "$(printf '%s\n' "$o" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p')" ;; esac
-  done | awk 'NR > 1 { printf ", " } { printf "%s", $0 }'
+  claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | ROOTS="$1" LC_ALL=C awk '
+    function norm(p) { gsub(/\\/, "/", p); gsub(/\/+/, "/", p); p = tolower(p)
+      if (p ~ /^[a-z]:(\/|$)/) p = "/" substr(p, 1, 1) substr(p, 3)
+      sub(/\/$/, "", p); return p }
+    # the value of a string field, its \\ read as one backslash
+    function field(o, k,   v, i, r) { if (!match(o, "\"" k "\": *\"[^\"]*\"")) return ""
+      v = substr(o, RSTART, RLENGTH); sub(/^"[A-Za-z]*": *"/, "", v); sub(/"$/, "", v); r = ""
+      while ((i = index(v, "\\")) > 0) { r = r substr(v, 1, i); v = substr(v, i + 1); if (substr(v, 1, 1) == "\\") v = substr(v, 2) }
+      return r v }
+    function inside(c,   i) { if (c == "") return 0; c = norm(c)
+      for (i = 1; i <= nr; i++) if (c == R[i] || substr(c, 1, length(R[i]) + 1) == R[i] "/") return 1
+      return 0 }
+    BEGIN { m = split(ENVIRON["ROOTS"], A, "\n"); nr = 0; for (i = 1; i <= m; i++) if (A[i] != "") R[++nr] = norm(A[i]) }
+    { nm = field($0, "name"); if (nm !~ /^#st/ && !index(nm, "selftest") && !index(nm, "probe:")) next
+      c = field($0, "cwd"); id = field($0, "id")
+      if (inside(c)) print "O " nm " (" id ")"; else print "F " id " (" (c == "" ? "no cwd" : c) ")" }'
+}
+# sessions <folders>: the session check of verify and clean; another folder's self-test sessions are
+# named (SKIP foreign ...), never counted and never advised for removal
+sessions() {
+  local x n
+  if ! command -v claude >/dev/null 2>&1; then skip "no claude: sessions not checked"; return; fi
+  x="$(st_sessions "$1")"
+  printf '%s\n' "$x" | sed -n 's/^F /SKIP foreign self-test session /p'
+  n="$(printf '%s\n' "$x" | sed -n 's/^O //p' | awk 'NR > 1 { printf ", " } { printf "%s", $0 }')"
+  [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
 }
 
 case "$step" in
@@ -207,10 +262,7 @@ clean)
     git -C "$r" merge-base --is-ancestor "$(git -C "$d/remote.git" rev-parse "refs/heads/$x")" main 2>/dev/null || b="$b $x"
   done
   [ -z "$b" ] && pass "every branch on the origin is merged into main" || fail "branches on the origin not merged into main:$b"
-  if command -v claude >/dev/null 2>&1; then
-    n="$(st_sessions)"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
-  else skip "no claude: sessions not checked"; fi
+  sessions "$(abspath "$d")"
   if [ -n "$state" ]; then
     if n="$(gh api "repos/$state/branches" --paginate --jq '.[].name' 2>/dev/null)"; then
       n="$(printf '%s\n' "$n" | grep '^selftest/')"
@@ -501,10 +553,7 @@ prepare|verify)
     n="$(gh pr list -R "$repo" --state merged --head "selftest/$c/task-1" --base "$base" --json number --jq '.[0].number' 2>/dev/null)"
     [ -n "$n" ] && pass "PR #$n merged into $base" || fail "no merged PR from selftest/$c/task-1 into $base"
   else skip "PR flow: not checked (no --state-repo)"; fi
-  if command -v claude >/dev/null 2>&1; then
-    n="$(st_sessions)"
-    [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (claude rm <id> each): $n"
-  else skip "no claude: sessions not checked"; fi
+  sessions "$(own_roots "$project" "$state")"
   finish ;;
 
 *) usage ;;

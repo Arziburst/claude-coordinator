@@ -6,12 +6,13 @@
 #   - a core commit whose base branch is only on the remote (a fresh clone on another machine) is refused;
 #   - a project under a folder with a non-ASCII name (`prj ü`): verify removes the clean, merged worktree.
 #     On Windows the .ps1 runs as on a Russian Windows, with the console's code page 866;
-#   - the self-test sessions still listed by `claude agents` (a stub claude: the real one is never called).
+#   - the self-test sessions still listed by `claude agents` (a stub claude: the real one is never called),
+#     each with its cwd: only the run's own folders count; another folder's session is a SKIP line (#158).
 #   tests/selftest/prepare.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/prepare.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -101,32 +102,63 @@ git -C "$s2" worktree add -q "$w2/base" selftest/c7/base; g -C "$w2/base" merge 
 st verify --project "$p2" --state "$s2" --core c7; expect "verify under a non-ASCII folder" 0 "PASS verify: no worktree left"
 n=$((n + 1)); [ ! -e "$w2/st1" ] && [ ! -e "$w2/base" ] || { echo "FAIL (verify under a non-ASCII folder): the merged worktrees are still there"; fail=1; }
 
-# the sessions claude agents still lists: their names, unquoted, and ids, in both versions
-export STUB_AGENTS='[{"id":"a1","name":"selftest-st1"},{"id":"b2","name":"other"},{"id":"c3","name":"selftest-task-1"}]'
+# the sessions claude agents still lists, each with its cwd as the real listing gives it: D <path> as
+# Claude Code prints a folder (Windows: C:\...), J <path> as a JSON string holds it (each \ doubled),
+# B <path> Windows-style (Windows: C:\...; elsewhere with \ for each /)
+if [ -n "$win" ]; then D() { cygpath -w "$1"; }; else D() { printf '%s\n' "$1"; }; fi
+J() { D "$1" | sed 's/\\/\\\\/g'; }
+B() { if [ -n "$win" ]; then J "$1"; else printf '%s\n' "$1" | sed 's|/|\\\\|g'; fi; }
+# their names, unquoted, and ids, in both versions
+export STUB_AGENTS='[{"id":"a1","cwd":"'"$(J "$p2")"'","name":"selftest-st1"},{"id":"b2","cwd":"'"$(J "$p2")"'","name":"other"},{"id":"c3","cwd":"'"$(J "$p2")"'","name":"selftest-task-1"}]'
 st verify --project "$p2" --state "$s2" --core c7; expect "sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): selftest-st1 (a1), selftest-task-1 (c3)"
 # a stopped (`done`) session is listed only with --all, as the real listing prints it; a `#st` name
 # without `selftest` and a `probe:` name count too (#151)
 export STUB_AGENTS='[]' STUB_AGENTS_ALL='[
   {
     "id": "2be9934b",
+    "cwd": "'"$(J "$p2")"'",
     "sessionId": "2be9934b-aaaa-4bbb-8ccc-dddddddddddd",
     "name": "#st2 worker: PR",
     "state": "done"
   },
   {
     "id": "5c6d7e8f",
+    "cwd": "'"$(J "$p2")"'",
     "sessionId": "5c6d7e8f-aaaa-4bbb-8ccc-dddddddddddd",
     "name": "#12 worker: stuff",
     "state": "done"
   },
   {
     "id": "77aa88bb",
+    "cwd": "'"$(J "$s2")"'",
     "sessionId": "77aa88bb-aaaa-4bbb-8ccc-dddddddddddd",
     "name": "probe: push",
     "state": "done"
   }
 ]'
 st verify --project "$p2" --state "$s2" --core c7; expect "done sessions left" 1 "FAIL verify: sessions left (claude rm <id> each): #st2 worker: PR (2be9934b), probe: push (77aa88bb)"
+# only the run's own sessions count (#158): a cwd in the project root, in a worktree under it written
+# Windows-style, in a worktree root the state repository's PROJECT.md names (relative to the root). Another
+# project's session and one in a folder that only shares the root's name as a prefix (`<root>-old`) are
+# foreign: a SKIP line each, not counted, not advised for removal
+printf '| Setting | Value |\n|---|---|\n| Worktree roots | `../wt-c7`; none |\n' > "$s2/PROJECT.md"
+own='{"id":"a1","cwd":"'"$(J "$p2")"'","name":"#st1 lead: selftest c7"},
+  {"id":"w1","cwd":"'"$(B "$p2/.claude/worktrees/selftest/c7/st2")"'","name":"#st2 worker: PR"},
+  {"id":"r1","cwd":"'"$(J "$tmp/wt-c7/x")"'","name":"probe: push"}'
+foreign='{"id":"f1","cwd":"'"$(J "$tmp/other")"'","name":"#st1 lead: selftest c7"},
+  {"id":"f2","cwd":"'"$(J "$p2-old")"'","name":"#st2 worker: PR"},
+  {"id":"n1","cwd":"'"$(J "$tmp/other")"'","name":"#12 worker: stuff"}'
+export STUB_AGENTS_ALL="[$own, $foreign]"
+st verify --project "$p2" --state "$s2" --core c7
+expect "own and foreign sessions" 1 "FAIL verify: sessions left (claude rm <id> each): #st1 lead: selftest c7 (a1), #st2 worker: PR (w1), probe: push (r1)"
+expect "own and foreign sessions: another project's" 1 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
+expect "own and foreign sessions: <root>-old" 1 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
+n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q 'n1' || { echo "FAIL (own and foreign sessions): n1 is not a self-test session"; fail=1; }
+export STUB_AGENTS_ALL="[$foreign]"
+st verify --project "$p2" --state "$s2" --core c7
+expect "only foreign sessions" 0 "PASS verify: no self-test session left"
+expect "only foreign sessions" 0 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
+expect "only foreign sessions" 0 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
 unset STUB_AGENTS STUB_AGENTS_ALL
 
 echo "selftest prepare ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
