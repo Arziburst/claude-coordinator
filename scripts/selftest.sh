@@ -457,14 +457,18 @@ hooks)
   if [ -z "$(printf '%s' "$pbs" | tr -d ', \t')" ]; then echo "protected branches: main master (default)"
   else
     echo "protected branches: ${names[*]}"
+    # a neutral folder outside any repository: the probe must not depend on the branch this test runs on
+    # (on a protected branch the guard would block every push as "push while on <branch>")
+    nd="$(mktemp -d)"; ndj="$nd"; command -v cygpath >/dev/null 2>&1 && ndj="$(cygpath -m "$nd")"
     for b in "${names[@]}"; do
-      err="$(printf '{"tool_input":{"command":"git push origin %s"}}' "$b" |
+      err="$(cd "$nd" && printf '{"tool_input":{"command":"git push origin %s"},"cwd":"%s"}' "$b" "$ndj" |
         COORD_PROTECTED_BRANCHES="$pbs" bash "$core/scripts/hooks/safety-guard.sh" 2>&1 >/dev/null)"; rc=$?
       case "$rc:$err" in
         "2:Blocked by safety-guard: push to a protected branch ($b)."*) pass "the guard blocks a push to $b" ;;
         *) fail "the guard does not block a push to $b as a protected branch (exit $rc)" ;;
       esac
     done
+    rmdir "$nd" 2>/dev/null
   fi
   finish ;;
 
