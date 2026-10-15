@@ -232,7 +232,11 @@ function dec(x,    o, c, k, h, v) {
     o = o substr(x, 1, k - 1); c = substr(x, k + 1, 1); x = substr(x, k + 2)
     if (c == "u") { h = tolower(substr(x, 1, 4)); x = substr(x, 5); v = 0
       for (k = 1; k <= 4; k++) v = v * 16 + index("0123456789abcdef", substr(h, k, 1)) - 1
-      c = (v > 31 && v < 128) ? sprintf("%c", v) : "?" }
+      # UTF-8 bytes (the awk runs in the C locale): a folder or a name in Cyrillic decodes as it is
+      if (v > 31 && v < 128) c = sprintf("%c", v)
+      else if (v >= 128 && v < 2048) c = sprintf("%c%c", 192 + int(v / 64), 128 + v % 64)
+      else if (v >= 2048 && (v < 55296 || v > 57343)) c = sprintf("%c%c%c", 224 + int(v / 4096), 128 + int(v / 64) % 64, 128 + v % 64)
+      else c = "?" }
     else if (c == "n" || c == "r" || c == "t" || c == "b" || c == "f") c = " "
     o = o c
   }
@@ -268,7 +272,7 @@ read_agents() {
   while IFS= read -r a && IFS= read -r b && IFS= read -r c && IFS= read -r d; do
     ag_ids+=("$a"); ag_sids+=("$b"); ag_cwds+=("$c"); ag_names+=("$d")
   done <<AGENTS_END
-$(printf '%s' "$raw" | awk "$AGENTS_AWK")
+$(printf '%s' "$raw" | LC_ALL=C awk "$AGENTS_AWK")
 AGENTS_END
 }
 case "${OSTYPE:-}" in msys*|cygwin*|darwin*) sm="" ;; *) sm=keep ;; esac   # letter case kept on Linux
@@ -320,6 +324,7 @@ IS_OWN_END
 # session_check <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id;
 # send - a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it
 # names are all outside the project (a name an own session has too passes: it may be meant for that one)
+lc() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }   # ids are hex: a typed UUID in upper case is the same session
 session_check() {
   local what="$1" a="$2" how="$3" k own=0 foreign="" re nm="" ci
   [ -n "$a" ] || return 0
@@ -332,8 +337,8 @@ session_check() {
     if [ "$how" = send ]; then
       if [ "${ag_names[$k]}" = "$a" ] || [ "${ag_ids[$k]}" = "$a" ] || [ "${ag_sids[$k]}" = "$a" ] ||
         { [ -n "$nm" ] && [ "${ag_names[$k]}" = "$nm" ]; }; then :; else k=$((k + 1)); continue; fi
-    elif [[ $a =~ $re ]]; then [ "${ag_sids[$k]}" = "$a" ] || { k=$((k + 1)); continue; }
-    else [ "${ag_ids[$k]}" = "$a" ] || { k=$((k + 1)); continue; }; fi
+    elif [[ $a =~ $re ]]; then [ "$(lc "${ag_sids[$k]}")" = "$(lc "$a")" ] || { k=$((k + 1)); continue; }
+    else [ "$(lc "${ag_ids[$k]}")" = "$(lc "$a")" ] || { k=$((k + 1)); continue; }; fi
     own_forms
     [ ${#owns[@]} -gt 0 ] || { eval "$ci"; return 0; }   # no project folder known: nothing to tell it by
     if [ -n "${ag_cwds[$k]}" ] && ! is_own "${ag_cwds[$k]}"; then foreign="${ag_cwds[$k]}"; else own=1; fi
@@ -352,6 +357,7 @@ claude_seg() {
     case "$t" in
       --resume|-r) nx=1 ;;
       --resume=*) session_check "claude --resume" "${t#--resume=}" id ;;
+      -r?*) session_check "claude --resume" "${t#-r}" id ;;   # -r<id>: the value glued to the short flag
       -*) ;;
       *) if [ -z "$verb" ]; then
            case "$t" in stop|rm|respawn|attach) verb="$t" ;; *) verb=- ;; esac
@@ -424,13 +430,14 @@ has() { printf '%s' "$lines" | grep -Eiq -- "$1"; }
 # inner command of bash -c / pwsh -Command and a heredoc fed to a shell (other heredoc bodies are data).
 # An unbalanced quote makes the whole command split again with quotes ignored (stricter, never looser).
 SCAN_AWK='
-function wrapper(t) { return t ~ /^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs)$/ }
+function wrapper(t) { return t ~ /^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob)$/ }
 # wrappers with options of their own: the options that take a value
 function optarg(t) {
   if (t == "sudo") return "^-[ugpcdrt]$"; if (t == "env") return "^-[usc]$"; if (t == "timeout") return "^-[sk]$"
   if (t == "nice") return "^-n$"; if (t == "stdbuf") return "^-[ioe]$"
   # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
-  if (t == "caffeinate") return "^-[tw]$"; if (t == "arch") return "^-(arch|e|d)$"; if (t == "script") return "^-[tTc]$"; return ""
+  if (t == "caffeinate") return "^-[tw]$"; if (t == "arch") return "^-(arch|e|d)$"; if (t == "script") return "^-[tTc]$";
+  if (t == "xargs") return "^-[InPLdEsa]$"; return ""   # xargs -I {} -n 1 ... (not -i: its value is glued)
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
 # and VAR=value assignments; a wrapper given as a path or with .exe (/usr/bin/env, timeout.exe) counts
@@ -447,7 +454,7 @@ function cmdidx(toks, nt,    j, t, ao) {
   return j
 }
 # a command word without its folder and .exe: /usr/bin/git, git.exe, C:\x\git.exe -> git
-function base(t,    b) { b = tolower(t); sub("^.*[/\\\\]", "", b); sub(/\.exe$/, "", b); return b }
+function base(t,    b) { b = tolower(t); sub(/^=/, "", b); sub("^.*[/\\\\]", "", b); sub(/\.exe$/, "", b); return b }
 function closep(s, j,    n, dep, c, q, hd, k) {
   n = length(s); dep = 1; q = ""; hd = ""
   for (; j <= n; j++) {
@@ -503,11 +510,38 @@ function isshell(toks, nt,    j) {
   SHJ = j
   return j <= nt && base(toks[j]) ~ /^(bash|sh|zsh|dash|ksh|pwsh|powershell)$/
 }
-function seg(toks, nt, depth, qm, pp,    j, t, line, k, m, inner, lt) {
+# unesc(t): a word with each backslash taken as the shell takes an unquoted one (ma\in is main)
+function unesc(t,    o, k) { o = ""; while ((k = index(t, "\\")) > 0) { o = o substr(t, 1, k - 1) substr(t, k + 1, 1); t = substr(t, k + 2) }; return o t }
+# startproc(toks, nt): Start-Process / saps / start <program> [-ArgumentList] <arguments>, as one command
+# line (PowerShell runs the program with them), or "" for another command
+function startproc(toks, nt,    j, b, k, lt, prog, args) {
+  j = cmdidx(toks, nt); if (j > nt) return ""
+  b = base(toks[j]); if (b != "start-process" && b != "saps" && b != "start") return ""
+  prog = ""; args = ""
+  for (k = j + 1; k <= nt; k++) {
+    lt = tolower(toks[k])
+    if (lt ~ /^-f(i(l(e(p(a(t(h)?)?)?)?)?)?)?$/) { prog = toks[++k]; continue }
+    if (lt ~ /^-a(r(g(u(m(e(n(t(l(i(s(t)?)?)?)?)?)?)?)?)?)?)?$/ || lt == "-args") { args = args " " toks[++k]; continue }
+    # parameters with a value (-WorkingDirectory, -Verb, -WindowStyle, -Credential, -Environment,
+    # -RedirectStandard...), by their unambiguous prefixes; -Wait, -NoNewWindow, -PassThru take none
+    if (lt ~ /^-(wo|v|wi|c|e|r)/) { k++; continue }
+    if (lt ~ /^-/) continue
+    if (prog == "") prog = toks[k]; else args = args " " toks[k]
+  }
+  if (prog == "") return ""
+  gsub(/,/, " ", args)   # -ArgumentList push,origin,main
+  return prog args
+}
+function seg(toks, nt, depth, qm, pp,    j, t, line, k, m, inner, lt, line2) {
   if (nt == 0) return
-  line = ""
-  for (j = 1; j <= nt; j++) { t = toks[j]; gsub(/[\t\r\n]/, " ", t); line = line ((j > 1) ? "\t" : "") t }
+  line = ""; line2 = ""
+  for (j = 1; j <= nt; j++) { t = toks[j]; gsub(/[\t\r\n]/, " ", t); line = line ((j > 1) ? "\t" : "") t; line2 = line2 ((j > 1) ? "\t" : "") unesc(t) }
   OUT = OUT (pp ? "\001|\t" : "") line "\n"   # a first word \001| : this command reads the previous one through |
+  # a word with a backslash is also checked as the shell reads it unquoted (git push origin ma\in);
+  # the command as written is checked too, so this only adds a check
+  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
+  if (qm && ENVIRON["SG_TOOL"] != "PowerShell" && line2 != line) OUT = OUT (pp ? "\001|\t" : "") line2 "\n"
+  inner = startproc(toks, nt); if (inner != "") scan(inner, depth + 1, qm)
   if (!isshell(toks, nt)) return
   j = SHJ
   for (k = j + 1; k <= nt; k++) { lt = tolower(toks[k]); if (lt ~ /^-[a-z]*c$/ || lt ~ /^-com(m(a(n(d)?)?)?)?$/) break }
@@ -532,6 +566,7 @@ function scan(s, depth, qm,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, 
       tok = tok c; continue
     }
     if (qm && c == "\\" && (d == "\"" || d == "\047" || d == "\\")) { tok = tok d; st = 1; i++; continue }
+    if (qm && c == "$" && d == "\047") continue   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
     if (c == "\047" || c == "\"") { if (qm) { q = c; st = 1 }; continue }
     if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm); tok = tok "$SUBST"; st = 1; i = k; continue }
     if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm); tok = tok "$SUBST"; st = 1; i = k; continue }
@@ -569,7 +604,7 @@ END {
   if (FAIL) { OUT = ""; scan(all, 0, 0) }
   printf "%s", OUT
 }'
-segments=$(printf '%s' "$cmd" | awk "$SCAN_AWK")
+segments=$(printf '%s' "$cmd" | SG_TOOL="$tool" awk "$SCAN_AWK")
 
 # --- helpers (case-insensitive matching: GIT PUSH ORIGIN MAIN counts) ---
 shopt -s nocasematch
@@ -854,9 +889,10 @@ while IFS="$tab" read -r -a T; do
   i=0; n=${#A[@]}
   while [ $i -lt $n ]; do
     t="${A[$i]}"; [[ $t =~ $RE_ASSIGN ]] && { i=$((i + 1)); continue; }
+    t="${t#=}"   # zsh: =git is the path of git
     t="${t##*/}"; t="${t##*\\}"; case "$t" in *.exe) t="${t%????}" ;; esac
     case "$t" in
-      '{'|'}'|'!'|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs) i=$((i + 1)); continue ;;
+      '{'|'}'|'!'|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob) i=$((i + 1)); continue ;;
       sudo) ao='^-[ugpcdrt]$' ;;
       env|genv) ao='^-[usc]$' ;;
       timeout|gtimeout) ao='^-[sk]$' ;;
@@ -865,6 +901,7 @@ while IFS="$tab" read -r -a T; do
       caffeinate) ao='^-[tw]$' ;;            # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
       arch) ao='^-(arch|e|d)$' ;;
       script) ao='^-[tTc]$' ;;
+      xargs) ao='^-[InPLdEsa]$' ;;   # xargs -I {} -n 1 ... (not -i: its value is glued)
       *) break ;;
     esac
     i=$((i + 1))
@@ -876,7 +913,7 @@ while IFS="$tab" read -r -a T; do
     case "$t" in timeout|gtimeout|script) [ $i -lt $n ] && i=$((i + 1)) ;; esac   # the duration, or the typescript file of script
   done
   [ $i -lt $n ] || continue
-  w="${A[$i]}"; w="${w##*/}"; w="${w##*\\}"; case "$w" in *.exe) w="${w%????}" ;; esac
+  w="${A[$i]}"; w="${w#=}"; w="${w##*/}"; w="${w##*\\}"; case "$w" in *.exe) w="${w%????}" ;; esac
   case "$w" in
     git) git_seg "${A[@]:$((i + 1))}" ;;
     cd|pushd|chdir|set-location|sl|push-location) cd_seg "${A[@]:$((i + 1))}" ;;

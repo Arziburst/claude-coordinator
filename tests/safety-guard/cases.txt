@@ -641,3 +641,29 @@ allow	work	git push origin release/x	-	@PROJECT@	release/*
 block	work	git push origin v1+fix	-	@PROJECT@	v1+fix
 allow	work	git push origin v11fix	-	@PROJECT@	v1+fix
 allow	work	git push origin v1fix	-	@PROJECT@	v1+fix
+# --- a macOS review (round 4): -r<id> glued, an id in upper case, the splitter forms a shell still runs ---
+block	work	claude -rb0000001-0000-4000-8000-000000000001
+block	work	claude --bg -rb0000001-0000-4000-8000-000000000001 continue
+block	work	claude --resume B0000001-0000-4000-8000-000000000001
+block	work	claude rm B0000001
+allow	work	claude -ra0000001-0000-4000-8000-000000000001
+allow	work	claude rm A0000001
+# a backslash in an unquoted word (the shell drops it), ANSI-C quoting, zsh =cmd, xargs options
+block	work	git push origin ma\in
+block	work	git push origin $'main'
+block	work	=git push origin main
+block	work	xargs -I{} git push origin main
+block	work	xargs -I {} git push origin main
+block	work	echo x | xargs -n 1 -P 2 git push origin main
+block	work	=claude rm b0000001
+allow	work	git push origin feature\x
+allow	work	xargs -I {} echo {}
+allow	work	git push origin $'12-fix'
+# PowerShell Start-Process runs its program with its argument list
+block	work	Start-Process git -ArgumentList 'push origin main'
+block	work	Start-Process -FilePath git -ArgumentList push,origin,main -Wait -NoNewWindow
+block	work	saps git 'push origin main'
+block	work	Start-Process -WorkingDirectory . git -ArgumentList 'push origin main'
+block	work	Start-Process claude -ArgumentList 'rm b0000001'
+allow	work	Start-Process git -ArgumentList 'push origin 12-fix'
+allow	work	Start-Process notepad

@@ -153,7 +153,7 @@ st verify --project "$p2" --state "$s2" --core c7
 expect "own and foreign sessions" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st1 lead: selftest c7 (a1), #st2 worker: PR (w1), probe: push (r1)"
 expect "own and foreign sessions: another project's" 1 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
 expect "own and foreign sessions: <root>-old" 1 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
-n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q 'n1' || { echo "FAIL (own and foreign sessions): n1 is not a self-test session"; fail=1; }
+n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -Eq 'session n1 |\(n1\)' || { echo "FAIL (own and foreign sessions): n1 is not a self-test session"; fail=1; }
 export STUB_AGENTS_ALL="[$foreign]"
 st verify --project "$p2" --state "$s2" --core c7
 expect "only foreign sessions" 0 "PASS verify: no self-test session left"

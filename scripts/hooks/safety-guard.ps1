@@ -142,7 +142,9 @@ function ReadAgents {   # each session as @(id, sessionId, cwd, name)
   catch { $rc = 1 }
   finally { if ($enc) { try { [Console]::OutputEncoding = $enc } catch { } } }
   if ($rc -ne 0) { return }
-  try { $list = ConvertFrom-Json -InputObject ($out -join "`n") -ErrorAction Stop } catch { return }
+  # a line before the JSON (a notice, a BOM) is skipped, as the .sh reader skips it
+  $txt = ($out -join "`n").TrimStart([char]0xFEFF); $k = $txt.IndexOfAny([char[]]@('[', '{')); if ($k -gt 0) { $txt = $txt.Substring($k) }
+  try { $list = ConvertFrom-Json -InputObject $txt -ErrorAction Stop } catch { return }
   foreach ($s in $list) { if ($null -ne $s) { $script:agents += , @([string]$s.id, [string]$s.sessionId, [string]$s.cwd, [string]$s.name) } }
 }
 $script:owns = $null
@@ -198,7 +200,7 @@ function SessionCheck([string]$what, [string]$a, [string]$how) {
   $own = $false; $foreign = ''
   foreach ($s in $script:agents) {
     if ($how -eq 'send') { $hit = ($s[3] -ceq $a) -or ($s[0] -ceq $a) -or ($s[1] -ceq $a) -or ($nm -and $s[3] -ceq $nm) }
-    elseif ($uuid) { $hit = $s[1] -ceq $a } else { $hit = $s[0] -ceq $a }
+    elseif ($uuid) { $hit = $s[1] -eq $a } else { $hit = $s[0] -eq $a }   # ids are hex: either letter case
     if (-not $hit) { continue }
     OwnForms
     if ($script:owns.Count -eq 0) { return }   # no project folder known: nothing to tell it by
@@ -216,6 +218,7 @@ function ClaudeSeg([string[]]$a) {
     if ($nx) { $nx = $false; SessionCheck 'claude --resume' $t 'id'; continue }
     if ($t -eq '--resume' -or $t -eq '-r') { $nx = $true }
     elseif ($t -like '--resume=*') { SessionCheck 'claude --resume' $t.Substring(9) 'id' }
+    elseif ($t -cmatch '^-r(.+)$') { SessionCheck 'claude --resume' $Matches[1] 'id' }   # -r<id>: the value glued to the short flag
     elseif ($t.StartsWith('-')) { }
     elseif (-not $verb) { $verb = if ($t -match '^(stop|rm|respawn|attach)$') { $t } else { '-' } }
     elseif ($verb -ne '-') { SessionCheck "claude $verb" $t 'id' }
@@ -279,13 +282,15 @@ function Has([string]$re) { foreach ($l in $lines) { if ($l -match $re) { return
 $script:segs = New-Object System.Collections.Generic.List[object]
 $script:pipes = New-Object System.Collections.Generic.List[bool]   # the command reads the previous one through |
 $script:fail = $false
-$WRAP = '^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob|xargs)$'
+$WRAP = '^([{}!]|then|do|else|elif|if|while|until|time|nohup|command|exec|builtin|noglob)$'
 $ASSIGN = '^[A-Za-z_][A-Za-z0-9_]*='
 # wrappers with options of their own: the options that take a value
 function OptArg([string]$t) {
   switch ($t) { 'sudo' { '^-[ugpcdrt]$' } 'env' { '^-[usc]$' } 'timeout' { '^-[sk]$' } 'nice' { '^-n$' } 'stdbuf' { '^-[ioe]$' }
     # macOS: caffeinate -i, arch -arm64, script -q <file> <command>
-    'caffeinate' { '^-[tw]$' } 'arch' { '^-(arch|e|d)$' } 'script' { '^-[tTc]$' } default { '' } }
+    'caffeinate' { '^-[tw]$' } 'arch' { '^-(arch|e|d)$' } 'script' { '^-[tTc]$' }
+    # xargs -I {} -n 1 ... (not -i: its value is glued)
+    'xargs' { '^-[InPLdEsa]$' } default { '' } }
 }
 # the index of the command word: past wrappers (sudo -E, timeout -k 5 30, nice -n 5, stdbuf -oL ...)
 # and VAR=value assignments; a wrapper given as a path or with .exe (/usr/bin/env, timeout.exe) counts
@@ -303,7 +308,7 @@ function CmdIdx($toks) {
 }
 $SHELLS = '^(bash|sh|zsh|dash|ksh|pwsh|powershell)$'
 # a command word without its folder and .exe: /usr/bin/git, git.exe, C:\x\git.exe -> git
-function BaseName([string]$t) { $b = ($t.ToLowerInvariant() -split '[/\\]')[-1]; if ($b.EndsWith('.exe')) { $b = $b.Substring(0, $b.Length - 4) }; $b }
+function BaseName([string]$t) { $b = ($t.ToLowerInvariant().TrimStart('=') -split '[/\\]')[-1]; if ($b.EndsWith('.exe')) { $b = $b.Substring(0, $b.Length - 4) }; $b }
 # characters that end a run of ordinary text: in single quotes, in double quotes, unquoted, in ClosePar
 $RUN_SQ = [char[]]@([char]39)
 $RUN_DQ = [char[]]@([char]34, [char]92, [char]36, [char]96)
@@ -360,12 +365,42 @@ function IsShell($toks) {
   $script:shJ = $j
   ($j -lt $toks.Count) -and ((BaseName $toks[$j]) -match $SHELLS)
 }
+# Unesc: a word with each backslash taken as the shell takes an unquoted one (ma\in is main)
+function Unesc([string]$t) { [regex]::Replace($t, '\\(.?)', '$1') }
+# StartProc: Start-Process / saps / start <program> [-ArgumentList] <arguments> as one command line
+# (PowerShell runs the program with them), or '' for another command
+function StartProc($toks) {
+  $j = CmdIdx $toks; if ($j -ge $toks.Count) { return '' }
+  $b = BaseName $toks[$j]; if ($b -ne 'start-process' -and $b -ne 'saps' -and $b -ne 'start') { return '' }
+  $prog = ''; $args0 = ''
+  for ($k = $j + 1; $k -lt $toks.Count; $k++) {
+    $lt = $toks[$k].ToLowerInvariant()
+    if ($lt -match '^-f(i(l(e(p(a(t(h)?)?)?)?)?)?)?$') { $k++; if ($k -lt $toks.Count) { $prog = $toks[$k] }; continue }
+    if ($lt -match '^-a(r(g(u(m(e(n(t(l(i(s(t)?)?)?)?)?)?)?)?)?)?)?$' -or $lt -eq '-args') { $k++; if ($k -lt $toks.Count) { $args0 += ' ' + $toks[$k] }; continue }
+    # parameters with a value (-WorkingDirectory, -Verb, -WindowStyle, -Credential, -Environment,
+    # -RedirectStandard...), by their unambiguous prefixes; -Wait, -NoNewWindow, -PassThru take none
+    if ($lt -match '^-(wo|v|wi|c|e|r)') { $k++; continue }
+    if ($lt.StartsWith('-')) { continue }
+    if (-not $prog) { $prog = $toks[$k] } else { $args0 += ' ' + $toks[$k] }
+  }
+  if (-not $prog) { return '' }
+  $prog + $args0.Replace(',', ' ')   # -ArgumentList push,origin,main
+}
 function Seg($list, [int]$depth, [bool]$qm, [bool]$pp) {
   $toks = @($list)
   if ($toks.Count -eq 0) { return }
   $clean = New-Object string[] $toks.Count
   for ($j = 0; $j -lt $toks.Count; $j++) { $clean[$j] = $toks[$j] -replace '[\t\r\n]', ' ' }
   $script:segs.Add($clean); $script:pipes.Add($pp)
+  # a word with a backslash is also checked as the shell reads it unquoted (git push origin ma\in);
+  # the command as written is checked too, so this only adds a check
+  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
+  if ($qm -and $tool -ne 'PowerShell') {
+    $un = New-Object string[] $clean.Count; $diff = $false
+    for ($j = 0; $j -lt $clean.Count; $j++) { $un[$j] = Unesc $clean[$j]; if ($un[$j] -cne $clean[$j]) { $diff = $true } }
+    if ($diff) { $script:segs.Add($un); $script:pipes.Add($pp) }
+  }
+  $inner = StartProc $toks; if ($inner) { Scan $inner ($depth + 1) $qm }
   if (-not (IsShell $toks)) { return }
   for ($k = $script:shJ + 1; $k -lt $toks.Count; $k++) { $lt = $toks[$k].ToLowerInvariant(); if ($lt -match '^-[a-z]*c$' -or $lt -match '^-com(m(a(n(d)?)?)?)?$') { break } }
   if ($k -lt $toks.Count - 1 -and $toks[$k + 1] -eq '--') { $k++ }
@@ -390,6 +425,7 @@ function Scan([string]$s, [int]$depth, [bool]$qm) {
       $tok += $c; continue
     }
     if ($qm -and $c -eq '\' -and ($d -eq '"' -or $d -eq "'" -or $d -eq '\')) { $tok += $d; $st = $true; $i++; continue }
+    if ($qm -and $c -eq '$' -and $d -eq "'") { continue }   # $'...' (ANSI-C quoting): its text, as '...'
     if ($c -eq "'" -or $c -eq '"') { if ($qm) { $q = $c; $st = $true }; continue }
     if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
     if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
