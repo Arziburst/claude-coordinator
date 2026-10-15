@@ -63,7 +63,8 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   from `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract warns only when it is
   there and is neither; a contract without it is fine.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, the
-  coordinator restarts the contract on this model with the failed report attached (CORE §7) — once; a
+  coordinator restarts the contract on this model with the failed report attached (CORE §7) — once, the
+  top rung only within CORE §7's guard rails (else Opus at its highest effort); a
   second failure goes to the owner, not to another restart. A stuck worker (a `blocked` report) is
   helped or split (CORE §4), which spends no escalation. A model that is not stronger than `model`
   gives no second chance: check-contract warns.

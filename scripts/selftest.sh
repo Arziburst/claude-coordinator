@@ -420,6 +420,10 @@ hooks)
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if [ "$onfail" = block ]; then pass 'onFailure "block": a guard that fails to run blocks'
   else fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)'; fi
+  # SendMessage (CORE §1.17): the guard reads its `to` only when the matcher takes that tool in
+  case "$m" in ''|'*'|'.*') pass "its matcher covers SendMessage" ;;
+    *) if printf 'SendMessage\n' | grep -Eqx -- "$m" 2>/dev/null; then pass "its matcher covers SendMessage"
+       else skip "its matcher leaves out SendMessage: a message to another project's session is not guarded (CORE 1.17)"; fi ;; esac
   # the owner's working copy (TOOLKIT Safety): with env COORD_PROTECTED_ROOT the guard keeps the edit
   # tools out of it - so the root is an absolute path to a folder here, and the matcher takes in each
   # edit tool (none, "", "*" and ".*" match every tool; otherwise the whole name must match it)

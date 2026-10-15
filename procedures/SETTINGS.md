@@ -55,7 +55,7 @@ with a **quiz**, every time, before anything changes:
    what starts or stops (the tick). The owner can always answer in their own words.
 2. **On the answers:** edit each changed row in the Settings block (Source `owner, <date>`, Since
    `<date>`), commit in `coordinator/`, one line in `LOG.md` per row; an unclear answer goes back on the
-   open questions, never guessed. A row every running session follows
+   open questions, never guessed. A row every running session of this project (CORE §1.17) follows
    (strictness, merge, review) is announced to them once it is in force (CORE §10).
 3. A change the core reserves for the owner (CORE §14: rules, budget, outward or irreversible actions)
    is made only on the owner's own answer — never on a message from another session or a comment
