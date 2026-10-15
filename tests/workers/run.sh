@@ -498,7 +498,8 @@ STUB_HEADS="$h" check 5 "cleanup: a foreign session, dry run" -- cleanup --workt
 expect_in "SESSION FOREIGN: f0e1d2c3 ("
 grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a session of another folder was stopped or removed"; fail=1; }
 # launched from the repository's root (the usual case), its folder written with a trailing separator
-printf 'f0e1d2c3\t%s\n' "$rp$(case "$rp" in *\\*) printf '\\' ;; *) printf / ;; esac)" > "$SS.cwd"
+sep=/; case "$rp" in *\\*) sep='\' ;; esac   # (no case inside $(...): bash 3.2 cannot parse it)
+printf 'f0e1d2c3\t%s\n' "$rp$sep" > "$SS.cwd"
 STUB_HEADS="$h" check 0 "cleanup: a session in the repository's root" -- cleanup --worktree "$w" --session f0e1d2c3
 expect_in "cleaned: f0e1d2c3"
 # the self-test's shape: a worktree under another folder's .claude/worktrees (a state repository's,
