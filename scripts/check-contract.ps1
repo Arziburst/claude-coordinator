@@ -115,7 +115,7 @@ foreach ($f in $Files) {
   if ($txt.ContainsKey('non_goals')) {
     # its text without comments: a default line commented out (# - no changes ...) is missing
     $ng = (@($txt['non_goals'] -split "`n" | Where-Object { $_ -cnotmatch '^[ \t]*#' } | ForEach-Object { $_ -creplace '[ \t]+#.*$', '' }) -join "`n").ToLower()
-    if (-not $ng.Contains('beyond the fix')) { $out.Add('ERROR non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)'); $ne++ }
+    if (-not $ng.Contains('no changes beyond')) { $out.Add('ERROR non_goals lacks the default (no changes beyond this contract''s acceptance, its diagnostics and its tests)'); $ne++ }
     if (-not $ng.Contains('weaken')) { $out.Add('ERROR non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)'); $ne++ }
   }
   $b = "`n" + $txt['budget']

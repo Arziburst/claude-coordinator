@@ -16,7 +16,7 @@ acceptance:
     check: oracle
     how: git show selftest/<c>/st1:b.txt prints b
 non_goals:
-  - no changes beyond the fix, its diagnostics and its test
+  - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances
 do_not_decide: []
 budget:

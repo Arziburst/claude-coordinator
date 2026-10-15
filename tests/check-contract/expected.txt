@@ -12,7 +12,7 @@ empty-how.md: ERROR criterion 3: oracle check without `how`
 empty-how.md: ERROR criterion 4: oracle check without `how`
 empty-how.md: ERROR criterion 5: oracle check without `how`
 empty-how.md: FAIL (5 errors, 0 warnings)
-commented-defaults.md: ERROR non_goals lacks the default (no changes beyond the fix, its diagnostics and its test)
+commented-defaults.md: ERROR non_goals lacks the default (no changes beyond this contract's acceptance, its diagnostics and its tests)
 commented-defaults.md: ERROR non_goals lacks the default (do not weaken or loosen tests, timeouts or tolerances)
 commented-defaults.md: WARN  budget.model missing (CORE §7)
 commented-defaults.md: WARN  budget.escalate_to missing (no stronger model to retry on)
@@ -22,5 +22,6 @@ commented-defaults.md: FAIL (2 errors, 4 warnings)
 budget-time.md: WARN  budget.time (about an hour) is not minutes or a range of minutes (25 or 18-40, CORE §7a)
 budget-time.md: OK (0 errors, 1 warnings)
 budget-time-ok.md: OK (0 errors, 0 warnings)
+feature-scope.md: OK (0 errors, 0 warnings)
 bom.md: OK (0 errors, 0 warnings)
 missing.md: cannot read

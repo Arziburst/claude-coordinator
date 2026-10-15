@@ -33,7 +33,7 @@ acceptance:                        # ordered; each criterion says how it is chec
   - criterion: the code follows the project's standards
     check: review
 non_goals:
-  - no changes beyond the fix, its diagnostics and its test
+  - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances
 do_not_decide:                     # raised as questions, never decided by the worker
   - the reticle's colour and shape
