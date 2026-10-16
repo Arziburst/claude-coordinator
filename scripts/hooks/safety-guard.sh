@@ -164,7 +164,24 @@ CANON_ALL_END
 }
 case_fold() {   # case_fold <keep or ""> <path>...: one per line, \ as /, lower case unless keep
   local m="$1"; shift
-  if [ "$m" = keep ]; then printf '%s\n' "$@" | tr '\\' '/'; else printf '%s\n' "$@" | tr '\\A-Z' '/a-z'; fi
+  if [ "$m" = keep ]; then printf '%s\n' "$@" | tr '\\' '/'
+  elif [ -n "$lw" ]; then printf '%s\n' "$@" | tr '\\' '/' | lower
+  else printf '%s\n' "$@" | tr '\\A-Z' '/a-z'; fi
+}
+# lower: its input in lower case, line for line: the ASCII letters everywhere; where letter case in
+# paths is ignored (Windows, macOS) also Ü or Д, which NTFS and APFS fold too (as safety-guard.ps1's
+# ToLowerInvariant does). Git Bash's GNU tr folds ASCII only in any locale, its gawk folds them under
+# C.UTF-8 (built into Git Bash, whatever locale the hook gets); macOS tr folds them in a UTF-8 locale
+# (if it refuses the input: the ASCII letters only, as before).
+case "${OSTYPE:-}" in msys*|cygwin*) lw=awk ;; darwin*) lw=tr ;; *) lw="" ;; esac
+lower() {
+  local i o
+  if [ "$lw" = awk ]; then LC_ALL=C.UTF-8 awk '{ print tolower($0) }' 2>/dev/null
+  elif [ "$lw" = tr ]; then
+    i="$(cat; printf .)"; i="${i%.}"
+    o="$(printf '%s' "$i" | LC_ALL=en_US.UTF-8 tr '[:upper:]' '[:lower:]' 2>/dev/null; printf '.%s' "$?")"
+    if [ "${o##*.}" = 0 ]; then printf '%s' "${o%.*}"; else printf '%s' "$i" | tr 'A-Z' 'a-z'; fi
+  else tr 'A-Z' 'a-z'; fi
 }
 # A path as it lies on disk (#121): the part of it that exists, entered a folder at a time with cd -P
 # (links - symlinks, junctions - resolved; .. after a link goes to the link target's parent, as the
@@ -185,7 +202,7 @@ PHYSICAL_END
 }
 physical_folded() {   # physical_folded <keep or ""> <path>...: physical_parts, in lower case unless keep
   local m="$1"; shift
-  if [ "$m" = keep ]; then physical_parts "$@"; else physical_parts "$@" | tr 'A-Z' 'a-z'; fi
+  if [ "$m" = keep ]; then physical_parts "$@"; else physical_parts "$@" | lower; fi
 }
 # two lines per path, each starting with "." (so none is empty): the physical folder, the rest; run in a
 # subshell (it changes the directory). A folder at a time, not cd -P <whole path>: Git Bash takes .. in a
