@@ -450,7 +450,7 @@ never assumed (below).
   from the run log and the status line (§7a) — limit percent per run, so a plan change shows up in the
   numbers and the ladder follows without a rule change.
 - **Spend level** (`PROJECT.md`, set at init next to the strictness): **lean**, **balanced** (default)
-  or **thorough**. A thorough project still sends a typo to the light rung.
+  or **thorough**. It never removes a check, and a thorough project still sends a typo to the light rung.
   It sets **which way to lean** when two neighbouring rungs or efforts both fit (lean: the lower;
   balanced: the table; thorough: the higher), how routing moves (below), and **when the top rung is used**
   — raising effort comes before raising the model (Anthropic: Opus for most coding work; Fable for
@@ -656,8 +656,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 
 - **Process documents are the coordinator's own work** (`PROJECT.md`, `BINDINGS.md`, workflow docs),
   never delegated, changed on the owner's yes (§1.1): its own files committed in `coordinator/`, documents
-  in the project's repository through review and merge; rule changes every session follows go first in
-  the queue and are announced (§4 step 7).
+  in the project's repository through review and merge; changes every session follows go first in the
+  queue and are announced once in force.
 - **Core findings.** A problem whose cause is the core itself — a rule that cannot be followed, a core
   script that behaves wrongly, a safeguard that silently does not work, a real situation with no step,
   a role that cannot do what the core asks — gets a row in `coordinator/CORE-FINDINGS.md` the moment it
