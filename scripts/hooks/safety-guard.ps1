@@ -191,7 +191,8 @@ function IsOwn([string]$p) {   # a session's cwd inside one of the project's fol
 }
 # SessionCheck <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id; send -
 # a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it names are
-# all outside the project (a name an own session has too passes: it may be meant for that one)
+# all outside the project; a name is blocked when any session of another project has it, an own one too
+# (a message to a shared name may reach both: #201)
 function SessionCheck([string]$what, [string]$a, [string]$how) {
   if (-not $a) { return }
   $nm = ''; if ($how -eq 'send' -and $a -cmatch '^(.*) \[.*\]\z') { $nm = $Matches[1] }
@@ -205,6 +206,10 @@ function SessionCheck([string]$what, [string]$a, [string]$how) {
     OwnForms
     if ($script:owns.Count -eq 0) { return }   # no project folder known: nothing to tell it by
     if ($s[2] -and -not (IsOwn $s[2])) { $foreign = $s[2] } else { $own = $true }
+  }
+  if ($own -and $foreign -and $how -eq 'send') {
+    [Console]::Error.WriteLine("Blocked by safety-guard: $what a name a session of another project has too ($foreign): it may reach that session. Give this project's session a name of its own.")
+    exit 2
   }
   if (-not $own -and $foreign) {
     [Console]::Error.WriteLine("Blocked by safety-guard: $what a session of another project ($foreign). Ask the owner.")

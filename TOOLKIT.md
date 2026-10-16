@@ -264,7 +264,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   up in the listing, and a session outside `CLAUDE_PROJECT_DIR`, the repository's top and main checkout
   or the `Worktree roots` of `<root>/coordinator/PROJECT.md` is blocked (`Blocked by safety-guard: claude
   rm a session of another project (<cwd>). Ask the owner.`), whole path segments compared, as written
-  and as on disk. Only those calls run `claude agents` (measured on Windows, 2.1.300: about 0.5-0.7 s
+  and as on disk; a SendMessage to a name another project's session has too is blocked even when an own
+  session has it (it may reach both, #201). Only those calls run `claude agents` (measured on Windows, 2.1.300: about 0.5-0.7 s
   more per such call). **The limit:** a session the listing does not have, a listing that cannot be
   read, a name an own session shares, and an id hidden in a variable or a script pass the guard — the
   rule and the scripts' checks are the main defence.
