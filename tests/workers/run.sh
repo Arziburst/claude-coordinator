@@ -532,20 +532,28 @@ STUB_HEADS="$h" check 5 "cleanup: a full sessionId in upper case" -- cleanup --w
 expect_in "SESSION FOREIGN: f0e1d2c3 ("
 [ -d "$w" ] || { echo "FAIL: an upper-case sessionId removed the worktree"; fail=1; }
 grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: an upper-case sessionId stopped or removed a session"; fail=1; }
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
-  # the listing gives the session's folder through a symlink to the repository (macOS: /tmp is one): own
-  ln -s "$tmp/repo" "$tmp/repo-link"
-  printf 'f0e1d2c3\t%s\n' "$tmp/repo-link" > "$SS.cwd"
-  STUB_HEADS="$h" check 0 "cleanup: the session's folder through a symlink" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
-  expect_in "[dry-run] claude rm f0e1d2c3" ;;
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    # the listing gives the session's folder through a junction to the repository (C:\...): own
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' cmd /c mklink /J "$(cygpath -w "$tmp/repo-link")" "$(cygpath -w "$tmp/repo")" >/dev/null 2>&1
+    printf 'f0e1d2c3\t%s\n' "$(cygpath -w "$tmp/repo-link")" > "$SS.cwd"
+    STUB_HEADS="$h" check 0 "cleanup: the session's folder through a junction" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+    expect_in "[dry-run] claude rm f0e1d2c3" ;;
+  *)
+    # the listing gives the session's folder through a symlink to the repository (macOS: /tmp is one): own
+    ln -s "$tmp/repo" "$tmp/repo-link"
+    printf 'f0e1d2c3\t%s\n' "$tmp/repo-link" > "$SS.cwd"
+    STUB_HEADS="$h" check 0 "cleanup: the session's folder through a symlink" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+    expect_in "[dry-run] claude rm f0e1d2c3" ;;
 esac
-case "$(uname -s)" in Darwin)
-  # a non-ASCII letter in another case is the same folder on APFS (in a UTF-8 locale, as a session runs)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
+  # a non-ASCII letter in another case is the same folder on APFS and NTFS (in a UTF-8 locale, as a
+  # session runs; Git Bash's tr folds ASCII only)
   git clone -q "$tmp/remote.git" "$tmp/Ü/proj" 2>/dev/null
   w="$tmp/Ü/proj/.claude/worktrees/24-fix"
   git -C "$tmp/Ü/proj" worktree add -q -b 24-fix "$w" origin/main && g -C "$w" commit -q --allow-empty -m 24-fix && git -C "$w" push -q -u origin 24-fix 2>/dev/null
   h="$(git -C "$w" rev-parse HEAD)"
-  printf 'f0e1d2c3\t%s\n' "$(native "$tmp")/ü/proj" > "$SS.cwd"
+  printf 'f0e1d2c3\t%s%sü%sproj\n' "$(native "$tmp")" "$sep" "$sep" > "$SS.cwd"
   LC_ALL=en_US.UTF-8 STUB_HEADS="$h" check 0 "cleanup: a non-ASCII letter in another case" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
   expect_in "[dry-run] claude rm f0e1d2c3" ;;
 esac
