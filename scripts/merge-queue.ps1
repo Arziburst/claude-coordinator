@@ -8,8 +8,9 @@
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
 # in), and when the base brought changes to files the PR changes too (outside -Shared), it stops for a
 # re-review of that merge; the checks of the current head waited for (all pass or skipped); a failure
-# re-runs the failed runs once, a second failure stops; then `gh pr merge --<method> --delete-branch
-# --match-head-commit <head>`, and every open PR that changes a file the merged one changed is printed
+# re-runs the failed runs once, a second failure stops; then `gh pr merge --<method>
+# --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
+# stays for cleanup-worker), and every open PR that changes a file the merged one changed is printed
 # as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
 # make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
 # files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
@@ -101,10 +102,19 @@ foreach ($item in $prs) {
   $k = Behind $base $head
   if ($k -and $k -ne '0') {
     if ($DryRun) { "[dry-run] gh pr update-branch $pr"; Leave $pr 'SKIP' "dry run - $k behind $base, would update its branch and wait for its checks"; continue }
-    $null = GhRc @('pr', 'update-branch', $pr)
-    $new = (PrView $pr)[2]
+    $ub = @(& gh pr update-branch $pr 2>&1 | ForEach-Object { "$_" })
+    if ($LASTEXITCODE -ne 0) {
+      Leave $pr 'CONFLICT' "$branch - $base did not merge in ($(($ub | Where-Object { $_ }) -join ' ')); its worker merges $base by hand, runs its checks and pushes, then queue it again"; continue
+    }
+    # GitHub answers before the PR shows its new head: read it again until it moves (about 90 s)
+    $new = $head; $n = 0
+    while ($new -eq $head -and $n -lt 18) {
+      if ($n -gt 0) { Start-Sleep -Seconds ([Math]::Min([int]$Poll, 5)) }; $n++
+      $new = (PrView $pr)[2]
+    }
+    if ($new -eq $head) { Leave $pr 'TIMEOUT' 'its branch was updated, but its head did not move within 90 s - queue it again'; continue }
     $k = Behind $base $new
-    if ($new -eq $head -or ($k -and $k -ne '0')) {
+    if ($k -and $k -ne '0') {
       Leave $pr 'CONFLICT' "$branch - $base did not merge in; its worker merges $base by hand, runs its checks and pushes, then queue it again"; continue
     }
     $came = @(Q @('api', "repos/{owner}/{repo}/compare/$head...$new", '--template', $T_CMPFILES))
@@ -141,10 +151,13 @@ foreach ($item in $prs) {
     Start-Sleep -Seconds ([int]$Poll)
   }
   if ($tag) { Leave $pr $tag $msg; continue }
-  if ($DryRun) { "[dry-run] gh pr merge $pr --$Method --delete-branch --match-head-commit $head"; Leave $pr 'SKIP' 'dry run - green, would merge'; continue }
-  $out = @(& gh pr merge $pr "--$Method" --delete-branch --match-head-commit $head 2>&1 | ForEach-Object { "$_" })
+  if ($DryRun) { "[dry-run] gh pr merge $pr --$Method --match-head-commit $head"; Leave $pr 'SKIP' 'dry run - green, would merge'; continue }
+  # no --delete-branch: gh would also delete the local branch and with it the worker's worktree, past
+  # cleanup-worker's checks (CORE section 8); only the remote branch goes, cleanup-worker removes the rest
+  $out = @(& gh pr merge $pr "--$Method" --match-head-commit $head 2>&1 | ForEach-Object { "$_" })
   if ($LASTEXITCODE -ne 0) { Leave $pr 'MERGE FAILED' (($out | Where-Object { $_ }) -join ' '); continue }
   $merged++; "MERGED #${pr}: $(Short $head)"
+  if ((GhRc @('api', '-X', 'DELETE', "repos/{owner}/{repo}/git/refs/heads/$branch")) -eq 0) { "deleted the remote branch $branch" }
   # the open PRs that change a file this one changed (shared ones too): their workers merge main now
   foreach ($l in @(OpenPrs)) {
     $f = $l -split "`t"; if ($f[0] -eq $pr) { continue }
