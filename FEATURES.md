@@ -710,7 +710,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-UPDATE-02 Update with an impact report
 - defined: procedures/UPDATE-CORE.md
 - entry: "update the core", only on the owner's command
-- promises: an impact report comes before any change — conflicts with local edits, breaking lines, one-time steps not done, findings the update fixes; files merge only on the owner's yes, keeping the agreed local edits; running sessions are told
+- promises: an impact report comes before any change — conflicts with local edits, breaking lines, one-time steps not done, findings the update fixes; files merge only on the owner's yes, keeping the agreed local edits; every running session of the project is paused first (its full id recorded; idle, or stopped by its short id) and resumed after the self-test, told only the rule changes that apply to it
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 

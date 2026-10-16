@@ -47,7 +47,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      as its workaround that the update makes unnecessary; after the update each is proven here and
      marked `fixed <commit>`, or goes back to `new`. A project that kept its core problems in another
      form gets the template's file, its rows converted, on the owner's yes.
-4. **On the owner's yes:** merge the upstream files into the local copy, keeping the agreed local edits,
+4. **On the owner's yes,** first **pause** every running session of this project (CORE §1.17), so none
+   works under the old rules and scripts while they change: record each one's full session id, then
+   each finishes its step, commits, pushes, reports and goes idle; one that does not is stopped by its
+   short id (TOOLKIT *Pause and resume*). Then merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
    scripts changed, re-run the hook's self-test and `selftest hooks --settings` on the worker safety file and
    the coordinator's own settings files (SELFTEST step 2a). Always run `scripts/check-scripts` on the core copy
@@ -64,5 +67,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
    [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
    project's change path and stay on disk).
-6. **Journal** the update: the old and new commits and what the owner decided per item. Tell running
-   sessions to re-read their brief's rules only where the update changes them.
+6. **Resume** every session paused in step 4, after the self-test: an idle one with a one-line
+   "continue", a stopped one with `claude --bg --resume <full session id> "continue"` (TOOLKIT *Pause and
+   resume*); each is told to re-read its brief's rules only where the update changes them.
+7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
+   and resumed.
