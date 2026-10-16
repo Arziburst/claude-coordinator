@@ -463,11 +463,15 @@ never assumed (below).
   - everything else stays on strong or light, as the table and the routing say.
   **Guard rails — the top rung only while:** (a) the plan includes it (the owner's answer above) and no
   "limit reached" or usage-credits message came since the last weekly reset; (b) `scripts/run-stats
-  --limits` with the block's top-rung runs as `--block-top` — counted at 2.5× their estimate: the list
-  price ratio, and Fable uses the limits faster — prints `fits` for `seven_day` within the project's cap
-  before its reset; (c) the top rung's share of the week's list-price cost (the `top` column of the
-  `seven_day` line; its model marked `top` in the prices file, TOOLKIT *Usage*) stays under 50.0. One
-  failing → the run goes to Opus at the highest effort its kind allows, and the report names the guard.
+  --limits` with the block's top-rung runs as `--block-top` — counted at 2.5× their estimate, the list
+  price ratio of Fable to Opus (estimates come from the kind's runs, mostly on Opus; this ratio is why
+  Fable uses the limits faster — not a second factor) — prints `fits` for `seven_day` within the
+  project's cap before its reset; (c) the top rung's share of the week's list-price cost (the `top`
+  column of the `seven_day` line; its model marked `top` in the prices file, TOOLKIT *Usage*) stays under
+  50.0 — a share of what the week USED, so it stays under the 50% sub-cap of the weekly LIMIT, exactly
+  while limits follow list price (§7a's assumption; Anthropic publishes no factor); should Fable burn
+  faster than its price, (a)'s "limit reached" message is the stop. One failing → the run goes to Opus
+  at the highest effort its kind allows, and the report names the guard.
 - **Floors, at every level:** risk-tier work (§5) runs on Opus with high effort, or on the top rung with
   high where Opus is missing; the quality checks (contract, oracles, independent review, green CI) never
   depend on the level.
@@ -542,9 +546,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   arithmetic from the status file, those spends and the ladder's prices (`coordinator/prices.txt`,
   one-time step `prices-file`), never by hand (TOOLKIT *Usage*). That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
-  it gets its own ratio. Every model's spend counts toward both windows — Fable's too, and faster than
-  other models' (§7), which is why the block's top-rung runs go in as `--block-top`, at 2.5× their
-  estimate. The status line has no per-model window; `run-stats --limits` prints the top rung's share of
+  it gets its own ratio. Every model's spend counts toward both windows — Fable's too, faster than
+  other models' because its list price is higher (§7): the block's top-rung runs go in as `--block-top`,
+  at 2.5× their estimate, the list price ratio to Opus — one factor, not two. The status line has no per-model window; `run-stats --limits` prints the top rung's share of
   each window's list-price cost (`top`), the guard rail (c) of §7. A model with its own limit outside the
   weekly one (none known today; Fable is not one) would be marked `not-weekly` in the prices file and
   left out of the weekly sum.
