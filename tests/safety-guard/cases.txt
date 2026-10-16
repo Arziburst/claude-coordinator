@@ -558,10 +558,12 @@ allow	work	claude logs b0000001
 allow	work	claude agents --json --all
 allow	work	claude rm $id
 allow	work	claude --bg --name "#12 worker: Fix" --model opus "rm b0000001"
-# SendMessage: its to by name (also with a [ref]), id or sessionId; a name an own session has too passes
+# SendMessage: its to by name (also with a [ref]), id or sessionId; a name a session of another project
+# has too is blocked even when an own session has it (it may reach both, #201)
 allow	send:work	#13 worker: Own
 allow	send:work	#14 worker: Wt
-allow	send:work	#12 worker: Fix
+block	send:work	#12 worker: Fix
+block	send:work	#12 worker: Fix [r1a]
 block	send:work	Other Coordinator
 block	send:work	Other Coordinator [r3f]
 block	send:work	#15 worker: Old
