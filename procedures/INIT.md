@@ -5,7 +5,6 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
 
 ## Details of the start sequence (CORE §2)
 
-
 - **Existing project with its own rules** (other agents' formats — `.cursor/rules`, `AGENTS.md`, rule
    files, memory notes, a previous coordinator): the coordinator **defines the project rules** in its
    layers, for **Claude only**:
@@ -105,7 +104,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    `gh repo create <owner>/<project>-coordinator-state --private --source coordinator --remote origin`, first push `git -C coordinator push -u origin state`; *the team's organization*
    (recommended for a team); *local only* — warn: a lost disk or a move without a handoff loses the
    journal, the rules and the decisions. With a remote: verify `PRIVATE` (`gh repo view --json
-   visibility`), push as CORE §12b says (at every event that matters, at most every 15 minutes), record the link in `BINDINGS.md`, offer a pointer the next
+   visibility`), push as CORE §12b says, record the link in `BINDINGS.md`, offer a pointer the next
    machine can find (HANDOFF, *Finding it*).
 6. **Risky areas:** money, roles and permissions, personal data, audit — what was found in the code
    filled in; confirm (CORE §5).
@@ -131,7 +130,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     it; a translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
     session — `/rename <name>` (a session cannot rename itself) — and starts it with `claude --name
     "<name>"` from then on.
-11. **Core reports — send the core's bugs to its maintainer?** Explain, in the question itself:
+11. **Core reports — send the core's bugs to its maintainer?** Explain in the question:
     - **why it matters:** the maintainer can fix only the bugs that reach them. A bug of the core that
       nobody reports stays — in this project and in every other one; a reported one comes back fixed
       with the next "update the core", and this project then proves the fix itself.
@@ -203,8 +202,7 @@ Everything else in `PROJECT.template.md`: what follows from the strictness prese
 who merges, review, the approval gate, obvious review comments, autopilot and the tick, code to other
 services, reports) and the template's defaults (session names, the batch recipe, commit and PR format,
 progress comments, research, the radar list and the expectations checklist (CORE §4b), risk-area
-rules, status page, issue fields). The owner changes any of them
-with one line at the summary or later.
+rules, status page, issue fields). The owner changes any of them with one line at the summary or later.
 
 ### 3.4 Set up without asking
 

@@ -33,8 +33,8 @@ proposals, and — as the owner chose at init — sends an anonymous summary to 
    leading number (`0.0648 prices`), a result by its first word (`done`, `pass` = approved); a result no
    word explains is listed as `unknown result: <value> ×<n>` — fix the log or the habit behind it.
 2. **Read the report** — five axes, this week and the previous one:
-   - *cost*: tasks, merged tasks, the median cost per task, the total (the tasks' and the coordinator's
-     own lines), the cost per merged task;
+   - *cost* (dollars at API list price, CORE §7a *The unit*): tasks, merged tasks, the median cost per
+     task, the total (the tasks' and the coordinator's own lines), the cost per merged task;
    - *speed*: the medians of time to ready and of work, and — **apart, never mixed into the others** —
      the owner wait (its median, and the tasks still waiting);
    - *quality*: the rework, escalation and failure rates (of the tasks with runs), escaped bugs and per
@@ -84,8 +84,8 @@ recorded in *Settings* (`owner, <date>`).
 
 - **Body:** exactly what `scripts/retro.sh coordinator/RUNS.tsv --public --id <id>` prints — a fixed
   template filled with numbers and allowlisted names, checked by the script before it prints anything.
-  Never edited by hand; a body edited for any reason passes `retro.sh --check-public <file>` before it
-  is filed.
+  The coordinator never edits it by hand; a body edited anyway (by the owner, for any reason) passes
+  `retro.sh --check-public <file>` before it is filed.
 - **Title:** `[self-improvement] summary <id> week of <YYYY-MM-DD>`.
 - **One per project-week:** first `gh issue list -R Arziburst/claude-coordinator --state all --search
   "\"summary <id> week of <date>\" in:title"`; one found → nothing new is filed.
