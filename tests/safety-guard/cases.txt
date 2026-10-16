@@ -5,6 +5,8 @@
 # makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
 # of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path.
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
+# expect fold8: the same for a non-ASCII letter (Ü / ü); own8: the other way round - allow on Windows and macOS,
+# block on Linux. The project Üw (on work) is reached as @PROJECT_UML@: @PROJECT@ with Ü written ü.
 # An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset),
 # an optional 5th CLAUDE_PROJECT_DIR (without one: the cwd's first folder; -: unset), an optional 6th
 # COORD_PROTECTED_BRANCHES (without one or -: unset; main and master are protected either way). A cwd of dev is a repo on branch dev.
@@ -667,3 +669,13 @@ block	work	Start-Process -WorkingDirectory . git -ArgumentList 'push origin main
 block	work	Start-Process claude -ArgumentList 'rm b0000001'
 allow	work	Start-Process git -ArgumentList 'push origin 12-fix'
 allow	work	Start-Process notepad
+# a non-ASCII letter in another case (#179): Üw and üw are one folder on NTFS and APFS - the protected root
+# found through it; a0000004, listed in üw, is the project's own session
+block	write:Üw	@PROJECT@/a.txt
+fold8	write:Üw	@PROJECT_UML@/a.txt
+fold8	edit:Üw	../üw/src/app.js
+fold8	write:work	@PROJECT@/../üw/a.txt	@PROJECT@/../Üw
+own8	Üw	claude stop a0000004
+own8	ps:Üw	claude rm a0000004
+own8	send:Üw	#16 worker: Fold
+block	Üw	claude stop b0000001

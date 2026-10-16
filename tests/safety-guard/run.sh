@@ -16,8 +16,8 @@ winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -"$1" "$2"; else
 # other kind: 12-fix before main, main before work and dev, for git checkout -), and on work with other deny
 # files: crlf (saved with CRLF), blank (blank and whitespace-only lines), bad (a pattern that cannot be read),
 # bom (saved with a UTF-8 BOM), utf16 (UTF-16 with its BOM, as Windows PowerShell 5.1's > writes it),
-# utf16nul (UTF-16 without a BOM: NUL bytes).
-for b in main work dev crlf blank bad bom utf16 utf16nul; do
+# utf16nul (UTF-16 without a BOM: NUL bytes); Üw, a project with a non-ASCII letter in its name, on work.
+for b in main work dev crlf blank bad bom utf16 utf16nul Üw; do
   r="$tmp/$b"; br=work; case "$b" in main|dev) br=$b ;; esac
   git init -q -b "$br" "$r" && git -C "$r" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
   before=main; [ "$br" = main ] && before=12-fix
@@ -88,10 +88,14 @@ native() { (cd -P -- "$1" && case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pwd -W 
     k=1
     printf '\n  {\n    "id": "%s",\n    "cwd": "%s",\n    "kind": "background",\n    "startedAt": 1791042522505,\n    "sessionId": "%s-0000-4000-8000-000000000001",\n    "name": "%s",\n    "state": "done"\n  }' "$id" "$cw" "$id" "$nm"
   done
+  # a0000004 in the project Üw, its folder written üw (one folder on NTFS and APFS; on Linux another one)
+  cw="$(native "$tmp" | sed 's/\\/\\\\/g')"; case "$cw" in *\\*) cw="$cw\\\\üw" ;; *) cw="$cw/üw" ;; esac
+  printf ',\n  {\n    "id": "a0000004",\n    "cwd": "%s",\n    "kind": "background",\n    "startedAt": 1791042522505,\n    "sessionId": "a0000004-0000-4000-8000-000000000001",\n    "name": "#16 worker: Fold",\n    "state": "done"\n  }' "$cw"
   printf '\n]\n'
 } > "$SG_AGENTS"
-# letter case in paths: ignored on Windows and macOS (the expectation "fold" is block there), kept on Linux
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block ;; *) fold=allow ;; esac
+# letter case in paths: ignored on Windows and macOS (the expectation "fold" is block there), kept on Linux;
+# a non-ASCII letter's case too (fold8 block, own8 allow there; fold8 allow, own8 block on Linux)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block fold8=block own8=allow ;; *) fold=allow fold8=allow own8=block ;; esac
 # the cases' placeholders, replaced in the command and the COORD_PROTECTED_ROOT columns (after \n and \t
 # are read, so a \t in a Windows path stays a backslash and a t)
 SUBST_AWK='
@@ -100,11 +104,13 @@ function subst(s) {
   s = rep(s, "@HOME_M@", ENVIRON["SG_HOME_M"]); s = rep(s, "@HOME_W@", ENVIRON["SG_HOME_W"]); s = rep(s, "@HOME@", ENVIRON["SG_HOME"])
   s = rep(s, "@PROJECT_W@", ENVIRON["SG_PROJECT_W"]); s = rep(s, "@PROJECT_UP@", ENVIRON["SG_PROJECT_UP"])
   s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); s = rep(s, "@LINK_W@", ENVIRON["SG_LINK_W"])
+  s = rep(s, "@PROJECT_UML@", ENVIRON["SG_PROJECT_UML"])
   s = rep(s, "@LINK@", ENVIRON["SG_LINK"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
 }'
 while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
   case "$expect" in ''|'#'*) continue ;; esac
   [ "$expect" = fold ] && expect=$fold
+  [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8
   cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"   # a checkout with CRLF line ends
   [ "$pbr" = - ] && pbr=""   # the 6th column: COORD_PROTECTED_BRANCHES; none or -: unset (main master)
   n=$((n + 1))
@@ -120,6 +126,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
   export SG_PROJECT_W="$(winpath w "$tmp/${branch%%/*}")"
   export SG_PROJECT_U="$(printf '%s' "$SG_PROJECT" | awk '/^[A-Za-z]:\// { $0 = "/" tolower(substr($0, 1, 1)) substr($0, 3) } { printf "%s", $0 }')"
   export SG_PROJECT_UP="$(printf '%s' "$SG_PROJECT" | tr '[:lower:]' '[:upper:]')"
+  export SG_PROJECT_UML="$(printf '%s' "$SG_PROJECT" | sed 's/Ü/ü/g')"   # Üw written üw
   # the 4th column: COORD_PROTECTED_ROOT; for an edit tool @PROJECT@ when there is none, - for unset
   case "$tool" in Bash|PowerShell|SendMessage) ;; *) [ -n "$root" ] || root=@PROJECT@ ;; esac
   [ "$root" = - ] && root=""
