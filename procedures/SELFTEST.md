@@ -5,8 +5,8 @@ of CORE §1 apply.
 
 It proves that the coordinator works **on this machine, in this environment, at this core commit** —
 the scripts under its shells, the logins, background sessions starting further sessions, the roles,
-worktrees, git and gh — with real sessions on purpose, at a small cost (measured: about $0.5 at list
-price, the lead most of it; the run records the real number). It runs in the project's own **state
+worktrees, git and gh — with real sessions on purpose, at a small cost (measured: about $0.5 at API
+list price, the lead most of it; the run records the real number). It runs in the project's own **state
 repository** (`coordinator/`) and **keeps its branches and its PR as evidence** that this core commit
 passed here, so the owner can go back to a proven version. It does **not** replace the dry run (CORE
 §12a): the dry run checks the project's own wrappers on a real task; both run.
@@ -18,9 +18,6 @@ passed here, so the owner can go back to a proven version. It does **not** repla
 - **After every "update the core"** (UPDATE-CORE step 4): the full test, at the new commit.
 - On the owner's word, any time. A commit already tested here (its `selftest/<commit>/base` exists) is
   not tested again unless the owner deletes that evidence himself.
-
-Each run is one CHECKLIST line `selftest` ([ONE-TIME.md](../ONE-TIME.md)) naming the core commit and the
-machine.
 
 ## Where — no sandbox, no new trust
 
@@ -149,9 +146,9 @@ the report notes the interruption and the resume time.
    project's on the same machine gets a line `SKIP foreign self-test session <id> (<cwd>)` and is never
    advised for removal), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
    is deleted.**
-7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost (the sum of
-   step 6). A line in `coordinator/CHECKLIST.md`: `selftest`, the core commit, `hostname`, `done` or
-   `failed`.
+7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost at API list
+   price (the sum of step 6). Each run is one line in `coordinator/CHECKLIST.md`
+   ([ONE-TIME.md](../ONE-TIME.md)): `selftest`, the core commit, `hostname`, `done` or `failed`.
 
 ### The core itself — a sandbox (the maintainer, CI)
 

@@ -33,8 +33,8 @@ proposals, and — as the owner chose at init — sends an anonymous summary to 
    leading number (`0.0648 prices`), a result by its first word (`done`, `pass` = approved); a result no
    word explains is listed as `unknown result: <value> ×<n>` — fix the log or the habit behind it.
 2. **Read the report** — five axes, this week and the previous one:
-   - *cost*: tasks, merged tasks, the median cost per task, the total (the tasks' and the coordinator's
-     own lines), the cost per merged task;
+   - *cost* (dollars at API list price, CORE §7a *The unit*): tasks, merged tasks, the median cost per
+     task, the total (the tasks' and the coordinator's own lines), the cost per merged task;
    - *speed*: the medians of time to ready and of work, and — **apart, never mixed into the others** —
      the owner wait (its median, and the tasks still waiting);
    - *quality*: the rework, escalation and failure rates (of the tasks with runs), escaped bugs and per
