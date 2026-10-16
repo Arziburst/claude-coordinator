@@ -292,7 +292,7 @@ The continuous work:
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
    question, steps, expected result, possible answers); read logs yourself where they answer it. Wishes
    voiced in acceptance are handled per `PROJECT.md`.
-7. **Integrate** per `PROJECT.md` (§1.6, §1.7): one change at a time; a broken main line first; rule
+7. **Integrate** per `PROJECT.md` (§1.6, §1.7): one change at a time, through the merge queue (§4a); a broken main line first; rule
    changes every session follows go **first in the queue** (still through review and merge, §1.1) and
    are announced to every running session of this project (§1.17) once merged.
 8. **Clean up** (§8).
@@ -300,13 +300,25 @@ The continuous work:
 
 ## 4a. Conflict foresight
 
-- **Before a task,** check what it will touch (files, modules, shared tables, schemas, migrations,
-  generated files, docs tables) against open PRs and running tasks. Overlap → order the work, or brief:
-  "PR #x touches the same files — merge main as soon as it lands", queueing both in that order.
-- **Keep the merge order explicit** (dependencies first, overlaps one after another); tell the next
-  worker "your turn".
-- **After every merge,** tell exactly the affected sessions (overlapping files, a changed shared API,
-  schema or rule) to pull main now, not at their task's end. Long branches merge main regularly.
+The coordinator is the hub: workers and leads never settle an overlap between themselves — they read
+what their brief and the coordinator tell them and report a surprise to their report address.
+- **Before a task,** check what it will touch (`touches`: files, modules, shared tables, schemas,
+  migrations, generated files, docs) against open PRs and running tasks; `scripts/merge-queue status`
+  lists the open PRs changing the same files and the CONFLICTING ones (CI does not run on those).
+  Overlap outside the shared files → order the work (the second starts after the first merges) or give
+  one task the file; brief the rest "PR #x touches the same files". A lead's plan is one footprint.
+- **Shared files** (`PROJECT.md` *Shared files*): append-only docs and lists every task adds to, and
+  generated files. Briefs that touch one name it; the rules are the worker's (roles/worker.md step 3).
+- **Merge through the queue:** approved PRs land one at a time, in the order you keep (dependencies
+  first, overlaps one after another), with `scripts/merge-queue land <pr>@<approved commit> …` run in
+  the background: each PR merges main once, at its turn, never after every other merge. Its lines:
+  `CONFLICT` / `HEAD MOVED` / `NOT APPROVED` → back to that worker (or the verifier for a new commit);
+  `REVIEW` → the verifier re-reviews only the merge it names, then queue it again with that head;
+  `FAILED` → the red-check rule above. A main merged in by the queue without touching the PR's files
+  needs no re-review: its CI on the new head is the check. The queue cancels CI runs of a PR's older heads.
+- **After every merge,** tell exactly the sessions behind the `AFFECTED` PRs to merge main now, with
+  the files it names; a lead merges it into its integration branch and tells only its workers whose
+  sub-branches change those files. Nobody else is messaged.
 - A PR blocked by conflicts is a planning miss: record why (§10).
 
 ## 4b. Initiative and research
