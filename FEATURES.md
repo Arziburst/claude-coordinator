@@ -51,6 +51,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORK-13 | Risk tiers | money, permissions, security and customer data get stronger handling | WORK |
 | F-WORK-14 | Dry run | the first work runs in thought; two harmless checks really run | WORK |
 | F-WORK-15 | Who decides | owner, coordinator, worker and lead decisions are fixed | WORK |
+| F-WORK-16 | The merge queue | approved PRs land one at a time; each merges main once, at its turn | WORK |
 | F-WORKERS-01 | start-worker | a named background session in its own worktree with safety settings | WORKERS |
 | F-WORKERS-02 | Worker safety settings checked | no worker starts with a guard that would not block | WORKERS |
 | F-WORKERS-03 | Start from a trusted folder | the session starts in the trusted root and enters its worktree | WORKERS |
@@ -277,9 +278,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-11 Conflict foresight
 - defined: CORE.md §4a
 - entry: before every task; after every merge
-- promises: a task's footprint (`touches`) is checked against open PRs and running tasks; overlap is ordered or briefed; affected sessions are told to pull right after a merge
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- promises: the coordinator is the hub: a task's footprint (`touches`, a lead's plan as one) is checked against open PRs and running tasks (`merge-queue status` lists the open PRs changing the same files and the conflicting ones); overlap outside the shared files is ordered or one task owns the file; after a merge only the sessions of the `AFFECTED` PRs are told to merge main, with the files; a lead passes it only to its workers whose sub-branches change them; workers never settle an overlap with another session; shared files are added to, never rewritten, and generated ones regenerated, never merged by hand
+- tested by: tests/merge-queue/run.sh (`status`: the conflicting PRs and the overlapping pairs, shared globs left out; `AFFECTED` after a merge)
+- not covered: the footprint check before a task and the shared-file rules rest on the sessions following them; the hot files are not found automatically
 
 ### F-WORK-12 Approval gate and autopilot
 - defined: CORE.md §9, CORE.md §3, TOOLKIT.md
@@ -308,6 +309,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: goal, scope, look and feel, business values, rules and irreversible actions are the owner's; breakdown, models and cleanup are the coordinator's; implementation inside a contract is the worker's; only the owner's own typing counts (§1.14)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
+
+### F-WORK-16 The merge queue
+- defined: CORE.md §4a, scripts/merge-queue.sh, scripts/merge-queue.ps1, roles/verifier.md, PROJECT.template.md; one-time step `shared-files` (ONE-TIME.md)
+- entry: scripts/merge-queue.sh, scripts/merge-queue.ps1
+- promises: PRs land strictly in the order given, one at a time; a PR that is not open, a draft, or whose head is not the approved commit is left; runs of its branch on an older head are cancelled; behind its base, GitHub merges the base in once (`gh pr update-branch`) — a merge that did not land is `CONFLICT`, one that brought changes to the PR's own files (outside `--shared`) is `REVIEW` with the diff to re-review, one that did not needs no re-review; the checks of the current head must all pass or be skipped; a failure re-runs the failed runs once, a second failure is `FAILED`; a push while it waits is `HEAD MOVED`; the merge names the head (`--match-head-commit`); a left PR never stops the next; only `gh` is called, never `git`; `--dry-run` changes nothing
+- tested by: tests/merge-queue/run.sh (sixteen scenarios against a stub `gh`, in bash and both PowerShells)
+- not covered: GitHub itself is not called in the tests (the stub answers); the field names of its templates were checked once by hand against a real repository
 
 ## WORKERS
 

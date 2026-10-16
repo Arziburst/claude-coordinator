@@ -343,6 +343,10 @@ values, under 4 tasks, even counts, `--per-run`, no header or one in another ord
 CRLF with a BOM, a missing file; `--limits` on `tests/run-stats/limits/`: trusted, guessed and previous
 ratios, a block that fits and one that does not, a window that has reset, no `rate_limits`, CRLF with a
 BOM, models priced apart),
+  `tests/merge-queue/run.sh` (a stub `gh` answering from a state folder: merged, behind and updated, a
+  conflict, a merge of main that touched the PR's files with and without shared globs, a re-run once and
+  a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
+  / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
@@ -350,6 +354,14 @@ BOM, models priced apart),
   as on a Russian Windows.
 
 ## CI
+- **The merge queue** (CORE §4a): `bash <core>/scripts/merge-queue.sh land 12@5f3e2a1 14@9c0d1e2
+  --method squash --shared 'messages/*' --shared 'docs/decisions.md'` (Windows: `powershell -NoProfile
+  -ExecutionPolicy Bypass -File <core>/scripts/merge-queue.ps1 land -Pr 12@5f3e2a1,14@9c0d1e2 -Method
+  squash -Shared 'messages/*,docs/decisions.md'`), from the project's checkout, as a `run_in_background`
+  command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
+  and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
+  approved. `status` (the same globs) before planning. It calls only `gh`, never `git`: the owner's
+  checkout is left as it is, pulled after the merges as before.
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
   a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
   head (`gh pr view <n> --json headRefOid`, then `gh run list --commit <sha>`); on `cancelled`, look for

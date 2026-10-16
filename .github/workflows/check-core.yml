@@ -276,6 +276,17 @@ jobs:
       - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         run: bash tests/workers/run.sh ps powershell
+      - name: merge-queue against a stub gh (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/merge-queue/run.sh sh
+      - name: merge-queue against a stub gh (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/merge-queue/run.sh ps pwsh
+      - name: merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: |
+          bash tests/merge-queue/run.sh sh
+          bash tests/merge-queue/run.sh ps powershell
       - name: selftest - the scripted steps (bash)
         if: runner.os != 'Windows'
         run: |

@@ -27,8 +27,9 @@ worker (BINDINGS) and the phrase that ends your report.
    overhead: plan for it, and read it at each stage (step 6). If they do not fit, send the plan with the numbers to the
    coordinator and **start nothing** — no worker, no tester — until it answers, even when you expect
    the real cost to come out lower: going over the budget is the coordinator's call, never yours.
-   Otherwise send the plan to the coordinator in one message (sub-contracts, order, touches,
-   estimates) and start; you need no approval inside your task. Sub-contracts, briefs and run notes
+   Otherwise send the plan to the coordinator in one message (sub-contracts, order, touches — together
+   your task's footprint, which the coordinator orders against the other tasks, CORE §4a —, estimates)
+   and start; you need no approval inside your task. Sub-contracts, briefs and run notes
    live in `<your worktree>/.lead/` (start-worker keeps it out of git), never in `$CLAUDE_JOB_DIR/tmp`:
    that job folder is deleted when the session is resumed under a new job.
 3. **Delegate.** Tests first where CONTRACT and CORE §4 say so (the tester subagent): it returns its
@@ -69,7 +70,8 @@ worker (BINDINGS) and the phrase that ends your report.
    <sha>`; a newer commit on the sub-branch goes back to the verifier first); right after it, run
    the sub-contract's build and test oracles and the definition-of-done checks there yourself — a
    failure goes back to the worker like a finding — and merge
-   main into it when the coordinator says main moved. Never push to, merge into or rewrite the
+   main into it when the coordinator says main moved; then tell only the workers whose sub-branches
+   change the files it named to merge your integration branch. Never push to, merge into or rewrite the
    protected branches. Once a sub-branch's head is in your pushed integration branch
    (`git merge-base --is-ancestor`), remove its worker in step 6's order (`claude stop`, read its cost, then `claude rm` the session, by its short id),
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8; never

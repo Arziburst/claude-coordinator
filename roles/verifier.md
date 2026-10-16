@@ -58,7 +58,9 @@ changes**. The verdict holds for that commit only: anything pushed after it is r
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria,
 the findings and every criterion whose files changed since the reviewed commit; the others stay
 confirmed, with their evidence and the commit they were confirmed on — a CI oracle only from the CI
-run on the new head, else it stands as `review`.
+run on the new head, else it stands as `review`. A merge of main the merge queue made without touching
+the PR's files is not re-reviewed (CORE §4a); when the queue stops with `REVIEW`, the re-review is that
+merge only (the `git diff` it names).
 
 **Delivery.** As a subagent: the verdict is your final answer to the session that started you. As a
 session: deliver it with SendMessage to the session your brief names as the report address, with the

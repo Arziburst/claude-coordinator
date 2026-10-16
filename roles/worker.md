@@ -20,7 +20,11 @@ resources and launch/test limits, and the phrase that ends your report.
    PR the contract names. Waiting on CI, keep `gh pr checks <n> --watch` (or an equivalent wait)
    running in the background until you report: a background session idle with nothing running may
    exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite the protected branches or anyone else's branch.
-   Merge main when the coordinator says another PR landed. Secrets are used, never copied; customer
+   Merge main when the coordinator says another PR landed. **Shared files** (the brief names them):
+   add, never rewrite or reorder others' lines; a list entry goes in its sorted place, not at the end;
+   your keys in a group of your own; a generated file is regenerated with the project's command, never
+   merged by hand (in a conflict: take main's side, then regenerate). A file another task may be
+   changing goes to your report address as a question — never to that task's session. Secrets are used, never copied; customer
    data never leaves production; production actions only as the brief allows (CORE §1.4, §1.13).
 4. **Prove each criterion yourself.** For `check: oracle`, run the named test or command and keep its
    output or CI link. A check the brief says the verifier cannot repeat (a shared device, a lock, a

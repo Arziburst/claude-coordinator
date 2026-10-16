@@ -158,6 +158,17 @@ Always the owner's: first person, no mention of AI, no AI co-author lines (CORE 
 | Serial identifiers | `<fill>` | migration versions: check main + open PRs + branches, each branch owns its slot |
 | Processes after a task pauses | `<fill>` | stop; restart when it continues (keep / cache if start-up is slow) |
 
+## Shared files (CORE §4a)
+Files every task may add to; `scripts/merge-queue` takes them as `--shared` globs. Proposed from the
+history (the files most of the last weeks' PRs changed) at init or by the one-time step `shared-files`.
+
+| Question | This project | Default to offer |
+|---|---|---|
+| Append-only docs and lists | `<fill>` | the journal, decisions and traps docs, translation files, a test config's list of suites; a markdown log gets `<file> merge=union` in `.gitattributes` (git keeps both sides' added lines) or becomes a folder with one file per entry |
+| Generated files, each with the command that regenerates it | `<fill>` | e.g. database types: `<command>`; never merged by hand |
+| The queue's merge method | `<fill>` | squash (merge, where a stack of PRs lands as one merge commit) |
+| CI runs of older heads | `<fill>` | cancelled by the CI itself: `concurrency: { group: <workflow>-<ref>, cancel-in-progress: true }` |
+
 ## Risk tiers
 | Question | This project | Default to offer |
 |---|---|---|
