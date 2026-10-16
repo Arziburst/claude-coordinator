@@ -14,7 +14,10 @@ command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
 # The stub's state folder $STUB_D:
 #   pr-<n>         `<state> <isDraft> <head> <branch> <base>`        files-<n>  the PR's files, one a line
 #   behind-<sha>   how far <sha> is behind the base (none: 0)          cmp-<a>-<b> files the base brought
-#   update-<n>     the pr-<n> line after `gh pr update-branch` (none: the update changes nothing)
+#   update-<n>     the pr-<n> line after `gh pr update-branch` (none: the update changes nothing);
+#                  update-<n>.lag  that many `pr view` reads still show the old head (GitHub lags);
+#                  update-<n>.fail the update refused with this text                delete-fail  the
+#                  remote branch cannot be deleted
 #   checks-<sha>   one poll a line, the buckets of that poll (the last line repeats); `MOVE <sha>` moves
 #                  the PR's head to <sha> and answers pending
 #   runs-commit-<sha>, runs-branch-<branch>  `<id> <sha> <status> <conclusion>` lines
@@ -28,8 +31,15 @@ printf '%s\n' "$a" | tr '\n\t' '  ' >> "$D/log"; echo >> "$D/log"
 case "$1 $2" in
   "pr view")
     [ -f "$D/fail-view" ] && { echo "GraphQL: Could not resolve to a PullRequest" >&2; exit 1; }
-    case " $a " in *" files "*) cat "$D/files-$3" 2>/dev/null ;; *) cat "$D/pr-$3" ;; esac ;;
-  "pr update-branch") [ -f "$D/update-$3" ] && cp "$D/update-$3" "$D/pr-$3"; echo "updated" ;;
+    case " $a " in *" files "*) cat "$D/files-$3" 2>/dev/null ;;
+      *) if [ -f "$D/lag-$3" ]; then k=$(cat "$D/lag-$3")
+           if [ "$k" -gt 0 ]; then echo $((k - 1)) > "$D/lag-$3"; else cp "$D/update-$3" "$D/pr-$3"; rm "$D/lag-$3"; fi; fi
+         cat "$D/pr-$3" ;; esac ;;
+  "pr update-branch")
+    [ -f "$D/update-$3.fail" ] && { cat "$D/update-$3.fail" >&2; exit 1; }
+    if [ -f "$D/update-$3.lag" ]; then cp "$D/update-$3.lag" "$D/lag-$3"; elif [ -f "$D/update-$3" ]; then cp "$D/update-$3" "$D/pr-$3"; fi
+    echo "updated" ;;
+  "api -X") [ -f "$D/delete-fail" ] && { echo "Reference does not exist" >&2; exit 1; } ;;
   "pr checks")
     read -r _ _ h _ < "$D/pr-$3"; f="$D/checks-$h"; [ -f "$f" ] || exit 0
     n=$(cat "$f.n" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > "$f.n"
@@ -92,25 +102,43 @@ pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "
 printf '11\tMERGEABLE\tCLEAN\t11-fix\tsrc/x.ts\n12\tMERGEABLE\tBEHIND\t12-feat\tsrc/x.ts\tdocs/LOG.md\n19\tMERGEABLE\tBEHIND\t19-other\tsrc/q.ts\n' > "$STUB_D/prlist"
 run land 11 --poll 0
 code 0; has "MERGED #11: a111111"; has "AFFECTED #12: 12-feat - merge main now: src/x.ts, docs/LOG.md"; hasnt "AFFECTED #19"
-has "merge-queue: 1 merged"; called "pr merge 11 --squash --delete-branch --match-head-commit $H11"
+has "merge-queue: 1 merged"; called "pr merge 11 --squash --match-head-commit $H11"; notcalled "--delete-branch"
+called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"
 
 fresh "the method is passed on"
 pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"
 run land 11 --poll 0 --method merge
-code 0; called "pr merge 11 --merge --delete-branch --match-head-commit $H11"
+code 0; called "pr merge 11 --merge --match-head-commit $H11"
 
 fresh "behind: updated (the base touched none of its files), then green: merged on the new head"
 pr 13 $H13 13-x; echo 2 > "$STUB_D/behind-$H13"; echo "OPEN false $N13 13-x main" > "$STUB_D/update-13"
 echo src/y.ts > "$STUB_D/files-13"; echo docs/other.md > "$STUB_D/cmp-$H13-$N13"; printf 'pending\npass\n' > "$STUB_D/checks-$N13"
 run land 13 --poll 0
 code 0; has "updated #13: c131313 -> d131313, main merged in without touching the PR's files"; has "MERGED #13: d131313"
-called "pr update-branch 13"; called "pr merge 13 --squash --delete-branch --match-head-commit $N13"
+called "pr update-branch 13"; called "pr merge 13 --squash --match-head-commit $N13"
 
-fresh "behind and the update does not land: CONFLICT, the next PR still merges, exit 3"
+fresh "behind and the update refused: CONFLICT with gh's words, the next PR still merges, exit 3"
 pr 14 e141414 14-y; echo 1 > "$STUB_D/behind-e141414"; pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"
+echo "merge conflict between base and head" > "$STUB_D/update-14.fail"
 run land 14 11 --poll 0
-code 3; has "CONFLICT #14: 14-y - main did not merge in"; has "MERGED #11"; has "merge-queue: 1 merged, left: #14 (CONFLICT)"
-notcalled "pr merge 14"
+code 3; has "CONFLICT #14: 14-y - main did not merge in (merge conflict between base and head)"; has "MERGED #11"
+has "merge-queue: 1 merged, left: #14 (CONFLICT)"; notcalled "pr merge 14"
+
+fresh "the update landed but GitHub shows the new head only a few reads later: waited for, then merged"
+pr 13 $H13 13-x; echo 2 > "$STUB_D/behind-$H13"; echo "OPEN false $N13 13-x main" > "$STUB_D/update-13"; echo 3 > "$STUB_D/update-13.lag"
+echo src/y.ts > "$STUB_D/files-13"; echo docs/other.md > "$STUB_D/cmp-$H13-$N13"; echo pass > "$STUB_D/checks-$N13"
+run land 13 --poll 0
+code 0; has "updated #13: c131313 -> d131313"; has "MERGED #13: d131313"; hasnt "CONFLICT"
+
+fresh "the update answered but the head never moved: TIMEOUT, no merge"
+pr 14 e141414 14-y; echo 1 > "$STUB_D/behind-e141414"
+run land 14 --poll 0
+code 3; has "TIMEOUT #14: its branch was updated, but its head did not move within 90 s - queue it again"; notcalled "pr merge"
+
+fresh "the remote branch already gone (the repository deletes it on merge): still merged, exit 0"
+pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"; touch "$STUB_D/delete-fail"
+run land 11 --poll 0
+code 0; has "MERGED #11"; hasnt "deleted the remote branch"
 
 fresh "the base changed a file the PR changes: REVIEW, no merge"
 pr 15 f151515 15-z; echo 1 > "$STUB_D/behind-f151515"; echo "OPEN false 9151515 15-z main" > "$STUB_D/update-15"
@@ -177,7 +205,7 @@ pr 13 $H13 13-x; echo 2 > "$STUB_D/behind-$H13"; pr 11 $H11 11-fix; echo pass > 
 printf '777 0ld0ld0 in_progress \n' > "$STUB_D/runs-branch-11-fix"
 run land 13 11 --poll 0 --dry-run
 code 3; has "[dry-run] gh pr update-branch 13"; has "[dry-run] gh run cancel 777"
-has "[dry-run] gh pr merge 11 --squash --delete-branch --match-head-commit $H11"
+has "[dry-run] gh pr merge 11 --squash --match-head-commit $H11"
 notcalled "pr update-branch"; notcalled "pr merge"; notcalled "run cancel"
 
 fresh "status: merge states, the conflicting PRs and the pairs changing the same files"

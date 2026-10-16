@@ -8,8 +8,9 @@
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
 # in), and when the base brought changes to files the PR changes too (outside --shared), it stops for a
 # re-review of that merge; the checks of the current head waited for (all pass or skipped); a failure
-# re-runs the failed runs once, a second failure stops; then `gh pr merge --<method> --delete-branch
-# --match-head-commit <head>`, and every open PR that changes a file the merged one changed is printed
+# re-runs the failed runs once, a second failure stops; then `gh pr merge --<method>
+# --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
+# stays for cleanup-worker), and every open PR that changes a file the merged one changed is printed
 # as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
 # make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
 # files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
@@ -104,10 +105,17 @@ for item in "${prs[@]}"; do
   k="$(behind "$base" "$head")" || exit 1
   if [ "${k:-0}" != 0 ]; then
     [ "$dry" = 1 ] && { echo "[dry-run] gh pr update-branch $pr"; leave "$pr" SKIP "dry run - $k behind $base, would update its branch and wait for its checks"; continue; }
-    gh pr update-branch "$pr" >/dev/null 2>&1
-    v="$(pr_view "$pr")" || exit 1; read -r _ _ new _ _ <<< "$v"
+    out="$(gh pr update-branch "$pr" 2>&1)" ||
+      { leave "$pr" CONFLICT "$branch - $base did not merge in ($(printf '%s' "$out" | tr '\n' ' ')); its worker merges $base by hand, runs its checks and pushes, then queue it again"; continue; }
+    # GitHub answers before the PR shows its new head: read it again until it moves (about 90 s)
+    new="$head" n=0
+    while [ "$new" = "$head" ] && [ $n -lt 18 ]; do
+      [ $n -gt 0 ] && sleep $(( poll < 5 ? poll : 5 )); n=$((n + 1))
+      v="$(pr_view "$pr")" || exit 1; read -r _ _ new _ _ <<< "$v"
+    done
+    [ "$new" != "$head" ] || { leave "$pr" TIMEOUT "its branch was updated, but its head did not move within 90 s - queue it again"; continue; }
     k="$(behind "$base" "$new")" || exit 1
-    if [ "$new" = "$head" ] || [ "${k:-0}" != 0 ]; then
+    if [ "${k:-0}" != 0 ]; then
       leave "$pr" CONFLICT "$branch - $base did not merge in; its worker merges $base by hand, runs its checks and pushes, then queue it again"; continue
     fi
     came="$(q api "repos/{owner}/{repo}/compare/$head...$new" --template "$T_CMPFILES")" || exit 1
@@ -145,11 +153,14 @@ for item in "${prs[@]}"; do
     sleep "$poll"
   done
   [ "$result" = green ] || { leave "$pr" "${result%%|*}" "${result#*|}"; continue; }
-  if [ "$dry" = 1 ]; then echo "[dry-run] gh pr merge $pr --$method --delete-branch --match-head-commit $head"
+  if [ "$dry" = 1 ]; then echo "[dry-run] gh pr merge $pr --$method --match-head-commit $head"
     leave "$pr" SKIP "dry run - green, would merge"; continue; fi
-  out="$(gh pr merge "$pr" "--$method" --delete-branch --match-head-commit "$head" 2>&1)" ||
+  # no --delete-branch: gh would also delete the local branch and with it the worker's worktree, past
+  # cleanup-worker's checks (CORE §8); only the remote branch goes, cleanup-worker removes the rest
+  out="$(gh pr merge "$pr" "--$method" --match-head-commit "$head" 2>&1)" ||
     { leave "$pr" "MERGE FAILED" "$(printf '%s' "$out" | tr '\n' ' ')"; continue; }
   merged=$((merged + 1)); echo "MERGED #$pr: ${head:0:7}"
+  gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$branch" >/dev/null 2>&1 && echo "deleted the remote branch $branch"
   # the open PRs that change a file this one changed (shared ones too): their workers merge main now
   list="$(open_prs)" || exit 1
   while IFS= read -r l; do [ -n "$l" ] || continue
