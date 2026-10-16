@@ -274,7 +274,7 @@ END {
     }
     if (c == "{" || c == "[") { dep++; if (dep == 2) split("", V) }
     else if (c == "}" || c == "]") {
-      if (dep == 2 && c == "}") printf "%s\n%s\n%s\n%s\n", V["id"], V["sessionId"], V["cwd"], V["name"]
+      if (dep == 2 && c == "}") printf "%s\n%s\n%s\n%s\n", tolower(V["id"]), tolower(V["sessionId"]), V["cwd"], V["name"]
       dep--
     } else if (c == ",") key = ""
     i++
@@ -341,21 +341,23 @@ IS_OWN_END
 # session_check <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id;
 # send - a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it
 # names are all outside the project (a name an own session has too passes: it may be meant for that one)
-lc() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }   # ids are hex: a typed UUID in upper case is the same session
+# ids are hex: a typed UUID in upper case is the same session - the listing's ids and sessionIds come lower-cased
+# from AGENTS_AWK, the address is lower-cased once here: no process per listed session (a done session stays listed)
 session_check() {
-  local what="$1" a="$2" how="$3" k own=0 foreign="" re nm="" ci
+  local what="$1" a="$2" how="$3" k own=0 foreign="" re nm="" ci la
   [ -n "$a" ] || return 0
   ci=$(shopt -p nocasematch); shopt -u nocasematch
   re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
   [ "$how" = send ] && case "$a" in *' ['*']') nm="${a% \[*}" ;; esac
   read_agents
+  la="$(printf '%s' "$a" | tr 'A-Z' 'a-z')"
   k=0
   while [ $k -lt ${#ag_ids[@]} ]; do
     if [ "$how" = send ]; then
-      if [ "${ag_names[$k]}" = "$a" ] || [ "${ag_ids[$k]}" = "$a" ] || [ "${ag_sids[$k]}" = "$a" ] ||
+      if [ "${ag_names[$k]}" = "$a" ] || [ "${ag_ids[$k]}" = "$la" ] || [ "${ag_sids[$k]}" = "$la" ] ||
         { [ -n "$nm" ] && [ "${ag_names[$k]}" = "$nm" ]; }; then :; else k=$((k + 1)); continue; fi
-    elif [[ $a =~ $re ]]; then [ "$(lc "${ag_sids[$k]}")" = "$(lc "$a")" ] || { k=$((k + 1)); continue; }
-    else [ "$(lc "${ag_ids[$k]}")" = "$(lc "$a")" ] || { k=$((k + 1)); continue; }; fi
+    elif [[ $a =~ $re ]]; then [ "${ag_sids[$k]}" = "$la" ] || { k=$((k + 1)); continue; }
+    else [ "${ag_ids[$k]}" = "$la" ] || { k=$((k + 1)); continue; }; fi
     own_forms
     [ ${#owns[@]} -gt 0 ] || { eval "$ci"; return 0; }   # no project folder known: nothing to tell it by
     if [ -n "${ag_cwds[$k]}" ] && ! is_own "${ag_cwds[$k]}"; then foreign="${ag_cwds[$k]}"; else own=1; fi
