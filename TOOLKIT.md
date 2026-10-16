@@ -70,7 +70,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   running (roles/lead.md step 3, roles/worker.md step 3), one gone `done` is resumed (*Pause and
   resume*); remove a session with
   `claude rm` as its own command (some guards block compound removals).
-- **Pause and resume a session** (a core update, the owner's request, a cap — CORE §9; measured on
+- **Pause and resume a session** (a core update — UPDATE-CORE steps 4 and 6 —, the owner's request, a cap — CORE §9; measured on
   2.1.296): a session that only has to wait is told to finish its step, commit, push, report and go idle;
   a SendMessage ("continue") wakes it. To stop it outright, first record its **full** session id
   (`sessionId` in `claude agents --json` — a stopped session is listed only with `--all`), then stop it
