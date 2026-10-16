@@ -71,21 +71,49 @@ applies has an answer and the owner said yes to the summary.
 
 **How to ask.** Research first: study the project read-only (code, docs, git history, CI, existing
 rules and coordinators, connected tools) so every question comes with an informed recommendation. Ask
-with the multiple-choice question tool (in Claude Code: AskUserQuestion), 2–4 questions per round, in
-the owner's language: each has 2–4 concrete options, the **recommended option first, marked
-"(Recommended)"**, with a one-line reason from the research; the owner can always answer in their own
-words. Keep a list of open questions; an unclear answer goes back on it.
+with the multiple-choice question tool (in Claude Code: AskUserQuestion), in the owner's language; the
+owner can always answer in their own words. Keep a list of open questions; an unclear answer goes back
+on it.
+
+**The fixed questions — the same in every init, in this order, before anything else.** One setting
+per question, never two merged into one; the question and its options as below, translated, never
+reworded, added to or dropped; the options keep their order, the recommended one marked
+"(Recommended)" with a one-line reason from the research. What the list below says to explain goes in
+one short message before the round; the questions stay as written. A question that does not apply (9
+with a status line already set) is skipped. Clarifying questions — overridden rows, *Asked only when they
+apply*, follow-ups — come only after all of them.
+
+| Round | # | Header | Question | Options |
+|---|---|---|---|---|
+| 1 | 1a | Strictness | How strict should the coordinator be? (CORE §3) | *swarm* — every queued task runs, many workers, the coordinator merges · *standard* — I propose a block, you approve; I merge, you merge CI, releases and risky changes · *strict* — only tasks you name, one worker, people merge |
+| 1 | 1b | Spend | Which way should models and effort lean? No level removes a check. (CORE §7) | *balanced* — Opus by default; Fable for the hardest tasks and research · *lean* — the cheaper choice; Fable only to escalate a failed review · *thorough* — the stronger choice; Fable also verifies risky work |
+| 1 | 12 | Work mode | How will you give work? | *by task* — you name a task, it is done and reported, you name the next · *batch* — your command runs the batch recipe over the board |
+| 1 | 10 | Name | This coordinator's session name? Workers report to it; it must say which project and contain the English word `Coordinator`. | *`<Project> Coordinator`* · *my own name with `Coordinator`* |
+| 2 | 5 | State repo | Where does the coordinator's private state repository live? | *my account, private* · *the team's organization, private* · *local only — lost with the disk* |
+| 2 | 14 | Branches | Which branches does no worker ever push to, force-push or delete? `main` and `master` always. | *the found list: <names>* · *`main` and `master` only* · *my own list* |
+| 2 | 11 | Core bugs | When the coordinator core itself fails here, send the bug to its maintainer as a public issue under your gh account? Only the core's facts, nothing of the project. | *automatically* · *show me each one first* · *no — keep them here* |
+| 2 | 13 | Improve | The text of question 13 below, as written. | *show me each summary first* · *send it* · *only me* |
+| 3 | 8a | Caps | Usage caps? Over them only with your permission. | *week 90%, 5 hours 95%* · *my own caps* |
+| 3 | 8b | Fable | Does `/usage` show a *Current week (Fable)* row? | *yes* · *no* |
+| 3 | 8c | Credits | Are usage credits (paid usage beyond the plan) on? | *yes* · *no* |
+| 3 | 9 | Status line | Install the status line? It shows model, context and limits; the coordinator reads its limits from it. | *yes* · *no* |
+| 4 | 2, 3, 6, 7 | — | What the research found, one question each: "<found>. Right?" (7 only with a production) | *right* · *correct it* |
+| 4 | 4 | Sources | The sources-of-truth table as found: right? | *right* · *correct it* |
+
+The numbered list below says what each answer sets, where it is recorded and what to explain.
 
 ### 3.1 Asked — only the owner can decide
 
-1. **Strictness — swarm, standard or strict?** Show the presets table (CORE §3) and recommend from the
+1. **1a Strictness — swarm, standard or strict?** Show the presets table (CORE §3) and recommend from the
    research: *swarm* for an own project in a rush; *standard* when the owner wants to approve each block
    and the risky merges; *strict* for client work reviewed by people. In every preset a worker works on
-   its own inside its task and returns a finished PR. Then: which rows, if any, this project overrides.
-   With it, the **spend level** (CORE §7): *balanced* (recommended) · *lean* when limits are tight or the
-   plan is small · *thorough* when mistakes cost more than tokens. It leans model and effort choices and
-   sets when the top rung (Fable) is used — lean: only to escalate after a failed review; balanced: also
-   the hardest tasks and research; thorough: also verifying risky work — never removes a check.
+   its own inside its task and returns a finished PR. Which rows, if any, this project overrides is a
+   clarifying question, after the fixed ones.
+   **1b The spend level** (CORE §7), its own question — any of the nine pairs is valid: *balanced*
+   (recommended) · *lean* when limits are tight or the plan is small · *thorough* when mistakes cost more
+   than tokens. It leans model and effort choices and sets when the top rung (Fable) is used — lean: only
+   to escalate after a failed review; balanced: also the hardest tasks and research; thorough: also
+   verifying risky work — never removes a check.
 2. **What we build:** the product, for whom, the current milestone and what "done" means for it —
    proposed from the README, the board, a plan document.
 3. **Who is who:** solo or team; who owns the scope; who accepts work, how and where (the owner, QA, a
@@ -110,10 +138,10 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    filled in; confirm (CORE §5).
 7. **Production** — only if the project has one: real users or money; the backup before an
    irreversible change (command, destination); release flags for what acts on real users.
-8. **Budget:** usage caps (default: weekly 90%, short window 95%, over only with permission). The
-   ladder is detected (CORE §7) and shown in 3.2, with two questions a probe cannot answer (one-time
-   step `fable-on-plan`): "does `/usage` show a *Current week (Fable)* row? are usage credits on?" —
-   explain: on Max and premium Team / Enterprise seats Fable shares the weekly limit, burns it faster and
+8. **Budget**, three questions: **8a** usage caps (default: weekly 90%, short window 95%, over only with
+   permission). The ladder is detected (CORE §7) and shown in 3.2, with two questions a probe cannot
+   answer (one-time step `fable-on-plan`): **8b** "does `/usage` show a *Current week (Fable)* row?",
+   **8c** "are usage credits on?" — explain: on Max and premium Team / Enterprise seats Fable shares the weekly limit, burns it faster and
    may use up to half of it; on Pro and standard seats it runs on paid usage credits only, and a probe
    succeeds there too when credits are on. No row → Fable stays off the ladder; credits on → the
    coordinator says that the guard rail on Fable's weekly share is then the only stop (CORE §7).
@@ -121,16 +149,16 @@ words. Keep a list of open questions; an unclear answer goes back on it.
    settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
    coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
    *No:* nothing installed; the coordinator asks about limits when it matters.
-10. **The coordinator's name.** Explain in the question: workers, leads and other sessions find this
+10. **The coordinator's name.** Explain: workers, leads and other sessions find this
     coordinator by its session name — they send their reports to it, and when that name is not found
     they look for a session whose name contains `Coordinator` in this project's folder; with several
-    projects on one machine, each has its coordinator, so the name must say which project. Options:
-    *`<Project> Coordinator`* (recommended — the project's short name, e.g. `Shop Coordinator`) · the
-    owner's own name, which **must contain the English word `Coordinator`** (the fallback looks for
-    it; a translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
+    projects on one machine, each has its coordinator, so the name must say which project.
+    Recommended: *`<Project> Coordinator`*, the project's short name (e.g. `Shop Coordinator`); the
+    owner's own name **must contain the English word `Coordinator`** (the fallback looks for it; a
+    translated word breaks it). Recorded in `PROJECT.md` *Settings*; then the owner renames this
     session — `/rename <name>` (a session cannot rename itself) — and starts it with `claude --name
     "<name>"` from then on.
-11. **Core reports — send the core's bugs to its maintainer?** Explain in the question:
+11. **Core reports — send the core's bugs to its maintainer?** Explain:
     - **why it matters:** the maintainer can fix only the bugs that reach them. A bug of the core that
       nobody reports stays — in this project and in every other one; a reported one comes back fixed
       with the next "update the core", and this project then proves the fix itself.
@@ -142,17 +170,15 @@ words. Keep a list of open questions; an unclear answer goes back on it.
       project: no names, paths, code or customers ([CORE-FINDINGS.md](CORE-FINDINGS.md)). The issue is
       public and under the owner's account.
     - **saying no is fine:** nothing is sent; the findings stay in the file and can be passed on by hand.
-    Options: *automatically* (recommended) · *show me each one first* (recommended for client work) ·
-    *no — keep them here, I pass them on by hand*. Recorded in `PROJECT.md` *Settings*; changed later
-    with "settings".
+    Recommended: *automatically*; *show me each one first* for client work; with *no* the owner passes
+    them on by hand. Recorded in `PROJECT.md` *Settings*; changed later with "settings".
 12. **Work mode — how do you give work?** Explain: the coordinator has no cycle of its own; cleanup,
-    syncing the state and core reports run on events in every mode (CORE §4). Options: *by task*
-    (recommended for solo work) — you name a task, it is done and reported, you name the next · *batch*
-    (recommended for a team with a board or a tracker) — a command of yours (by default "start a new
-    cycle") runs the batch recipe over the runnable work; the recipe is agreed in the summary. In both,
+    syncing the state and core reports run on events in every mode (CORE §4). Recommended: *by task*
+    for solo work, *batch* for a team with a board or a tracker — its command is by default "start a
+    new cycle", it runs over the runnable work, the recipe is agreed in the summary. In both,
     a single task can be handed over any time. The autopilot (swarm) runs the batch recipe on its tick.
     Recorded in `PROJECT.md` *Settings*.
-13. **Help improve the coordinator?** Asked softly, in the owner's language, close to: "Would you like to
+13. **Help improve the coordinator?** The question, in the owner's language: "Would you like to
     help improve the coordinator? Once a week it would send its repository a short anonymous summary —
     numbers only: what tasks cost and how long they took, how many were reworked, where the safety guard
     got in the way. No code, no file names, nothing of what the tasks were about. You can see each
@@ -160,9 +186,9 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     Раз в неделю он будет отправлять в его репозиторий короткую обезличенную сводку — только цифры:
     сколько стоили и длились задачи, сколько было доработок, где мешала защита. Ни кода, ни имён файлов,
     ни содержания задач. Каждую сводку можно посмотреть до отправки или выключить в любой момент.")
-    Options: *show me each summary first* (recommended — and for the first week whatever the answer;
-    then the owner picks the mode, [RETRO.md](RETRO.md)) · *send it* · *only me — the weekly retro runs,
-    nothing leaves this machine*. Recorded in `PROJECT.md` *Settings* with the anonymous id
+    Recommended: *show me each summary first* — and for the first week whatever the answer; then the
+    owner picks the mode ([RETRO.md](RETRO.md)); *only me*: the weekly retro runs, nothing leaves this
+    machine. Recorded in `PROJECT.md` *Settings* with the anonymous id
     (`scripts/retro --new-id`, random, never derived from a name); the weekly retro runs in every mode.
 14. **Protected branches — which branches does no worker ever push to, force-push or delete?** The
     recommended answer is prefilled from the research: the repository's default branch, the branches
@@ -170,7 +196,7 @@ words. Keep a list of open questions; an unclear answer goes back on it.
     '.[] | select(.protected) | .name'`) — `main` and `master` are always protected and need no listing:
     the list adds to them, never replaces them. Exact names, no patterns (`release/1.0`, not
     `release/*`); the state repository's `state` is never one of them (CORE §12b).
-    Options: *the found list* (recommended) · *`main master` only* · the owner's own list. Recorded in
+    Recommended: *the found list*. Recorded in
     `PROJECT.md` *Settings* (*Protected branches*) and written to the worker safety file (*Safety
     check*): `env` `COORD_PROTECTED_BRANCHES` and the push deny rules for each listed branch.
 
@@ -245,7 +271,7 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
 ### 3.6 Scenarios
 
 - **An empty folder or just an idea.** Say in one line what is missing (no git, no code, no tracker).
-  Ask questions 1–3 (the idea may be one line, "an online shop") and "send everything useful you have"
+  Ask the fixed questions, then 2 and 3 (the idea may be one line, "an online shop") and "send everything useful you have"
   (a brief, designs, links, a product to copy or replace). Then, **with the owner's yes, research**: one
   or more researcher subagents or sessions (§4b) on how it can be built — candidate stacks,
   architecture, hosting, services, costs and limits — returned as **an options table with a

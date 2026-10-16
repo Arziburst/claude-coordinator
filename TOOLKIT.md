@@ -280,6 +280,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (`mcp__<db>__execute_sql`, `apply_migration`, branch reset / merge / delete); function deploys and
   secrets; production deploys (`vercel --prod*`, `vercel promote*`, `vercel rollback*`, `vercel env *`);
   code-host settings and workflows (`gh workflow run*`, `gh secret set*`, `gh release*`, `gh api *`).
+  A deny rule matches the start of a command only: `Bash(git push*)` misses `git -C <dir> push` and
+  `cd <dir> && git push` (seen, #202), so deny rules cannot say "no push at all"; the guard's own
+  rules, which read every form, block pushes to the protected branches only.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.

@@ -28,7 +28,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-START-01 | The one start sequence | every session runs the same nine steps and then waits | START |
 | F-START-02 | One coordinator per project | a second coordinator session in the same folder is raised, never joined silently | START |
 | F-START-03 | The coordinator's name | `<Project> Coordinator`, always containing `Coordinator`, set by the owner | START |
-| F-START-04 | The init quiz | fourteen owner questions with a recommended option, then one summary for a yes | START |
+| F-START-04 | The init quiz | the same fixed questions in the same order every init, one setting each, then clarifications and one summary for a yes | START |
 | F-START-05 | Strictness presets | swarm / standard / strict set the owner's gates between tasks | START |
 | F-START-06 | Spend level | lean / balanced / thorough tilts model and effort and sets when the top rung runs | START |
 | F-START-07 | Settings | one table of the project's settings; a change is always a quiz | START |
@@ -150,7 +150,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-START-04 The init quiz
 - defined: CORE.md §3, procedures/INIT.md
 - entry: step 6 of the start sequence; a new or adopted project
-- promises: no worker and no change before every applicable question is answered and the summary gets a yes (§1.12); each question is multiple choice with the recommendation first; what the project already shows is confirmed in one table, not asked
+- promises: no worker and no change before every applicable question is answered and the summary gets a yes (§1.12); the fixed questions come first, in the same order every init, one setting each (strictness and spend level apart), their text and options as INIT 3.1 writes them, translated, the recommended option marked; clarifying questions only after them; what the project already shows is confirmed in one table, not asked
 - tested by: none
 - not covered: the quiz's wording is not checked against the fourteen questions
 
