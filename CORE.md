@@ -171,9 +171,10 @@ an empty folder, an existing project, an older coordinator and a new machine. Th
 are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work before the quiz is complete
 (§1.12).
 
-**Strictness** is asked first, with the **spend level** next to it (lean / balanced / thorough, §7):
-the preset sets the owner's gates below, the level which way model and effort choices lean; any of the
-nine pairs is valid. `PROJECT.md` records both and any row the project overrides. In every preset a worker works on its own inside its task and returns a finished PR;
+**Strictness** is asked first and the **spend level** (lean / balanced / thorough, §7) right after, as
+a question of its own: the preset sets the owner's gates below, the level which way model and effort
+choices lean; any of the nine pairs is valid. Every init asks the same fixed questions in the same
+order (INIT 3.1). `PROJECT.md` records both and any row the project overrides. In every preset a worker works on its own inside its task and returns a finished PR;
 strictness only places the owner's gates between tasks.
 
 | | swarm | standard | strict |
