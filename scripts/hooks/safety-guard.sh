@@ -340,7 +340,8 @@ IS_OWN_END
 }
 # session_check <what> <address> <id | send>: id - a UUID is a sessionId, anything else a short id;
 # send - a name (also without a trailing " [ref]"), an id or a sessionId. Blocks when the sessions it
-# names are all outside the project (a name an own session has too passes: it may be meant for that one)
+# names are all outside the project; a name is blocked when any session of another project has it, an
+# own one too (a message to a shared name may reach both: #201)
 # ids are hex: a typed UUID in upper case is the same session - the listing's ids and sessionIds come lower-cased
 # from AGENTS_AWK, the address is lower-cased once here: no process per listed session (a done session stays listed)
 session_check() {
@@ -364,6 +365,10 @@ session_check() {
     k=$((k + 1))
   done
   eval "$ci"
+  if [ $own = 1 ] && [ -n "$foreign" ] && [ "$how" = send ]; then
+    echo "Blocked by safety-guard: $what a name a session of another project has too ($foreign): it may reach that session. Give this project's session a name of its own." >&2
+    exit 2
+  fi
   [ $own = 0 ] && [ -n "$foreign" ] || return 0
   echo "Blocked by safety-guard: $what a session of another project ($foreign). Ask the owner." >&2
   exit 2
