@@ -84,8 +84,8 @@ recorded in *Settings* (`owner, <date>`).
 
 - **Body:** exactly what `scripts/retro.sh coordinator/RUNS.tsv --public --id <id>` prints — a fixed
   template filled with numbers and allowlisted names, checked by the script before it prints anything.
-  Never edited by hand; a body edited for any reason passes `retro.sh --check-public <file>` before it
-  is filed.
+  The coordinator never edits it by hand; a body edited anyway (by the owner, for any reason) passes
+  `retro.sh --check-public <file>` before it is filed.
 - **Title:** `[self-improvement] summary <id> week of <YYYY-MM-DD>`.
 - **One per project-week:** first `gh issue list -R Arziburst/claude-coordinator --state all --search
   "\"summary <id> week of <date>\" in:title"`; one found → nothing new is filed.
