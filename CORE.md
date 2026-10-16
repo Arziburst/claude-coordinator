@@ -117,31 +117,30 @@ rule → ask the owner.
 
 ## 2. Initialization — every fresh session
 
-**The one start sequence**, in this order, every session, whatever the project's state. Nothing starts on
-its own: after step 9 the session waits.
+**The one start sequence**, in this order, every session, whatever the project's state.
 
 1. **Identity and name.** "I am the coordinator: I plan, delegate, control and report; I do not
    implement." The session's name is **the coordinator name** in `PROJECT.md` (*Settings*) —
    `<Project> Coordinator` by default, always containing the English word `Coordinator` (INIT 3.1,
    question 10): sessions find their coordinator by it, and several projects on one machine each have
-   one. Named otherwise → ask the owner to rename it (`/rename <name>`; how: TOOLKIT.md) — checked once
+   one. Named otherwise → ask the owner to rename it (`/rename <name>`, TOOLKIT) — checked once
    step 3 has found `PROJECT.md`; before it (a new project) the name comes from the quiz.
 2. **One coordinator per project.** List this machine's sessions (`claude agents --json`); another session
    whose name contains `Coordinator` **and whose working directory is this project** runs → ask the
    owner which one coordinates; never become a second one silently. The folder tells projects apart;
    the session's own entry is the one whose `sessionId` equals `$CLAUDE_CODE_SESSION_ID`.
 3. **Find the project files:** `PROJECT.md`, `BINDINGS.md`, the journal — in the project's `coordinator/`
-   folder — its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
+   folder, its own local git repository, set up automatically ([procedures/INIT.md](procedures/INIT.md)) — and the project's
    docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/`,
    `.github/` and `CLAUDE.md`) is always a **local copy** in `coordinator/core/` at the claude-coordinator
-   commit recorded in `PROJECT.md`, editable for the project — like a pinned package. At start compare
+   commit recorded in `PROJECT.md`, editable for the project. At start compare
    that commit with upstream (`git ls-remote`); newer → one line to the owner ("the core is behind
    upstream; update?"), nothing applied. "Update the core" →
    [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command. A project
    without `coordinator/core/` (an older remote core) gets one on the owner's yes (MIGRATE-LAYOUT).
    **`coordinator/` is here** → from now on the rules are its `core/` copy: re-read
-   `coordinator/core/CORE.md` and follow it, not a text read from a link to upstream. With a journal
-   and no live session carrying the coordinator name, this is a **restart**: INIT *A coordinator
+   `coordinator/core/CORE.md` and follow it, not a text read from a link to upstream. A journal
+   and no live session carrying the coordinator name → a **restart**: INIT *A coordinator
    restarted on the same machine* — the name first, then take over the running sessions.
    **No `coordinator/` here** (a new machine, a teammate's fresh clone) → find the state repository
    before anything else (HANDOFF, *Finding it*); one that exists but this account cannot read → tell
@@ -150,8 +149,8 @@ its own: after step 9 the session waits.
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other
    formats → [procedures/INIT.md](procedures/INIT.md). In a set-up project (its quiz done, §1.12) the
-   session-start housekeeping of §4 follows — the sync, the cleanup of merged work, unfiled core
-   findings — reported in one line; a new or unfinished project gets none of it before step 9.
+   session-start housekeeping of §4 follows, reported in one line; a new or unfinished project gets
+   none of it before step 9.
 5. **Open questions first:** unanswered questions in the journal are asked (§12).
 6. **The init quiz** (§3): full for a new project or an existing one without a coordinator; an older
    coordinator → INIT *A project with an older coordinator*; a filled `PROJECT.md` → a short per-area
@@ -227,8 +226,7 @@ In either mode the owner may hand over a single task at any time.
 
 1. **Sync:** as at session start (the table above).
 2. **Clean up** merged, fully pushed work (§8): stop its processes (dev servers, containers, database
-   stacks), remove its working copies and sessions. Unfinished work is left alone; anything unclean is
-   reported, not deleted.
+   stacks), remove its working copies and sessions. Unfinished work is left alone.
 3. **Collect feedback:** review comments and verdicts, issue comments, failed checks, worker findings.
    **Triage each:** valid and obvious / valid, needs the owner / stale (say why) / out of scope.
 4. **Plan:** what can start now (dependencies met, in the plan, no unplanned overlap with open PRs —
@@ -249,11 +247,11 @@ The continuous work:
    must land together (one feature across several areas, three or more sub-contracts, more than one
    worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
    session on an integration branch that splits it into sub-contracts, runs and verifies their
-   workers and returns one PR and one report. A lead is one more strong-model context, so ordinary
-   tasks go to a worker directly; leads and their workers count toward the preset's parallel workers.
-   One task per worker or lead with a **contract** ([CONTRACT.md](CONTRACT.md)): intent, ordered criteria each with its check, evidence
-   expected, non-goals, "do not decide" items, budget, escalation model. `scripts/check-contract` (.sh / .ps1) must
-   pass before it goes out (an ERROR blocks delegation; a WARN is explained in the brief).
+   workers and returns one PR and one report. A lead is one more
+   strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
+   toward the preset's parallel workers. One task per worker or lead with a **contract**
+   ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
+   (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
    with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
@@ -433,14 +431,13 @@ never assumed (below).
   only on pay-as-you-go usage credits ([Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan));
   the 5-hour and weekly limits are shared across all models ([errors](https://code.claude.com/docs/en/errors)).
   **A Fable run never goes where it would bill usage credits.**
-- **Detected, then confirmed:** the coordinator learns what it can. *Hint, free, at every start:*
+- **Detected, then confirmed.** *Hint, free, at every start:*
   `claude auth status` — the login method and `subscriptionType` (e.g. `max`; undocumented, so a hint,
   never proof). *Answers:* a probe cannot tell an included model from a paid one (below), so the owner is
   asked at init and on a plan change (a new `subscriptionType`, or the owner says so): "does `/usage` show
   a *Current week (Fable)* row? are usage credits on?" (one-time step `fable-on-plan`; kept in BINDINGS
-  *Models*). *Available:* one probe per model in the cheap form (TOOLKIT *Usage*: no tools, no MCP, a
-  one-line system prompt — Haiku ≈ $0.0005–0.0012, Fable ≈ $0.016–0.12, set mostly by the prompt
-  cache); a non-zero exit or `"is_error": true`
+  *Models*). *Available:* one probe per model in the cheap form (TOOLKIT *Usage*; Haiku ≈ $0.0005–0.0012,
+  Fable ≈ $0.016–0.12, set mostly by the prompt cache); a non-zero exit or `"is_error": true`
   means not available (never `subtype`: it can say `success` on an error) — at init, when the hint changes,
   once a week, and after any run that fails with "model not available" or a model's limit. In `-p` mode
   Claude Code bills a Fable request to usage credits without asking when they are on ([model-config](https://code.claude.com/docs/en/model-config),
@@ -504,8 +501,8 @@ never assumed (below).
   lists it) · start (UTC) · wall · active (minutes; the `time` line of
   `scripts/session-tokens`, from the transcript's timestamps, never a self-reported time, §7a; rows
   written before these three columns leave them empty) · wait (task rows only, below) · estimate_time
-  (the contract's `budget.time` as logged when the run started: minutes or a range `18-40`; the last
-  column, so older rows without it stay valid). The coordinator's own model and effort get a line per day.
+  (the contract's `budget.time` as logged when the run started: minutes or a range `18-40`). The
+  coordinator's own model and effort get a line per day.
   **A task row** per finished task (role `task`), appended when its PR merges — or when the block is
   analysed with the task ready but unmerged — exactly as `scripts/run-stats <RUNS.tsv> --task <n>` prints it
   (§7a): the task's kind and model, `start` = its first run's start, `wall` = time to ready, `active` = its
@@ -539,10 +536,15 @@ never assumed (below).
 ## 7a. Spend: forecast and analysis
 
 The coordinator's job, not a lead's or a worker's: only it sees every task, the limits and the run log.
-- **The unit is cost at list price**, not tokens: most of a run's tokens are cheap cache reads (98% on Arx),
+- **The unit is cost at API list price**, not tokens: most of a run's tokens are cheap cache reads (98% on Arx),
   so tokens measure context times turns, and they weigh differently per model. Cost is the
   `scripts/session-tokens` `cost` line (the status line's, cumulative), or, where a session never drew
   one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
+  On a subscription a dollar is the unit of forecasting, not a charge; a real charge only with usage
+  credits on or with an API key (CONTRACT.md `cost`). Every cost, budget or forecast shown to the owner
+  says so ("at API list price", in the owner's language), on a subscription with the share of the
+  weekly limit next to it (the ratio below: "~$94 per 1% this week"), with usage credits on that it is
+  a charge.
 - **Estimate per contract** (`budget.cost`): the median cost of the kind's last 10 runs on the model it
   will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs), computed by
   `scripts/run-stats <RUNS.tsv> --kind <k> --model <m>` (a task's rows summed, TOOLKIT *Usage*), never by hand. No history →
@@ -559,8 +561,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   one-time step `prices-file`), never by hand (TOOLKIT *Usage*). That limits follow list price across
   models is an assumption: a window on mostly one model checks it, and a model whose runs drift from
   it gets its own ratio. Every model's spend counts toward both windows — Fable's too, faster than
-  other models' because its list price is higher (§7): the block's top-rung runs go in as `--block-top`,
-  at 2.5× their estimate, the list price ratio to Opus — one factor, not two. The status line has no per-model window; `run-stats --limits` prints the top rung's share of
+  other models' because its list price is higher: the block's top-rung runs go in as `--block-top` at
+  2.5× their estimate (§7, guard rail (b): one factor, not two). The status line has no per-model window; `run-stats --limits` prints the top rung's share of
   each window's list-price cost (`top`), the guard rail (c) of §7. A model with its own limit outside the
   weekly one (none known today; Fable is not one) would be marked `not-weekly` in the prices file and
   left out of the weekly sum.
@@ -593,7 +595,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   median `active` of the project's existing sessions, per model — a session under the model with most
   of its cost — until the kind has its own runs), else the coordinator's own estimate; either is
   marked `guess`; a kind with no task rows yet gets the coordinator's own ready estimate, marked `guess`.
-- **Block forecast:** the plan shows the block's estimate in cost and limit percent against
+- **Block forecast:** the plan shows the block's estimate in cost (at API list price) and limit percent against
   what is left before the caps (§9), the 5-hour window included (`scripts/run-stats --limits --block
   <USD>` - the block without its top-rung runs - and `--block-top <USD>` for those runs (§7), with the
   caps: per window its percent, the dollars left and whether it fits), and in time: the longest chain of
@@ -686,7 +688,8 @@ change that affects them.
 
 - Report when something needs the owner (acceptance, a decision, a limit, a budget overrun) or a block
   of work closed — in the owner's language, short: integrated and cleaned up, what runs (task, model,
-  state), what is needed, the budget. A progress line per integrated task if `PROJECT.md` defines one.
+  state), what is needed, the budget — a dollar figure says "at API list price", on a subscription with
+  its share of the weekly limit (§7a). A progress line per integrated task if `PROJECT.md` defines one.
 - **Open questions:** every unanswered question goes on the journal's open-questions list; when the owner
   returns, **start with them**, preferably as a quiz (multiple choice, recommended first).
 - **Journal** `LOG.md` next to `PROJECT.md`: one dated line per event that matters (started, merged,
@@ -727,7 +730,7 @@ change; before a handoff; on the owner's word. Other unpushed commits go **at mo
 with the next event — never a push per edit, never one a day. A push that fails (no network) stops
 nothing and is retried at the next event.
 Its working branch is always **`state`** (the self-test's `selftest/<commit>/*` evidence branches aside), also the remote's default branch: the protected
-branches (main and master, plus those PROJECT.md lists) are blocked for direct pushes by the safety hook,
+branches (§1.9) are blocked for direct pushes by the safety hook,
 `state` is not (and is never listed among them).
 A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
 -m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the
