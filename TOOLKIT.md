@@ -17,7 +17,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   included: act only on sessions whose `cwd` is inside the project (CORE §1.17; the layers: *Safety*).
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
-  cannot tell sessions apart. The name carries the role, not the project (CORE §4): `#37 worker: <title>`.
+  cannot tell sessions apart. The name carries the role, not the project: `#37 worker: <title>`.
 - **Session or subagent, per role:** `worker` — a background session in its own working copy (named
   `#<task> worker: …`); `verifier` — a background session (`#<task> verifier: …`), or a subagent where
   `PROJECT.md` allows; `lead` — a background session (`#<task> lead: …`) in its integration branch's
@@ -327,11 +327,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
-  `tests/session-insights/run.sh` (fixture transcripts: guard blocks followed by a retry, a way around,
-  a change and a stop, a deny rule, refusals by another hook, the classifier, a safety check and the
-  user, tool errors and a repeat, errors that are only an exit code, waits, rereads, a cache rewrite, a subagent,
-  `--since` across two sessions, CRLF, a BOM and malformed lines; `--until`, `--skip-tests` and `--project`
-  on `tests/retro/claude/`), `tests/retro/run.sh` (a run log with a history, a thin previous week, a week
+  `tests/session-insights/run.sh` (fixture transcripts: the cases its top comment lists),
+  `tests/retro/run.sh` (a run log with a history, a thin previous week, a week
   with a rework, an escalation, a failed run, a lead and a subagent row, a project's own kind and an open
   wait, a self-test and a probe left out, a kinds map, logged estimates and rebuilt forecasts, an unknown result, a sibling worktree root; its journal, escapes and transcripts; the local report and the
   public body against their expected files, the folder's name absent from the public body, a week with too
@@ -411,7 +408,8 @@ BOM, models priced apart),
   [Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan);
   the limits are shared across models, [errors](https://code.claude.com/docs/en/errors)). Probe a model
   in the cheap form: `claude -p --model <id> --tools "" --strict-mcp-config --system-prompt "Reply with
-  the single word ok." --output-format json "ok"`. Its cost is a range, set mostly by the prompt cache: a
+  the single word ok." --output-format json "ok"`. Its cost (at API list price, CORE §7a *The unit*) is
+  a range, set mostly by the prompt cache: a
   cold first call writes the whole prompt to the cache, and the folder's CLAUDE.md files and the auto
   memory add to that prompt even with `--system-prompt` (measured on 2.1.296: Haiku ≈ $0.0005–0.0012,
   Sonnet ≈ $0.024, Opus ≈ $0.050, Fable ≈ $0.016–0.12; Haiku from an empty temp folder wrote 4347
