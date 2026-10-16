@@ -5,8 +5,8 @@ contract; the worker's rules come from its role, the reviewer's from [roles/veri
 so a brief carries the contract and the facts of this task, not the rules again (CORE §4, §6).
 
 The format is a YAML header, checked by eye or by a script, and a short free-text body. It replaces a
-free-form Definition of done; the content is the same (ordered pass criteria, the evidence expected,
-non-goals, "do not decide" items), made explicit so nothing is lost in the hand-off.
+free-form Definition of done with the same content — ordered pass criteria (the `acceptance` list), the
+evidence expected, non-goals, "do not decide" items — made explicit so nothing is lost in the hand-off.
 
 ## The contract
 
@@ -56,18 +56,20 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
   result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
-- **`cost`**: the coordinator's estimate in dollars at list price (CORE §7a, `scripts/run-stats`) — cost, not tokens: most
-  tokens are cheap cache reads, so a token count measures context times turns, not spend. A lead fits
-  its sub-contracts inside it and stops to ask when a run goes over twice its own estimate.
-- **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`) —
-  from `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract warns only when it is
-  there and is neither; a contract without it is fine.
+- **`cost`**: the coordinator's estimate in dollars at API list price (CORE §7a, `scripts/run-stats`):
+  on a subscription the unit of forecasting, not a charge; a real charge only with usage credits on or
+  with an API key. Cost, not tokens: most tokens are cheap cache reads, so a token count measures
+  context times turns, not spend. A lead fits its sub-contracts inside it and
+  stops to ask when a run goes over twice its own estimate.
+- **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`), from
+  `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract
+  warns only when it is there and is neither; a contract without it is fine.
 - **`escalate_to`**: when a worker's result fails review for a reason a stronger model would fix, the
   coordinator restarts the contract on this model with the failed report attached (CORE §7) — once, the
-  top rung only within CORE §7's guard rails (else Opus at its highest effort); a
-  second failure goes to the owner, not to another restart. A stuck worker (a `blocked` report) is
-  helped or split (CORE §4), which spends no escalation. A model that is not stronger than `model`
-  gives no second chance: check-contract warns.
+  top rung only within CORE §7's guard rails (else Opus at its highest effort); a second failure goes
+  to the owner, not to another restart. A stuck worker (a `blocked` report) is helped or split
+  (CORE §4), which spends no escalation. A model that is not stronger than `model` gives no second
+  chance: check-contract warns.
 
 ## The report
 
@@ -89,10 +91,11 @@ core_findings: []                  # a suspected fault of the core itself, with 
 ---
 ```
 
-A **lead** (roles/lead.md) adds `runs` — one entry per run under it, its own session last; tokens,
-cost and time are read with `scripts/session-tokens`, never self-reported (`source`: `status` — the status
-line's cost; `prices` — the transcript's tokens per model times the ladder's list prices; `start`,
-`wall`, `active` — its `time` line, minutes), and the coordinator copies them into the run log (CORE §7):
+A **lead** (roles/lead.md) adds `runs`: one entry per run under it, its own session last. Tokens,
+cost and time are read with `scripts/session-tokens`, never self-reported (`source`: `status` — the
+status line's cost; `prices` — the transcript's tokens per model times the ladder's list prices;
+`start`, `wall`, `active` — its `time` line, minutes; a cost at API list price, as `cost` above). The
+coordinator copies them into the run log (CORE §7):
 
 ```yaml
 runs:
@@ -100,14 +103,13 @@ runs:
   - {task: 37, role: lead, model: opus, effort: medium, estimate: 12, cost: 9.4, tokens: 19800000, source: prices, result: ready, start: n/a, wall: n/a, active: n/a, estimate_time: 60-90}
 ```
 
-**Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a log,
-a command and its output); everything else is `claim`; a `check: owner` criterion is `owner` until the owner accepts it (the steps
-are in the report). Only the reviewer can turn a claim into
-`review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. **A CI run
-is an oracle only for the commit it ran on:** its proof names the run and that commit, and it counts
-for a verdict only when that commit is the head the reviewer reviewed — a run on an older head is a
-`claim`. A check the reviewer may not run (a shared device, a lock) can rest on the worker's raw output
-for the reviewed commit, attached where `how` says: it is shown as `oracle (worker's run, <commit>)`,
-never as plain `oracle` (CORE §6). Reports,
-the journal and the owner's summary keep the class, so "tested", "reviewed" and "said so" never look the
-same.
+**Evidence classes.** A worker marks a result `oracle` only with a pointer to the proof (a CI run, a
+log, a command and its output); everything else is `claim`; a `check: owner` criterion is `owner`
+until the owner accepts it (the steps are in the report). Only the reviewer can turn a claim into
+`review`-confirmed, and only an oracle the reviewer has seen counts as `oracle` in the verdict. **A CI
+run is an oracle only for the commit it ran on:** its proof names the run and that commit, and it
+counts for a verdict only when that commit is the head the reviewer reviewed — a run on an older head
+is a `claim`. A check the reviewer may not run (a shared device, a lock) can rest on the worker's raw
+output for the reviewed commit, attached where `how` says: it is shown as `oracle (worker's run,
+<commit>)`, never as plain `oracle` (CORE §6). Reports, the journal and the owner's summary keep the
+class, so "tested", "reviewed" and "said so" never look the same.

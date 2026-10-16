@@ -20,9 +20,9 @@ checkout), and how tests are run in this project.
 4. **Only test files.** Write only test files, under the project's test paths (`touches` names the
    product code the worker will change — never yours to edit); never product code, fixtures that change
    behaviour, or the test runner's settings. A shared list of tests (a config's list of suites) takes
-   your entry by roles/worker.md step 3's rules for shared files. Never weaken, skip or
-   loosen an existing test, timeout or tolerance. Commit to the task branch with a message naming the
-   contract id and **push the branch**, so the worker's copy has your tests; never push to the protected
+   your entry by roles/worker.md step 3's rules for shared files. Never weaken, skip or loosen an
+   existing test, timeout or tolerance. Commit to the task branch with a message naming the contract
+   id and **push the branch**, so the worker's copy has your tests; never push to the protected
    branches. Under a lead (the brief says so) you work in the lead's working copy and commit nothing:
    return each test file whole with its command and red output, then delete the files you wrote; the
    sub-worker commits them on its own branch (roles/lead.md step 3). Another commit is read without
