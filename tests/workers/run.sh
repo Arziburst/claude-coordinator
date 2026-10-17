@@ -593,8 +593,17 @@ expect_in '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalCont
 expect_in "read your brief in full with the Read tool: $cfgw/coordinator/briefs/5e550000-0000-4000-8000-000000000001.md"
 LAST="$(printf '%s' '{"session_id":"5e550000-0000-4000-8000-0000000000ff"}' | CLAUDE_CONFIG_DIR="$cfgw" ac worker | tr -d '\r')"
 expect_in "re-read your role file and the contract your brief gave"
-LAST="$(printf '%s' "$j" | ac coordinator | tr -d '\r')"
+jc='{"session_id":"c0c00000-0000-4000-8000-000000000001","cwd":"/work/proj","source":"compact"}'
+LAST="$(printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
 expect_in "re-read in full with the Read tool: /work/proj/coordinator/core/CORE.md (section 1, the hard rules, first)"
+# the coordinator variant also loads in a worker launched from the project root (#217): silent there -
+# a session with a kept brief, or one working in a worktree (either separator)
+out="$(printf '%s' "$j" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
+[ -z "$out" ] || { echo "FAIL: the coordinator variant spoke in a session with a kept brief: $out"; fail=1; }
+for wc in '/work/proj/.claude/worktrees/12-fix' 'E:\\work\\proj\\.claude\\worktrees\\12-fix\\src'; do
+  out="$(printf '{"session_id":"c0c00000-0000-4000-8000-000000000002","cwd":"%s"}' "$wc" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
+  [ -z "$out" ] || { echo "FAIL: the coordinator variant spoke in a worktree ($wc): $out"; fail=1; }
+done
 LAST="$(printf 'not json' | ac coordinator | tr -d '\r')"
 expect_in '"additionalContext":"The conversation was just compacted'
 out="$(printf '%s' "$j" | ac nobody 2>/dev/null)"; rc=$?
