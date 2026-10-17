@@ -241,11 +241,11 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: none known
 
 ### F-WORK-06 Tests first
-- defined: roles/tester.md, CORE.md §4
+- defined: roles/tester.md, CORE.md §4, CONTRACT.md, scripts/check-contract.sh, scripts/check-contract.ps1
 - entry: an oracle criterion with no test yet; every risky change (§5)
-- promises: the tester writes only test files; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- promises: the tester writes only test files; every contract records the decision in `tests_first` — `yes`, or `no` with its reason — and check-contract refuses one without it or with neither; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
+- tested by: tests/check-contract/run.sh (`tests_first` missing, `maybe`, a bare `no`; `yes` and a quoted `no - <why>` pass)
+- not covered: whether a `no` is right, and whether the tester then ran, rest on the coordinator and the verifier
 
 ### F-WORK-07 Leads for large tasks
 - defined: roles/lead.md, CORE.md §4, TOOLKIT.md

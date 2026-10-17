@@ -264,7 +264,9 @@ The continuous work:
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent
    ([roles/tester.md](roles/tester.md)): create the task's working copy and branch first (the
    start-worker steps without the launch), run the tester there; it pushes its red tests, and they and
-   their commands go into the worker's brief, to be made green unchanged.
+   their commands go into the worker's brief, to be made green unchanged. The contract's `tests_first`
+   records the decision every time: `yes`, or `no` with its reason (no `oracle` criterion needs a new
+   test, and the change is not §5); check-contract refuses a contract without it (#212).
 4. **Control:** every session started, by any script, gets `SendMessage(to: <its name>,
    notify_when_idle: true)` right after it starts (start-worker prints the line), and its brief names
    the coordinator's current session name as the report address (`--report-to`), never a guessed

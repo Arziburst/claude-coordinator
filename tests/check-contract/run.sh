@@ -16,7 +16,7 @@ win=""; command -v cygpath >/dev/null 2>&1 && { win=1; core="$(cygpath -m "$core
 cp "$here"/*.md "$tmp/"
 # and a body line that reads like a key: below the header it is not part of the contract
 { printf '\357\273\277'; cat "$core/tests/selftest/contract.md"; printf 'acceptance: is read from the header only\n'; } > "$tmp/bom.md"
-files=(how-in-text.md quoted.md empty-id-title.md misplaced.md empty-how.md commented-defaults.md budget-time.md budget-time-ok.md feature-scope.md bom.md missing.md)
+files=(how-in-text.md quoted.md empty-id-title.md misplaced.md empty-how.md commented-defaults.md budget-time.md budget-time-ok.md feature-scope.md tests-first-missing.md tests-first-bad.md tests-first-no-reason.md bom.md missing.md)
 cd "$tmp" || exit 1
 if [ "$kind" = ps ] && [ -n "$win" ]; then
   a=""; for f in "${files[@]}"; do a="$a '$f'"; done

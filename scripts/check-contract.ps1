@@ -3,7 +3,8 @@
 #   pwsh -File scripts/check-contract.ps1 <contract.md|contract.yaml> ...      (or: powershell -File ...)
 # The contract is the YAML header between `---` lines, or a top-level `contract:` block.
 # ERROR (exit 1): a required key missing, id / title / intent empty, an acceptance item not led by `criterion:`,
-# a criterion without a valid check, an oracle without `how` (empty, blank or null is none), non_goals without
+# a criterion without a valid check, an oracle without `how` (empty, blank or null is none), `tests_first`
+# missing or neither yes nor no with its reason (CORE section 4 step 3), non_goals without
 # the two default lines (a line commented out does not count); a file
 # that cannot be read (`<file>: cannot read`). WARN: budget.model, .escalate_to, .cost or touches missing; no
 # oracle criterion; budget.time (optional) present but not minutes or a range (25, 18-40).
@@ -15,7 +16,7 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 10 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 11 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -65,6 +66,14 @@ foreach ($f in $Files) {
   }
   foreach ($k in 'id', 'title', 'intent') {
     if ($txt.ContainsKey($k) -and (Blank $txt[$k])) { $out.Add("ERROR ``$k`` is empty"); $ne++ }
+  }
+  # tests first (CORE section 4 step 3): yes, or no with its reason - never left undecided
+  if (-not $txt.ContainsKey('tests_first')) { $out.Add("ERROR missing ``tests_first`` (yes, or no with the reason: CORE ${sect}4 step 3)"); $ne++ }
+  else {
+    $tf = (Val $txt['tests_first']).ToLower()
+    if ($tf -cnotmatch '^yes([ \t,:;(]|$)' -and $tf -cnotmatch ('^no[ \t]*(' + [char]0x2014 + '|-|:|,|[(])[ \t]*[^ \t)]')) {
+      $out.Add("ERROR ``tests_first`` is neither yes nor no with its reason ($(Val $txt['tests_first']))"); $ne++
+    }
   }
 
   # acceptance criteria; each item starts with `- criterion:` (the first `-` line sets the items indent)
