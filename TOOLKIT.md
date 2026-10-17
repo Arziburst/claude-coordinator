@@ -47,7 +47,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   coordinator CORE.md (§1 first), PROJECT.md, BINDINGS.md and LOG.md's open questions. It prints JSON
   `additionalContext`: plain hook output never reaches the model. The worker variant is in the
   settings examples, the coordinator variant goes in its own settings (one-time step
-  `after-compact-hook`). The compaction threshold stays Claude Code's default.
+  `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
+  load it, and it stays silent in a session with a kept brief or working in a worktree (#217). The
+  compaction threshold stays Claude Code's default.
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
   "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
   trusted (confirmed on Claude Code 2.1.296, Windows). start-worker therefore starts the session in
