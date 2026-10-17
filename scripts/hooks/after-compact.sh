@@ -6,7 +6,9 @@
 # worker: the brief start-worker saved for this session, <config>/coordinator/briefs/<session_id>.md
 # (<config> = $CLAUDE_CONFIG_DIR, else ~/.claude); without one, its role file and the contract in its brief.
 # coordinator: coordinator/core/CORE.md (section 1 first), PROJECT.md, BINDINGS.md and LOG.md's open
-# questions under the session's folder, then the running sessions and the open PRs.
+# questions under the session's folder, then the running sessions and the open PRs; silent in a session
+# that is a worker (a kept brief, or a folder in .claude/worktrees): the project's settings, where this
+# variant sits, load in workers launched from the same root too (#217).
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
 # does not reach the model), always exits 0. Windows: after-compact.ps1, the same text.
 role="${1:-}"
@@ -25,6 +27,11 @@ if [ "$role" = worker ]; then
     msg="$lead Before your next step, re-read your role file and the contract your brief gave (its criteria, non_goals and do_not_decide), then check your branch with git status and git log. Follow them as written, not the summary."
   fi
 else
+  # the coordinator variant sits in the project's settings, which a worker launched from the same root
+  # loads too (#217): a session with a kept brief, or working in a worktree, is a worker - not this one
+  b=""; case "$sid" in *[!0-9a-fA-F-]*|"") ;; *) b="$cfg/coordinator/briefs/$sid.md" ;; esac
+  wd="$(printf '%s' "$cwd" | tr '\\' '/')"
+  if { [ -n "$b" ] && [ -f "$b" ]; } || case "$wd" in */.claude/worktrees/*|*/.claude/worktrees) true ;; *) false ;; esac; then exit 0; fi
   p="${cwd:+$cwd/}coordinator"
   msg="$lead Before your next step, re-read in full with the Read tool: $p/core/CORE.md (section 1, the hard rules, first), $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
 fi
