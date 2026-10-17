@@ -36,7 +36,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   itself, and no CLI command renames a running one (`claude --bg --resume <id> --name …` starts a
   copy). `claude agents --json` shows each session's `name`, `cwd`, `id` and `sessionId`; only the name
   works as a SendMessage address, and only the name survives a `claude respawn` (2.1.296).
-- **Model:** `--model`. **Effort** for `--bg` *(unconfirmed)* — put the effort in the brief if no flag works.
+- **Model:** `--model`. **Effort:** `--effort low|medium|high|xhigh|max` (measured: a `--bg` session's
+  transcript records it), passed by start-worker's `--effort` / `-Effort`; without it a session runs at
+  the user's default effort for its model (#211).
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
   "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
   trusted (confirmed on Claude Code 2.1.296, Windows). start-worker therefore starts the session in
