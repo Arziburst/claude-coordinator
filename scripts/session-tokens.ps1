@@ -22,6 +22,10 @@ param([string]$Session, [string]$Since, [switch]$Prune)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
+# an empty or blank id would match every session as a prefix (#209)
+if ($PSBoundParameters.ContainsKey('Session') -and -not $Session.Trim()) {
+  [Console]::Error.WriteLine('empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)'); exit 2
+}
 if (-not $Session -and -not $Since -and -not $Prune) {
   Get-Content -LiteralPath $PSCommandPath -TotalCount 17 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }

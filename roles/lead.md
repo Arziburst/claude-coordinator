@@ -94,7 +94,8 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
      contains it, never add it to your own line a second time. **Your own session** is read the same
      way at each stage (each run's end, before each start, before the report) by
      `$CLAUDE_CODE_SESSION_ID` (PowerShell: `$env:CLAUDE_CODE_SESSION_ID`), the full id Claude Code
-     sets in every session; its cost and time count in the budget check below. It lags by the turn in
+     sets in every session — empty in a tool that does not pass it on: then the `sessionId` your own
+     name has in `claude agents --json`; its cost and time count in the budget check below. It lags by the turn in
      progress (on your first turn zero or only part of it: "not yet", not your cost; TOOLKIT *Usage*).
    - **Then** delete that run's status file (`~/.claude/coordinator/sessions/<sessionId>.json`,
      TOOLKIT *Usage*); **only then** `claude rm <id>` (the short id) and check that `claude agents

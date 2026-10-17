@@ -43,10 +43,13 @@ expect() {
   echo "ok   $name"
 }
 cl="$here/claude"; t="$here"
+E="empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)"
 expect "a session, its subagent, the cost line" 0 "$t/expected.txt" - -- "$cl" s1
 expect "a session without subagents" 0 "$t/expected-s2.txt" - -- "$cl" s2
 expect "a subagent by its agentId" 0 "$t/expected-agent.txt" - -- "$cl" x
 expect "an ambiguous transcript prefix" 1 - "$(printf 'ambiguous id s:\ns1\ns2')" -- "$cl" s
+expect "an empty session id is refused, never every session (#209)" 2 - "$E" -- "$cl" ""
+expect "a blank session id is refused" 2 - "$E" -- "$cl" "  "
 expect "--since a UTC time" 0 "$t/expected-since.txt" - -- "$cl" --since 2026-10-05T17:00:00Z
 expect "--since with milliseconds" 0 "$t/expected-since.txt" - -- "$cl" --since 2026-10-05T17:00:00.000Z
 expect "--since without the Z" 0 "$t/expected-since.txt" - -- "$cl" --since 2026-10-05T17:00:00
