@@ -174,7 +174,7 @@ are in [procedures/INIT.md](procedures/INIT.md), read before asking. No work bef
 **Strictness** is asked first and the **spend level** (lean / balanced / thorough, §7) right after, as
 a question of its own: the preset sets the owner's gates below, the level which way model and effort
 choices lean; any of the nine pairs is valid. Every init asks the same fixed questions in the same
-order (INIT 3.1). `PROJECT.md` records both and any row the project overrides. In every preset a worker works on its own inside its task and returns a finished PR;
+order (INIT 3.1). `PROJECT.md` records both and any row the project overrides. An override that narrows or drops a step of the core (the tester, the verifier, a check, a gate) is written only on the owner's explicit yes and named as such in the summary — never worded by the coordinator on its own, and never by restating a core step shorter (#212). In every preset a worker works on its own inside its task and returns a finished PR;
 strictness only places the owner's gates between tasks.
 
 | | swarm | standard | strict |
@@ -493,7 +493,8 @@ never assumed (below).
   options — split the task, rewrite the contract, the top rung, or drop it (§12).
 - **Run log** `coordinator/RUNS.tsv` (in the coordinator's own git, never in the project's; only the
   coordinator writes it — a lead's runs come in its report): one line per finished worker, lead,
-  tester, reviewer or researcher run — date · task (`37`, or `37.2` under a lead) · role · kind (a row
+  tester, reviewer or researcher run, a tester or verifier run as a subagent too (its cost `in <the
+  parent>`, so it is not counted twice; a lead's `runs` list them, roles/lead.md step 7) — date · task (`37`, or `37.2` under a lead) · role · kind (a row
   of the table by its name, or a project's own kind under one) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
   the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
   per model times the ladder's list prices, §7a; a cell is read by its leading number, so `0.0648 prices`

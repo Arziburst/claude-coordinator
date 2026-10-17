@@ -106,7 +106,7 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
    cheaper model).
 7. **Finish.** Open the PR the parent contract names from the integration branch and return the
    report (CONTRACT.md *The report*) with every parent criterion's evidence, plus `runs` as shown
-   there: one entry per run (its estimate and estimate_time are the sub-contract's `budget.cost` and
+   there: one entry per run, each tester and verifier subagent run included, its cost `in lead` (its estimate and estimate_time are the sub-contract's `budget.cost` and
    `budget.time`; `start`, `wall` and `active` as session-tokens printed them; the coordinator writes
    them to `RUNS.tsv`), your own session last, read as in step 6 just before the report (the
    coordinator reads it again afterwards; its number is the one that counts). Suspected faults of the

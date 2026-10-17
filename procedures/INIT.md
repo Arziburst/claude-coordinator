@@ -263,7 +263,8 @@ rules, status page, issue fields). The owner changes any of them with one line a
 
 Write `PROJECT.md` (its *Settings* block first, Source per row) / `BINDINGS.md` from the answers, the
 findings and the defaults; show one summary
-grouped by section — asked, found, by default, and the differences with existing rules — and ask "yes,
+grouped by section — asked, found, by default, and the differences with existing rules; each line of
+`PROJECT.md` that narrows or drops a step of the core on a line of its own (CORE §3) — and ask "yes,
 or fix these rows". On the yes, write `coordinator/CHECKLIST.md` ([ONE-TIME.md](../ONE-TIME.md)): a line for
 every catalog row — the settings as answered, the checks as run in the setup (`done`, `failed`, `n/a`)
 or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SELFTEST.md](SELFTEST.md)).
