@@ -18,7 +18,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      project rule still wins, the owner decides whether to keep, adapt or drop it;
    - each upstream change that conflicts with a local edit, and the proposed resolution;
    - **Settings the new core's checks fail:** `selftest hooks --settings` of the scratch clone on the worker
-     safety file and the coordinator's own settings files, before anything is merged — each FAIL is a change
+     safety file and on each of the coordinator's own settings files that holds the guard (one without it
+     is "no guard: the owner's choice", CORE §1.16, never a FAIL; #223), before anything is merged — each FAIL is a change
      the project makes with the update, and each SKIP on the worker safety file a protection it does not
      use yet, offered to the owner (e.g. `COORD_PROTECTED_ROOT` not set: the working copy is not kept from
      workers' edit tools — the file gains the env value and the edit tools in the guard's matcher,
@@ -47,13 +48,18 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      as its workaround that the update makes unnecessary; after the update each is proven here and
      marked `fixed <commit>`, or goes back to `new`. A project that kept its core problems in another
      form gets the template's file, its rows converted, on the owner's yes.
+   - **In auto mode** Claude Code's classifier may refuse step 4's changes to the coordinator's own
+     configuration (the safety and settings files, `~/.claude/agents/`) as "Self-Modification", even a
+     read next to them (#221). Say so in the report and ask the owner before step 4: they approve those
+     changes in a mode that asks, or add an allow rule for them; a refusal mid-update is raised, never
+     worked around (CORE §1.16).
 4. **On the owner's yes,** first **pause** every running session of this project (CORE §1.17), so none
    works under the old rules and scripts while they change: record each one's full session id, then
    each finishes its step, commits, pushes, reports and goes idle; one that does not is stopped by its
    short id (TOOLKIT *Pause and resume*). Then merge the upstream files into the local copy, keeping the agreed local edits,
    record the new commit in `PROJECT.md`, commit in `coordinator/`, and re-read the core. If the
    scripts changed, re-run the hook's self-test and `selftest hooks --settings` on the worker safety file and
-   the coordinator's own settings files (SELFTEST step 2a). Always run `scripts/check-scripts` on the core copy
+   the coordinator's own settings files that hold the guard (SELFTEST step 2a). Always run `scripts/check-scripts` on the core copy
    and on the project's coordination scripts (the wrappers that call the core: BINDINGS), and one
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
    runs until the next worker is due. Then the **full self-test** at the new commit
