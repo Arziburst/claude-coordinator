@@ -9,6 +9,7 @@ acceptance:
   - criterion: the sync runs twice without a change
     check: oracle
     how: tests/sync.sh twice, the second run prints "no change"
+tests_first: yes
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances

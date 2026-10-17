@@ -11,6 +11,7 @@ acceptance:
     check: 'review'
   - { criterion: the owner likes the colours, check: "owner" }
   - { criterion: "the empty list prints nothing", check: 'oracle', how: "tests/empty.sh passes" }
+tests_first: "no - tests/sort.sh and tests/empty.sh exist"
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances

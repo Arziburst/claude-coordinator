@@ -15,6 +15,7 @@ acceptance:
   - criterion: b.txt holds the single line "b"
     check: oracle
     how: git show selftest/<c>/st1:b.txt prints b
+tests_first: no — the oracles are git show checks of two one-line files
 non_goals:
   - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances

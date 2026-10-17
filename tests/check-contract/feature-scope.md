@@ -7,6 +7,7 @@ acceptance:
   - criterion: the cart page lists the items
     check: oracle
     how: tests/cart.sh passes
+tests_first: yes
 non_goals:
   - no changes beyond the task's scope and its tests
   - do not weaken or loosen tests, timeouts or tolerances

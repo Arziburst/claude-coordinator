@@ -7,6 +7,7 @@ acceptance:
   - criterion: a.txt holds "a"
     check: oracle
     how: cat a.txt prints a
+tests_first: yes
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances

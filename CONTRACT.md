@@ -32,6 +32,7 @@ acceptance:                        # ordered; each criterion says how it is chec
     how: the existing tests/vr suite passes
   - criterion: the code follows the project's standards
     check: review
+tests_first: yes                   # an oracle criterion names a new test (CORE §4 step 3)
 non_goals:
   - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances
@@ -56,6 +57,9 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
   result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
+- **`tests_first`**: `yes` — the tester writes the red tests before the worker starts (CORE §4 step 3) —
+  or `no` with its reason (`no - the criteria are covered by existing tests`). Required: a decision,
+  never a default; `yes` for every §5 change and every `oracle` criterion whose test does not exist yet.
 - **`cost`**: the coordinator's estimate in dollars at API list price (CORE §7a, `scripts/run-stats`):
   on a subscription the unit of forecasting, not a charge; a real charge only with usage credits on or
   with an API key. Cost, not tokens: most tokens are cheap cache reads, so a token count measures

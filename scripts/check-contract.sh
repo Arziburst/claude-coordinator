@@ -10,12 +10,13 @@
 #     a planning gap, CONTRACT.md); an empty, blank or null `how` is none;
 #   - non_goals without the two default lines (no changes beyond … — this contract's acceptance, or "the fix" in an older contract —, do not weaken … tests …;
 #     a line commented out does not count).
+#   - `tests_first` missing, or neither `yes` nor `no` with its reason (`no - <why>`; CORE §4 step 3);
 #   - a file that cannot be read: `<file>: cannot read`.
 # WARN — allowed, but say why in the brief:
 #   - budget.model, budget.escalate_to, budget.cost or touches missing; no criterion with an oracle check;
 #   - budget.time (optional, never missed) present but not minutes or a range of them (25, 18-40).
 # Reads the structure line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
-[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
 failed=0
 for f in "$@"; do
   { [ -f "$f" ] && [ -r "$f" ]; } || { echo "$f: cannot read"; failed=1; continue; }
@@ -59,6 +60,10 @@ for f in "$@"; do
       for (k = 1; k <= 6; k++) if (!(req[k] in has)) err("missing `" req[k] "`")
       split("id title intent", req, " ")
       for (k = 1; k <= 3; k++) if ((req[k] in has) && blank(req[k])) err("`" req[k] "` is empty")
+      # tests first (CORE §4 step 3): yes, or no with its reason - never left undecided
+      if (!("tests_first" in has)) err("missing `tests_first` (yes, or no with the reason: CORE §4 step 3)")
+      else { tf = tolower(val(txt["tests_first"])); if (tf !~ /^yes([ \t,:;(]|$)/ && tf !~ /^no[ \t]*(—|-|:|,|[(])[ \t]*[^ \t)]/)
+        err("`tests_first` is neither yes nor no with its reason (" val(txt["tests_first"]) ")") }
 
       # acceptance criteria; each item starts with `- criterion:` (the first `-` line sets the items indent)
       c = 0; ok_oracle = 0; ii = -1; mis = 0

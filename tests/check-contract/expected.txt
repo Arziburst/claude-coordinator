@@ -23,5 +23,11 @@ budget-time.md: WARN  budget.time (about an hour) is not minutes or a range of m
 budget-time.md: OK (0 errors, 1 warnings)
 budget-time-ok.md: OK (0 errors, 0 warnings)
 feature-scope.md: OK (0 errors, 0 warnings)
+tests-first-missing.md: ERROR missing `tests_first` (yes, or no with the reason: CORE §4 step 3)
+tests-first-missing.md: FAIL (1 errors, 0 warnings)
+tests-first-bad.md: ERROR `tests_first` is neither yes nor no with its reason (maybe)
+tests-first-bad.md: FAIL (1 errors, 0 warnings)
+tests-first-no-reason.md: ERROR `tests_first` is neither yes nor no with its reason (no)
+tests-first-no-reason.md: FAIL (1 errors, 0 warnings)
 bom.md: OK (0 errors, 0 warnings)
 missing.md: cannot read
