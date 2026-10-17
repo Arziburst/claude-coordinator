@@ -74,6 +74,12 @@ the report notes the interruption and the resume time.
    - **Probe names:** each probe session is named `probe: …` (`--name "probe: push"`, `"probe: push (own
      settings)"`, `"probe: edit"`): `selftest verify` and `clean` find the self-test's sessions by that name
      (or `selftest`, or a `#st` task), and the retro leaves them out.
+   - **Started by the coordinator session itself**, never by a subagent — the probes here and the
+     sessions of steps 4 and 5: Claude Code's auto-mode classifier refused a subagent's launch of
+     `probe: push` ("Git Destructive", #218) that the coordinator's own launch had passed. A launch
+     refused anyway (a classifier, a permission rule) is no FAIL of the guard: the report says
+     `BLOCKED probe: <name> (launch refused: <reason>)`, the owner starts it with the same command from
+     their own terminal, and it is then checked as above; the self-test is not complete before that.
    - **The edit probe**, when the worker safety file sets `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*): a
      third probe session on the light model, started from the project root with `--settings <worker
      safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt` containing x; do not
