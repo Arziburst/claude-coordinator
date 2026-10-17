@@ -1,8 +1,10 @@
 # Start a named worker session in its own git worktree, with the safety settings applied
 # (Windows; macOS / Linux: start-worker.sh - the same steps and checks).
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
-#       -Branch 12-fix-login -Model opus -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
+#       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
 #       -ReportTo <coordinator session> [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
+# -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
+# budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
@@ -25,7 +27,7 @@
 # worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
-      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun)
+      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -37,14 +39,15 @@ function Fail([string]$m) { [Console]::Error.WriteLine($m); exit 1 }
 
 if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
-foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('BriefFile', $BriefFile),
+foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
+if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
 # Absolute paths: both files are used from inside the worktree.
 $Safety = (Resolve-Path -LiteralPath $Safety).Path; $BriefFile = (Resolve-Path -LiteralPath $BriefFile).Path
 # a relative -WorktreeRoot is taken from the current folder (git would resolve it against the repository)
@@ -255,7 +258,7 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
 }
 $brief = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
 $subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
-if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
+if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
@@ -268,7 +271,8 @@ if ($PSVersionTable.PSVersion -lt [version]'7.3') {
   $argName = ($Name -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
 }
 Push-Location -LiteralPath $from
-try { & $claude.Source --bg --name $argName --model $Model --permission-mode $Mode --settings $Safety $brief }
+$eff = @(if ($Effort) { '--effort', $Effort })
+try { & $claude.Source --bg --name $argName --model $Model @eff --permission-mode $Mode --settings $Safety $brief }
 finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it

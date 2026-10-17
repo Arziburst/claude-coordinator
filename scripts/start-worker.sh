@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start a named worker session in its own git worktree, with the safety settings applied.
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
-#       --model opus --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
+#       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
@@ -10,6 +10,8 @@
 #           repository. The hook's self-test must pass, or no worker starts. Launched from the root
 #           without env COORD_PROTECTED_ROOT in it: a notice (edit tools can reach the working copy).
 # --model is required: the coordinator picks it per task (CORE §7).
+# --effort: low, medium, high, xhigh or max, passed as claude --effort (CORE §7, the contract's budget.effort);
+# without it the session runs at the user's default effort for its model.
 # Default mode auto (the autonomous level, CORE §3); acceptEdits for the cautious level;
 # bypassPermissions is refused by this script.
 # The session starts in the repository root (--launch-from overrides it), which the owner trusts once:
@@ -30,7 +32,7 @@
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" dry=0
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" dry=0
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -39,6 +41,7 @@ while [ $# -gt 0 ]; do
     --name) need "$@"; name="$2"; shift 2 ;;
     --branch) need "$@"; branch="$2"; shift 2 ;;
     --model) need "$@"; model="$2"; shift 2 ;;
+    --effort) need "$@"; effort="$2"; shift 2 ;;
     --mode) need "$@"; mode="$2"; shift 2 ;;
     --brief-file) need "$@"; brief="$2"; shift 2 ;;
     --safety) need "$@"; safety="$2"; shift 2 ;;
@@ -51,8 +54,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
+case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
+eff=(); [ -z "$effort" ] || eff=(--effort "$effort")
 # Absolute paths: both files are used after "cd" into the worktree.
 abs() { (cd "$(dirname "$1")" && printf '%s/%s' "$(pwd)" "$(basename "$1")"); }
 safety="$(abs "$safety")"; brief="$(abs "$brief")"
@@ -214,9 +219,9 @@ if [ -n "$role" ] && [ -f "$rolef" ]; then
   else roletext="$body"; echo "role $role: roles/$role.md heads the brief"; fi
 fi
 if [ "$dry" = 1 ]; then
-  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
+  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
 else
-  ( cd "$from" && claude --bg --name "$name" --model "$model" --permission-mode "$mode" --settings "$safety" "$first
+  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$first
 
 ${roletext:+$roletext
 

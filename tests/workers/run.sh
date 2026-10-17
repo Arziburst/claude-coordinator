@@ -92,6 +92,7 @@ start() {
         --launch-from) a+=(-LaunchFrom "$2"); shift 2 ;;
         --report-to) a+=(-ReportTo "$2"); shift 2 ;;
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
+        --effort) a+=(-Effort "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -358,6 +359,16 @@ case "$(uname -s)" in Darwin|MINGW*|MSYS*|CYGWIN*)
   else echo "FAIL: git did not create 53-CASE beside the packed 53-case"; fail=1; fi
   git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/53-case" ;;
 esac
+# the effort reaches claude as --effort (#211): it was dropped, every worker ran at the user's default
+check 1 "start: an effort outside the five levels" -- start "${S[@]}" --effort turbo
+expect_in "low, medium, high, xhigh or max"
+check 0 "start: --effort in the dry run" -- start "${S[@]}" --effort xhigh --dry-run
+expect_in "--model opus --effort xhigh --permission-mode auto"
+: > "$STUB_LOG"
+check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low
+grep -q -- "--bg --name #54 worker: e --model opus --effort low --permission-mode auto" "$STUB_LOG" ||
+  { echo "FAIL: claude did not get --effort low:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/54-effort" 2>/dev/null
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
