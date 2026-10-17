@@ -257,6 +257,7 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
   }
 }
 $brief = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
+$full = $brief   # as sent, before the escaping below: kept for after a compaction
 $subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
 if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
@@ -283,6 +284,20 @@ for ($i = 0; $i -lt 20; $i++) {
   Start-Sleep -Seconds 1
 }
 if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the subscribe fails, retry it in a few seconds') }
+# the brief as sent, kept by the session's id: hooks/after-compact.ps1 points the session back to it after
+# a compaction (a summary loses rules); briefs older than 14 days are pruned
+$sid = ''
+foreach ($o in ("$(& $claude.Source agents --json 2>$null)" -replace "[`r`n]", '') -split '}') {
+  if ($o.Contains('"' + $jname + '"')) { $m = [regex]::Match($o, '"sessionId": *"([0-9a-fA-F-]+)"'); if ($m.Success) { $sid = $m.Groups[1].Value } }
+}
+if ($sid) {
+  $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+  $bd = Join-Path $cfg 'coordinator/briefs'
+  $null = New-Item -ItemType Directory -Force -Path $bd
+  [IO.File]::WriteAllText((Join-Path $bd "$sid.md"), $full + "`n", (New-Object System.Text.UTF8Encoding $false))
+  "brief kept for after a compaction: $((Join-Path $bd "$sid.md").Replace('\', '/'))"
+  Get-ChildItem -LiteralPath $bd -Filter '*.md' -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-14) } | Remove-Item -Force -ErrorAction SilentlyContinue
+} else { [Console]::Error.WriteLine('no sessionId in the listing: the brief is not kept for after a compaction') }
 $subscribe
 exit 0
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

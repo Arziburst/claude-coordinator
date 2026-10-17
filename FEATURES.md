@@ -62,6 +62,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
 | F-WORKERS-09 | Messages between sessions | the name is the address; renames are announced | WORKERS |
 | F-WORKERS-10 | A run cut by a usage limit | pause to the reset, then respawn and say "continue" | WORKERS |
+| F-WORKERS-11 | After a compaction | the session re-reads its brief or the coordinator its rules, from disk | WORKERS |
 | F-SAFE-01 | Protected branches guarded | pushes, force-pushes and deletes of main / master and the listed branches are blocked | SAFE |
 | F-SAFE-02 | Destructive removals guarded | removing `/`, a drive, home or a worktree by hand is blocked | SAFE |
 | F-SAFE-03 | The guard parses like a shell | quotes, continuations, `$(…)`, `bash -c` and heredocs are understood | SAFE |
@@ -388,6 +389,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: the coordinator pauses until `resets_at`, then respawns each blocked session and sends "continue"; the report notes the pause
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
+### F-WORKERS-11 After a compaction
+- defined: scripts/hooks/after-compact.sh, scripts/hooks/after-compact.ps1, scripts/start-worker.sh, scripts/start-worker.ps1, TOOLKIT.md, settings.example.json, settings.example.windows.json; one-time step `after-compact-hook` (ONE-TIME.md)
+- entry: Claude Code compacts a session's conversation (SessionStart, source `compact`)
+- promises: start-worker keeps the brief as sent by the new session's id (`<config>/coordinator/briefs/<sessionId>.md`, pruned after 14 days); right after a compaction the hook puts one instruction into the context, as JSON `additionalContext` (plain stdout does not reach the model): a worker or lead reads its kept brief in full with the Read tool, else its role file and contract, and checks its branch; the coordinator re-reads CORE.md (§1 first), PROJECT.md, BINDINGS.md and LOG.md's open questions, then the running sessions and open PRs; files from disk, never a summary of them; the auto-compact threshold is left at Claude Code's default; the .sh and .ps1 print the same
+- tested by: tests/workers/run.sh (the brief kept under the stub session's id; the hook's JSON for a worker with and without a kept brief, the coordinator, input that is not JSON, an unknown role; bash and both PowerShells)
+- not covered: whether the session then reads the files rests on it; measured once on Haiku (an injected word was seen after two compactions)
+
 
 ## SAFE
 
