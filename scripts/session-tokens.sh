@@ -33,6 +33,9 @@
 set -eu
 [ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
+# an empty or blank id would match every session as a prefix (#209)
+[ -n "$(printf '%s' "$arg" | tr -d ' \t')" ] || {
+  echo "empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)" >&2; exit 2; }
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # Claude Code's own override of ~/.claude
 dir="$cfg/coordinator/sessions"
 # rects(line): the record's own timestamp, outside "message": the first on the line when it comes
