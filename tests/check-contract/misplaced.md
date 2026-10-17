@@ -9,6 +9,7 @@ acceptance:
     how: cat a.txt prints a
   - check: review
     criterion: the code reads well
+tests_first: yes
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances

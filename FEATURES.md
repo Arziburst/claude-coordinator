@@ -241,11 +241,11 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: none known
 
 ### F-WORK-06 Tests first
-- defined: roles/tester.md, CORE.md §4
+- defined: roles/tester.md, CORE.md §4, CONTRACT.md, scripts/check-contract.sh, scripts/check-contract.ps1
 - entry: an oracle criterion with no test yet; every risky change (§5)
-- promises: the tester writes only test files; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- promises: the tester writes only test files; every contract records the decision in `tests_first` — `yes`, or `no` with its reason — and check-contract refuses one without it or with neither; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
+- tested by: tests/check-contract/run.sh (`tests_first` missing, `maybe`, a bare `no`; `yes` and a quoted `no - <why>` pass)
+- not covered: whether a `no` is right, and whether the tester then ran, rest on the coordinator and the verifier
 
 ### F-WORK-07 Leads for large tasks
 - defined: roles/lead.md, CORE.md §4, TOOLKIT.md
@@ -322,7 +322,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-01 start-worker
 - defined: scripts/start-worker.sh, scripts/start-worker.ps1, TOOLKIT.md
 - entry: scripts/start-worker.sh, scripts/start-worker.ps1
-- promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); a stale folder at the worktree path is refused, a worktree reached through a symlinked `--worktree-root` is reused, a relative `--worktree-root` is taken from the current folder, a flag in place of a value is refused; on a case-insensitive file system (Windows, macOS) a branch that differs from an existing one only in letter case is refused; the role file (from `#<task> <role>: …`) heads the brief once; `--dry-run` changes nothing
+- promises: a worktree on a new branch from the base and a named background session for it; `--model` is required; `--effort` (low, medium, high, xhigh or max; another value refused) reaches claude as `--effort`, without it the user's default; a repository without an origin, or a base not on origin yet, starts from the local base (an unreachable origin is an error); a stale folder at the worktree path is refused, a worktree reached through a symlinked `--worktree-root` is reused, a relative `--worktree-root` is taken from the current folder, a flag in place of a value is refused; on a case-insensitive file system (Windows, macOS) a branch that differs from an existing one only in letter case is refused; the role file (from `#<task> <role>: …`) heads the brief once; `--dry-run` changes nothing
 - tested by: tests/workers/run.sh (among them a reused worktree folder with another branch checked out, refused; a branch beside one in another letter case under packed refs, refused), CI step "start-worker and cleanup-worker against temporary repositories" (bash, PowerShell 7, Windows PowerShell 5.1)
 - not covered: none known
 

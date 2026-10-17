@@ -21,6 +21,7 @@ acceptance:
     check: oracle
     how: >
       scripts/notes.sh lists every merged PR
+tests_first: yes
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances

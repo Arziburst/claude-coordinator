@@ -32,7 +32,7 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
    task. Sub-contracts, briefs and run notes live in `<your worktree>/.lead/` (start-worker keeps it
    out of git), never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed under a
    new job.
-3. **Delegate.** Tests first where CONTRACT and CORE §4 say so (the tester subagent): it returns its
+3. **Delegate.** Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
    tests, you pass them in the sub-worker's brief and the sub-worker commits them on its own branch
    (your subagents work in your worktree and cannot commit in a sub-worker's) — on the sub-branch that
    needs them, never on your integration branch, so the other sub-branches keep building. Each worker
