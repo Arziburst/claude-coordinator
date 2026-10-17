@@ -221,11 +221,12 @@ fi
 if [ "$dry" = 1 ]; then
   echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
 else
-  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$first
+  full="$first
 
 ${roletext:+$roletext
 
-}$(cat "$brief")" )
+}$(cat "$brief")"
+  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$full" )
   # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
   i=0
   # the listing is JSON: a backslash or a double quote in the name is escaped there
@@ -235,5 +236,14 @@ ${roletext:+$roletext
     i=$((i + 1)); sleep 1
   done
   [ "$i" -lt 20 ] || echo "not listed after 20 s: if the subscribe fails, retry it in a few seconds" >&2
+  # the brief as sent, kept by the session's id: hooks/after-compact.sh points the session back to it after
+  # a compaction (a summary loses rules); briefs older than 14 days are pruned
+  sid="$(claude agents --json 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -F "\"$jname\"" |
+    sed -n 's/.*"sessionId": *"\([0-9a-fA-F-]*\)".*/\1/p' | tail -n 1)"
+  if [ -n "$sid" ]; then
+    bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
+    mkdir -p "$bd" && printf '%s\n' "$full" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
+    find "$bd" -name '*.md' -type f -mtime +14 -exec rm -f {} + 2>/dev/null || true
+  else echo "no sessionId in the listing: the brief is not kept for after a compaction" >&2; fi
 fi
 echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"

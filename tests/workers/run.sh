@@ -24,7 +24,7 @@ S="$STUB_LOG.sessions"
 if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
 if [ "${1:-}" = agents ]; then
   all=""; case " $* " in *" --all "*) all=1 ;; esac
-  a="$(sed 's/\\/\\\\/g; s/"/\\"/g; s/.*/{"name":"&"}/' "$STUB_LOG.names" 2>/dev/null | paste -sd, -)"
+  a="$(sed 's/\\/\\\\/g; s/"/\\"/g' "$STUB_LOG.names" 2>/dev/null | awk '{ printf "{\"name\":\"%s\",\"sessionId\":\"5e550000-0000-4000-8000-%012d\"}\n", $0, NR }' | paste -sd, -)"
   [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
   b="$(awk -v all="$all" 'FILENAME == ARGV[1] { k = index($0, "\t"); if (k) cw[substr($0, 1, k - 1)] = substr($0, k + 1); next }
     $3 != "done" || all { n = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); w = cw[$1]; gsub(/\\/, "\\\\", w)
@@ -65,7 +65,7 @@ if ($env:STUB_HEADS) { $env:STUB_HEADS }
 exit 0
 EOF
 chmod +x "$tmp/bin/claude" "$tmp/bin/gh"
-export PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/claude.log"
+export PATH="$tmp/bin:$PATH" STUB_LOG="$tmp/claude.log" CLAUDE_CONFIG_DIR="$tmp/cfg"   # start-worker keeps briefs under it
 : > "$STUB_LOG"
 
 g() { git -c user.email=t@t -c user.name=t "$@"; }
@@ -148,6 +148,10 @@ case "$LAST" in *"not listed after"*) echo "FAIL: the started session was not fo
 grep -q -- "--bg --name #12 worker: Fix --model opus --permission-mode auto --settings" "$STUB_LOG" ||
   { echo "FAIL: claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -q 'Second line "quoted".' "$STUB_LOG" || { echo "FAIL: the brief did not reach claude intact"; fail=1; }
+# the brief as sent is kept by the session's id, for the after-compact hook
+kb="$tmp/cfg/coordinator/briefs/5e550000-0000-4000-8000-000000000001.md"
+grep -q 'Second line "quoted".' "$kb" 2>/dev/null && grep -q '^You implement one contract' "$kb" ||
+  { echo "FAIL: the brief was not kept for after a compaction ($kb)"; fail=1; }
 # launched from the repository root (trusted), the brief's first action entering the worktree
 grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not launched from the repository root:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -q 'Report to: the session named "Core lead"' "$STUB_LOG" || { echo "FAIL: the brief does not name the report address"; fail=1; }
@@ -270,7 +274,7 @@ grep -q 'coordinator' "$tmp/repo5/.git/info/exclude" && { echo "FAIL: the dry ru
 check 0 "start: coordinator/ not ignored" -- start --repo "$tmp/repo5" --name "#42 worker: a" --branch 42-a "${W[@]}" --safety "$tmp/safety.json"
 expect_in "added /coordinator/ to the repository's .git/info/exclude"
 check 0 "start: coordinator/ ignored already" -- start --repo "$tmp/repo5" --name "#43 worker: a" --branch 43-a "${W[@]}" --safety "$tmp/safety.json"
-case "$LAST" in *"/coordinator/"*) echo "FAIL: /coordinator/ added a second time"; fail=1 ;; esac
+case "$LAST" in *"/coordinator/ to the repository"*) echo "FAIL: /coordinator/ added a second time"; fail=1 ;; esac
 [ "$(grep -c '^/coordinator/$' "$tmp/repo5/.git/info/exclude")" = 1 ] && [ -z "$(git -C "$tmp/repo5" status --porcelain)" ] ||
   { echo "FAIL: the project's git sees coordinator/:"; git -C "$tmp/repo5" status --short | sed 's/^/    /'; sed 's/^/    /' "$tmp/repo5/.git/info/exclude"; fail=1; }
 # an unreachable origin: the script's own message (Windows PowerShell 5.1 included)
@@ -577,6 +581,24 @@ if ! PATH="$nocl:$p2" command -v claude >/dev/null 2>&1; then
   expect_in "SESSION KEPT: 0d0d0d0d (claude rm failed: claude: command not found)"
   [ -d "$w" ] || { echo "FAIL: no claude on PATH, the worktree was removed"; fail=1; }
 fi
+
+# --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
+ac() { local role="$1"; shift
+  if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/hooks/after-compact.ps1" "$role"
+  else bash "$core/scripts/hooks/after-compact.sh" "$role"; fi; }
+cfgw="$tmp/cfg"; command -v cygpath >/dev/null 2>&1 && cfgw="$(cygpath -m "$tmp/cfg")"
+j='{"session_id":"5e550000-0000-4000-8000-000000000001","cwd":"/work/proj","source":"compact"}'
+LAST="$(printf '%s' "$j" | CLAUDE_CONFIG_DIR="$cfgw" ac worker | tr -d '\r')"
+expect_in '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The conversation was just compacted'
+expect_in "read your brief in full with the Read tool: $cfgw/coordinator/briefs/5e550000-0000-4000-8000-000000000001.md"
+LAST="$(printf '%s' '{"session_id":"5e550000-0000-4000-8000-0000000000ff"}' | CLAUDE_CONFIG_DIR="$cfgw" ac worker | tr -d '\r')"
+expect_in "re-read your role file and the contract your brief gave"
+LAST="$(printf '%s' "$j" | ac coordinator | tr -d '\r')"
+expect_in "re-read in full with the Read tool: /work/proj/coordinator/core/CORE.md (section 1, the hard rules, first)"
+LAST="$(printf 'not json' | ac coordinator | tr -d '\r')"
+expect_in '"additionalContext":"The conversation was just compacted'
+out="$(printf '%s' "$j" | ac nobody 2>/dev/null)"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: after-compact with an unknown role: exit $rc, printed '$out'"; fail=1; }
 
 echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

@@ -39,6 +39,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **Model:** `--model`. **Effort:** `--effort low|medium|high|xhigh|max` (measured: a `--bg` session's
   transcript records it), passed by start-worker's `--effort` / `-Effort`; without it a session runs at
   the user's default effort for its model (#211).
+- **After a compaction** (CORE §1.15): a summary of the conversation replaces it, and loses rules and
+  state (measured: a session re-ran commands it had run). The `SessionStart` hook with matcher `compact`
+  (`scripts/hooks/after-compact.sh worker` / `coordinator`, Windows `.ps1`) then puts one instruction
+  into the context — re-read the job's files in full from disk before the next step: a worker or lead
+  the brief start-worker kept by its session id (`<config>/coordinator/briefs/<sessionId>.md`), the
+  coordinator CORE.md (§1 first), PROJECT.md, BINDINGS.md and LOG.md's open questions. It prints JSON
+  `additionalContext`: plain hook output never reaches the model. The worker variant is in the
+  settings examples, the coordinator variant goes in its own settings (one-time step
+  `after-compact-hook`). The compaction threshold stays Claude Code's default.
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
   "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
   trusted (confirmed on Claude Code 2.1.296, Windows). start-worker therefore starts the session in
@@ -710,8 +719,8 @@ Run in this order; the first work is a **dry run** (CORE §12a).
    [settings.example.windows.json](settings.example.windows.json)) with absolute paths — the core copy's
    for the hook, the project root for `COORD_PROTECTED_ROOT` (*Safety*) — (passed to every
    worker by `start-worker.sh --safety` / `start-worker.ps1 -Safety`). **The coordinator's own settings** (its session or the
-   user settings): the status line if the owner wants it (CORE §3, *Installing it* above) and
-   `crossSessionInbound: "accept"`.
+   user settings): the status line if the owner wants it (CORE §3, *Installing it* above),
+   `crossSessionInbound: "accept"` and the after-compact hook with `coordinator` (*Workers*).
    Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
    pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
 4. Make the scripts executable: `chmod +x scripts/*.sh scripts/hooks/*.sh` (macOS / Linux).
