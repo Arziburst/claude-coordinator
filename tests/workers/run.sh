@@ -590,6 +590,26 @@ if ! PATH="$nocl:$p2" command -v claude >/dev/null 2>&1; then
   [ -d "$w" ] || { echo "FAIL: no claude on PATH, the worktree was removed"; fail=1; }
 fi
 
+# --- a folder git could not delete (a just-stopped session still holding it, #238): git unregisters the
+# worktree but the folder stays - removed when empty, left with an error when not
+realgit="$(command -v git)"; gw="$tmp/gitwrap"; mkdir -p "$gw"
+cat > "$gw/git" <<EOF
+#!/usr/bin/env bash
+if [ "\$3 \$4" = "worktree remove" ] && [ -f "$tmp/leave-folder" ]; then
+  rm -f "$tmp/leave-folder"; "$realgit" "\$@"; mkdir -p "\$5"; [ -z "\${LEAVE_FILE:-}" ] || : > "\$5/held"; exit 1
+fi
+exec "$realgit" "\$@"
+EOF
+printf '%s\n' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
+mk 26-fix; : > "$tmp/leave-folder"
+PATH="$gw:$PATH" STUB_HEADS="$h" check 0 "cleanup: git leaves the folder empty - it is removed" -- cleanup --worktree "$w"
+expect_in "removed the empty folder git left"
+[ -d "$w" ] && { echo "FAIL: the empty folder git left was not removed"; fail=1; }
+mk 27-fix; : > "$tmp/leave-folder"
+PATH="$gw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: git leaves the folder with a file - kept, reported" -- cleanup --worktree "$w"
+expect_in "is no longer a worktree but not empty - left as is"
+[ -f "$w/held" ] || { echo "FAIL: a folder with a file in it was touched"; fail=1; }
+
 # --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
 ac() { local role="$1"; shift
   if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/hooks/after-compact.ps1" "$role"
