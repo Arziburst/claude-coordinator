@@ -25,9 +25,9 @@ budget-time-ok.md: OK (0 errors, 0 warnings)
 feature-scope.md: OK (0 errors, 0 warnings)
 tests-first-missing.md: ERROR missing `tests_first` (yes, or no with the reason: CORE §4 step 3)
 tests-first-missing.md: FAIL (1 errors, 0 warnings)
-tests-first-bad.md: ERROR `tests_first` is neither yes nor no with its reason (maybe)
+tests-first-bad.md: ERROR `tests_first` is neither yes nor no with its reason (maybe): write `tests_first: yes` or `tests_first: no - <why>`
 tests-first-bad.md: FAIL (1 errors, 0 warnings)
-tests-first-no-reason.md: ERROR `tests_first` is neither yes nor no with its reason (no)
+tests-first-no-reason.md: ERROR `tests_first` is neither yes nor no with its reason (no): write `tests_first: yes` or `tests_first: no - <why>`
 tests-first-no-reason.md: FAIL (1 errors, 0 warnings)
 bom.md: OK (0 errors, 0 warnings)
 missing.md: cannot read

@@ -60,6 +60,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **`tests_first`**: `yes` — the tester writes the red tests before the worker starts (CORE §4 step 3) —
   or `no` with its reason (`no - the criteria are covered by existing tests`). Required: a decision,
   never a default; `yes` for every §5 change and every `oracle` criterion whose test does not exist yet.
+  A contract written before the field existed needs none while its session is only resumed; it gets
+  the field when it is next written or changed, since check-contract runs before each delegation. A
+  task given to a lead: its sub-contracts carry the field, and the lead runs the tester for each `yes`
+  (roles/lead.md step 3).
 - **`cost`**: the coordinator's estimate in dollars at API list price (CORE §7a, `scripts/run-stats`):
   on a subscription the unit of forecasting, not a charge; a real charge only with usage credits on or
   with an API key. Cost, not tokens: most tokens are cheap cache reads, so a token count measures
