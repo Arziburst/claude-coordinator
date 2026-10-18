@@ -10,7 +10,8 @@
 # re-review of that merge; the checks of the current head waited for (all pass or skipped); a failure
 # re-runs the failed runs once, a second failure stops; then `gh pr merge --<method>
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
-# stays for cleanup-worker), and every open PR that changes a file the merged one changed is printed
+# stays for cleanup-worker; a branch other open PRs are based on is kept, #229), and every open PR that
+# changes a file the merged one changed is printed
 # as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
 # make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
 # files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
@@ -157,7 +158,10 @@ foreach ($item in $prs) {
   $out = @(& gh pr merge $pr "--$Method" --match-head-commit $head 2>&1 | ForEach-Object { "$_" })
   if ($LASTEXITCODE -ne 0) { Leave $pr 'MERGE FAILED' (($out | Where-Object { $_ }) -join ' '); continue }
   $merged++; "MERGED #${pr}: $(Short $head)"
-  if ((GhRc @('api', '-X', 'DELETE', "repos/{owner}/{repo}/git/refs/heads/$branch")) -eq 0) { "deleted the remote branch $branch" }
+  # a branch other open PRs are based on stays: GitHub closes a PR whose base is deleted (#229)
+  $deps = (@(& gh pr list --state open --base $branch --json number --template '{{range .}}#{{.number}} {{end}}' 2>$null) -join '').Trim()
+  if ($deps) { "kept the remote branch ${branch}: $deps use it as their base" }
+  elseif ((GhRc @('api', '-X', 'DELETE', "repos/{owner}/{repo}/git/refs/heads/$branch")) -eq 0) { "deleted the remote branch $branch" }
   # the open PRs that change a file this one changed (shared ones too): their workers merge main now
   foreach ($l in @(OpenPrs)) {
     $f = $l -split "`t"; if ($f[0] -eq $pr) { continue }

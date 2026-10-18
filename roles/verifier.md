@@ -39,7 +39,8 @@ it) would make that work look deleted.
      more is a question to the coordinator, not a reason to skip.
    - A lead's subagent cannot build or test in a sub-worker's worktree: the lead runs those oracles on
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
-     attached output, else a known gap.
+     attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
+     refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
