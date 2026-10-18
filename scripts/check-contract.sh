@@ -63,7 +63,7 @@ for f in "$@"; do
       # tests first (CORE §4 step 3): yes, or no with its reason - never left undecided
       if (!("tests_first" in has)) err("missing `tests_first` (yes, or no with the reason: CORE §4 step 3)")
       else { tf = tolower(val(txt["tests_first"])); if (tf !~ /^yes([ \t,:;(]|$)/ && tf !~ /^no[ \t]*(—|-|:|,|[(])[ \t]*[^ \t)]/)
-        err("`tests_first` is neither yes nor no with its reason (" val(txt["tests_first"]) ")") }
+        err("`tests_first` is neither yes nor no with its reason (" val(txt["tests_first"]) "): write `tests_first: yes` or `tests_first: no - <why>`") }
 
       # acceptance criteria; each item starts with `- criterion:` (the first `-` line sets the items indent)
       c = 0; ok_oracle = 0; ii = -1; mis = 0

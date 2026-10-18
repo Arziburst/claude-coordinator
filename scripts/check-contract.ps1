@@ -72,7 +72,7 @@ foreach ($f in $Files) {
   else {
     $tf = (Val $txt['tests_first']).ToLower()
     if ($tf -cnotmatch '^yes([ \t,:;(]|$)' -and $tf -cnotmatch ('^no[ \t]*(' + [char]0x2014 + '|-|:|,|[(])[ \t]*[^ \t)]')) {
-      $out.Add("ERROR ``tests_first`` is neither yes nor no with its reason ($(Val $txt['tests_first']))"); $ne++
+      $out.Add("ERROR ``tests_first`` is neither yes nor no with its reason ($(Val $txt['tests_first'])): write ``tests_first: yes`` or ``tests_first: no - <why>``"); $ne++
     }
   }
 
