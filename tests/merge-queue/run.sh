@@ -47,7 +47,9 @@ case "$1 $2" in
     case "$l" in MOVE\ *) p="$3"; set -- $l; read -r s d _ b c < "$D/pr-$p"; echo "$s $d $2 $b $c" > "$D/pr-$p"; echo pending; exit 8 ;; esac
     for k in $l; do echo "$k"; done ;;
   "pr merge") [ -f "$D/merge-$3.fail" ] && { cat "$D/merge-$3.fail" >&2; exit 1; }; echo "merged" ;;
-  "pr list") cat "$D/prlist" 2>/dev/null ;;
+  "pr list")   # --base <branch>: the open PRs based on it (base-<branch>), else the open PRs (prlist)
+    b=""; p=""; for x in "$@"; do [ "$p" = --base ] && b="$x"; p="$x"; done
+    if [ -n "$b" ]; then cat "$D/base-$b" 2>/dev/null; else cat "$D/prlist" 2>/dev/null; fi ;;
   "run list")
     case "$3" in --commit) cat "$D/runs-commit-$4" 2>/dev/null ;; --branch) cat "$D/runs-branch-$4" 2>/dev/null ;; esac ;;
   "run rerun"|"run cancel") ;;
@@ -134,6 +136,11 @@ fresh "the update answered but the head never moved: TIMEOUT, no merge"
 pr 14 e141414 14-y; echo 1 > "$STUB_D/behind-e141414"
 run land 14 --poll 0
 code 3; has "TIMEOUT #14: its branch was updated, but its head did not move within 90 s - queue it again"; notcalled "pr merge"
+
+fresh "a branch other open PRs are based on is kept: GitHub would close them (#229)"
+pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"; printf '#40 #41 ' > "$STUB_D/base-11-fix"
+run land 11 --poll 0
+code 0; has "MERGED #11"; has "kept the remote branch 11-fix: #40 #41 use it as their base"; notcalled "api -X DELETE"
 
 fresh "the remote branch already gone (the repository deletes it on merge): still merged, exit 0"
 pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"; touch "$STUB_D/delete-fail"

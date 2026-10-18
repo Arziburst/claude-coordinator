@@ -10,7 +10,8 @@
 # re-review of that merge; the checks of the current head waited for (all pass or skipped); a failure
 # re-runs the failed runs once, a second failure stops; then `gh pr merge --<method>
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
-# stays for cleanup-worker), and every open PR that changes a file the merged one changed is printed
+# stays for cleanup-worker; a branch other open PRs are based on is kept, #229), and every open PR that
+# changes a file the merged one changed is printed
 # as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
 # make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
 # files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
@@ -160,7 +161,10 @@ for item in "${prs[@]}"; do
   out="$(gh pr merge "$pr" "--$method" --match-head-commit "$head" 2>&1)" ||
     { leave "$pr" "MERGE FAILED" "$(printf '%s' "$out" | tr '\n' ' ')"; continue; }
   merged=$((merged + 1)); echo "MERGED #$pr: ${head:0:7}"
-  gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$branch" >/dev/null 2>&1 && echo "deleted the remote branch $branch"
+  # a branch other open PRs are based on stays: GitHub closes a PR whose base is deleted (#229)
+  deps="$(gh pr list --state open --base "$branch" --json number --template "{{range .}}#{{.number}} {{end}}" 2>/dev/null)"
+  if [ -n "$deps" ]; then echo "kept the remote branch $branch: ${deps% } use it as their base"
+  else gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$branch" >/dev/null 2>&1 && echo "deleted the remote branch $branch"; fi
   # the open PRs that change a file this one changed (shared ones too): their workers merge main now
   list="$(open_prs)" || exit 1
   while IFS= read -r l; do [ -n "$l" ] || continue
