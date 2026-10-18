@@ -44,8 +44,13 @@ case "$1 $2" in
     read -r _ _ h _ < "$D/pr-$3"; f="$D/checks-$h"; [ -f "$f" ] || exit 0
     n=$(cat "$f.n" 2>/dev/null || echo 0); n=$((n + 1)); echo $n > "$f.n"
     l="$(sed -n "${n}p" "$f")"; [ -n "$l" ] || l="$(tail -n 1 "$f")"
-    case "$l" in MOVE\ *) p="$3"; set -- $l; read -r s d _ b c < "$D/pr-$p"; echo "$s $d $2 $b $c" > "$D/pr-$p"; echo pending; exit 8 ;; esac
-    for k in $l; do echo "$k"; done ;;
+    case "$l" in MOVE\ *) p="$3"; set -- $l; read -r s d _ b c < "$D/pr-$p"; echo "$s $d $2 $b $c" > "$D/pr-$p"; printf 'c1\t2026-01-01T00:00:01Z\tpending\n'; exit 8 ;; esac
+    # each word a check: `<bucket>` (its own name), or `<name>@<second>=<bucket>` (`@-` not started yet)
+    i=0; for k in $l; do i=$((i + 1))
+      case "$k" in *@*=*) nm="${k%%@*}"; s="${k#*@}"; s="${s%%=*}"; bk="${k#*=}"
+                          [ "$s" = - ] && t="" || t="2026-01-01T00:00:$(printf '%02d' "$s")Z" ;;
+                   *) nm="c$i"; t="2026-01-01T00:00:00Z"; bk="$k" ;; esac
+      printf '%s\t%s\t%s\n' "$nm" "$t" "$bk"; done ;;
   "pr merge") [ -f "$D/merge-$3.fail" ] && { cat "$D/merge-$3.fail" >&2; exit 1; }; echo "merged" ;;
   "pr list")   # --base <branch>: the open PRs based on it (base-<branch>), else the open PRs (prlist)
     b=""; p=""; for x in "$@"; do [ "$p" = --base ] && b="$x"; p="$x"; done
@@ -175,6 +180,17 @@ fresh "a failure right after the re-run (no pending seen yet) is the old result:
 pr 16 b161616 16-a; printf 'fail\nfail\npending\npass\n' > "$STUB_D/checks-b161616"; echo '901 b161616 completed failure' > "$STUB_D/runs-commit-b161616"
 run land 16 --poll 0
 code 0; has "MERGED #16"
+
+fresh "the same check name twice on the head: the newest run counts, an older failure is no failure (#234)"
+pr 16 b161616 16-a; echo 'ci@1=fail ci@5=pass other=pass' > "$STUB_D/checks-b161616"
+echo 'https://github.com/o/r/actions/runs/901 b161616 completed failure' > "$STUB_D/runs-commit-b161616"
+run land 16 --poll 0
+code 0; has "MERGED #16"; hasnt "re-ran"; notcalled "run rerun"
+
+fresh "a newer run of the same name not started yet is pending, not the old pass"
+pr 16 b161616 16-a; printf 'ci@3=pass ci@-=pending\nci@3=pass ci@4=pass\n' > "$STUB_D/checks-b161616"
+run land 16 --poll 0
+code 0; has "MERGED #16"; called "pr checks 16"
 
 fresh "a failed check with no run to re-run: FAILED"
 pr 16 b161616 16-a; echo fail > "$STUB_D/checks-b161616"
