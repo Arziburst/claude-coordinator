@@ -130,6 +130,14 @@ expect_in "only the owner's own explicit setup"
 check 1 "start: not a git repository" -- start --repo "$tmp" --name x --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
 check 1 "start: no report address" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json"
 expect_in "<session>"
+# a brief that is missing, empty or blanks only is refused by name, before any worktree (#226)
+: > "$tmp/empty-brief.md"; printf '  \r\n\t\n' > "$tmp/blank-brief.md"
+for b in empty-brief blank-brief; do
+  check 1 "start: an $b" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/$b.md" --safety "$tmp/safety.json" --report-to x --dry-run
+  expect_in "is empty - a worker with no task would start"
+done
+check 1 "start: a brief file that does not exist" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/nope.md" --safety "$tmp/safety.json" --report-to x --dry-run
+expect_in "nope.md does not exist"
 check 0 "start: dry run" -- start "${S[@]}" --dry-run
 expect_in "[dry-run]"
 expect_in "keep "
