@@ -157,6 +157,20 @@ if [ -n "$session" ]; then
     fi
   fi
 fi
-run git -C "$root" worktree remove "$wt" || { echo "REMOVE FAILED: git worktree remove $wt" >&2; exit 1; }
+if [ "$dry" = 1 ]; then run git -C "$root" worktree remove "$wt"
+else
+  # a just-stopped session's processes may hold the folder for a moment (#238): retry for about 10 s;
+  # once git has unregistered the worktree (no .git in it), a folder left behind is removed only if empty
+  n=0
+  until git -C "$root" worktree remove "$wt"; do
+    [ -e "$wt/.git" ] || break
+    n=$((n + 1)); [ "$n" -lt 5 ] || { echo "REMOVE FAILED: git worktree remove $wt" >&2; exit 1; }
+    sleep 2
+  done
+  if [ -d "$wt" ]; then
+    rmdir "$wt" 2>/dev/null || { echo "REMOVE FAILED: $wt is no longer a worktree but not empty - left as is" >&2; exit 1; }
+    echo "removed the empty folder git left: $wt"
+  fi
+fi
 run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"
 echo "cleaned: ${id:-no session} ${wt}"

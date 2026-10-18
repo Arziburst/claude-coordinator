@@ -222,8 +222,22 @@ if ($Session) {
     }
   }
 }
-Run git @('-C', $root, 'worktree', 'remove', $Worktree)
-if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("REMOVE FAILED: git worktree remove $Worktree"); exit 1 }
+if ($DryRun) { Run git @('-C', $root, 'worktree', 'remove', $Worktree) }
+else {
+  # a just-stopped session's processes may hold the folder for a moment (#238): retry for about 10 s;
+  # once git has unregistered the worktree (no .git in it), a folder left behind is removed only if empty
+  for ($n = 1; ; $n++) {
+    & git -C $root worktree remove $Worktree
+    if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath (Join-Path $Worktree '.git'))) { break }
+    if ($n -ge 5) { [Console]::Error.WriteLine("REMOVE FAILED: git worktree remove $Worktree"); exit 1 }
+    Start-Sleep -Seconds 2
+  }
+  if (Test-Path -LiteralPath $Worktree -PathType Container) {
+    if (@(Get-ChildItem -LiteralPath $Worktree -Force).Count) { [Console]::Error.WriteLine("REMOVE FAILED: $Worktree is no longer a worktree but not empty - left as is"); exit 1 }
+    Remove-Item -LiteralPath $Worktree -Force
+    "removed the empty folder git left: $Worktree"
+  }
+}
 Run git @('-C', $root, 'branch', '-d', $branch)
 if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
 "cleaned: $(if ($id) { $id } else { 'no session' }) $Worktree"
