@@ -37,6 +37,11 @@ try {
 $ErrorActionPreference = 'Stop'
 function Fail([string]$m) { [Console]::Error.WriteLine($m); exit 1 }
 
+# a brief that is missing, or empty / blanks only, would start a worker with no task (#226)
+if ($BriefFile) {
+  if (-not (Test-Path -LiteralPath $BriefFile -PathType Leaf)) { Fail "-BriefFile: $BriefFile does not exist" }
+  if (-not ("$(Get-Content -Raw -LiteralPath $BriefFile)" -match '\S')) { Fail "-BriefFile: $BriefFile is empty - a worker with no task would start" }
+}
 if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
