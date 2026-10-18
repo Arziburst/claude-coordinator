@@ -38,7 +38,10 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
    needs them, never on your integration branch, so the other sub-branches keep building. Each worker
    is a background session named `#<task>.<n> worker: <title>` (TOOLKIT), started with the project's
    start-worker on a branch from your integration branch (`--base <it>`; unpushed, the local one is
-   used — push it with `-u` at its first commit), never from main; at most as many at once as the
+   used — push it with `-u` at its first commit), never from main. A branch you make yourself (a stage
+   branch) never tracks main: `git switch -c <branch> --no-track <base>`, then `git push -u origin
+   <branch>` — `git checkout -b <b> origin/main` sets main as its upstream, and a bare `git push` would
+   aim there (#231). Start at most as many at once as the
    brief allows, each with `--report-to` your own session name; briefs carry the sub-contract and the
    facts, not the rules (roles/worker.md). Right after each start, `SendMessage(to: <its name>,
    notify_when_idle: true)`; no notice or report when due → `ListAgents`; a `waiting` worker (a
@@ -91,7 +94,9 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
      A **subagent** run (a tester or verifier through the Agent tool) is read the same way by the
      `agentId` its result gives: tokens per model, no `cost` line; its cost is those tokens at list
      price (TOOLKIT *Usage*), reported as `cost: $<x> (in lead)` — your own session's total already
-     contains it, never add it to your own line a second time. **Your own session** is read the same
+     contains it, never add it to your own line a second time. Its output is `out>=`, so `$<x>` is a
+     lower bound, and your total is the exact number (the task notification's token count is its last
+     context size, not its spend; #232). **Your own session** is read the same
      way at each stage (each run's end, before each start, before the report) by
      `$CLAUDE_CODE_SESSION_ID` (PowerShell: `$env:CLAUDE_CODE_SESSION_ID`), the full id Claude Code
      sets in every session — empty in a tool that does not pass it on: then the `sessionId` your own
