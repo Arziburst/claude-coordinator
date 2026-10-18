@@ -47,7 +47,9 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { [Console]::Error.Writ
 $T_PR = "{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}}`n"
 $T_FILES = "{{range .files}}{{.path}}`n{{end}}"
 $T_CMPFILES = "{{range .files}}{{.filename}}`n{{end}}"
-$T_CHECKS = "{{range .}}{{.bucket}}`n{{end}}"
+# a check name can run more than once on one head (a pull_request run and a later workflow_dispatch run):
+# only the newest of each name counts, a run not started yet being the newest (#234)
+$T_CHECKS = "{{range .}}{{.name}}`t{{.startedAt}}`t{{.bucket}}`n{{end}}"
 $T_RUNS = "{{range .}}{{.url}} {{.headSha}} {{.status}} {{.conclusion}}`n{{end}}"
 $T_LIST = "{{range .}}{{.number}}`t{{.mergeable}}`t{{.mergeStateStatus}}`t{{.headRefName}}{{range .files}}`t{{.path}}{{end}}`n{{end}}"
 # Q <gh args>: gh's non-empty output lines; a failed gh stops the run (exit 1)
@@ -131,7 +133,13 @@ foreach ($item in $prs) {
   while ($true) {
     $now = (PrView $pr)[2]
     if ($now -ne $head) { $tag = 'HEAD MOVED'; $msg = "$(Short $head) -> $(Short $now) while it waited - verify the new commit, then queue $pr@$(Short $now)"; break }
-    $b = @(& gh pr checks $pr --json bucket --template $T_CHECKS 2>$null | ForEach-Object { "$_" } | Where-Object { $_ -ne '' })
+    $best = @{}
+    foreach ($l in @(& gh pr checks $pr --json name,startedAt,bucket --template $T_CHECKS 2>$null | ForEach-Object { "$_" })) {
+      $f = $l -split "`t"; if ($f.Count -lt 3) { continue }
+      $t = if (-not $f[1] -or $f[1].StartsWith('0001-')) { '9999' } else { $f[1] }
+      if (-not $best.ContainsKey($f[0]) -or [string]::CompareOrdinal($t, $best[$f[0]][0]) -ge 0) { $best[$f[0]] = @($t, $f[2]) }
+    }
+    $b = @($best.Values | ForEach-Object { $_[1] })
     if (-not $b.Count) {
       $empty++; if ($empty -ge 5) { $tag = 'NO CHECKS'; $msg = "no check ran on $(Short $head)"; break }
     } elseif ($b -contains 'pending') { $seen = $true }

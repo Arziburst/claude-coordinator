@@ -55,7 +55,9 @@ NL='
 T_PR="{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}}$NL"
 T_FILES="{{range .files}}{{.path}}$NL{{end}}"
 T_CMPFILES="{{range .files}}{{.filename}}$NL{{end}}"
-T_CHECKS="{{range .}}{{.bucket}}$NL{{end}}"
+# a check name can run more than once on one head (a pull_request run and a later workflow_dispatch run):
+# only the newest of each name counts, a run not started yet being the newest (#234)
+T_CHECKS="{{range .}}{{.name}}$TAB{{.startedAt}}$TAB{{.bucket}}$NL{{end}}"
 T_RUNS="{{range .}}{{.url}} {{.headSha}} {{.status}} {{.conclusion}}$NL{{end}}"
 T_LIST="{{range .}}{{.number}}$TAB{{.mergeable}}$TAB{{.mergeStateStatus}}$TAB{{.headRefName}}{{range .files}}$TAB{{.path}}{{end}}$NL{{end}}"
 # q <gh args>: gh's output; a failed gh stops the run (exit 1), called as `x="$(q ...)" || exit 1`
@@ -132,7 +134,7 @@ for item in "${prs[@]}"; do
   while :; do
     v="$(pr_view "$pr")" || exit 1; read -r _ _ now _ _ <<< "$v"
     [ "$now" = "$head" ] || { result="HEAD MOVED|${head:0:7} -> ${now:0:7} while it waited - verify the new commit, then queue $pr@${now:0:7}"; break; }
-    b="$(gh pr checks "$pr" --json bucket --template "$T_CHECKS" 2>/dev/null | grep -v '^$')"
+    b="$(gh pr checks "$pr" --json name,startedAt,bucket --template "$T_CHECKS" 2>/dev/null | awk -F"$TAB" 'NF >= 3 { t = $2; if (t == "" || t ~ /^0001-/) t = "9999"; if (!($1 in T) || t >= T[$1]) { T[$1] = t; B[$1] = $3 } } END { for (k in B) print B[k] }')"
     if [ -z "$b" ]; then
       empty=$((empty + 1)); [ $empty -ge 5 ] && { result="NO CHECKS|no check ran on ${head:0:7}"; break; }
     elif printf '%s\n' "$b" | grep -qx pending; then seen=1
