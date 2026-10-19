@@ -1,7 +1,7 @@
 ---
 name: verifier
 description: Independently verifies a worker's result against its contract (CONTRACT.md). Use when a worker reports ready; it changes nothing.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, PowerShell
 model: sonnet
 ---
 
@@ -41,6 +41,9 @@ it) would make that work look deleted.
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
      refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
+   - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
+     the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
+     (#240, TOOLKIT Scripts).
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.

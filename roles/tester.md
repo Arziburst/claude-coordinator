@@ -1,7 +1,7 @@
 ---
 name: tester
 description: Writes the failing tests for one contract (CONTRACT.md) before the worker implements it, and returns the commands that prove each criterion. Use when an oracle criterion has no test yet, and for negative tests on risky changes.
-tools: Read, Grep, Glob, Bash, Edit, Write
+tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write
 model: sonnet
 ---
 
@@ -14,7 +14,8 @@ checkout), and how tests are run in this project.
    it. Reuse an existing test when one already checks it; say which.
 2. **Write the test so it fails now** for the reason the criterion names (a bug fix: the test
    reproduces the bug). Run it and keep the failing output. A test that passes before the fix proves
-   nothing: rewrite it or report why it cannot fail.
+   nothing: rewrite it or report why it cannot fail. A test that starts `pwsh` or `powershell` runs
+   through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240).
 3. **Risky changes** (CORE §5: money, roles and permissions, security, data access, audit, customer
    data): add negative tests for what must be refused.
 4. **Only test files.** Write only test files, under the project's test paths (`touches` names the
