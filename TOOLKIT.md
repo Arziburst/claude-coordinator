@@ -324,6 +324,12 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   -File <script> …` (or `pwsh` the same way). A bare `.\script.ps1` or `-File` without `-ExecutionPolicy
   Bypass` is refused under the default execution policy — a lead's cost read failed that way. Briefs
   and role files give the full command.
+- **In a worktree session, through the PowerShell tool.** In a session isolated in a worktree, Claude
+  Code refuses `pwsh` / `powershell` started from the Bash tool ("cannot be shown not to run git"),
+  even after a `cd` into its own worktree; the same `pwsh -File` through the PowerShell tool runs
+  (measured, #240). A check that starts PowerShell (a `.ps1`, a project script calling one) goes
+  through the PowerShell tool there. The verifier and tester roles list it in `tools:`; where there is
+  no PowerShell tool (macOS, Linux) the name is ignored (measured).
 - **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
   (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
   escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
