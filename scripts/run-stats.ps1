@@ -12,7 +12,8 @@
 # (median: the mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
 # rank from 4 values on, min and max under 4; cost to the cent, time to the minute, half up; no values: 0 and -).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 <RUNS.tsv> -Task <n> [-PrJson <file|->]
-#     [-Waits <file>]   the task's `task` row to append: time to ready and owner wait from its runs, the PR's
+#     [-Waits <file>] [-Append]   the task's `task` row to append (-Append writes it to RUNS.tsv, #242): time to
+#     ready and owner wait from its runs, the PR's
 #     `gh pr view <n> --json statusCheckRollup,mergedAt,createdAt` and the owner-decision intervals of the journal,
 #     `<asked UTC> <answered UTC>` per line (the rules: run-stats.sh's top comment; -PrJson:- reads stdin).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 -Limits [-Status <file>] [-Spend5h <file|->]
@@ -25,14 +26,14 @@
 # Exit 1 when a file cannot be read (and in -Limits: no rate limits in the JSON, a malformed price line, a spend
 # model without a price; in -Task: no rows for the task, no start, not ready, a malformed wait line), 2 on a usage error.
 param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [string]$Task, [string]$PrJson, [string]$Waits,
-  [switch]$Limits, [string]$Status, [string]$Spend5h, [string]$SpendWeek, [string]$Prices,
+  [switch]$Append, [switch]$Limits, [string]$Status, [string]$Spend5h, [string]$SpendWeek, [string]$Prices,
   [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$BlockTop, [string]$Now)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 27 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 if ($Limits) {
-  if ($File -or $Kind -or $Model -or $PerRun -or $Task -or $PrJson -or $Waits) { Show-Usage }
-} elseif ($Task -or $PrJson -or $Waits) {
+  if ($File -or $Kind -or $Model -or $PerRun -or $Task -or $PrJson -or $Waits -or $Append) { Show-Usage }
+} elseif ($Task -or $PrJson -or $Waits -or $Append) {
   if (-not $File -or -not $Task -or $Kind -or $Model -or $PerRun -or $Waits -eq '-') { Show-Usage }
 } elseif (-not $File -or ([bool]$Kind -ne [bool]$Model) -or ($PerRun -and $Kind)) { Show-Usage }
 $ErrorActionPreference = 'Stop'
@@ -286,7 +287,17 @@ if ($Task) {
   $u = @{}; $out = New-Object 'System.Collections.Generic.List[string]'
   foreach ($h in $hd) { $v = ''; if ($Row.ContainsKey($h) -and -not $u.ContainsKey($h)) { $v = $Row[$h]; $u[$h] = 1 }; $out.Add($v) }
   foreach ($h in 'date', 'task', 'role', 'kind', 'model', 'effort', 'estimate', 'tokens', 'cost', 'result', 'start', 'wall', 'active', 'wait') { if (-not $u.ContainsKey($h)) { $out.Add($Row[$h]) } }
-  $out -join "`t"
+  $line = $out -join "`t"
+  $line
+  if ($Append) {
+    # the row as the file's last line, in its line ends; a last line without its end gets one first.
+    # The coordinator once took the printed row for a written one, and the task rows went missing (#242)
+    $p = (Resolve-Path -LiteralPath $File).Path; $t = [IO.File]::ReadAllText($p)
+    $nl = if ($t.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $pre = if ($t.Length -and -not $t.EndsWith("`n")) { $nl } else { '' }
+    [IO.File]::AppendAllText($p, $pre + $line + $nl, (New-Object System.Text.UTF8Encoding $false))
+    [Console]::Error.WriteLine("run-stats: the task row appended to $File")
+  }
   exit 0
 }
 $L = $null

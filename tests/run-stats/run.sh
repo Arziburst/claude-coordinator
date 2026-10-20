@@ -48,7 +48,7 @@ run() {
       --limits) a+=(-Limits) ;; --status) a+=(-Status) ;; --spend-5h) a+=(-Spend5h) ;; --spend-week) a+=(-SpendWeek) ;;
       --prices) a+=(-Prices) ;; --prev-5h) a+=(-Prev5h) ;; --prev-week) a+=(-PrevWeek) ;; --cap-5h) a+=(-Cap5h) ;;
       --cap-week) a+=(-CapWeek) ;; --block) a+=(-Block) ;; --block-top) a+=(-BlockTop) ;; --now) a+=(-Now) ;;
-      --task) a+=(-Task) ;; --pr-json) a+=(-PrJson) ;; --waits) a+=(-Waits) ;;
+      --task) a+=(-Task) ;; --pr-json) a+=(-PrJson) ;; --waits) a+=(-Waits) ;; --append) a+=(-Append) ;;
       # stdin: 5.1 takes a bare - after a parameter through -File for a parameter name and fails, so -Spend5h:-
       -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek | -PrJson | -Waits) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
       *) a+=("$x") ;; esac; done
@@ -161,6 +161,17 @@ expect "task: a header in another order, with wait and a column of its own" 0 "$
   reordered-task.tsv --task 42 --pr-json pr-late.json
 expect "task: CRLF line ends and a BOM in every input" 0 "$k/expected-crlf.txt" - -- \
   runs-crlf.tsv --task 40 --pr-json pr-rerun-crlf.json --waits waits-crlf.txt
+# --append writes the row it prints as the file's last line (#242: a printed row was taken for a written one)
+cp task-runs.tsv app.tsv; before="$(wc -l < app.tsv | tr -d ' ')"
+expect "task: --append prints the row" 0 "$k/expected-late.txt" "run-stats: the task row appended to app.tsv" -- \
+  app.tsv --task 40 --pr-json pr-late.json --append
+n=$((n + 1)); if [ "$(tail -n 1 app.tsv)" = "$(tr -d '\r' < "$k/expected-late.txt")" ] && [ "$(wc -l < app.tsv | tr -d ' ')" = $((before + 1)) ]
+then echo "ok   task: --append wrote it as one new last line"; else bad "task: --append did not write the row as one new last line"; fi
+cp runs-crlf.tsv app-crlf.tsv; printf 'no-end' >> app-crlf.tsv
+expect "task: --append, CRLF and a last line without its end" 0 "$k/expected-crlf.txt" - -- \
+  app-crlf.tsv --task 40 --pr-json pr-rerun-crlf.json --waits waits-crlf.txt --append
+n=$((n + 1)); if [ "$(tail -c 2 app-crlf.tsv | od -An -c | tr -d ' ')" = '\r\n' ] && [ "$(tail -n 2 app-crlf.tsv | head -n 1 | od -An -c | tr -d ' \n')" = 'no-end\r\n' ]
+then echo "ok   task: --append kept CRLF and ended the last line first"; else bad "task: --append broke the line ends"; fi
 IN=pr-late.json expect "task: the PR's JSON from stdin" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json -
 expect "task: the last run of a check red - not ready" 1 - "run-stats: task 40: not ready - the check checks (windows-latest) is FAILURE" -- \
   task-runs.tsv --task 40 --pr-json pr-red.json
