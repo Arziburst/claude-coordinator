@@ -48,7 +48,9 @@ rule → ask the owner.
 7. **Never integrate over failing or pending checks**, even a known flake. An unverifiable check is a
    known gap, not a pass. **Integrate exactly the commit the verdict approved** (gh: `gh pr merge
    --match-head-commit <sha>`): a head that moved after the verdict is reviewed again — only the change
-   since — and its checks must be green. Fix the flake first or ask. When the owner waives CI for a change to the
+   since — and its checks must be green. Fix the flake first or ask; where the **flake quarantine** is
+   on (the default, `PROJECT.md` *Settings*), a flake still red after one fix round leaves CI as §4 *A red
+   check* says, on the owner's confirmation by default. When the owner waives CI for a change to the
    coordination scripts (wrappers, hooks, work tooling), the coordinator still runs
    `scripts/check-scripts` on them and one start-worker dry run before the merge: seconds, no runner.
    **A red check is classified before anyone acts on it** (§4 *A red check*). A coordination-tooling fix
@@ -295,7 +297,14 @@ The continuous work:
    *infrastructure* — a quota, a runner offline, the network, storage → its own bug, fixed
    first and named as the blocker on every PR it holds, never merged over; *flake* — red on a loaded
    machine, the same commit untouched → re-run once: green → the check passed on that commit (one
-   journal line; a second time it is a flake bug); red again → a flake bug, never a merge.
+   journal line; a second time it is a flake bug); red again → a flake bug, never a merge. A flake bug
+   gets **one fix round** (the tester reproduces it, roles/tester.md step 3; one worker attempt); still
+   flaky → **quarantine**, where `PROJECT.md` keeps it on (the default; no row → on, confirmed): unless
+   the owner turned the confirmation off, a quiz first — the check and its evidence; quarantine / another
+   fix round / keep it and hold the merges, the recommendation first — then, on a *quarantine* answer (or
+   with the confirmation off), the check leaves CI for the project's manual set through a PR, with an
+   issue and a journal line, still runnable by hand. Only "Coordinator, settings" changes the quarantine
+   or its confirmation; init never asks it and the update never offers it (#237).
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved.
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
@@ -399,7 +408,7 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 ## 6. Review standard
 
 - The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) on the contract, the
-  report and the change: contract first, `oracle` checks run itself, every result keeps its evidence class
+  report and the change (and the tester's commit, where a tester ran, #237): contract first, `oracle` checks run itself, every result keeps its evidence class
   (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
   cites (`source:`, SOURCES §4). The verdict names the head commit it reviewed; a CI run on that commit
   counts as its oracle and is not run again, a run on any other commit is a `claim`. An oracle the

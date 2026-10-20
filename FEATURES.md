@@ -245,7 +245,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-06 Tests first
 - defined: roles/tester.md, CORE.md §4, CONTRACT.md, scripts/check-contract.sh, scripts/check-contract.ps1
 - entry: an oracle criterion with no test yet; every risky change (§5)
-- promises: the tester writes only test files; every contract records the decision in `tests_first` — `yes`, or `no` with its reason — and check-contract refuses one without it or with neither; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore)
+- promises: the tester writes only test files; every contract records the decision in `tests_first` — `yes`, or `no` with its reason — and check-contract refuses one without it or with neither; its tests fail now for the reason the criterion names; the worker makes them green unchanged; what cannot be automated becomes an owner check; under a lead the tester commits nothing and returns its test files, which the sub-worker commits on the sub-branch that needs them, never on the integration branch; a tester reads another commit without moving a working copy (no checkout, switch, reset, stash or restore); a test checks what is visible from outside and an access point it needs is named in the contract or the test file's header, implemented as written; a wrong test goes back to the tester, the worker makes only build-only edits that change no check and names them; a flaky check is reproduced in three parts (load, a variant failing every time, a negative control) (#237)
 - tested by: tests/check-contract/run.sh (`tests_first` missing, `maybe`, a bare `no`; `yes` and a quoted `no - <why>` pass)
 - not covered: whether a `no` is right, and whether the tester then ran, rest on the coordinator and the verifier
 
@@ -259,7 +259,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-08 The worker role
 - defined: roles/worker.md, CONTRACT.md
 - entry: a worker's brief
-- promises: the worker changes only what the criteria need, works on its own branch, proves each oracle itself, reports to the address in its brief with every criterion's evidence class and any suspected core fault in `core_findings`; stuck → a `blocked` report; waiting on CI it keeps a background wait (`gh pr checks --watch`) running until it reports
+- promises: the worker changes only what the criteria need, works on its own branch, proves each oracle itself, reports to the address in its brief with every criterion's evidence class and any suspected core fault in `core_findings`; stuck → a `blocked` report; waiting on CI it keeps a background wait (`gh pr checks --watch`) running until it reports; it never weakens, removes or rewrites the tester's tests and edits them only to make a test build or run, named in `test_edits`, any other change going back to the tester; on other tests the not-weakening edits are named too (a cycle wait to a time or state wait of the same value, a tolerance widened only on its own new check with a measured reason, a non-random starting state with every check unchanged and a negative control still failing); its report states `ci_seconds`, and a change over the project's CI time budget (default 30 s) is a question first; a check the verifier cannot repeat carries its raw output, a summary being a claim; a long local run is never under a short tool timeout (#237)
 - tested by: SELFTEST step 4
 - not covered: none known
 
@@ -496,7 +496,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-01 Independent verifier
 - defined: roles/verifier.md, CORE.md §6
 - entry: a worker reports ready with green checks
-- promises: the verifier is not the author and changes nothing — it reads another commit with `git show`, `git grep`, `git diff`, `git log` or a scratch worktree, never with checkout, switch, reset, stash or restore in a working copy; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner
+- promises: the verifier is not the author and changes nothing — it reads another commit with `git show`, `git grep`, `git diff`, `git log` or a scratch worktree, never with checkout, switch, reset, stash or restore in a working copy; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner; the verifier diffs the tester's commit against the reviewed head: a change to the tester's tests other than a build-only edit `test_edits` names is a finding — a weakened, removed or loosened check a Blocker, an unnamed build-only edit a Major (#237)
 - tested by: SELFTEST step 4 (a verifier run)
 - not covered: SELFTEST step 4 checks only that each sub-task has a verdict, not its commit, per-criterion verdicts or evidence classes
 
@@ -524,7 +524,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-05 Red checks classified
 - defined: CORE.md §4, CORE.md §1, TOOLKIT.md
 - entry: a red or cancelled check
-- promises: cancelled → read the current head's run; code → back to the worker; infrastructure → its own bug, fixed first, named as the blocker; flake → one re-run on the same commit, a second red is a flake bug
+- promises: cancelled → read the current head's run; code → back to the worker; infrastructure → its own bug, fixed first, named as the blocker; flake → one re-run on the same commit, a second red is a flake bug; a flake bug gets one fix round, then — with the flake quarantine on (the default; changed only through "Coordinator, settings", never asked at init) and, by default, the owner's quiz answer — the check leaves CI for the manual set through a PR, with an issue and a journal line, still runnable by hand; a project without the row has it on, confirmed (#237)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 

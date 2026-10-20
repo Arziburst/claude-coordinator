@@ -379,6 +379,11 @@ BOM, models priced apart),
   those steps by hand with the host's own tool: one approved PR at a time on its approved commit, the
   sessions whose PRs change the merged files told to merge main, the merge confirmed before any cleanup
   (CORE §4a, §8); INIT's summary names them (support for another host is built when a project needs it).
+- **Local test runs:** a long run never under a short tool timeout — a killed run looks like a crash;
+  start it in the background and wait for its end. What a test starts (a server, a browser, an app)
+  ends with it: on Windows a job object (or the runner's own kill of the process tree), on macOS / Linux
+  a process group (Linux `setsid`; macOS and bash 3.2: `set -m`, so a background job gets its own group;
+  ended with `kill -- -<pgid>`) (#237).
 - **The merge queue** (CORE §4a): `bash <core>/scripts/merge-queue.sh land 12@5f3e2a1 14@9c0d1e2
   --method squash --shared 'messages/*' --shared 'docs/decisions.md'` (Windows: `powershell -NoProfile
   -ExecutionPolicy Bypass -File <core>/scripts/merge-queue.ps1 land -Pr 12@5f3e2a1,14@9c0d1e2 -Method

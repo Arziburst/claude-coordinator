@@ -22,7 +22,8 @@ never from memory:
      autopilot with its tick;
   4. language of the conversation and of artifacts;
   5. voice in commits and PRs — always the owner's (CORE §11), shown, not changeable here;
-  6. who merges, the review gates (verifier, the owner, humans), production and MCP writes;
+  6. who merges, the review gates (verifier, the owner, humans), production and MCP writes; the flake
+     quarantine (on, confirmed / on, without asking / off — CORE §4 *A red check*; changed only here);
   7. routing — `coordinator/ROUTING.md` in one line per kind that differs from CORE §7's table,
      the pins, the usage caps;
   8. the state repository — remote (or local only), branch (`state`, CORE §12b), private yes / no

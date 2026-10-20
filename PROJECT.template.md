@@ -22,6 +22,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | **Work mode** (CORE §4) | `<fill>` | `<fill>` | `<date>` | **by task** — the owner names a task, then the next (solo work) · batch — a batch command runs the recipe below over the tracker (a team, a board) |
 | Language: conversation / artifacts | `<fill>` | `<fill>` | `<date>` | owner's language / English |
 | Voice in commits and PRs | the owner's | core | — | not a setting: always the owner's, no AI lines (CORE §11) |
+| Flake quarantine (CORE §4 *A red check*) | on, confirmed | default | `<date>` | **on, each one confirmed by the owner (a quiz)** · on, without asking · off — never asked at init; changed only through "Coordinator, settings" |
 | Who merges | `<fill>` | `<fill>` | `<date>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |
 | Review gates | `<fill>` | `<fill>` | `<date>` | the verifier always (CORE §6); human review: swarm none · standard the owner on risky changes · strict developer and/or business analyst, their comments back to the same branch + re-review |
 | Production and MCP writes (CORE §1.4) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm, standard write when the task needs it, backup first · strict read-only except named actions |
@@ -123,7 +124,8 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 |---|---|---|
 | Definition-of-done checks per task | `<fill>` | lint + typecheck + build + unit tests (+ DB tests with a migration) |
 | End-to-end check of the task | `<fill>` | a headless-browser scenario that clicks through the changed pages on a database seeded with test data |
-| CI layout | `<fill>` | a fast set on every PR, heavy checks by path filter, caching |
+| CI layout | `<fill>` | a fast set on every PR, heavy checks by path filter, caching; a full suite over about 10 minutes: a fast selection on PRs (the changed paths and the PR's own tests, stopping at the first failure), the full suite once before the merge on the updated head; long scenario tests cut to their asserted moments or moved to a manual set |
+| CI time budget | `<fill>` | a change adding more than 30 seconds to the full suite asks the coordinator first; every worker report states it (roles/worker.md) |
 | Improvements | `<fill>` | the coordinator proposes checks that save time or owner attention (CORE §4b); the owner decides |
 
 ## Voice in artifacts

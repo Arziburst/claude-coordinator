@@ -13,7 +13,8 @@ holds only your run's artefacts — then `git worktree remove <it>`, never `--fo
 blocks). Never `git checkout`, `git switch`, `git reset`, `git stash` or `git restore` in a working copy
 (a verifier once moved the owner's working copy with `git checkout --detach`).
 
-Inputs: the contract, the worker's report and the change (a PR, a branch or a diff). A branch's change
+Inputs: the contract, the worker's report and the change (a PR, a branch or a diff), and the tester's
+commit or files where a tester ran. A branch's change
 is what it adds since it left its base: `git diff <base>...<branch>` (three dots: against the merge
 base), never against the base's current tip — a base that moved since (another sub-branch merged into
 it) would make that work look deleted.
@@ -41,6 +42,12 @@ it) would make that work look deleted.
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
      refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
+   - **The tester's commit** (the brief names it; under a lead, the test files the tester returned, kept
+     in the lead's `.lead/`): compare its test files with the reviewed head (`git diff <the tester's
+     commit> <head> -- <its test files>`; under a lead, `git diff --no-index <the .lead copy> <the file at
+     the head>`). Every change must be a build-only edit the worker's
+     `test_edits` names (roles/worker.md step 2); a check weakened, removed or loosened is a Blocker, an
+     unnamed build-only edit a Major (#237).
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
      `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through

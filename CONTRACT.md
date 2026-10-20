@@ -54,6 +54,9 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   calculation — something other than an opinion), `review` (the independent reviewer reads it), `owner`
   (only the owner can accept it). A criterion with no nameable check is a planning gap: fix it before
   the work starts.
+- **Test access points:** an interface a test needs (a status field, a flag, an endpoint, a command, a
+  test hook) is named in the contract — in a criterion or the free text — or by the tester at the top of
+  its test file; the worker implements it as written (#237).
 - **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
   result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.
@@ -96,6 +99,8 @@ questions: []                      # do_not_decide items and new forks
 known_gaps:
   - not run on a real phone: no device
 core_findings: []                  # a suspected fault of the core itself, with evidence (procedures/CORE-FINDINGS.md)
+ci_seconds: +4                     # what the change adds to the full CI suite (roles/worker.md step 2)
+test_edits: []                     # each edit to an existing test and why; the tester's: build-only (roles/worker.md step 2)
 ---
 ```
 

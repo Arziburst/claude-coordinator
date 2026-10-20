@@ -212,7 +212,8 @@ Asked only when they apply:
 
 ### 3.2 Found and confirmed — one table
 
-Stack; build / run / test / lint commands; environments and deploy; CI layout; MCP servers and their
+Stack; build / run / test / lint commands; environments and deploy; CI layout (a full suite over about
+10 minutes → the CI layout hint of `PROJECT.md` *Testing and CI* proposed); MCP servers and their
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
 per-worker isolation (working copies and the command that installs a new one's dependencies, ports,
@@ -232,7 +233,9 @@ Everything else in `PROJECT.template.md`: what follows from the strictness prese
 who merges, review, the approval gate, obvious review comments, autopilot and the tick, code to other
 services, reports) and the template's defaults (session names, the batch recipe, commit and PR format,
 progress comments, research, the radar list and the expectations checklist (CORE §4b), risk-area
-rules, issue fields). The owner changes any of them with one line at the summary or later.
+rules, issue fields). The owner changes any of them with one line at the summary or later — except the
+flake quarantine: written with its default (on, confirmed), not shown in the summary, changed only
+through "Coordinator, settings" (#237).
 
 ### 3.4 Set up without asking
 
