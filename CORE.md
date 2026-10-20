@@ -264,7 +264,8 @@ The continuous work:
    with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
-   apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
+   apply, parallel work on the same code, resources (§8, with the command that installs a new working
+   copy's dependencies, #249), launch/test limits, the report phrase — role
    rules live in the role file ([roles/worker.md](roles/worker.md)), never repeated in the brief's text — start-worker puts
    the role file at the top of a session's brief (TOOLKIT *Roles*). An `oracle`
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent

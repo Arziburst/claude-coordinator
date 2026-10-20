@@ -28,8 +28,10 @@ resources and launch/test limits, and the phrase that ends your report.
    then regenerate). A file another task may be changing is a question to your report address, never
    to that task's session. Secrets are used, never copied; customer data never leaves production;
    production actions only as the brief allows (CORE §1.4, §1.13).
-4. **Prove each criterion yourself.** For `check: oracle`, run the named test or command and keep its
-   output or CI link. A check the brief says the verifier cannot repeat (a shared device, a lock, a
+4. **Prove each criterion yourself.** First install your working copy's own dependencies with the
+   brief's command (`npm ci` in a Node project): a new worktree has none, and a check that finds them
+   in a folder above it runs on other versions and proves nothing (#249). For `check: oracle`, run the
+   named test or command and keep its output or CI link. A check the brief says the verifier cannot repeat (a shared device, a lock, a
    cost): attach its raw output where the criterion's `how` says, with the commit it ran on. What you
    could not run is a known gap, never a pass.
 5. **Report** with SendMessage to the session the brief names as the report address; not in

@@ -41,6 +41,8 @@ it) would make that work look deleted.
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
      refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
+   - A working copy you run checks in has its own dependencies installed first (the brief's command,
+     `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
      (#240, TOOLKIT Scripts).
