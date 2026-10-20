@@ -212,7 +212,8 @@ Asked only when they apply:
 
 ### 3.2 Found and confirmed — one table
 
-Stack; build / run / test / lint commands; environments and deploy; CI layout; MCP servers and their
+Stack; build / run / test / lint commands; environments and deploy; CI layout (a full suite over about
+10 minutes → the CI layout hint of `PROJECT.md` *Testing and CI* proposed); MCP servers and their
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
 per-worker isolation (working copies and the command that installs a new one's dependencies, ports,

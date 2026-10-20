@@ -15,7 +15,17 @@ resources and launch/test limits, and the phrase that ends your report.
 2. **Stay inside it.** Change only what the criteria need (`touches` is the expected footprint; going
    beyond it is a question first — CORE §1.11). Never weaken or loosen tests, timeouts or tolerances;
    never decide a `do_not_decide` item or invent a business value — raise it as a question and
-   continue with what does not depend on it.
+   continue with what does not depend on it. **The tester's tests** (the brief names them) are made green
+   unchanged: never weakened, removed or rewritten; one you find wrong is a question to your report
+   address and goes back to the tester. You may only make one build or run — an import, a name, a path,
+   a compile fix — without changing any check it makes, and you name each such edit in your report. An
+   access point a test needs (named in the contract or at the top of the test file) is implemented as
+   written. **Not weakening** (allowed, each named in the report): a wait of N cycles or ticks turned
+   into a wait on time or on a state with the same value; a tolerance widened only on your PR's own new
+   check, with a measured reason, still telling the broken case apart, commented beside it; a starting
+   state made non-random (set, not rolled) with every check unchanged and a negative control that still
+   fails. **CI time is a budget:** a change that adds more than the project's threshold to the full
+   suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237).
 3. **Your branch only.** Work in your own working copy and branch, never the coordinator's checkout;
    commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its
    remote); open the PR the contract names. Waiting on CI, keep `gh pr checks <n> --watch` (or an
@@ -32,8 +42,10 @@ resources and launch/test limits, and the phrase that ends your report.
    brief's command (`npm ci` in a Node project): a new worktree has none, and a check that finds them
    in a folder above it runs on other versions and proves nothing (#249). For `check: oracle`, run the
    named test or command and keep its output or CI link. A check the brief says the verifier cannot repeat (a shared device, a lock, a
-   cost): attach its raw output where the criterion's `how` says, with the commit it ran on. What you
-   could not run is a known gap, never a pass.
+   cost): attach its raw output where the criterion's `how` says, with the commit it ran on — a summary
+   alone is a claim. What you could not run is a known gap, never a pass. A long local run never runs
+   under a short tool timeout (a killed run looks like a crash): start it in the background and wait for
+   it; what a test starts (a server, a browser, an app) ends with it (TOOLKIT *CI*).
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is
    this project; neither → put the whole report in your final output with "NOT DELIVERED: <the
@@ -51,6 +63,8 @@ resources and launch/test limits, and the phrase that ends your report.
    questions: []              # do_not_decide items and new forks
    known_gaps: []             # what you could not run or check
    core_findings: []          # a suspected fault of the core itself (a rule, a script, a check), with evidence
+   ci_seconds: +0             # what the change adds to the full CI suite, measured, else estimated (#237)
+   test_edits: []             # each edit to the tester's tests: build-only or not weakening, and why
    ```
 6. **Stuck or near your context limit:** stop and send a `blocked` report with what is done, what is
    left and why — do not push half-finished guesses to finish.
