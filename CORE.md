@@ -757,7 +757,9 @@ kept out of the project's git like `coordinator/`. **A skill the owner asks for 
 every project — never in `~/.claude/skills/` (every session on the machine, of every project, loads
 that, #243), never in another project's folders. Its description names it as this project's
 coordinator's: workers in `<project>/.claude/worktrees/` see the project's skills too (Claude Code
-looks up the folders, measured, #245).
+looks up the folders, measured, #245). **The core's own skills**, `coord-*` (the core's `skills/`: the
+event table's rows and the procedures, each a pointer to the core file that wins over it), are copied
+there at init and refreshed by every update; a project's own skill never takes a `coord-` name (#243).
 Its remote, chosen at init, is **always private**: the owner's account or the team's organization,
 pushed as above; or none (local only, lost with the disk). Finding it on a new machine and the
 handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).

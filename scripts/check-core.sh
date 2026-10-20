@@ -8,7 +8,9 @@
 #   - FEATURES.md out of sync: a file a block names is missing, a script, procedure, role or one-time
 #     step is in no feature, an ID repeats, a block lacks a field, the table and the blocks disagree
 #     (a field's indented continuation lines are read as part of it);
-#   - a script under scripts/ without its other half: every script is a .sh + .ps1 pair.
+#   - a script under scripts/ without its other half: every script is a .sh + .ps1 pair;
+#   - a core skill (skills/*/SKILL.md) outside `coord-`, named unlike its folder, not marked as the
+#     coordinator's, or naming a `coordinator/core/<path>` this core does not have.
 # Run in CI on every pull request and before proposing a core change (CORE §10).
 set -u
 root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -121,6 +123,22 @@ while IFS= read -r f; do
   case "$f" in *.sh) o="${f%.sh}.ps1" ;; *) o="${f%.ps1}.sh" ;; esac
   [ -e "$o" ] || { echo "$f: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; errors=$((errors + 1)); }
 done < <([ -d scripts ] && find scripts -type f \( -name '*.sh' -o -name '*.ps1' \) | LC_ALL=C sort)
+
+# the core's skills (CORE §12b, #243): skills/coord-*/SKILL.md, its frontmatter name its folder, its description
+# saying it is the coordinator's, every `coordinator/core/<path>` it names a file of this core
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  d="$(basename "$(dirname "$f")")"
+  case "$d" in coord-*) ;; *) echo "$f: a core skill's folder starts with coord-"; errors=$((errors + 1)) ;; esac
+  nm="$(tr -d '\r' < "$f" | sed -n '2,6s/^name: *//p' | head -n 1)"
+  [ "$nm" = "$d" ] || { echo "$f: name '$nm' is not its folder '$d'"; errors=$((errors + 1)); }
+  tr -d '\r' < "$f" | sed -n '2,6p' | grep -q "^description: '\{0,1\}Coordinator only" ||
+    { echo "$f: the description does not start with 'Coordinator only'"; errors=$((errors + 1)); }
+  while read -r n p; do [ -e "$p" ] || { echo "$f:$n: no such core file $p"; errors=$((errors + 1)); }
+  done < <(tr -d '\r' < "$f" | awk '{ s = $0
+    while (match(s, /coordinator\/core\/[A-Za-z0-9._\/-]+/)) { p = substr(s, RSTART + 17, RLENGTH - 17); s = substr(s, RSTART + RLENGTH)
+      sub(/[.\/]+$/, "", p); print NR, p } }')
+done < <([ -d skills ] && find skills -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
 
 nsec=$(echo $sections | wc -w | tr -d ' ')
 echo "check-core: $files files, $nsec sections, $rules hard rules, $nfeat features, $errors errors"
