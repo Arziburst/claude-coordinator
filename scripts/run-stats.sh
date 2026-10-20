@@ -3,8 +3,9 @@
 #   scripts/run-stats.sh <RUNS.tsv>                                 per kind and model, over TASKS
 #   scripts/run-stats.sh <RUNS.tsv> --kind <kind> --model <model>   that pair's line only (a contract's estimate)
 #   scripts/run-stats.sh <RUNS.tsv> --per-run                       per kind, role and model, over single rows
-#   scripts/run-stats.sh <RUNS.tsv> --task <n> [--pr-json <file|->] [--waits <file>]
-#                                                                   one task's `task` row: time to ready (below)
+#   scripts/run-stats.sh <RUNS.tsv> --task <n> [--pr-json <file|->] [--waits <file>] [--append]
+#                                                                   one task's `task` row: time to ready (below);
+#                                                                   --append also writes it to RUNS.tsv (#242)
 #   scripts/run-stats.sh --limits [options]                         the limits: percent per dollar, dollars left
 #                                                                   and a block's fit (below)
 # RUNS.tsv (CORE §7): tab-separated, columns by the header line when there is one (its first field `date`;
@@ -78,7 +79,7 @@
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
 # line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
 # ready or a wait line is malformed; 2 on a usage error.
-usage() { sed -n '2,80s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,81s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -206,9 +207,10 @@ tfn='function epoch(v,   y, m, d, h, mi, s, e, yoe, doe) { sub(/^[ \t]+/, "", v)
     return sprintf("%04d-%02d-%02dT%02d:%02d:%02dZ", y, m, d, idiv(s, 3600), idiv(s % 3600, 60), s % 60) }'
 # --task: one task's `task` row - its time to ready and owner wait (CORE 7a)
 taskrow() {
-  local f="$1" id="$2" pj="" wf="" x C="checks none" G="-" W=""
+  local f="$1" id="$2" pj="" wf="" x C="checks none" G="-" W="" ap=0 row nl
   shift 2
   while [ $# -gt 0 ]; do
+    [ "$1" = --append ] && { ap=1; shift; continue; }
     [ $# -ge 2 ] || usage
     case "$1" in --pr-json) pj="$2" ;; --waits) wf="$2" ;; *) usage ;; esac; shift 2
   done
@@ -254,7 +256,7 @@ taskrow() {
         if (NF != 2 || a < 0 || b < a) { print "run-stats: " ENVIRON["F"] ":" FNR ": not an owner wait (<asked UTC> <answered UTC>)" > "/dev/stderr"; exit 1 }
         print a, b }' "$wf")" || return 1
   fi
-  F="$f" T="$id" C="$C" G="$G" W="$W" B="$B" LC_ALL=C awk -F '\t' "$units$tfn"'
+  row="$(F="$f" T="$id" C="$C" G="$G" W="$W" B="$B" LC_ALL=C awk -F '\t' "$units$tfn"'
     BEGIN { T = ENVIRON["T"]; sub(/[.].*$/, "", T); ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cs = 10; cb = 11; cw = 12; ca = 13
       first = -1; ver = -1 }
     function col(c) { return c ? $c : "" }
@@ -302,7 +304,16 @@ taskrow() {
       x = "date task role kind model effort estimate tokens cost result start wall active wait"; split(x, nn, " ")
       o = ""; for (i = 1; i <= nh; i++) { v = ""; if ((hd[i] in V) && !(hd[i] in u)) { v = V[hd[i]]; u[hd[i]] = 1 }; o = o (i > 1 ? "\t" : "") v }
       for (i = 1; i <= 14; i++) if (!(nn[i] in u)) o = o (o == "" && i == 1 ? "" : "\t") V[nn[i]]
-      print o }' "$f"
+      print o }' "$f")" || return 1
+  printf '%s\n' "$row"
+  [ "$ap" = 1 ] || return 0
+  # --append: the row as the file's last line, in its line ends; a last line without its end gets one first.
+  # The coordinator once took the printed row for a written one, and the task rows went missing (#242)
+  nl='
+'; [ "$(tr -cd '\r' < "$f" | wc -c | tr -d ' ')" = 0 ] || nl="$(printf '\r')$nl"   # not grep: Git Bash's drops CRs
+  if [ -s "$f" ] && [ "$(tail -c 1 "$f" | wc -l | tr -d ' ')" = 0 ]; then printf '%s' "$nl" >> "$f"; fi
+  printf '%s%s' "$row" "$nl" >> "$f" || return 1
+  echo "run-stats: the task row appended to $f" >&2
 }
 [ "${1:-}" = --limits ] && { shift; limits "$@"; exit $?; }
 [ "${2:-}" = --task ] && { [ $# -ge 3 ] && [ -n "$1" ] && [ -n "$3" ] || usage; f="$1"; id="$3"; shift 3; taskrow "$f" "$id" "$@"; exit $?; }

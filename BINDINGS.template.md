@@ -23,7 +23,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Worker working copies | `<create / remove commands>` |
 | Production backup before an irreversible change (CORE §1.4) | `<command>` → `<destination>`, kept `<how long>` |
 | Per-task resources | working copy `<pattern>` · DB stack `<pattern>` · ports `<base> + <task> mod <range>` |
-| Start / stop a task's environment | `<commands>` |
+| Start / stop a task's environment — first the working copy's own dependencies (`npm ci`, a virtualenv, …): a new worktree has none (#249) | `<commands>` |
 | Shared resources and their guards | `<fill>` |
 | Move a task on the board | `<command / field ids>` |
 | Usage / limits source | `<file or command>` |

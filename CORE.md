@@ -264,7 +264,8 @@ The continuous work:
    with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
-   apply, parallel work on the same code, resources (§8), launch/test limits, the report phrase — role
+   apply, parallel work on the same code, resources (§8, with the command that installs a new working
+   copy's dependencies, #249), launch/test limits, the report phrase — role
    rules live in the role file ([roles/worker.md](roles/worker.md)), never repeated in the brief's text — start-worker puts
    the role file at the top of a session's brief (TOOLKIT *Roles*). An `oracle`
    criterion with no test yet, and every §5 change, first goes to the **tester** subagent
@@ -517,8 +518,8 @@ never assumed (below).
   (the contract's `budget.time` as logged when the run started: minutes or a range `18-40`). The
   coordinator's own model and effort get a line per day.
   **A task row** per finished task (role `task`), appended when its PR merges — or when the block is
-  analysed with the task ready but unmerged — exactly as `scripts/run-stats <RUNS.tsv> --task <n>` prints it
-  (§7a): the task's kind and model, `start` = its first run's start, `wall` = time to ready, `active` = its
+  analysed with the task ready but unmerged — written by `scripts/run-stats <RUNS.tsv> --task <n> … --append`,
+  never copied by hand (a printed row was once taken for a written one, #242) (§7a): the task's kind and model, `start` = its first run's start, `wall` = time to ready, `active` = its
   work, `wait` = the owner wait in minutes (`<m>+` while unmerged: still open), result `merged` / `ready`,
   effort to cost `-`. A later task row of the same task replaces the earlier for the forecast (append, never
   edit). It repeats its runs' work, so the forecast's cost and work skip it; a header without `wait` or `estimate_time` gets
