@@ -26,7 +26,6 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Start / stop a task's environment | `<commands>` |
 | Shared resources and their guards | `<fill>` |
 | Move a task on the board | `<command / field ids>` |
-| Status page (the owner's summary of `LOG.md`, CORE §12) | `<link>` |
 | Usage / limits source | `<file or command>` |
 | Periodic tick | `<how to create it>` |
 | Owner's test station / preview | `<command or URL pattern>` |

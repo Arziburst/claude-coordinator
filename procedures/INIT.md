@@ -179,17 +179,19 @@ The numbered list below says what each answer sets, where it is recorded and wha
     a single task can be handed over any time. The autopilot (swarm) runs the batch recipe on its tick.
     Recorded in `PROJECT.md` *Settings*.
 13. **Help improve the coordinator?** The question, in the owner's language: "Would you like to
-    help improve the coordinator? Once a week it would send its repository a short anonymous summary —
-    numbers only: what tasks cost and how long they took, how many were reworked, where the safety guard
-    got in the way. No code, no file names, nothing of what the tasks were about. You can see each
-    summary before it is sent, or turn it off at any time." (Russian: "Хотите помочь улучшать координатор?
-    Раз в неделю он будет отправлять в его репозиторий короткую обезличенную сводку — только цифры:
-    сколько стоили и длились задачи, сколько было доработок, где мешала защита. Ни кода, ни имён файлов,
-    ни содержания задач. Каждую сводку можно посмотреть до отправки или выключить в любой момент.")
+    help improve the coordinator? Whenever you ask it for a retro, it would send its repository a short
+    anonymous summary — numbers only: what tasks cost and how long they took, how many were reworked,
+    where the safety guard got in the way. No code, no file names, nothing of what the tasks were about.
+    You can see each summary before it is sent, or turn it off at any time." (Russian: "Хотите помочь
+    улучшать координатор? Когда вы попросите разбор (ретро), он будет отправлять в его репозиторий
+    короткую обезличенную сводку — только цифры: сколько стоили и длились задачи, сколько было доработок,
+    где мешала защита. Ни кода, ни имён файлов, ни содержания задач. Каждую сводку можно посмотреть до
+    отправки или выключить в любой момент.")
     Recommended: *show me each summary first* — and for the first week whatever the answer; then the
-    owner picks the mode ([RETRO.md](RETRO.md)); *only me*: the weekly retro runs, nothing leaves this
+    owner picks the mode ([RETRO.md](RETRO.md)); *only me*: the retro runs, nothing leaves this
     machine. Recorded in `PROJECT.md` *Settings* with the anonymous id
-    (`scripts/retro --new-id`, random, never derived from a name); the weekly retro runs in every mode.
+    (`scripts/retro --new-id`, random, never derived from a name); the retro runs in every mode, when
+    the owner asks.
 14. **Protected branches — which branches does no worker ever push to, force-push or delete?** The
     recommended answer is prefilled from the research: the repository's default branch, the branches
     protected on the code host (where a gh login exists: `gh api repos/{owner}/{repo}/branches --jq
@@ -228,7 +230,7 @@ Everything else in `PROJECT.template.md`: what follows from the strictness prese
 who merges, review, the approval gate, obvious review comments, autopilot and the tick, code to other
 services, reports) and the template's defaults (session names, the batch recipe, commit and PR format,
 progress comments, research, the radar list and the expectations checklist (CORE §4b), risk-area
-rules, status page, issue fields). The owner changes any of them with one line at the summary or later.
+rules, issue fields). The owner changes any of them with one line at the summary or later.
 
 ### 3.4 Set up without asking
 

@@ -635,7 +635,7 @@ LAST="$(printf '%s' '{"session_id":"5e550000-0000-4000-8000-0000000000ff"}' | CL
 expect_in "re-read your role file and the contract your brief gave"
 jc='{"session_id":"c0c00000-0000-4000-8000-000000000001","cwd":"/work/proj","source":"compact"}'
 LAST="$(printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
-expect_in "re-read in full with the Read tool: /work/proj/coordinator/core/CORE.md (section 1, the hard rules, first)"
+expect_in "re-read in full with the Read tool: /work/proj/coordinator/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), /work/proj/coordinator/PROJECT.md"
 # the coordinator variant also loads in a worker launched from the project root (#217): silent there -
 # a session with a kept brief, or one working in a worktree (either separator)
 out="$(printf '%s' "$j" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
