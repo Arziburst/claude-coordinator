@@ -643,7 +643,8 @@ BOM, models priced apart),
   file cannot be read, 2 on a usage error.
 - **A task's time to ready and owner wait** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv> --task <n>
   --pr-json <file> --waits <file>` (`run-stats.ps1 <RUNS.tsv> -Task <n> -PrJson <file> -Waits <file>`)
-  prints the task row to append to `RUNS.tsv` when the task merges: `gh pr view <PR> --json
+  prints the task row for `RUNS.tsv` when the task merges, and with `--append` (`-Append`) writes it there
+  as the last line, in the file's line ends (#242): `gh pr view <PR> --json
   statusCheckRollup,mergedAt,createdAt > <file>` (or `--pr-json -` from a pipe; `-PrJson:-` in
   Windows PowerShell 5.1), and the owner questions that held the task up, from the journal, one
   `<asked> <answered>` per line in UTC (`2026-10-06T08:20:00Z 2026-10-06T08:35:00Z`; `#` comments). It
