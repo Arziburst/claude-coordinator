@@ -3,7 +3,7 @@
 # its turn comes, never after every other merge.
 #   powershell -File scripts\merge-queue.ps1 land -Pr <pr>[@<approved sha>],... [-Method squash|merge|rebase]
 #                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-DryRun]
-#   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...]
+#   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...] [-Touches <path or glob>,...]
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
 # in), and when the base brought changes to files the PR changes too (outside -Shared), it stops for a
@@ -12,27 +12,33 @@
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
 # stays for cleanup-worker; a branch other open PRs are based on is kept, #229), and every open PR that
 # changes a file the merged one changed is printed
-# as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
-# make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
-# files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
-# not run on them) and the pairs of open PRs that change the same files outside -Shared.
-# Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, SKIP, NOT APPROVED, CONFLICT,
-# REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP.
+# as AFFECTED, then one AFTER MERGE line: the merge row of CORE section 4's event table, so its duties have
+# a trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
+# not make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md
+# *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
+# (CI does not run on them) and the pairs of open PRs that change the same files outside -Shared; with
+# -Touches (a task's `touches`: a file, a folder or a glob), the open PRs changing anything under them,
+# as TOUCHES - the conflict foresight before a task (CORE section 4a; start-worker runs it).
+# Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
+# CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
+# TOUCHES.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
 # says why; the queue goes on with the next). Only gh is called, never git.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
-      [string]$Poll = '60', [string]$Timeout = '120', [switch]$DryRun)
+      [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
 # page; the caller's console gets its own encoding back on every way out
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-DryRun] | status [-Shared <glob>,...]'
+$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-DryRun] | status [-Shared <glob>,...] [-Touches <path>,...]'
 function Usage([string]$m) { [Console]::Error.WriteLine($(if ($m) { "$m; $usage" } else { $usage })); exit 1 }
 if ($Mode -ne 'land' -and $Mode -ne 'status') { Usage '' }
 if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, merge or rebase' }
 if ($Poll -notmatch '^[0-9]+$' -or $Timeout -notmatch '^[0-9]+$') { Usage '-Poll and -Timeout take whole numbers' }
 $prs = @(if ($Pr) { $Pr -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
 $globs = @(if ($Shared) { $Shared -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
+$tl = @(if ($Touches) { $Touches -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
+$sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 if ($Mode -eq 'status' -and $prs.Count) { Usage 'status takes no PR' }
 if ($Mode -eq 'land' -and -not $prs.Count) { Usage '' }
 foreach ($item in $prs) {
@@ -67,6 +73,11 @@ function IsShared([string]$f) { foreach ($g in $globs) { if ($f -like $g) { retu
 function Meet([string[]]$a, [string[]]$b, [switch]$All) {
   (@($a | Where-Object { $_ -and ($All -or -not (IsShared $_)) -and ($b -ccontains $_) }) -join ', ')
 }
+# Under <file>: inside one of -Touches - the path itself, a file below it, or a match of it as a glob
+function Under([string]$f) {
+  foreach ($t in $tl) { $b = $t.TrimEnd('/'); if ($f -ceq $b -or $f.StartsWith("$b/", [StringComparison]::Ordinal) -or $f -clike $t) { return $true } }
+  $false
+}
 function PrFiles([string]$l) { @(($l -split "`t") | Select-Object -Skip 4) }
 function Short([string]$x) { if ($x.Length -gt 7) { $x.Substring(0, 7) } else { $x } }
 
@@ -80,7 +91,12 @@ if ($Mode -eq 'status') {
     $both = Meet (PrFiles $list[$i]) (PrFiles $list[$j])
     if ($both) { $np++; "OVERLAP #$(($list[$i] -split "`t")[0]) #$(($list[$j] -split "`t")[0]): $both" }
   } }
-  "merge-queue status: $($list.Count) open, $nc conflicting, $np overlapping pairs"
+  $nt = 0
+  if ($tl.Count) { foreach ($l in $list) {
+    $hit = @(PrFiles $l | Where-Object { $_ -and (Under $_) }) -join ', '
+    if ($hit) { $nt++; $f = $l -split "`t"; "TOUCHES #$($f[0]): $($f[3]) - $hit" }
+  } }
+  "merge-queue status: $($list.Count) open, $nc conflicting, $np overlapping pairs$(if ($tl.Count) { ", $nt touching the task" })"
   exit 0
 }
 
@@ -147,12 +163,12 @@ foreach ($item in $prs) {
       if (-not $retried) {
         $ids = @(Q @('run', 'list', '--commit', $head, '--limit', '50', '--json', 'url,headSha,status,conclusion', '--template', $T_RUNS) |
           Where-Object { (-split $_)[3] -match '^(failure|cancelled|timed_out|startup_failure)$' } | ForEach-Object { ((-split $_)[0] -split '/')[-1] })
-        if (-not $ids.Count) { $tag = 'FAILED'; $msg = "a check failed on $(Short $head) and no run of it can be re-run"; break }
+        if (-not $ids.Count) { $tag = 'FAILED'; $msg = "a check failed on $(Short $head) and no run of it can be re-run - classify it from its log (CORE ${sect}4 step 4), never merge over it"; break }
         if ($DryRun) { foreach ($id in $ids) { "[dry-run] gh run rerun $id --failed" }; $tag = 'SKIP'; $msg = 'dry run - a check failed, would re-run it once'; break }
         foreach ($id in $ids) { $null = GhRc @('run', 'rerun', $id, '--failed') }
         "re-ran #$pr's failed runs once: $($ids -join ' ')"; $retried = $true; $seen = $false; $rpoll = 0
       } elseif ($seen -or $rpoll -ge 3) {
-        $tag = 'FAILED'; $msg = "its checks failed twice on $(Short $head) - read the log before anything else"; break
+        $tag = 'FAILED'; $msg = "its checks failed twice on $(Short $head) - read the log before anything else: the queue re-ran them once, so a flake is a flake bug; classify it (CORE ${sect}4 step 4), never merge over it"; break
       } else { $rpoll++ }
     } else { break }
     if ($DryRun) { $tag = 'SKIP'; $msg = 'dry run - its checks are pending'; break }
@@ -176,6 +192,7 @@ foreach ($item in $prs) {
     $both = Meet (PrFiles $l) $files -All
     if ($both) { "AFFECTED #$($f[0]): $($f[3]) - merge $base now: $both" }
   }
+  "AFTER MERGE #${pr}: the event table (CORE ${sect}4) - cleanup-worker (${sect}8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, ${sect}10); tell each AFFECTED PR's session to merge $base (${sect}4a); a bug it fixed that escaped earlier work -> ESCAPES (${sect}12); the project's after-merge duties (PROJECT.md)"
 }
 "merge-queue: $merged merged$(if ($left.Count) { ", left: $($left -join ', ')" })"
 if ($left.Count) { exit 3 }

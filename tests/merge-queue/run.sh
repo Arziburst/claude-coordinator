@@ -77,15 +77,16 @@ case "$kind" in
   sh) mq() { bash "$core/scripts/merge-queue.sh" "$@"; } ;;
   ps) ps="${1:-pwsh}"
       # the .sh's flags as the .ps1's parameters: land/status stay, --x y -> -X y, the PRs as -Pr a,b
-      mq() { local a=() prs="" sh="" nx=""
+      mq() { local a=() prs="" sh="" tc="" nx=""
         for x in "$@"; do
           [ "$nx" = shared ] && { sh="${sh:+$sh,}$x"; nx=""; continue; }
+          [ "$nx" = touches ] && { tc="${tc:+$tc,}$x"; nx=""; continue; }
           [ "$nx" = value ] && { a+=("$x"); nx=""; continue; }
           case "$x" in
-          land|status) a+=("$x") ;; --method) a+=(-Method); nx=value ;; --shared) nx=shared ;;
+          land|status) a+=("$x") ;; --method) a+=(-Method); nx=value ;; --shared) nx=shared ;; --touches) nx=touches ;;
           --poll) a+=(-Poll); nx=value ;; --timeout) a+=(-Timeout); nx=value ;; --dry-run) a+=(-DryRun) ;; --*) a+=("$x") ;;
           [0-9]*) prs="${prs:+$prs,}$x" ;; *) a+=("$x") ;; esac; done
-        [ -n "$prs" ] && a+=(-Pr "$prs"); [ -n "$sh" ] && a+=(-Shared "$sh")
+        [ -n "$prs" ] && a+=(-Pr "$prs"); [ -n "$sh" ] && a+=(-Shared "$sh"); [ -n "$tc" ] && a+=(-Touches "$tc")
         "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" "${a[@]}"; } ;;
   *) echo "unknown kind: $kind" >&2; exit 2 ;;
 esac
@@ -109,6 +110,8 @@ pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "
 printf '11\tMERGEABLE\tCLEAN\t11-fix\tsrc/x.ts\n12\tMERGEABLE\tBEHIND\t12-feat\tsrc/x.ts\tdocs/LOG.md\n19\tMERGEABLE\tBEHIND\t19-other\tsrc/q.ts\n' > "$STUB_D/prlist"
 run land 11 --poll 0
 code 0; has "MERGED #11: a111111"; has "AFFECTED #12: 12-feat - merge main now: src/x.ts, docs/LOG.md"; hasnt "AFFECTED #19"
+# the merge row of CORE §4's event table, printed so its duties have a trigger (#242)
+has "AFTER MERGE #11: the event table (CORE §4) - cleanup-worker (§8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, §10); tell each AFFECTED PR's session to merge main (§4a); a bug it fixed that escaped earlier work -> ESCAPES (§12); the project's after-merge duties (PROJECT.md)"
 has "merge-queue: 1 merged"; called "pr merge 11 --squash --match-head-commit $H11"; notcalled "--delete-branch"
 called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"
 
@@ -175,6 +178,7 @@ fresh "failed twice: FAILED, no merge"
 pr 16 b161616 16-a; printf 'fail\npending\nfail\n' > "$STUB_D/checks-b161616"; echo '901 b161616 completed failure' > "$STUB_D/runs-commit-b161616"
 run land 16 --poll 0
 code 3; has "FAILED #16: its checks failed twice on b161616"; notcalled "pr merge 16"
+has "the queue re-ran them once, so a flake is a flake bug; classify it (CORE §4 step 4), never merge over it"; hasnt "AFTER MERGE #16"
 
 fresh "a failure right after the re-run (no pending seen yet) is the old result: waited for"
 pr 16 b161616 16-a; printf 'fail\nfail\npending\npass\n' > "$STUB_D/checks-b161616"; echo '901 b161616 completed failure' > "$STUB_D/runs-commit-b161616"
@@ -195,7 +199,7 @@ code 0; has "MERGED #16"; called "pr checks 16"
 fresh "a failed check with no run to re-run: FAILED"
 pr 16 b161616 16-a; echo fail > "$STUB_D/checks-b161616"
 run land 16 --poll 0
-code 3; has "FAILED #16: a check failed on b161616 and no run of it can be re-run"
+code 3; has "FAILED #16: a check failed on b161616 and no run of it can be re-run - classify it from its log (CORE §4 step 4), never merge over it"
 
 fresh "the approved commit: another head is NOT APPROVED, the approved one (upper case, short) merges"
 pr 17 a171717aaaa 17-b; echo pass > "$STUB_D/checks-a171717aaaa"
@@ -236,6 +240,18 @@ printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tmessages/en.json\n32\tCONFLICTING\
 run status --shared 'messages/*'
 code 0; has "#31 CLEAN 31-a"; has "CONFLICTING #32: 32-b - its worker merges main by hand, CI does not run on it"
 has "OVERLAP #31 #32: src/a.ts"; hasnt "OVERLAP #31 #33"; has "merge-queue status: 3 open, 1 conflicting, 1 overlapping pairs"
+hasnt "TOUCHES"; hasnt "touching the task"
+# --touches: the conflict foresight before a task (CORE §4a) - a file, a folder (with or without its
+# slash) or a glob; shared files count too, the task may touch them
+run status --touches src/b.ts --touches messages/
+code 0; has "TOUCHES #31: 31-a - messages/en.json"; has "TOUCHES #32: 32-b - src/b.ts"; has "TOUCHES #33: 33-c - messages/en.json"
+hasnt "src/a.ts, messages"; has ", 3 touching the task"
+run status --touches 'src/*.ts'
+code 0; has "TOUCHES #31: 31-a - src/a.ts"; has "TOUCHES #32: 32-b - src/a.ts, src/b.ts"; hasnt "TOUCHES #33"; has ", 2 touching the task"
+run status --touches messages --touches src/c.ts
+code 0; has "TOUCHES #31: 31-a - messages/en.json"; hasnt "TOUCHES #32"; has ", 2 touching the task"
+run status --touches src/a
+code 0; hasnt "TOUCHES"; has ", 0 touching the task"
 
 fresh "usage errors and a failing gh: exit 1"
 run land; code 1
