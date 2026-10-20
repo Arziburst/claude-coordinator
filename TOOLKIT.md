@@ -44,8 +44,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (`scripts/hooks/after-compact.sh worker` / `coordinator`, Windows `.ps1`) then puts one instruction
   into the context — re-read the job's files in full from disk before the next step: a worker or lead
   the brief start-worker kept by its session id (`<config>/coordinator/briefs/<sessionId>.md`), the
-  coordinator CORE.md (§1 first), PROJECT.md, BINDINGS.md and LOG.md's open questions. It prints JSON
-  `additionalContext`: plain hook output never reaches the model. The worker variant is in the
+  coordinator CORE.md (§1 first, then the event table of §4), PROJECT.md, BINDINGS.md and LOG.md's open
+  questions. It prints JSON `additionalContext`: plain hook output never reaches the model. The worker variant is in the
   settings examples, the coordinator variant goes in its own settings (one-time step
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
   load it, and it stays silent in a session with a kept brief or working in a worktree (#217). The
