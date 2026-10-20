@@ -376,6 +376,18 @@ check 1 "start: an effort outside the five levels" -- start "${S[@]}" --effort t
 expect_in "low, medium, high, xhigh or max"
 check 0 "start: --effort in the dry run" -- start "${S[@]}" --effort xhigh --dry-run
 expect_in "--model opus --effort xhigh --permission-mode auto"
+# the conflict foresight before a worker's launch (#242): merge-queue status with the brief's touches
+# (the stub gh prints $STUB_HEADS as the open PRs' list); informational, never a stop
+expect_in "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE §4a)"
+printf 'Do it.\ntouches: [src/a.ts, "docs/"]   # what it changes\n' > "$tmp/brief-touches.md"
+T=(--repo "$tmp/repo" --branch 12-fix --model opus --brief-file "$tmp/brief-touches.md" --safety "$tmp/safety.json" --report-to x --dry-run)
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight" -- start --name "#12 worker: Fix" "${T[@]}"
+expect_in "foresight: TOUCHES #31: 31-a - src/a.ts"
+expect_in "foresight: merge-queue status: 1 open, 0 conflicting, 0 overlapping pairs, 1 touching the task"
+STUB_GH_RC=1 check 0 "start: the conflict foresight, gh failing" -- start --name "#12 lead: Fix" "${T[@]}"
+expect_in "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a)"
+check 0 "start: no conflict foresight for a verifier" -- start --name "#12 verifier: Fix" "${T[@]}"
+case "$LAST" in *foresight*) echo "FAIL: a verifier start printed the conflict foresight"; fail=1 ;; esac
 : > "$STUB_LOG"
 check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low
 grep -q -- "--bg --name #54 worker: e --model opus --effort low --permission-mode auto" "$STUB_LOG" ||
