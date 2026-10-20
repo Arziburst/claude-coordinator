@@ -249,6 +249,8 @@ rules, issue fields). The owner changes any of them with one line at the summary
   info/exclude (`git rev-parse --git-path info/exclude`: a linked worktree's `.git` is a file), first commit (layout: [state-repo/README.template.md](../state-repo/README.template.md));
   commit at every change and push per CORE §12b where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
+- **`coordinator/skills/`** and its link `.claude/skills` (CORE §12b, one-time step `coordinator-skills`):
+  where the coordinator's skills live; empty until the owner asks for one.
 - **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
   record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
@@ -256,7 +258,7 @@ rules, issue fields). The owner changes any of them with one line at the summary
   checks and adds it before every start, so an older project gets it at its next worker; likewise
   `/.lead/`, where a lead keeps its notes inside its worktree (roles/lead.md). Never
   `.gitignore`: that is a project file its team and the client would see. Nothing else of the
-  coordinator is written into the project's tree (the roles go to `~/.claude/agents/`, the hook is
+  coordinator is written into the project's tree but the `.claude/skills` link (excluded the same way) (the roles go to `~/.claude/agents/`, the hook is
   referenced by its absolute path in `coordinator/core/`).
 - **The voice** is not asked: artifacts are always in the owner's voice, with no AI co-author lines
   (§11).

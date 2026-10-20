@@ -29,6 +29,7 @@ with the client.
 | `ESCAPES.tsv` | bugs found after their change was merged: date, bug, the task that introduced it (or unknown), who found it (CORE §12) |
 | `CORE-FINDINGS.md` | the core's own failures found here, sent to claude-coordinator and proven fixed after an update (core/procedures/CORE-FINDINGS.md) |
 | `CHECKLIST.md` | the one-time settings and checks that ran here, per project and per machine (`core/ONE-TIME.md`) |
+| `skills/` | the coordinator's skills; `<project>/.claude/skills` links here (core/CORE.md §12b) |
 | `core/` | the local copy of the coordinator core, at the commit recorded in `PROJECT.md` |
 | `SOURCES.md`, `sources/` | the source catalog and the files the owner gave (masked summaries; raw files never leave this private repository) |
 | `TASKS.md` | only without a tracker: the tasks and their statuses |
