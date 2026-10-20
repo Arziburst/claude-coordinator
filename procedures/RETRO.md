@@ -1,21 +1,19 @@
-# The weekly retro — the coordinator measured, and improved
+# The retro — the coordinator measured, and improved
 
 Part of the coordinator core, read when the retro runs. Same authority as `CORE.md`; the hard rules of
 CORE §1 apply — §1.11 (a proposal changes nothing without the owner's yes) and §1.13 (an issue in
 claude-coordinator is public) above all.
 
 The owner's goal for the coordinator: code written **cheaper, faster, with higher quality, more
-predictably and more stably** than plain distributed sessions. Once a week the retro measures each of
-the five on this project, this week against the previous one, turns the numbers into at most three
+predictably and more stably** than plain distributed sessions. When the owner asks, the retro measures
+each of the five on this project, a week against the previous one, turns the numbers into at most three
 proposals, and — as the owner chose at init — sends an anonymous summary to the core's maintainer.
 
 ## 1. When
 
-- **Weekly, by itself.** The retro is due when the *Settings* row **last retro** in `PROJECT.md` names a
-  week before the last complete one (or none): checked at session start and with the daily sync (CORE §4,
-  the events), and on the tick where autopilot runs one (CORE §9). A session-scoped cron cannot carry a
-  weekly job (it expires after 7 days, TOOLKIT *The periodic tick*), so the due check is the schedule.
-  It runs once per week; a week already done is not run again unless the owner asks.
+- **Only when the owner asks** — it never runs by itself (the owner's decision, #242: a weekly due
+  check was never acted on). The *Settings* row **last retro** in `PROJECT.md` records the last week
+  done.
 - **"Retro"** from the owner, in any wording ("ретро", "retrospective"), any time: the last complete
   week, or the week the owner names (`--week <a day of it>`; the current week, still partial, with
   today's date).

@@ -212,16 +212,22 @@ cycle of its own:
 
 In either mode the owner may hand over a single task at any time.
 
-**Housekeeping runs on events, in every mode — never held for a batch:**
+**The event table — what runs on each event, in every mode, never held for a batch.** Nothing else
+reminds you of these: after every event, and after a compaction, check the row; a duty only in memory
+is lost (#242).
 
 | Event | What runs |
 |---|---|
 | A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
-| A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) |
+| A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; the session named and subscribed (steps 3–4 below); its journal line (§12) |
+| A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
+| A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a); a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12) |
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
-| The weekly retro is due (*last retro* in `PROJECT.md` before the last complete week; checked with the sync), or the owner says "retro" | the retro ([procedures/RETRO.md](procedures/RETRO.md)): the report, at most three proposals, the summary as the owner chose |
+| A mistake is corrected or found | the lesson written as a rule (§10) |
+| The conversation is compacted | CORE (§1 first, then this table), `PROJECT.md`, `BINDINGS.md` and the journal's open questions re-read from disk; any duty of this table not done since the last journal line, done now |
 | Anything in `coordinator/` changes | a commit there at once; a push per §12b |
 | A batch ends | the batch report (§12) |
+| The owner asks — "retro", "radar", "spend report" (any wording) | the retro ([procedures/RETRO.md](procedures/RETRO.md)): the report, at most three proposals, the summary as the owner chose; one radar reference (§4b); the analysis of forecast against actual (§7a) — none of them runs by itself |
 
 **The batch skeleton:**
 
@@ -336,11 +342,10 @@ The coordinator **proposes**, the owner approves every proposal before it become
   by row; taken rows become tasks; research itself creates none.
 - **Research radar** — finding what nobody asked about yet: a list in `PROJECT.md` of references and
   competitors (similar products, open-source projects, mods, ports), proposed from the init research and
-  added to whenever a worker or the owner names one. **One reference per block** (§3 table, *Reports*),
-  a light-model researcher; its rows go into the research catalog with the decision empty — what they
-  do better, what we could take, the licence. The owner decides the new rows in one batch at the end of
-  the block, with a recommendation per group; taken rows become tasks. Pre-approved by the list itself
-  in the swarm and standard presets; strict: proposed per block like any research.
+  added to whenever a worker or the owner names one. **One reference when the owner asks** ("radar", any
+  wording; it never runs by itself, #242), a light-model researcher; its rows go into the research
+  catalog with the decision empty — what they do better, what we could take, the licence. The owner
+  decides the new rows in one batch, with a recommendation per group; taken rows become tasks.
 - **Expectations checklist:** what users of this kind of product expect (a VR game: comfort, turning
   options, seated play; a shop: search, cart, payment), drafted from the radar and the research, kept in
   the project's docs; the plan is re-audited against it at each milestone checkpoint and the gaps are
@@ -468,7 +473,7 @@ never assumed (below).
   - **balanced:** also the `hardest` kinds and research runs — the researcher role on a question of §4b
     *Research before building*, and a lead's research sub-run — Fable being Anthropic's pick for
     multistep research, questions about the Claude platform itself above all (the radar's one reference
-    per block stays light, §4b);
+    stays light, §4b);
   - **thorough**, and the strict preset at any level: also the independent verification (the verifier)
     of risk-tier work (§5, the owner's critical zones) and a `hard` task that already failed its review
     once on Opus; risk-tier work itself runs on the top rung only when the task is `hardest` — otherwise
@@ -607,19 +612,21 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   its tasks through `depends_on` with at most the parallel-worker limit running at once (§8), each at its
   median time to ready (a task waits for its dependency to be ready, not just worked), marked `rough`.
   It does not fit → a smaller block, or the owner decides (over a cap only with permission).
-- **Analysis after the block:** one report line — forecast vs actual (cost, percent, time — work and
-  time to ready, each against its own forecast — per task and for the block, deviation), the
-  worst overrun by task, reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its estimate in cost or in time is looked at: a wrong
+- **Analysis, when the owner asks** ("spend report", any wording; it never runs by itself, #242): one
+  report line per block — forecast vs actual (cost, percent, time — work and time to ready, each
+  against its own forecast — per task and for the block, deviation), the worst overrun by task,
+  reworks and escalations, and the escaped bugs per 10 merged tasks (§12). A task over twice its
+  estimate in cost or in time is looked at: a wrong
   kind, a contract too big for one worker, a model too weak; the lesson goes into `PROJECT.md` (§10).
   A side line gives the average owner wait (the task rows' `wait`) — a hint where the pipeline stalls, never a
   reproach. Estimates recalibrate by themselves through the medians; "spend report" shows the numbers
   behind them (`scripts/run-stats <RUNS.tsv>`: every kind and model).
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
-- **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)) measures the coordinator on cost, speed,
-  quality, predictability and stability, week against week, from the run log and the project's transcripts
-  (`scripts/retro`, its input `scripts/session-insights`, TOOLKIT *Usage*), writes at most three proposals
-  for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init. Its
+- **The retro**, when the owner asks ([procedures/RETRO.md](procedures/RETRO.md)), measures the
+  coordinator on cost, speed, quality, predictability and stability, week against week, from the run log
+  and the project's transcripts (`scripts/retro`, its input `scripts/session-insights`, TOOLKIT *Usage*),
+  writes at most three proposals for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init. Its
   predictability judges a task by the estimate logged at the start where there is one (§7: `estimate`,
   `estimate_time`) — a range met inside it, one number `n` met from `2n/3` to `3n/2` (symmetric on a log
   scale, about as wide as a range's 25th–75th band, so a single number never looks more predictable than
@@ -655,9 +662,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 - **Time budgets (strict preset, or where `PROJECT.md` asks):** keep tasks near their realistic estimate (the median of
   `budget.time`, §7a); warn before the pessimistic (the top of its range).
 - The periodic tick (~30 min) exists **only with autopilot on**; recreate it after a restart.
-- The coordinator is a big share of the spend: short turns, filtered output, no polling, no "are you
-  done?" messages; update the status page (the owner's summary of `LOG.md`, linked in BINDINGS)
-  before long waits.
+- The coordinator is a big share of the spend: short turns, filtered output (never the lines a script
+  prints for you to act on — the merge queue's `AFFECTED`, `REVIEW`, `CONFLICT`, #242), no polling, no
+  "are you done?" messages.
 
 ## 10. Rules, mistakes and lessons
 
@@ -700,7 +707,7 @@ change that affects them.
 - **Journal** `LOG.md` next to `PROJECT.md`: one dated line per event that matters (started, merged,
   cleaned up, decided, verdicts, questions and answers — a question that holds a task up names the task
   and the UTC time it was asked and answered — the `--waits` input of `run-stats --task`, §7a).
-  It survives compaction, restarts and moves; the status page summarizes it. No customer data or secrets
+  It survives compaction, restarts and moves. No customer data or secrets
   (§1.13); in a client's repository, written for the client.
 - **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
   owner's test, CI on the main line, another task, a user) gets one line in `coordinator/ESCAPES.tsv`
