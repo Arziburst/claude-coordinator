@@ -223,7 +223,8 @@ databases, containers; the worktree roots outside
 identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one cheap probe per model, Fable counted only with the owner's answers of question 8; list prices — written also as `coordinator/prices.txt`, the prices file of `scripts/run-stats --limits`, with `top` after Fable when it is the top rung, one-time step `prices-file`; a price not on the pricing page is asked); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
 (code host, tracker, design, database, hosting, docs, browser) — propose the matching servers, the owner
 decides what is connected and with which rights; whether git, a code host and a tracker exist
-(missing → [SOURCES.md](SOURCES.md) §3). Existing rules in other formats are merged as *Details of the
+(missing → [SOURCES.md](SOURCES.md) §3), and which code host: not GitHub → the summary names the steps the
+coordinator takes by hand there (TOOLKIT *CI*). Existing rules in other formats are merged as *Details of the
 start sequence* says, and every place they differ from the core is one line in the summary.
 
 ### 3.3 By default — not asked, shown in the summary

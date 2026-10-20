@@ -61,6 +61,12 @@ the report notes the interruption and the resume time.
    - `selftest hooks --settings <file>` on the worker safety file and on every settings file of the
      coordinator's own session that holds the guard (the project's `.claude/settings.json` and
      `.claude/settings.local.json`, the user's `~/.claude/settings.json`).
+   - **When the probe sessions run** (the owner's decision, #235): only when something they prove can
+     have changed — no `probes` record in `CHECKLIST.md` for this `hostname` (a new machine); the update
+     changed `scripts/hooks/safety-guard.*`; a settings file they probe differs from its recorded
+     `git hash-object`; or the owner asks. Otherwise the report says `SKIP probes: guard and settings
+     unchanged since <date>` — no BLOCKED, the self-test is complete without them. Each run that passes
+     writes the record: `probes PASS <date> <hostname>` with each probed file's `git hash-object`.
    - Two probe sessions on the light model, started from the project root (trusted): one with
      `--settings <worker safety file>`, one with no `--settings` (it loads the settings the coordinator
      itself runs with). Each is told: "Run exactly `git push origin HEAD:main --dry-run`, report its
@@ -74,12 +80,17 @@ the report notes the interruption and the resume time.
    - **Probe names:** each probe session is named `probe: …` (`--name "probe: push"`, `"probe: push (own
      settings)"`, `"probe: edit"`): `selftest verify` and `clean` find the self-test's sessions by that name
      (or `selftest`, or a `#st` task), and the retro leaves them out.
-   - **Started by the coordinator session itself**, never by a subagent — the probes here and the
-     sessions of steps 4 and 5: Claude Code's auto-mode classifier refused a subagent's launch of
-     `probe: push` ("Git Destructive", #218) that the coordinator's own launch had passed. A launch
-     refused anyway (a classifier, a permission rule) is no FAIL of the guard: the report says
-     `BLOCKED probe: <name> (launch refused: <reason>)`, the owner starts it with the same command from
-     their own terminal, and it is then checked as above; the self-test is not complete before that.
+   - **The owner launches the probes:** Claude Code's auto-mode classifier refuses a session's own
+     launch of a session told to push to main, from a subagent ("Git Destructive", #218) and from the
+     coordinator itself ("Auto-Mode Bypass", #235) — and no allow rule is added to get past it, which would
+     weaken Claude Code's own protection. The coordinator prints each probe's full command, ready; the
+     owner runs it with `! <command>` in the coordinator's prompt (the owner's own command, not the
+     session's) or in their own terminal, and it is then checked as above. Until then the report says
+     `DUE probe: <name> (run by the owner: <command>)`, and it stays on the journal's open questions.
+   - **The sessions of steps 4 and 5** are started by the coordinator session itself, never by a
+     subagent (#218). A launch refused anyway (a classifier, a permission rule) is no FAIL: the report says
+     `BLOCKED <name> (launch refused: <reason>)`, the owner starts it with the same command, and it is
+     then checked; the self-test is not complete before that.
    - **The edit probe**, when the worker safety file sets `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*): a
      third probe session on the light model, started from the project root with `--settings <worker
      safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt` containing x; do not

@@ -13,23 +13,23 @@ evidence expected, non-goals, "do not decide" items — made explicit so nothing
 ```yaml
 ---
 id: 37                             # the task's number in the tracker
-title: Items with a reticle per hand
+title: Saved carts per account
 intent: >                          # why this matters, 1-3 sentences - the field most often lost in a hand-off
-  The player must see which item each hand points at, so they do not grab the wrong one.
+  A signed-in customer finds the same cart on every device, so they do not lose what they picked.
 inputs:                            # exact pointers, not "the whole project"
-  - src/vr/hands/*.cpp
+  - src/cart/*.ts
   - docs/decisions.md#D-12
-  - "S-3 Figma: inventory screen"  # sources by id (procedures/SOURCES.md)
+  - "S-3 Figma: cart screen"       # sources by id (procedures/SOURCES.md)
 outputs:
-  - a PR into main from 37-feat-hand-reticle
+  - a PR into main from 37-feat-saved-cart
 acceptance:                        # ordered; each criterion says how it is checked
-  - criterion: each hand shows its own reticle
+  - criterion: a cart saved on one device opens on another
     check: oracle                  # oracle | review | owner
-    how: test_vr_reticle (new) passes
+    how: test_cart_sync (new) passes
     source: S-3                    # where the criterion comes from; none = the coordinator's own reading
-  - criterion: grabbing items does not regress
+  - criterion: checkout does not regress
     check: oracle
-    how: the existing tests/vr suite passes
+    how: the existing tests/cart suite passes
   - criterion: the code follows the project's standards
     check: review
 tests_first: yes                   # an oracle criterion names a new test (CORE §4 step 3)
@@ -37,15 +37,15 @@ non_goals:
   - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances
 do_not_decide:                     # raised as questions, never decided by the worker
-  - the reticle's colour and shape
+  - how long a saved cart is kept
 budget:
-  model: opus                      # per CORE §7: rendering and input are "hard or risky"
+  model: opus                      # per CORE §7: stored customer data is "hard or risky"
   effort: high
   escalate_to: fable               # model for one retry after a failed review
   cost: 16                         # USD at list price: the whole task, its tests and review (CORE §7a)
   time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
-touches: [src/vr/hands/]           # what it will change, for conflict foresight (CORE §4a)
+touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
 ---
 Free text: context, known traps, parallel work nearby, launch and test limits, the report phrase.
 ```
@@ -90,9 +90,9 @@ contract: 37
 status: ready                      # ready | blocked | failed
 model: opus
 results:
-  - criterion: each hand shows its own reticle
+  - criterion: a cart saved on one device opens on another
     evidence: oracle               # oracle | claim | owner
-    proof: "CI run #812 on 5f3e2a1: test_vr_reticle passed"   # a CI run names the commit it ran on
+    proof: "CI run #812 on 5f3e2a1: test_cart_sync passed"   # a CI run names the commit it ran on
   - criterion: the code follows the project's standards
     evidence: claim
 questions: []                      # do_not_decide items and new forks

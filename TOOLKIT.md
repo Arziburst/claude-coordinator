@@ -373,6 +373,12 @@ BOM, models priced apart),
   as on a Russian Windows.
 
 ## CI
+- **The code host the scripts talk to is GitHub,** through `gh`: the merge queue, cleanup-worker's
+  "is its PR merged" check, `run-stats --task --pr-json` and INIT's read of the protected branches. On
+  another code host (GitLab, Bitbucket, Azure DevOps …) the rules are the same and the coordinator takes
+  those steps by hand with the host's own tool: one approved PR at a time on its approved commit, the
+  sessions whose PRs change the merged files told to merge main, the merge confirmed before any cleanup
+  (CORE §4a, §8); INIT's summary names them (support for another host is built when a project needs it).
 - **Local test runs:** a long run never under a short tool timeout — a killed run looks like a crash;
   start it in the background and wait for its end. What a test starts (a server, a browser, an app)
   ends with it: on Windows a job object (or the runner's own kill of the process tree), on macOS / Linux
@@ -443,7 +449,7 @@ BOM, models priced apart),
   memory add to that prompt even with `--system-prompt` (measured on 2.1.296: Haiku ≈ $0.0005–0.0012,
   Sonnet ≈ $0.024, Opus ≈ $0.050, Fable ≈ $0.016–0.12; Haiku from an empty temp folder wrote 4347
   cache tokens against 2402 from a repo folder — an empty folder is not reliably cheaper). The bare
-  `claude -p --model <id> "ok"` loads the full system prompt and tools — on Arx $0.47 on Fable.
+  `claude -p --model <id> "ok"` loads the full system prompt and tools — $0.47 on Fable on a real project.
   Not available: a non-zero exit or `"is_error": true`; never test `subtype`, which can say `success` on
   an error. A success does not prove the plan includes the model: in `-p` mode a Fable request is billed
   to usage credits without asking when they are on, and fails with an API error when they are off
@@ -472,9 +478,9 @@ BOM, models priced apart),
   always sums the messages, and a subagent read by its `agentId` has no record of its own. A wrapper
   that parses `out>=` must accept `out=`. The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
-  session's (measured on Arx), so tokens always come from the transcript. No `cost` line → the tokens
+  session's (measured on a real project), so tokens always come from the transcript. No `cost` line → the tokens
   per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
-  cache entries, `prompt_cache.ttl: "1h"` in the status JSON; on Arx this matched the status cost to
+  cache entries, `prompt_cache.ttl: "1h"` in the status JSON; on a real project this matched the status cost to
   the cent). **A subagent** (the Agent tool) has no session id and no status file: pass the `agentId`
   its result gives (or a unique prefix) — session-tokens reads `<parent>/subagents/agent-<id>.jsonl`
   and prints its own tokens per model, never a `cost` line; its cost is those tokens at list price. It
