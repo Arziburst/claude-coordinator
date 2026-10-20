@@ -31,11 +31,11 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Core (CORE §2) | `<fill>` | `<fill>` | `<date>` | a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
 | Coordinator name (CORE §2) | `<fill>` | `<fill>` | `<date>` | `<Project> Coordinator` — always containing the English word `Coordinator`; the session is started with `claude --name "<name>"` or renamed with `/rename <name>` |
 | Core reports (procedures/CORE-FINDINGS.md) | `<fill>` | `<fill>` | `<date>` | **automatically** · show me each one first (client work) · no — by hand: how the core's own failures reach claude-coordinator |
-| Self-improvement summaries (procedures/RETRO.md) | `<fill>` | `<fill>` | `<date>` | **show me first** (the first week always) · send · only me — whether the weekly retro sends its anonymous summary of numbers to claude-coordinator |
+| Self-improvement summaries (procedures/RETRO.md) | `<fill>` | `<fill>` | `<date>` | **show me first** (the first week always) · send · only me — whether the retro sends its anonymous summary of numbers to claude-coordinator |
 | Self-improvement id | `<fill>` | `<fill>` | `<date>` | 12 random hex digits from `scripts/retro --new-id`, made once, never derived from a name |
 | Worktree roots | `<fill>` | `<fill>` | `<date>` | none — the workers' worktrees are under `.claude/worktrees`; else every `--worktree-root` the project gives start-worker, relative to the project root where it can be (`../<project>-wt`), split by `,` — the retro counts sessions started there |
 | Protected branches (CORE §1.9, TOOLKIT *Safety*) | `<fill>` | `<fill>` | `<date>` | `main` and `master` always, plus the repository's default branch and the branches protected on the code host (INIT 3.1, question 14) — exact names, no patterns, added to main and master, never replacing them; the added ones written to the worker safety file's `env` `COORD_PROTECTED_BRANCHES` and its push deny rules; none: main and master only |
-| Last retro (week of) | `<fill>` | `<fill>` | `<date>` | none yet — the weekly retro sets it (procedures/RETRO.md) |
+| Last retro (week of) | `<fill>` | `<fill>` | `<date>` | none yet — the retro sets it (procedures/RETRO.md) |
 
 ## Project
 | Question | This project | Default to offer |
@@ -73,7 +73,7 @@ Other sources: the catalog `coordinator/SOURCES.md`. Missing tools (no tracker, 
 | Unplanned but needed work | `<fill>` | per the strictness (CORE §3): swarm filed and queued · standard filed, starts on the scope owner's yes · strict proposed only |
 | The owner's wishes | `<fill>` | an issue at once, in the owner's words |
 | Issue fields | `<fill>` | scope, out of scope, **do not decide**, depends on, acceptance criteria, verification, estimate |
-| Status page / progress line | `<fill>` | a pinned issue; "milestone ≈ N% (closed/all)" after each merge |
+| Progress line | `<fill>` | "milestone ≈ N% (closed/all)" in the report after each merge |
 
 ## The batch recipe (CORE §4)
 What the batch command runs here (work mode *batch*, and the autopilot's tick) — an ordered recipe, agreed at init,
@@ -99,7 +99,7 @@ revised any time. Under *by task* only the approval gate and the comment rows ap
 |---|---|---|
 | Start research | `<fill>` | propose in one line with the model it would use; start only on the owner's yes |
 | Where results go | `<fill>` | a catalog document in the project's docs (`docs/research/<topic>.md`) or a table in the coordinator session |
-| Radar: references and competitors | `<fill>` | proposed from the init research (similar products, open-source projects, mods); one per block, a light-model researcher; rows decided by the owner in one batch at the end of the block · strict: proposed per block |
+| Radar: references and competitors | `<fill>` | proposed from the init research (similar products, open-source projects, mods); one reference when the owner asks ("radar"), never by itself, a light-model researcher; rows decided by the owner in one batch |
 | Expectations checklist | `<fill>` | `docs/expectations.md`; re-audited at each milestone checkpoint |
 
 ## The change flow

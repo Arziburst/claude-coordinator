@@ -33,7 +33,7 @@ else
   wd="$(printf '%s' "$cwd" | tr '\\' '/')"
   if { [ -n "$b" ] && [ -f "$b" ]; } || case "$wd" in */.claude/worktrees/*|*/.claude/worktrees) true ;; *) false ;; esac; then exit 0; fi
   p="${cwd:+$cwd/}coordinator"
-  msg="$lead Before your next step, re-read in full with the Read tool: $p/core/CORE.md (section 1, the hard rules, first), $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
+  msg="$lead Before your next step, re-read in full with the Read tool: $p/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
 fi
 esc="$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$esc"

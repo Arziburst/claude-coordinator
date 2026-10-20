@@ -155,9 +155,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   after 7 days, max 50 per session. `--resume` restores cron tasks (not self-paced loops). Recreate the
   tick after every restart. Durable alternatives: Routines (cloud, ≥ 1 h) or Desktop scheduled tasks.
   [scheduled-tasks](https://code.claude.com/docs/en/scheduled-tasks.md)
-- A weekly job cannot live in a cron that expires after 7 days: the **weekly retro** is a due check
-  instead — *last retro* in `PROJECT.md` against the last complete week, at session start, with the daily
-  sync and on the tick where there is one ([procedures/RETRO.md](procedures/RETRO.md)).
+- A weekly job cannot live in a cron that expires after 7 days; the retro runs only when the owner
+  asks ([procedures/RETRO.md](procedures/RETRO.md), #242).
 
 ## Safety
 - **Permission rules:** `deny` → `ask` → `allow`; a deny always wins. Compound commands are split
@@ -524,7 +523,7 @@ BOM, models priced apart),
   so on the first turn it is zero or only the first responses (Windows: $0.0039 of a $0.0062 turn), and
   later it lags by the rest of the turn. Read it at stage boundaries; a zero or small first reading is
   "not yet".
-- **Where sessions lose money, time, quality or stability** (CORE §7a, the weekly retro's input):
+- **Where sessions lose money, time, quality or stability** (CORE §7a, the retro's input):
   `scripts/session-insights.sh <session-id | prefix | agentId | transcript.jsonl>` or `--since <UTC time
   | Unix seconds>` (`session-insights.ps1 <id>` / `-Since`; `--detail` / `-Detail`), the same lookup
   as session-tokens: a session is its transcript and its subagents', `--since` every transcript on the
@@ -581,7 +580,7 @@ BOM, models priced apart),
   record after the result); a result whose call is not in the files read (or before `--since`) is
   skipped, and so is a line that is no record (a malformed or cut line). Exit 1 when no transcript is
   found or a prefix is ambiguous, 2 on a usage error.
-- **The weekly retro** ([procedures/RETRO.md](procedures/RETRO.md)): `scripts/retro.sh <RUNS.tsv> [--week
+- **The retro** ([procedures/RETRO.md](procedures/RETRO.md)): `scripts/retro.sh <RUNS.tsv> [--week
   <YYYY-MM-DD>] [--project <root>] [--journal <LOG.md>] [--escapes <ESCAPES.tsv>] [--no-insights]`
   (`retro.ps1 <RUNS.tsv> -Week … -Project … -Journal … -Escapes … -NoInsights`). The week is Monday to
   Sunday UTC holding `--week` (default: the last complete week), against the 7 days before it; the
