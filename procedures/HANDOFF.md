@@ -46,7 +46,8 @@ holding the coordinator's files —
   (above). The session reads its
   `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
   context already known: clone the project, clone the state repository into its `coordinator/` and add
-  `coordinator/` to the project's info/exclude (`git rev-parse --git-path info/exclude`), re-detect the platform and the "re-detect" rows, check the
+  `coordinator/` to the project's info/exclude (`git rev-parse --git-path info/exclude`), re-create the
+  `.claude/skills` link (one-time step `coordinator-skills`: a link is not in git), re-detect the platform and the "re-detect" rows, check the
   logins and the safety setup, confirm the quiz briefly, offer the machine rows of
   [ONE-TIME.md](../ONE-TIME.md) missing for this `hostname` in `CHECKLIST.md`, dry run (§12a) — including which interrupted
   tasks it would restart — then wait for the owner.

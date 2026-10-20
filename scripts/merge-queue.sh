@@ -3,7 +3,7 @@
 # merges main once, when its turn comes, never after every other merge.
 #   scripts/merge-queue.sh land <pr>[@<approved sha>]... [--method squash|merge|rebase] [--shared <glob>]...
 #                               [--poll <seconds>] [--timeout <minutes>] [--dry-run]
-#   scripts/merge-queue.sh status [--shared <glob>]...
+#   scripts/merge-queue.sh status [--shared <glob>]... [--touches <path or glob>]...
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
 # in), and when the base brought changes to files the PR changes too (outside --shared), it stops for a
@@ -12,25 +12,30 @@
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
 # stays for cleanup-worker; a branch other open PRs are based on is kept, #229), and every open PR that
 # changes a file the merged one changed is printed
-# as AFFECTED. The queue never resolves a conflict and never merges a commit it was not given or did not
-# make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md *Shared
-# files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones (CI does
-# not run on them) and the pairs of open PRs that change the same files outside --shared.
-# Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, SKIP, NOT APPROVED, CONFLICT,
-# REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP.
+# as AFFECTED, then one AFTER MERGE line: the merge row of CORE §4's event table, so its duties have a
+# trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
+# not make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md
+# *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
+# (CI does not run on them) and the pairs of open PRs that change the same files outside --shared; with
+# --touches (a task's `touches`: a file, a folder or a glob), the open PRs changing anything under them,
+# as TOUCHES - the conflict foresight before a task (CORE §4a; start-worker runs it).
+# Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
+# CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
+# TOUCHES.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
 # says why; the queue goes on with the next). Only gh is called, never git (Windows: merge-queue.ps1).
 set -uo pipefail
 
-usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--dry-run] | status [--shared <glob>]..."
+usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
 mode="${1:-}"; [ $# -gt 0 ] && shift
 case "$mode" in land|status) ;; *) echo "$usage" >&2; exit 1 ;; esac
-method=squash poll=60 timeout=120 dry=0 prs=() shared=()
+method=squash poll=60 timeout=120 dry=0 prs=() shared=() touches=()
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --method) need "$@"; method="$2"; shift 2 ;;
     --shared) need "$@"; shared+=("$2"); shift 2 ;;
+    --touches) need "$@"; touches+=("$2"); shift 2 ;;
     --poll) need "$@"; poll="$2"; shift 2 ;;
     --timeout) need "$@"; timeout="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
@@ -69,6 +74,9 @@ is_shared() { local g; for g in ${shared[@]+"${shared[@]}"}; do case "$1" in $g)
 # meet <lines a> <lines b> [all]: the lines of a also in b (outside --shared unless "all"), joined by ", "
 meet() { local f out=""; while IFS= read -r f; do [ -n "$f" ] || continue; [ -z "${3:-}" ] && is_shared "$f" && continue
            printf '%s\n' "$2" | grep -qxF -- "$f" && out="${out:+$out, }$f"; done <<< "$1"; printf '%s' "$out"; }
+# under <file>: inside one of --touches - the path itself, a file below it, or a match of it as a glob
+under() { local t; for t in ${touches[@]+"${touches[@]}"}; do case "$1" in "${t%/}"|"${t%/}"/*) return 0 ;; esac
+            case "$1" in $t) return 0 ;; esac; done; return 1; }
 pr_files() { printf '%s\n' "$1" | cut -f5- | tr '\t' '\n'; }
 
 if [ "$mode" = status ]; then
@@ -84,7 +92,13 @@ if [ "$mode" = status ]; then
       [ -n "$both" ] && { np=$((np + 1)); echo "OVERLAP #${a%%"$TAB"*} #${b%%"$TAB"*}: $both"; }
     done <<< "$list"
   done <<< "$list"
-  echo "merge-queue status: $n open, $nc conflicting, $np overlapping pairs"
+  nt=0; if [ ${#touches[@]} -gt 0 ]; then
+    while IFS= read -r a; do [ -n "$a" ] || continue; hit=""
+      while IFS= read -r f; do [ -n "$f" ] && under "$f" && hit="${hit:+$hit, }$f"; done <<< "$(pr_files "$a")"
+      [ -n "$hit" ] && { nt=$((nt + 1)); echo "TOUCHES #${a%%"$TAB"*}: $(printf '%s\n' "$a" | cut -f4) - $hit"; }
+    done <<< "$list"
+  fi
+  echo "merge-queue status: $n open, $nc conflicting, $np overlapping pairs${touches[0]+, $nt touching the task}"
   exit 0
 fi
 
@@ -142,13 +156,13 @@ for item in "${prs[@]}"; do
       if [ $retried = 0 ]; then
         r="$(q run list --commit "$head" --limit 50 --json url,headSha,status,conclusion --template "$T_RUNS")" || exit 1
         ids="$(printf '%s\n' "$r" | awk '$4 ~ /^(failure|cancelled|timed_out|startup_failure)$/ { n = split($1, p, "/"); print p[n] }')"
-        [ -n "$ids" ] || { result="FAILED|a check failed on ${head:0:7} and no run of it can be re-run"; break; }
+        [ -n "$ids" ] || { result="FAILED|a check failed on ${head:0:7} and no run of it can be re-run - classify it from its log (CORE §4 step 4), never merge over it"; break; }
         if [ "$dry" = 1 ]; then for id in $ids; do echo "[dry-run] gh run rerun $id --failed"; done
           result="SKIP|dry run - a check failed, would re-run it once"; break; fi
         for id in $ids; do gh run rerun "$id" --failed >/dev/null 2>&1; done
         echo "re-ran #$pr's failed runs once:" $ids; retried=1 seen=0 rpoll=0
       elif [ $seen = 1 ] || [ $rpoll -ge 3 ]; then
-        result="FAILED|its checks failed twice on ${head:0:7} - read the log before anything else"; break
+        result="FAILED|its checks failed twice on ${head:0:7} - read the log before anything else: the queue re-ran them once, so a flake is a flake bug; classify it (CORE §4 step 4), never merge over it"; break
       else rpoll=$((rpoll + 1)); fi
     else result=green; break; fi
     [ "$dry" = 1 ] && { result="SKIP|dry run - its checks are pending"; break; }
@@ -174,6 +188,7 @@ for item in "${prs[@]}"; do
     both="$(meet "$(pr_files "$l")" "$files" all)"
     [ -n "$both" ] && echo "AFFECTED #$num: $(printf '%s\n' "$l" | cut -f4) - merge $base now: $both"
   done <<< "$list"
+  echo "AFTER MERGE #$pr: the event table (CORE §4) - cleanup-worker (§8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, §10); tell each AFFECTED PR's session to merge $base (§4a); a bug it fixed that escaped earlier work -> ESCAPES (§12); the project's after-merge duties (PROJECT.md)"
 done
 echo "merge-queue: $merged merged${left:+, left: $left}"
 [ -z "$left" ] || exit 3

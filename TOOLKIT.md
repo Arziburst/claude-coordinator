@@ -379,7 +379,9 @@ BOM, models priced apart),
   squash -Shared 'messages/*,docs/decisions.md'`), from the project's checkout, as a `run_in_background`
   command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
-  approved. `status` (the same globs) before planning. It calls only `gh`, never `git`: the owner's
+  approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
+  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
+  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls only `gh`, never `git`: the owner's
   checkout is left as it is, pulled after the merges as before.
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
   a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
