@@ -260,8 +260,8 @@ The continuous work:
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
    (an ERROR blocks delegation; a WARN is explained in the brief).
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
-   `#<task> <role>: <title>` (e.g. `#37 worker: Items with a reticle per hand`, `#37 verifier: Items
-   with a reticle per hand`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
+   `#<task> <role>: <title>` (e.g. `#37 worker: Saved carts per account`, `#37 verifier: Saved carts
+   per account`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
    name, no project prefix (the folder names the project). Which role runs as a session and which as a
    subagent: TOOLKIT *Workers*. The brief: the contract, the decisions that
    apply, parallel work on the same code, resources (§8, with the command that installs a new working
@@ -320,8 +320,9 @@ what their brief and the coordinator tell them and report a surprise to their re
   one task the file; brief the rest "PR #x touches the same files". A lead's plan is one footprint.
 - **Shared files** (`PROJECT.md` *Shared files*): append-only docs and lists every task adds to, and
   generated files. Briefs that touch one name it; the rules are the worker's (roles/worker.md step 3).
-- **Merge through the queue:** approved PRs land one at a time, in the order you keep (dependencies
-  first, overlaps one after another), with `scripts/merge-queue land <pr>@<approved commit> …` run in
+- **Merge through the queue** (a GitHub code host; on another, the same steps by hand, TOOLKIT *CI*):
+  approved PRs land one at a time, in the order you keep (dependencies first, overlaps one after
+  another), with `scripts/merge-queue land <pr>@<approved commit> …` run in
   the background: each PR merges main once, at its turn, never after every other merge. Its lines:
   `CONFLICT` / `HEAD MOVED` / `NOT APPROVED` → back to that worker (or the verifier for a new commit);
   `REVIEW` → the verifier re-reviews only the merge it names, then queue it again with that head;
@@ -350,8 +351,8 @@ The coordinator **proposes**, the owner approves every proposal before it become
   wording; it never runs by itself, #242), a light-model researcher; its rows go into the research
   catalog with the decision empty — what they do better, what we could take, the licence. The owner
   decides the new rows in one batch, with a recommendation per group; taken rows become tasks.
-- **Expectations checklist:** what users of this kind of product expect (a VR game: comfort, turning
-  options, seated play; a shop: search, cart, payment), drafted from the radar and the research, kept in
+- **Expectations checklist:** what users of this kind of product expect (a shop: search, cart, payment;
+  a game: comfort, controls, saving), drafted from the radar and the research, kept in
   the project's docs; the plan is re-audited against it at each milestone checkpoint and the gaps are
   proposed as tasks.
 - **After any research or question nothing changes straight away:** report what was found, how reliable
@@ -550,7 +551,7 @@ never assumed (below).
 ## 7a. Spend: forecast and analysis
 
 The coordinator's job, not a lead's or a worker's: only it sees every task, the limits and the run log.
-- **The unit is cost at API list price**, not tokens: most of a run's tokens are cheap cache reads (98% on Arx),
+- **The unit is cost at API list price**, not tokens: most of a run's tokens are cheap cache reads (98% on a real project),
   so tokens measure context times turns, and they weigh differently per model. Cost is the
   `scripts/session-tokens` `cost` line (the status line's, cumulative), or, where a session never drew
   one, its tokens per model times the ladder's list prices. Tokens stay in the run log for diagnosis.
@@ -563,7 +564,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   will run on (worker plus its tester and reviewer; a lead: the sum of its sub-runs), computed by
   `scripts/run-stats <RUNS.tsv> --kind <k> --model <m>` (a task's rows summed, TOOLKIT *Usage*), never by hand. No history →
   seeded at init from the project's existing transcripts (`scripts/session-tokens` over
-  `~/.claude/projects/<project>/`; on Arx this changed the first guess about 10×), else the
+  `~/.claude/projects/<project>/`; on a real project this changed the first guess about 10×), else the
   coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
   a seed is a median **per model**, not per kind, until the run log has the kind's own runs.
 - **Limit percent per dollar:** the limits are shown as whole percents, so one task rarely moves them
