@@ -312,7 +312,9 @@ The coordinator is the hub: workers and leads never settle an overlap between th
 what their brief and the coordinator tell them and report a surprise to their report address.
 - **Before a task,** check what it will touch (`touches`: files, modules, shared tables, schemas,
   migrations, generated files, docs) against open PRs and running tasks; `scripts/merge-queue status`
-  lists the open PRs changing the same files and the CONFLICTING ones (CI does not run on those).
+  lists the open PRs changing the same files and the CONFLICTING ones (CI does not run on those), and
+  with `--touches` the open PRs changing the task's `touches` — start-worker runs that for a worker or a
+  lead and prints it as `foresight:` lines (#242).
   Overlap outside the shared files → order the work (the second starts after the first merges) or give
   one task the file; brief the rest "PR #x touches the same files". A lead's plan is one footprint.
 - **Shared files** (`PROJECT.md` *Shared files*): append-only docs and lists every task adds to, and
@@ -322,7 +324,8 @@ what their brief and the coordinator tell them and report a surprise to their re
   the background: each PR merges main once, at its turn, never after every other merge. Its lines:
   `CONFLICT` / `HEAD MOVED` / `NOT APPROVED` → back to that worker (or the verifier for a new commit);
   `REVIEW` → the verifier re-reviews only the merge it names, then queue it again with that head;
-  `FAILED` → the red-check rule above. A main merged in by the queue without touching the PR's files
+  `FAILED` → the red-check rule above; `AFTER MERGE` → the merge row of the event table (§4), printed
+  so its duties have a trigger (#242). A main merged in by the queue without touching the PR's files
   needs no re-review: its CI on the new head is the check. The queue cancels CI runs of a PR's older heads.
 - **After every merge,** tell exactly the sessions behind the `AFFECTED` PRs to merge main now, with
   the files it names; a lead merges it into its integration branch and tells only its workers whose

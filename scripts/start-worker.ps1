@@ -25,6 +25,8 @@
 # backslashes, and a hook that fails to run blocks nothing.
 # The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
 # worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
+# A worker or a lead: before the launch it prints the conflict foresight (CORE section 4a) - merge-queue
+# status with the brief's `touches: [...]` - as `foresight:` lines; informational, never a stop.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '')
@@ -259,6 +261,24 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
     $key = @($body | Where-Object { $_ -ne '' })[0]
     if ($key -and $briefText.Replace("`r", '').Contains($key)) { "role ${role}: already in the brief" }
     else { $roleText = $bodyText; "role ${role}: roles/$role.md heads the brief" }
+  }
+}
+# conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches: [...]`
+# names, printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
+$sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
+$fr = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $fr = $Matches[2] }
+if ($fr -in @('worker', 'lead', '')) {
+  $tm = [regex]::Match($briefText.Replace("`r", ''), '(?m)^[ \t]*touches:[ \t]*\[([^\]]*)\]')
+  if (-not $tm.Success) {
+    "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE ${sect}4a)"
+  } else {
+    $tl = @($tm.Groups[1].Value -split ',' | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })
+    $fo = @(); $frc = 1
+    Push-Location -LiteralPath $root
+    try { $fo = @(& (Join-Path $PSScriptRoot 'merge-queue.ps1') status -Touches ($tl -join ',') 2>&1 | ForEach-Object { "$_" }); $frc = $LASTEXITCODE }
+    catch { $fo = @("$_") } finally { Pop-Location }
+    if ($frc -eq 0) { $fo | Where-Object { $_ -match '^(TOUCHES|merge-queue status:)' } | ForEach-Object { "foresight: $_" } }
+    else { "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE ${sect}4a): $(@($fo)[0])" }
   }
 }
 $brief = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText

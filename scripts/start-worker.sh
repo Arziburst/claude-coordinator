@@ -28,6 +28,8 @@
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
+# A worker or a lead: before the launch it prints the conflict foresight (CORE §4a) - merge-queue status
+# with the brief's `touches: [...]` - as `foresight:` lines; informational, never a stop.
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
@@ -223,6 +225,22 @@ if [ -n "$role" ] && [ -f "$rolef" ]; then
   if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then echo "role $role: already in the brief"
   else roletext="$body"; echo "role $role: roles/$role.md heads the brief"; fi
 fi
+# conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches: [...]` names,
+# printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
+case "$role" in worker|lead|"")
+  tl="$(tr -d '\r' < "$brief" | sed -n 's/^[[:space:]]*touches:[[:space:]]*\[\([^]]*\)\].*/\1/p' | head -n 1)"
+  if [ -z "$tl" ]; then
+    echo "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE §4a)"
+  else
+    ta=(); set -f; oifs="$IFS"; IFS=','
+    for t in $tl; do t="$(printf '%s' "$t" | sed "s/^[[:space:]\"']*//; s/[[:space:]\"']*\$//")"; [ -z "$t" ] || ta+=(--touches "$t"); done
+    IFS="$oifs"; set +f
+    mq="$(cd "$(dirname "$0")" && pwd)/merge-queue.sh"
+    if fo="$(cd "$root" && bash "$mq" status ${ta[@]+"${ta[@]}"} 2>&1)"; then
+      printf '%s\n' "$fo" | grep -E '^(TOUCHES|merge-queue status:)' | sed 's/^/foresight: /' || true
+    else echo "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a): $(printf '%s\n' "$fo" | head -n 1)"; fi
+  fi ;;
+esac
 if [ "$dry" = 1 ]; then
   echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
 else
