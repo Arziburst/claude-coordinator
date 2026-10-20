@@ -13,7 +13,8 @@ checkout), and how tests are run in this project.
 1. **Contract first.** For each criterion with `check: oracle` decide what observable behaviour proves
    it. Reuse an existing test when one already checks it; say which.
 2. **Write the test so it fails now** for the reason the criterion names (a bug fix: the test
-   reproduces the bug). Run it and keep the failing output. A test that passes before the fix proves
+   reproduces the bug). Run it — in a working copy with its own dependencies installed (the brief's
+   command, #249) — and keep the failing output. A test that passes before the fix proves
    nothing: rewrite it or report why it cannot fail. A test that starts `pwsh` or `powershell` runs
    through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240).
 3. **Risky changes** (CORE §5: money, roles and permissions, security, data access, audit, customer

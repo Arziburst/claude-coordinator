@@ -215,7 +215,8 @@ Asked only when they apply:
 Stack; build / run / test / lint commands; environments and deploy; CI layout; MCP servers and their
 CLI fallbacks, with each one's write tools (CORE §1.4); tracker, statuses, labels, hierarchy; branch
 and commit format (from history; none → the template's); coding standards (linter configs, docs);
-per-worker isolation (working copies, ports, databases, containers; the worktree roots outside
+per-worker isolation (working copies and the command that installs a new one's dependencies, ports,
+databases, containers; the worktree roots outside
 `.claude/worktrees`, one-time step `worktree-roots`); the project's own task kinds mapped to the core's
 (`ROUTING.md` `## Kinds`, one-time step `kinds-map`, proposed from the run log); shared resources; serial
 identifiers (migration versions); the machine's platform; the model ladder (CORE §7: one cheap probe per model, Fable counted only with the owner's answers of question 8; list prices — written also as `coordinator/prices.txt`, the prices file of `scripts/run-stats --limits`, with `top` after Fable when it is the top rung, one-time step `prices-file`; a price not on the pricing page is asked); first cost and time estimates per model from the project's existing transcripts (one pass of `scripts/session-tokens` over them: the cost and the `time` line's `active` per session, CORE §7a); technologies without a connected MCP server
