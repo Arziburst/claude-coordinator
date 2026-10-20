@@ -747,6 +747,14 @@ branches (§1.9) are blocked for direct pushes by the safety hook,
 A state repository still on `main` or `master` is moved on the owner's yes: `git -C coordinator branch
 -m state`, `git -C coordinator push -u origin state`, `gh repo edit <repo> --default-branch state`; the
 old remote branch is deleted by the owner (the hook blocks it).
+**The coordinator's skills** live in it too, `coordinator/skills/<name>/SKILL.md`: history, backup and a
+move with the rest (#245). Claude Code finds them through `<project>/.claude/skills`, a link to that
+folder (Windows: a directory junction; macOS / Linux: a symlink — one-time step `coordinator-skills`),
+kept out of the project's git like `coordinator/`. **A skill the owner asks for is created there**, in
+every project — never in `~/.claude/skills/` (every session on the machine, of every project, loads
+that, #243), never in another project's folders. Its description names it as this project's
+coordinator's: workers in `<project>/.claude/worktrees/` see the project's skills too (Claude Code
+looks up the folders, measured, #245).
 Its remote, chosen at init, is **always private**: the owner's account or the team's organization,
 pushed as above; or none (local only, lost with the disk). Finding it on a new machine and the
 handoff (**only on the owner's command**, "prepare a handoff"): [procedures/HANDOFF.md](procedures/HANDOFF.md).

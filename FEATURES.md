@@ -658,9 +658,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ## STATE
 
 ### F-STATE-01 The state repository
-- defined: CORE.md §12b, procedures/INIT.md, state-repo/README.template.md
+- defined: CORE.md §12b, procedures/INIT.md, procedures/HANDOFF.md, state-repo/README.template.md, ONE-TIME.md
 - entry: INIT 3.4; question 5
-- promises: `coordinator/` is its own git repository, excluded from the project's git by its info/exclude file; the core copy, journal, run log and findings live there, never in the project's history from then on (a migrated project keeps its past history)
+- promises: `coordinator/` is its own git repository, excluded from the project's git by its info/exclude file; the core copy, journal, run log and findings live there, never in the project's history from then on (a migrated project keeps its past history); the coordinator's skills live in its `skills/`, linked at `<project>/.claude/skills` (one-time step `coordinator-skills`), and a skill the owner asks for is created there, never at the user level or in another project (#243, #245)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
