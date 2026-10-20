@@ -175,6 +175,29 @@ foreach ($f in $halves) {
   $o = if ($f.EndsWith('.sh')) { $f -creplace '\.sh$', '.ps1' } else { $f -creplace '\.ps1$', '.sh' }
   if (-not (Test-Path -LiteralPath (Join-Path $Root $o))) { "${f}: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; $errors++ }
 }
+# the core's skills (CORE section 12b, #243): skills/coord-*/SKILL.md, its frontmatter name its folder, its
+# description saying it is the coordinator's, every `coordinator/core/<path>` it names a file of this core
+$sk = Join-Path $Root 'skills'
+if (Test-Path -LiteralPath $sk -PathType Container) {
+  $sf = [string[]]@(Get-ChildItem -LiteralPath $sk -Directory -Force | ForEach-Object { "skills/$($_.Name)/SKILL.md" } |
+    Where-Object { Test-Path -LiteralPath (Join-Path $Root $_) -PathType Leaf })
+  [Array]::Sort($sf, [StringComparer]::Ordinal)
+  foreach ($f in $sf) {
+    $d = Split-Path -Leaf (Split-Path -Parent $f)
+    if (-not $d.StartsWith('coord-', [StringComparison]::Ordinal)) { "${f}: a core skill's folder starts with coord-"; $errors++ }
+    $L = @([IO.File]::ReadAllLines((Join-Path $Root $f)))
+    $head = @($L | Select-Object -Skip 1 -First 5)
+    $nm = ''; foreach ($h in $head) { if ($h -cmatch '^name: *(.*)$') { $nm = $Matches[1]; break } }
+    if ($nm -cne $d) { "${f}: name '$nm' is not its folder '$d'"; $errors++ }
+    if (-not @($head | Where-Object { $_ -cmatch "^description: '?Coordinator only" }).Count) { "${f}: the description does not start with 'Coordinator only'"; $errors++ }
+    for ($i = 0; $i -lt $L.Count; $i++) {
+      foreach ($m in [regex]::Matches($L[$i], 'coordinator/core/([A-Za-z0-9._/-]+)')) {
+        $p = $m.Groups[1].Value -creplace '[./]+$', ''
+        if (-not (Test-Path -LiteralPath (Join-Path $Root $p))) { "${f}:$($i + 1): no such core file $p"; $errors++ }
+      }
+    }
+  }
+}
 "check-core: $files files, $($sections.Count) sections, $rules hard rules, $nfeat features, $errors errors"
 if ($errors) { exit 1 }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

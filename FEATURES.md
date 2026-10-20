@@ -106,6 +106,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-STATE-05 | Handoff and finding the state | a move prepared only on command; a new machine finds the state first | STATE |
 | F-STATE-06 | Layout migration | an older layout moves to its own git only on the owner's yes | STATE |
 | F-STATE-07 | The journal and open questions | one dated line per event; open questions asked first on return | STATE |
+| F-STATE-08 | The core's skills | `coord-*` skills point the coordinator to the event table and the procedures | STATE |
 | F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
 | F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
 | F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
@@ -698,6 +699,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: nothing is moved, untracked or deleted before the owner's yes to the exact plan; every file stays on disk and in the new repository
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-08 The core's skills
+- defined: skills/, CORE.md §12b, procedures/INIT.md, procedures/UPDATE-CORE.md, ONE-TIME.md, scripts/check-core.sh, scripts/check-core.ps1
+- entry: INIT 3.4; every "update the core"; one-time step `coordinator-skills`; Claude Code lists the skills to the coordinator every turn
+- promises: fifteen `coord-*` skills — the procedures (update, self-test, retro, handoff, settings, what is your task, core findings, sources, research, spend report) and the event table's rows (task start, after a merge, a red check, a mistake, after a compaction); each says "Coordinator only" and points to the core file that wins over it, never a copy of its rules; copied into `coordinator/skills/` at init and refreshed by every update, the project's own skills untouched; check-core refuses a skill outside `coord-`, named unlike its folder, not marked as the coordinator's or naming a missing core file (#243)
+- tested by: tests/check-core/run.sh (a skill naming a missing core file; a folder without `coord-`, a name not its folder, a description not the coordinator's; in bash and both PowerShells); Claude Code loading all fifteen measured once by hand (2026-10-20, 2.1.304)
+- not covered: whether the coordinator invokes a skill at its event rests on the model (a hint, not a trigger: the scripts and the after-compact hook are the triggers); the copy at init and update rests on the coordinator following the steps
 
 ### F-STATE-07 The journal and open questions
 - defined: CORE.md §12

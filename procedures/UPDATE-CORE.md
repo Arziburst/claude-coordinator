@@ -65,7 +65,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    runs until the next worker is due. Then the **full self-test** at the new commit
    ([SELFTEST.md](SELFTEST.md)), after every update (a `declined` CHECKLIST line: offered, never run silently): its branches in the state repository are the
    evidence that this commit works here; its CHECKLIST line names the commit. Then
-   install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
+   install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) and refresh the core's skills — every
+   `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
+   removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
    Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.

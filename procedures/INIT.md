@@ -251,7 +251,8 @@ rules, issue fields). The owner changes any of them with one line at the summary
   commit at every change and push per CORE §12b where it has a remote. The owner may choose to commit the
   files into the project instead — recorded in `PROJECT.md`.
 - **`coordinator/skills/`** and its link `.claude/skills` (CORE §12b, one-time step `coordinator-skills`):
-  where the coordinator's skills live; empty until the owner asks for one.
+  where the coordinator's skills live: the core's `coord-*` skills copied from `coordinator/core/skills/`,
+  and the project's own when the owner asks for one.
 - **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
   record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
