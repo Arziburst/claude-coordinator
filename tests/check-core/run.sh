@@ -2,13 +2,14 @@
 # check-core on a copy of the core that passes, then with:
 #   - a FEATURES.md field wrapped onto an indented continuation line that names missing files: each one
 #     reported with the continuation line's number;
-#   - a script under scripts/ without its .ps1 and one under scripts/hooks/ without its .sh: each reported.
+#   - a script under scripts/ without its .ps1 and one under scripts/hooks/ without its .sh: each reported;
+#   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's.
 # The same lines from both versions.
 #   tests/check-core/run.sh sh                  # check-core.sh, with the bash running this file
 #   tests/check-core/run.sh ps pwsh             # check-core.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -50,6 +51,18 @@ expect "a .sh without its .ps1" 1 "scripts/lone.sh: no scripts/lone.ps1 - every 
 expect "a .ps1 without its .sh" 1 "scripts/hooks/lone.ps1: no scripts/hooks/lone.sh - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"
 # and scripts/lone.sh is in no feature
 summary "five errors in all" 1 5
+# the core's skills (#243): a path to a missing core file; a folder without coord-, a name not its folder,
+# a description that does not say it is the coordinator's
+sed 's#coordinator/core/procedures/RETRO.md#coordinator/core/procedures/NORETRO.md#' "$d/skills/coord-retro/SKILL.md" > "$tmp/s" &&
+  cat "$tmp/s" > "$d/skills/coord-retro/SKILL.md"
+r="$(grep -n 'NORETRO' "$d/skills/coord-retro/SKILL.md" | cut -d: -f1)"
+mkdir -p "$d/skills/mine" && printf -- "---\nname: other\ndescription: 'Helps with anything'\n---\n\nHello.\n" > "$d/skills/mine/SKILL.md"
+run
+expect "a skill naming a missing core file" 1 "skills/coord-retro/SKILL.md:$r: no such core file procedures/NORETRO.md"
+expect "a core skill's folder without coord-" 1 "skills/mine/SKILL.md: a core skill's folder starts with coord-"
+expect "a skill whose name is not its folder" 1 "skills/mine/SKILL.md: name 'other' is not its folder 'mine'"
+expect "a skill not marked as the coordinator's" 1 "skills/mine/SKILL.md: the description does not start with 'Coordinator only'"
+summary "nine errors in all" 1 9
 
 echo "check-core ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
