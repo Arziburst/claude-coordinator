@@ -800,7 +800,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SELFTEST-01 The self-test
 - defined: procedures/SELFTEST.md, scripts/selftest.sh, scripts/selftest.ps1, CORE.md §12a
 - entry: after the dry run at init; after every core update; one-time step `selftest`
-- promises: real sessions on the cheapest models run a lead, two workers, a verifier, a merge and, with a remote, one PR in the project's state repository; the report is one table with the run's cost; a core FAIL becomes a core finding; its sessions are started by the coordinator itself, never a subagent, and a launch Claude Code refuses is `BLOCKED probe`, no FAIL of the guard, run by the owner before the test is complete
+- promises: real sessions on the cheapest models run a lead, two workers, a verifier, a merge and, with a remote, one PR in the project's state repository; the report is one table with the run's cost; a core FAIL becomes a core finding; its sessions are started by the coordinator itself, never a subagent, and a launch Claude Code refuses is `BLOCKED`, no FAIL, run by the owner before the test is complete; the guard probes run only on a new machine, a changed guard or probed settings file, or the owner's word (else `SKIP probes`), launched by the owner (`! <command>`: Claude Code refuses a session's own launch of them), `DUE probe` until then (#235)
 - tested by: CI steps "selftest - the scripted steps" (bash, Windows PowerShell 5.1 and pwsh)
 - not covered: the project's real CI and branch protection; the first real PR is watched instead (`first-real-pr-watched`)
 
