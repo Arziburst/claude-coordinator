@@ -17,14 +17,15 @@ resources and launch/test limits, and the phrase that ends your report.
    never decide a `do_not_decide` item or invent a business value — raise it as a question and
    continue with what does not depend on it. **The tester's tests** (the brief names them) are made green
    unchanged: never weakened, removed or rewritten; one you find wrong is a question to your report
-   address and goes back to the tester. You may only make one build or run — an import, a name, a path,
-   a compile fix — without changing any check it makes, and you name each such edit in your report. An
-   access point a test needs (named in the contract or at the top of the test file) is implemented as
-   written. **Not weakening** (allowed, each named in the report): a wait of N cycles or ticks turned
-   into a wait on time or on a state with the same value; a tolerance widened only on your PR's own new
-   check, with a measured reason, still telling the broken case apart, commented beside it; a starting
-   state made non-random (set, not rolled) with every check unchanged and a negative control that still
-   fails. **CI time is a budget:** a change that adds more than the project's threshold to the full
+   address and goes back to the tester. You may only make a test build or run — an import, a name, a
+   path, a compile fix — without changing any check it makes, and you name each such edit in your report
+   (`test_edits`); any other change to the tester's tests goes back to the tester. An access point a test
+   needs (named in the contract or at the top of the test file) is implemented as written. **Not
+   weakening**, on tests other than the tester's (the exceptions to the rule above, not a loosening;
+   each named in `test_edits`): a wait of N cycles or ticks turned into a wait on time or on a state with
+   the same value; a tolerance widened only on your PR's own new check, with a measured reason; a
+   starting state made non-random (set, not rolled) with every check unchanged and a negative control
+   that still fails. **CI time is a budget:** a change that adds more than the project's threshold to the full
    suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237).
 3. **Your branch only.** Work in your own working copy and branch, never the coordinator's checkout;
    commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its
@@ -64,7 +65,7 @@ resources and launch/test limits, and the phrase that ends your report.
    known_gaps: []             # what you could not run or check
    core_findings: []          # a suspected fault of the core itself (a rule, a script, a check), with evidence
    ci_seconds: +0             # what the change adds to the full CI suite, measured, else estimated (#237)
-   test_edits: []             # each edit to the tester's tests: build-only or not weakening, and why
+   test_edits: []             # each edit to an existing test and why (the tester's: build-only)
    ```
 6. **Stuck or near your context limit:** stop and send a `blocked` report with what is done, what is
    left and why — do not push half-finished guesses to finish.

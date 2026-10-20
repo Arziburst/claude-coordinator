@@ -299,12 +299,12 @@ The continuous work:
    machine, the same commit untouched → re-run once: green → the check passed on that commit (one
    journal line; a second time it is a flake bug); red again → a flake bug, never a merge. A flake bug
    gets **one fix round** (the tester reproduces it, roles/tester.md step 3; one worker attempt); still
-   flaky → **quarantine**, where `PROJECT.md` keeps it on (the default): unless the owner turned the
-   confirmation off, a quiz first — the check and its evidence; quarantine / another fix round / keep it
-   and hold the merges, the recommendation first — then on the answer the check leaves CI for the
-   project's manual set through a PR, with an issue at the end of the queue and a journal line, still
-   runnable by hand. Only "Coordinator, settings" changes the quarantine or its confirmation; init never
-   asks it (#237).
+   flaky → **quarantine**, where `PROJECT.md` keeps it on (the default; no row → on, confirmed): unless
+   the owner turned the confirmation off, a quiz first — the check and its evidence; quarantine / another
+   fix round / keep it and hold the merges, the recommendation first — then, on a *quarantine* answer (or
+   with the confirmation off), the check leaves CI for the project's manual set through a PR, with an
+   issue and a journal line, still runnable by hand. Only "Coordinator, settings" changes the quarantine
+   or its confirmation; init never asks it and the update never offers it (#237).
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved.
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
@@ -407,7 +407,7 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 ## 6. Review standard
 
 - The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) on the contract, the
-  report and the change: contract first, `oracle` checks run itself, every result keeps its evidence class
+  report and the change (and the tester's commit, where a tester ran, #237): contract first, `oracle` checks run itself, every result keeps its evidence class
   (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
   cites (`source:`, SOURCES §4). The verdict names the head commit it reviewed; a CI run on that commit
   counts as its oracle and is not run again, a run on any other commit is a `claim`. An oracle the

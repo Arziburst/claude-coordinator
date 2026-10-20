@@ -41,10 +41,11 @@ it) would make that work look deleted.
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
      refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
-   - **The tester's commit:** compare its test files with the reviewed head (`git diff <the tester's
-     commit> <head> -- <its test files>`). Every change must be one the worker's `test_edits` names —
-     build-only, or not weakening as roles/worker.md step 2 allows — and hold; any other change, or a check
-     weakened, removed or loosened, is a Blocker (#237).
+   - **The tester's commit** (the brief names it; under a lead, the test files the tester returned, kept
+     in the lead's `.lead/`): compare its test files with the reviewed head (`git diff <the tester's
+     commit> <head> -- <its test files>`). Every change must be a build-only edit the worker's
+     `test_edits` names (roles/worker.md step 2); a check weakened, removed or loosened is a Blocker, an
+     unnamed build-only edit a Major (#237).
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
      `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through

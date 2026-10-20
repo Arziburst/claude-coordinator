@@ -100,7 +100,7 @@ known_gaps:
   - not run on the headset: no device
 core_findings: []                  # a suspected fault of the core itself, with evidence (procedures/CORE-FINDINGS.md)
 ci_seconds: +4                     # what the change adds to the full CI suite (roles/worker.md step 2)
-test_edits: []                     # each edit to the tester's tests, and why (roles/worker.md step 2)
+test_edits: []                     # each edit to an existing test and why; the tester's: build-only (roles/worker.md step 2)
 ---
 ```
 
