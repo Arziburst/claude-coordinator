@@ -42,19 +42,32 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   ([SETTINGS.md](procedures/SETTINGS.md)), the self-test ([SELFTEST.md](procedures/SELFTEST.md)), "update the core"
   ([UPDATE-CORE.md](procedures/UPDATE-CORE.md), with [MIGRATE-LAYOUT.md](procedures/MIGRATE-LAYOUT.md)), the sources of
   truth, the source catalog and projects without a tracker or git ([SOURCES.md](procedures/SOURCES.md)), the
-  core's own failures sent to its maintainer and proven fixed ([CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)).
+  core's own failures sent to its maintainer and proven fixed ([CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)),
+  the retro, run only when the owner asks ([RETRO.md](procedures/RETRO.md)).
+- [skills/](skills/) — the core's own Claude Code skills, `coord-*`: one per procedure and per row of the
+  event table (task start, after a merge, a red check, a mistake, after a compaction), each a short
+  pointer to the core file that wins over it. Copied into the project's `coordinator/skills/` at init and
+  refreshed by every update; Claude Code finds them through `<project>/.claude/skills`, a link to that
+  folder (CORE §12b).
 
 ## Toolkit (any machine — Windows, macOS, Linux)
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
   messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
 - [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker` (named session
-  in its own worktree), `cleanup-worker` (only clean and pushed work), `hooks/safety-guard`
+  in its own worktree; prints the conflict foresight first), `cleanup-worker` (only clean, pushed and merged work),
+  `merge-queue` (approved PRs land one at a time; prints the `AFFECTED` sessions and the `AFTER MERGE`
+  duties), `check-contract` (a contract is complete before it goes out), `run-stats` and `session-tokens`
+  (cost and time from the transcripts; the run log's task row written with `--append`), `hooks/after-compact`
+  (after a compaction, the session re-reads its rules from disk), `hooks/safety-guard`
   (guards only the irreversible: pushes / force-pushes / deletes of main, mirror pushes, removing `/`,
   home or a worktree by hand — work branches stay free), `selftest` (the scripted steps of the
   self-test: checks, environment, the evidence branches in the state repository; a sandbox for the
   core itself), `statusline`
   (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
   also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
+- **Code host:** the scripts that talk to it (the merge queue, cleanup-worker's merged check, the task
+  row's PR times) use GitHub's `gh`; on another host the coordinator takes the same steps by hand
+  (TOOLKIT *CI*).
 - [settings.example.json](settings.example.json) / [settings.example.windows.json](settings.example.windows.json)
   — the worker safety file (passed by `start-worker --safety` / `-Safety`): protected-branch denies, the hook and its self-test, messages accepted — the swarm and
   standard baseline; the strict preset and the cautious override add denies.
@@ -67,7 +80,16 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   at start the coordinator says when upstream is newer, and "update the core" brings the changes in on
   command, with an impact report first.
 - **Give it work** — name a task (work mode *by task*), or say the batch command ("start a new cycle" by default) to run
-  the project's batch recipe (*batch*). Cleanup, syncing the state and core reports run on events in either mode (CORE §4).
+  the project's batch recipe (*batch*). In either mode **the event table** (CORE §4) says what runs on
+  each event — a session start, a task start, a red check, a merge, a mistake, a compaction; the merge
+  queue, start-worker and the after-compact hook print the reminders, and the `coord-*` skills keep them
+  in view.
+- **On request only:** "retro", "radar" (one research reference), "spend report" — none runs by itself.
+- **Tests:** a tester writes the failing tests first and the worker makes them green unchanged; a flaky
+  check gets one fix round, then — confirmed by the owner — leaves CI for a manual set (the flake
+  quarantine, on by default; "Coordinator, settings" changes it).
+- **Skills:** ask the coordinator for a skill and it creates it in `coordinator/skills/` of that project —
+  never at the user level, where every session on the machine would load it.
 - **Moving to another machine** — `coordinator/` is pushed at every event that matters (CORE §12b) to a private remote, the
   project's state repository, if the owner chose one at init; say "prepare a handoff" before a move: the
   coordinator pushes the work in flight and writes `HANDOFF.md` (CORE §12b, `state-repo/README.template.md`,
