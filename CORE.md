@@ -270,9 +270,10 @@ The continuous work:
    copy's dependencies, #249), launch/test limits, the report phrase — role
    rules live in the role file ([roles/worker.md](roles/worker.md)), never repeated in the brief's text — start-worker puts
    the role file at the top of a session's brief (TOOLKIT *Roles*). An `oracle`
-   criterion with no test yet, and every §5 change, first goes to the **tester** subagent
-   ([roles/tester.md](roles/tester.md)): create the task's working copy and branch first (the
-   start-worker steps without the launch), run the tester there; it pushes its red tests, and they and
+   criterion with no test yet, and every §5 change, first goes to the **tester**
+   ([roles/tester.md](roles/tester.md)) — a subagent, or a session where TOOLKIT *Workers* says (no guard
+   in the coordinator's own settings, a long run): create the task's working copy and branch first (the
+   start-worker steps without the launch; a tester session: start-worker itself), run the tester there; it pushes its red tests, and they and
    their commands go into the worker's brief, to be made green unchanged. The contract's `tests_first`
    records the decision every time: `yes`, or `no` with its reason (no `oracle` criterion needs a new
    test, and the change is not §5); check-contract refuses a contract without it (#212). Under a lead

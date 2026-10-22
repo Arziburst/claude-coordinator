@@ -25,8 +25,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   runs tester, verifier and scout as its own subagents — a background session can start
   further background sessions (confirmed on Claude Code 2.1.296, Windows); if a version refuses, the
   lead sends its start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
-  `tester` and `scout` — subagents only. A subagent has no session of its own: it appears inside the
-  session that started it, under its role name.
+  `scout` — a subagent only; `tester` — a subagent for a short run, else a background session
+  (`#<task> tester: …`): start-worker with the worker safety file, in the task's working copy and
+  branch, the worker started after its report in the same copy (start-worker reuses it). A session when
+  **the coordinator's own settings hold no guard** — a subagent runs under the settings of the session
+  that started it, not under the worker safety file, and the tester pushes (the self-test's
+  `selftest hooks` on those files, SELFTEST step 2a, says whether they hold it) — or when **the run is
+  long**: a flake's reproduction, a build or suite over about 10 minutes, a device; a subagent ends with
+  its session and its cost is only a lower bound (`out>=`, #232). A lead's tester stays its subagent:
+  the lead runs under the worker safety file. A subagent has no session of its own: it appears inside
+  the session that started it, under its role name.
 - **The coordinator's own name** (CORE §2 step 1): the coordinator name in `PROJECT.md` *Settings*,
   `<Project> Coordinator` by default (INIT 3.1, question 10). It must contain the English word
   `Coordinator`: the roles' fallback looks for it when a report address fails. Several projects on one
