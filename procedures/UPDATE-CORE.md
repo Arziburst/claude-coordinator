@@ -30,7 +30,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      coordinator, which writes `coordinator/` inside the root (TOOLKIT *Safety*), so that SKIP is expected
      on its own files and not offered (#256). Auto mode refuses the coordinator's own edit of its settings
      ("Self-Modification"), so on the owner's yes the coordinator writes the **complete** new file in its
-     scratch folder and gives the owner one command to apply it — `! cp <prepared file> <target>` in the
+     scratch folder — from the target's current content, right before the command (another project may
+     share it: the user's `~/.claude/settings.json`), the diff shown to the owner — and gives the owner one
+     command to apply it — `! cp <prepared file> <target>` in the
      coordinator's prompt, or the same in their own terminal (PowerShell: `Copy-Item <prepared file>
      <target>`) — then re-runs `selftest hooks --settings <target>` in a **new** session (hooks load at
      start: the running session keeps the old guard);

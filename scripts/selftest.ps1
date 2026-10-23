@@ -626,7 +626,7 @@ switch ($Step) {
   foreach ($w in ($wts | Select-Object -Skip 1)) {
     $wbase = $base
     $wb = "$(& git -C $w symbolic-ref -q --short HEAD 2>$null)"
-    if ($wb -match '^selftest/([^/]+)/') {
+    if ($wb -cmatch '^selftest/([^/]+)/') {
       $x = "selftest/$($Matches[1])/base"
       & git -C $State show-ref -q --verify "refs/heads/$x"
       if ($LASTEXITCODE -eq 0) { $wbase = $x }
