@@ -6,7 +6,8 @@
 # In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
 #   scripts/selftest.sh prepare --project <root> --state <coordinator dir> --core <commit>
 #                                                    3: the project's git ignores .claude/worktrees;
-#                                                       branch selftest/<commit>/base from the state branch
+#                                                       branch selftest/<commit>/base from the state branch,
+#                                                       its worktree <root>/.claude/worktrees/selftest/<commit>/base
 #   scripts/selftest.sh verify --project <root> --state <coordinator dir> --core <commit> [--state-repo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
@@ -30,7 +31,7 @@
 # Exit 1 on any FAIL, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,31s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0
@@ -573,20 +574,37 @@ prepare|verify)
       git -C "$state" push -q -u origin "$base" 2>/dev/null && pass "pushed $base" || fail "could not push $base"
       echo "remote: yes"
     else echo "remote: no - local branches and a local merge"; fi
-    echo "worktrees: $(cd "$project" && pwd)/.claude/worktrees"
+    # every worktree of the run lies in the project's own .claude/worktrees (start-worker --worktree-root
+    # <wr>), never in the state repository's: that one is inside the project root, where the guard keeps a
+    # worker's edit tools out (COORD_PROTECTED_ROOT, #260). The base's worktree, for the merge of st1, is
+    # made here
+    wr="$(abspath "$project")/.claude/worktrees"; wb="$wr/selftest/$c/base"
+    if git -C "$state" show-ref -q --verify "refs/heads/$base"; then
+      git -C "$state" worktree add -q "$wb" "$base" >/dev/null 2>&1 && pass "worktree of $base at $wb" ||
+        fail "could not add a worktree of $base at $wb"
+    fi
+    echo "worktrees: $wr/selftest/$c (start-worker's worktree root: $wr)"
     echo "base: $base"
     echo "started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     finish
   fi
   # verify: worktrees of the state repository (the first listed is the repository itself) that are
-  # clean and merged into the base are removed; branches never are - they are the evidence
+  # clean and merged into the base are removed; branches never are - they are the evidence. git lists
+  # them wherever they lie: the project's .claude/worktrees, or the state repository's own, where an
+  # older self-test put them (#260). A worktree on another run's branch (selftest/<x>/...) counts as
+  # merged into that run's base, selftest/<x>/base, when it exists
   git -C "$state" worktree list --porcelain | sed -n 's/^worktree //p' | tail -n +2 | while IFS= read -r w; do
+    wbase="$base"
+    case "$(git -C "$w" symbolic-ref -q --short HEAD 2>/dev/null)" in
+      selftest/*/*) x="$(git -C "$w" symbolic-ref -q --short HEAD)"; x="${x#selftest/}"; x="selftest/${x%%/*}/base"
+        git -C "$state" show-ref -q --verify "refs/heads/$x" && wbase="$x" ;;
+    esac
     [ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ] &&
-      git -C "$state" merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" "$base" 2>/dev/null &&
+      git -C "$state" merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" "$wbase" 2>/dev/null &&
       git -C "$state" worktree remove "$w"
   done
   left="$(git -C "$state" worktree list --porcelain | grep -c '^worktree ')"
-  [ "$left" -le 1 ] && pass "no worktree left" || fail "$((left - 1)) worktree(s) left: not clean or not merged into $base"
+  [ "$left" -le 1 ] && pass "no worktree left" || fail "$((left - 1)) worktree(s) left: not clean or not merged into $base (another run's: into its own selftest/<commit>/base)"
   for b in "$base" "$st1"; do
     git -C "$state" show-ref -q --verify "refs/heads/$b" && pass "evidence: $b" || fail "missing: $b"
   done

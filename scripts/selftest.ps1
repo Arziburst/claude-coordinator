@@ -5,7 +5,8 @@
 # In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
 #   powershell -File scripts/selftest.ps1 prepare -Project <root> -State <coordinator dir> -Core <commit>
 #                                                    3: the project's git ignores .claude/worktrees;
-#                                                       branch selftest/<commit>/base from the state branch
+#                                                       branch selftest/<commit>/base from the state branch,
+#                                                       its worktree <root>/.claude/worktrees/selftest/<commit>/base
 #   powershell -File scripts/selftest.ps1 verify -Project <root> -State <coordinator dir> -Core <commit> [-StateRepo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
 #                                                       (base, st1 merged into it, the merged PR); nothing deleted
@@ -43,7 +44,7 @@ $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 30 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 31 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 # a step takes only its own parameters: anything else (another step's, an unknown one, a stray word) is a
 # usage error, as in selftest.sh
@@ -601,23 +602,43 @@ switch ($Step) {
       if ($LASTEXITCODE -eq 0) { Pass "pushed $base" } else { Fail "could not push $base" }
       'remote: yes'
     } else { 'remote: no - local branches and a local merge' }
-    'worktrees: ' + (Join-Path (Resolve-Path -LiteralPath $Project).Path '.claude/worktrees')
+    # every worktree of the run lies in the project's own .claude/worktrees (start-worker -WorktreeRoot
+    # <wr>), never in the state repository's: that one is inside the project root, where the guard keeps a
+    # worker's edit tools out (COORD_PROTECTED_ROOT, #260). The base's worktree, for the merge of st1, is
+    # made here
+    $wr = ((AbsPath $Project) -replace '\\', '/').TrimEnd('/') + '/.claude/worktrees'; $wb = "$wr/selftest/$Core/base"
+    & git -C $State show-ref -q --verify "refs/heads/$base"
+    if ($LASTEXITCODE -eq 0) {
+      $null = & git -C $State worktree add -q $wb $base 2>&1
+      if ($LASTEXITCODE -eq 0) { Pass "worktree of $base at $wb" } else { Fail "could not add a worktree of $base at $wb" }
+    }
+    "worktrees: $wr/selftest/$Core (start-worker's worktree root: $wr)"
     "base: $base"
     'started: ' + (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
     Finish
   }
   # verify: worktrees of the state repository (the first listed is the repository itself) that are
-  # clean and merged into the base are removed; branches never are - they are the evidence
+  # clean and merged into the base are removed; branches never are - they are the evidence. git lists
+  # them wherever they lie: the project's .claude/worktrees, or the state repository's own, where an
+  # older self-test put them (#260). A worktree on another run's branch (selftest/<x>/...) counts as
+  # merged into that run's base, selftest/<x>/base, when it exists
   $wts = @(& git -C $State worktree list --porcelain | Where-Object { $_ -like 'worktree *' } | ForEach-Object { $_.Substring(9) })
   foreach ($w in ($wts | Select-Object -Skip 1)) {
+    $wbase = $base
+    $wb = "$(& git -C $w symbolic-ref -q --short HEAD 2>$null)"
+    if ($wb -match '^selftest/([^/]+)/') {
+      $x = "selftest/$($Matches[1])/base"
+      & git -C $State show-ref -q --verify "refs/heads/$x"
+      if ($LASTEXITCODE -eq 0) { $wbase = $x }
+    }
     $dirty = & git -C $w status --porcelain 2>$null
     if ($LASTEXITCODE -ne 0 -or $dirty) { continue }
     $head = & git -C $w rev-parse HEAD
-    & git -C $State merge-base --is-ancestor $head $base 2>$null
+    & git -C $State merge-base --is-ancestor $head $wbase 2>$null
     if ($LASTEXITCODE -eq 0) { & git -C $State worktree remove $w }
   }
   $left = @(& git -C $State worktree list --porcelain | Where-Object { $_ -like 'worktree *' }).Count
-  if ($left -le 1) { Pass 'no worktree left' } else { Fail "$($left - 1) worktree(s) left: not clean or not merged into $base" }
+  if ($left -le 1) { Pass 'no worktree left' } else { Fail "$($left - 1) worktree(s) left: not clean or not merged into $base (another run's: into its own selftest/<commit>/base)" }
   foreach ($b in @($base, $st1)) {
     & git -C $State show-ref -q --verify "refs/heads/$b"
     if ($LASTEXITCODE -eq 0) { Pass "evidence: $b" } else { Fail "missing: $b" }

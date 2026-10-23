@@ -6,13 +6,15 @@
 #   - a core commit whose base branch is only on the remote (a fresh clone on another machine) is refused;
 #   - a project under a folder with a non-ASCII name (`prj ü`): verify removes the clean, merged worktree.
 #     On Windows the .ps1 runs as on a Russian Windows, with the console's code page 866;
+#   - the worktrees in the project's .claude/worktrees, not the state repository's (#260): prepare makes
+#     the base's worktree there, out of the project's git; verify removes an older run's at the old place;
 #   - the self-test sessions still listed by `claude agents` (a stub claude: the real one is never called),
 #     each with its cwd: only the run's own folders count; another folder's session is a SKIP line (#158).
 #   tests/selftest/prepare.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/prepare.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -98,9 +100,40 @@ printf 'coordinator/\n' >> "$p2/.git/info/exclude"; cp "$f" "$s2/CORE-FINDINGS.m
 st prepare --project "$p2" --state "$s2" --core c7; expect "prepare under a non-ASCII folder" 0 "PASS prepare: branch selftest/c7/base from state"
 git -C "$s2" worktree add -q -b selftest/c7/st1 "$w2/st1" selftest/c7/base
 echo a > "$w2/st1/a.txt"; git -C "$w2/st1" add a.txt 2>/dev/null; g -C "$w2/st1" commit -q -m a
-git -C "$s2" worktree add -q "$w2/base" selftest/c7/base; g -C "$w2/base" merge -q --no-ff --no-edit selftest/c7/st1
+g -C "$w2/base" merge -q --no-ff --no-edit selftest/c7/st1   # the base's worktree, made by prepare
 st verify --project "$p2" --state "$s2" --core c7; expect "verify under a non-ASCII folder" 0 "PASS verify: no worktree left"
 n=$((n + 1)); [ ! -e "$w2/st1" ] && [ ! -e "$w2/base" ] || { echo "FAIL (verify under a non-ASCII folder): the merged worktrees are still there"; fail=1; }
+
+# the run's worktrees lie in the project's .claude/worktrees, never in the state repository's, which is
+# inside the root the guard keeps a worker's edit tools out of (COORD_PROTECTED_ROOT, #260): prepare makes
+# the base's worktree at <project>/.claude/worktrees/selftest/<c>/base, out of the project's git, nothing
+# at the old place; verify still removes a worktree an older self-test left at the old place
+# (<state>/.claude/worktrees), merged into that run's own base
+p3="$tmp/p3"; s3="$p3/coordinator"; w3="$p3/.claude/worktrees/selftest/c8"; o3="$s3/.claude/worktrees/selftest/c0"
+git init -q -b main "$p3" && g -C "$p3" commit -q --allow-empty -m p
+git init -q -b state "$s3" && g -C "$s3" commit -q --allow-empty -m s
+printf 'coordinator/\n' >> "$p3/.git/info/exclude"; cp "$f" "$s3/CORE-FINDINGS.md"
+git -C "$s3" branch selftest/c0/base state
+git -C "$s3" worktree add -q -b selftest/c0/st1 "$o3/st1" selftest/c0/base
+echo z > "$o3/st1/z.txt"; git -C "$o3/st1" add z.txt 2>/dev/null; g -C "$o3/st1" commit -q -m z
+git -C "$s3" branch -f selftest/c0/base selftest/c0/st1
+if [ -n "$win" ]; then M() { cygpath -m "$1"; }; else M() { printf '%s\n' "$1"; }; fi
+st prepare --project "$p3" --state "$s3" --core c8
+expect "prepare: the base's worktree in the project's .claude/worktrees" 0 "PASS prepare: worktree of selftest/c8/base at $(M "$p3")/.claude/worktrees/selftest/c8/base"
+expect "prepare: the worktree root it names" 0 "worktrees: $(M "$p3")/.claude/worktrees/selftest/c8 (start-worker's worktree root: $(M "$p3")/.claude/worktrees)"
+n=$((n + 1)); [ "$(git -C "$w3/base" symbolic-ref -q --short HEAD 2>/dev/null)" = selftest/c8/base ] ||
+  { echo "FAIL (prepare: the base's worktree): no worktree of selftest/c8/base at $w3/base"; fail=1; }
+n=$((n + 1)); [ ! -e "$s3/.claude/worktrees/selftest/c8" ] ||
+  { echo "FAIL (prepare: the base's worktree): a worktree at the old place $s3/.claude/worktrees/selftest/c8"; fail=1; }
+n=$((n + 1)); [ -z "$(git -C "$p3" status --porcelain)" ] ||
+  { echo "FAIL (prepare: the base's worktree): the project's git sees it:"; git -C "$p3" status --porcelain | sed 's/^/    /'; fail=1; }
+git -C "$s3" worktree add -q -b selftest/c8/st1 "$w3/st1" selftest/c8/base   # as start-worker --worktree-root makes it
+echo a > "$w3/st1/a.txt"; git -C "$w3/st1" add a.txt 2>/dev/null; g -C "$w3/st1" commit -q -m a
+g -C "$w3/base" merge -q --no-ff --no-edit selftest/c8/st1
+st verify --project "$p3" --state "$s3" --core c8
+expect "verify: the run's worktrees and an older run's at the old place" 0 "PASS verify: no worktree left"
+n=$((n + 1)); [ ! -e "$w3/st1" ] && [ ! -e "$w3/base" ] && [ ! -e "$o3/st1" ] ||
+  { echo "FAIL (verify: the run's worktrees and an older run's at the old place): merged worktrees are still there"; fail=1; }
 
 # the sessions claude agents still lists, each with its cwd as the real listing gives it: D <path> as
 # Claude Code prints a folder (Windows: C:\...), J <path> as a JSON string holds it (each \ doubled),
