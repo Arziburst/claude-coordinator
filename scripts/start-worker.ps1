@@ -2,7 +2,7 @@
 # (Windows; macOS / Linux: start-worker.sh - the same steps and checks).
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
-#       -ReportTo <coordinator session> [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
+#       -ReportTo <coordinator session> [-Contract <file>] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -26,10 +26,15 @@
 # The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
 # worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
 # A worker or a lead: before the launch it prints the conflict foresight (CORE section 4a) - merge-queue
-# status with the brief's `touches: [...]` - as `foresight:` lines; informational, never a stop.
+# status with the brief's `touches` - as `foresight:` lines; informational, never a stop.
+# The contract must pass check-contract before it goes out (CORE section 4, #267): -Contract <file>, or for
+# a worker or a lead without it the contract in the brief (a block between `---` lines holding `id:` and
+# `acceptance:`, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
+# the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
+# lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
-      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '')
+      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -46,15 +51,16 @@ if ($BriefFile) {
 }
 if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
-                  @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot))) {
+                  @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
+if ($Contract -and -not (Test-Path -LiteralPath $Contract -PathType Leaf)) { Fail "-Contract: $Contract does not exist" }
 # Absolute paths: both files are used from inside the worktree.
 $Safety = (Resolve-Path -LiteralPath $Safety).Path; $BriefFile = (Resolve-Path -LiteralPath $BriefFile).Path
 # a relative -WorktreeRoot is taken from the current folder (git would resolve it against the repository)
@@ -111,6 +117,38 @@ if ($hook.EndsWith('.ps1')) {
 } else { $selftest = bash $hook --self-test }
 if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test printed nothing ($hook)" }
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
+
+# The contract passes check-contract before it goes out (CORE section 4, #267), checked before anything is
+# created: -Contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
+# the first block between two `---` lines of the brief that holds `id:` and `acceptance:` at its top level
+$sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
+$crole = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $crole = $Matches[2] }
+$cFile = $Contract; $cLabel = $Contract; $cTmp = ''
+if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
+  # each `---` line ends a candidate block and opens the next (a rule above the contract is no contract)
+  $cl = [IO.File]::ReadAllText($BriefFile).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n"
+  $on = $false; $buf = @(); $hasId = $false; $hasAcc = $false; $found = $false
+  foreach ($l in $cl) {
+    if ($l -match '^---[ \t]*$') {
+      if ($on -and $hasId -and $hasAcc) { $found = $true; break }
+      $on = $true; $buf = @(); $hasId = $false; $hasAcc = $false; continue
+    }
+    if ($on) { $buf += $l; if ($l -cmatch '^id:') { $hasId = $true }; if ($l -cmatch '^acceptance:') { $hasAcc = $true } }
+  }
+  if ($found) {
+    $cTmp = [IO.Path]::GetTempFileName(); $cFile = $cTmp; $cLabel = 'contract in the brief'
+    [IO.File]::WriteAllText($cTmp, "---`n" + ($buf -join "`n") + "`n---`n", (New-Object System.Text.UTF8Encoding $false))
+  } else { "contract: none found in the brief - check-contract not run (CORE ${sect}4)" }
+}
+if ($cFile) {
+  $cOut = @(); $cRc = 1
+  try { $cOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') $cFile 2>&1 } | ForEach-Object { "$_" }); $cRc = $LASTEXITCODE }
+  catch { $cOut = @("$_") }
+  finally { if ($cTmp) { Remove-Item -LiteralPath $cTmp -Force -ErrorAction SilentlyContinue } }
+  # its lines name the file it read: the brief's contract by that name, not by the temporary file
+  $cOut | ForEach-Object { if ($_.StartsWith("${cFile}: ")) { "${cLabel}: " + $_.Substring($cFile.Length + 2) } else { $_ } }
+  if ($cRc -ne 0) { Fail "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE ${sect}4)" }
+}
 
 function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')" } else { & $exe @a; if ($LASTEXITCODE -ne 0) { Fail "$exe failed" } }
@@ -263,16 +301,25 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
     else { $roleText = $bodyText; "role ${role}: roles/$role.md heads the brief" }
   }
 }
-# conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches: [...]`
-# names, printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
+# conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches` names - inline
+# `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
+# printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $fr = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $fr = $Matches[2] }
 if ($fr -in @('worker', 'lead', '')) {
-  $tm = [regex]::Match($briefText.Replace("`r", ''), '(?m)^[ \t]*touches:[ \t]*\[([^\]]*)\]')
-  if (-not $tm.Success) {
-    "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE ${sect}4a)"
+  $raw = @(); $bl = $briefText.Replace("`r", '') -split "`n"
+  for ($i = 0; $i -lt $bl.Count; $i++) {
+    if ($bl[$i] -notmatch '^[ \t]*touches:') { continue }
+    $s = ($bl[$i] -replace '^[ \t]*touches:[ \t]*', '') -replace '[ \t]*#.*$', ''
+    if ($s.StartsWith('[')) { $raw = @(($s.Substring(1) -replace '\].*$', '') -split ',') }
+    elseif ($s -eq '') { for ($j = $i + 1; $j -lt $bl.Count -and $bl[$j] -match '^[ \t]*-[ \t]'; $j++) {
+      $raw += (($bl[$j] -replace '^[ \t]*-[ \t]*', '') -replace '[ \t]+#.*$', '') } }
+    break
+  }
+  $tl = @($raw | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })
+  if (-not $tl.Count) {
+    "foresight: no touches in the brief - check the open PRs against the task yourself (CORE ${sect}4a)"
   } else {
-    $tl = @($tm.Groups[1].Value -split ',' | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })
     $fo = @(); $frc = 1
     Push-Location -LiteralPath $root
     try { $fo = @(& (Join-Path $PSScriptRoot 'merge-queue.ps1') status -Touches ($tl -join ',') 2>&1 | ForEach-Object { "$_" }); $frc = $LASTEXITCODE }
