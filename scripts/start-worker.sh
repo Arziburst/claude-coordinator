@@ -133,8 +133,8 @@ selftest=$(bash "$hook" --self-test || true)
 # The contract passes check-contract before it goes out (CORE §4, #267), checked before anything is
 # created: --contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
 # the first block after a `---` line of the brief - up to the next `---` or the brief's end - that holds
-# any key check-contract requires at its top level (id, title, intent, acceptance, non_goals,
-# do_not_decide, tests_first): a contract missing some of them is still checked, never "none found"
+# any key check-contract requires at its top level but title (id, intent, acceptance, non_goals,
+# do_not_decide, tests_first; title is common in quoted front matter, #267): a contract missing some of them is still checked, never "none found"
 crole="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
 cfile="$contract" clabel="$contract" ctmp=""
 if [ -z "$contract" ]; then case "$crole" in worker|lead|"")
@@ -145,7 +145,7 @@ if [ -z "$contract" ]; then case "$crole" in worker|lead|"")
   B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"] }
     { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
     /^---[ \t]*$/ { if (on && k) { printf "---\n%s---\n", buf; done = 1; exit } on = 1; buf = ""; k = 0; next }
-    on { buf = buf $0 "\n"; if ($0 ~ /^(id|title|intent|acceptance|non_goals|do_not_decide|tests_first):/) k = 1 }
+    on { buf = buf $0 "\n"; if ($0 ~ /^(id|intent|acceptance|non_goals|do_not_decide|tests_first):/) k = 1 }
     END { if (!done && on && k) printf "---\n%s---\n", buf }' "$brief" > "$ctmp"
   if [ -s "$ctmp" ]; then cfile="$ctmp" clabel="contract in the brief"
   else echo "contract: none found in the brief - check-contract not run (CORE §4)"; fi ;;

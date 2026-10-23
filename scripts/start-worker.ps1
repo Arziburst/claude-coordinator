@@ -121,8 +121,8 @@ if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 # The contract passes check-contract before it goes out (CORE section 4, #267), checked before anything is
 # created: -Contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
 # the first block after a `---` line of the brief - up to the next `---` or the brief's end - that holds
-# any key check-contract requires at its top level (id, title, intent, acceptance, non_goals,
-# do_not_decide, tests_first): a contract missing some of them is still checked, never "none found"
+# any key check-contract requires at its top level but title (id, intent, acceptance, non_goals,
+# do_not_decide, tests_first; title is common in quoted front matter, #267): a contract missing some of them is still checked, never "none found"
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $crole = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $crole = $Matches[2] }
 $cFile = $Contract; $cLabel = $Contract; $cTmp = ''
@@ -135,7 +135,7 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
       if ($on -and $hasKey) { $found = $true; break }
       $on = $true; $buf = @(); $hasKey = $false; continue
     }
-    if ($on) { $buf += $l; if ($l -cmatch '^(id|title|intent|acceptance|non_goals|do_not_decide|tests_first):') { $hasKey = $true } }
+    if ($on) { $buf += $l; if ($l -cmatch '^(id|intent|acceptance|non_goals|do_not_decide|tests_first):') { $hasKey = $true } }
   }
   # a block left open at the brief's end counts too
   if (-not $found -and $on -and $hasKey) { $found = $true }

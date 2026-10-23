@@ -444,6 +444,10 @@ expect_in "refused: the contract fails check-contract"
 check 0 "start: a --- block that is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-crule.md" --dry-run
 expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
 expect_in "[dry-run] (cd "
+# quoted Markdown front matter (title: is common there) is no contract either (#267)
+printf 'Make docs/p.md with:\n---\ntitle: My page\nlayout: post\n---\nBody.\n' > "$tmp/brief-cfront.md"
+check 0 "start: quoted front matter with title: is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cfront.md" --dry-run
+expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
 check 1 "start: --contract with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --contract "$cc/tests-first-missing.md" --dry-run
 expect_in "tests-first-missing.md: ERROR missing \`tests_first\`"
 expect_in "refused: the contract fails check-contract"
