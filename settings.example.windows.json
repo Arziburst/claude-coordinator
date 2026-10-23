@@ -59,6 +59,8 @@
       "mcp__github__merge_pull_request"
     ],
     "allow": [
+      "Bash(gh pr create --draft *)",
+      "PowerShell(gh pr create --draft *)",
       "PowerShell(Select-String *)",
       "PowerShell(Select-Object *)",
       "PowerShell(Get-ChildItem *)",

@@ -181,6 +181,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
   human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
+- **A worker's draft PR:** the worker safety file allows `gh pr create --draft *` (Bash and PowerShell),
+  the one narrow allow rule it holds for a write: Claude Code's auto mode resolves a narrow allow rule
+  without its classifier (permission-modes docs), which had refused some workers' draft PRs; a compound
+  command still needs every part allowed. `gh pr ready` and `gh pr merge` stay denied where the preset
+  denies them (#261).
 - **The guard reads a command's text, not only what will run:** `git push` written inside a string or a
   here-string of the same command (a brief written to a file) is read as a push and may be blocked.
   Write such text with the Write tool. The guard does not strip strings on purpose: that would let

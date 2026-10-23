@@ -329,9 +329,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: none known
 
 ### F-WORKERS-02 Worker safety settings checked
-- defined: scripts/start-worker.sh, TOOLKIT.md
-- entry: `--safety` / `-Safety`
-- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message
+- defined: scripts/start-worker.sh, TOOLKIT.md, settings.example.json, settings.example.windows.json, ONE-TIME.md
+- entry: `--safety` / `-Safety`; one-time step `worker-draft-pr`
+- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message; the worker safety file allows only `gh pr create --draft *` among the writes, a narrow rule auto mode resolves without its classifier (#261)
 - tested by: tests/workers/run.sh (backslash path, PowerShell shell anywhere in the hook object, a wrong PreToolUse path, no PreToolUse guard, a silent self-test, a quoted and an unquoted path with a space)
 - not covered: other wrappers that could swallow the exit code
 
