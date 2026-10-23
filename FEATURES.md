@@ -726,7 +726,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-UPDATE-02 Update with an impact report
 - defined: procedures/UPDATE-CORE.md
 - entry: "update the core", only on the owner's command
-- promises: an impact report comes before any change — conflicts with local edits, breaking lines, one-time steps not done, findings the update fixes; files merge only on the owner's yes, keeping the agreed local edits; every running session of the project is paused first (its full id recorded; idle, or stopped by its short id) and resumed after the self-test, told only the rule changes that apply to it
+- promises: an impact report comes before any change — conflicts with local edits, breaking lines, one-time steps not done, findings the update fixes, and each `selftest hooks --settings` SKIP offered on the worker safety file and on the coordinator's own settings files that hold the guard (on its own files all but `COORD_PROTECTED_ROOT`, which does not apply to the coordinator: that SKIP is expected there); an own settings file is written complete in the coordinator's scratch folder and applied by the owner's one command (`! cp <prepared> <target>`, PowerShell `Copy-Item`), auto mode refusing the coordinator's own edit, then checked with `selftest hooks --settings` in a new session (#256); files merge only on the owner's yes, keeping the agreed local edits; every running session of the project is paused first (its full id recorded; idle, or stopped by its short id) and resumed after the self-test, told only the rule changes that apply to it
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 

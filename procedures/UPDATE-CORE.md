@@ -23,7 +23,17 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      the project makes with the update, and each SKIP on the worker safety file a protection it does not
      use yet, offered to the owner (e.g. `COORD_PROTECTED_ROOT` not set: the working copy is not kept from
      workers' edit tools — the file gains the env value and the edit tools in the guard's matcher,
-     TOOLKIT *Safety*);
+     TOOLKIT *Safety*). **Each SKIP on the coordinator's own settings files** is offered the same way,
+     so the file is brought to the current guard matcher (e.g. a matcher without SendMessage: the
+     coordinator's own messages to other sessions are not guarded, CORE §1.17 — the matcher gains the tools
+     of the current settings example) — **except `COORD_PROTECTED_ROOT`**: it does not apply to the
+     coordinator, which writes `coordinator/` inside the root (TOOLKIT *Safety*), so that SKIP is expected
+     on its own files and not offered (#256). Auto mode refuses the coordinator's own edit of its settings
+     ("Self-Modification"), so on the owner's yes the coordinator writes the **complete** new file in its
+     scratch folder and gives the owner one command to apply it — `! cp <prepared file> <target>` in the
+     coordinator's prompt, or the same in their own terminal (PowerShell: `Copy-Item <prepared file>
+     <target>`) — then re-runs `selftest hooks --settings <target>` in a **new** session (hooks load at
+     start: the running session keeps the old guard);
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
@@ -51,7 +61,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - **In auto mode** Claude Code's classifier may refuse step 4's changes to the coordinator's own
      configuration (the safety and settings files, `~/.claude/agents/`) as "Self-Modification", even a
      read next to them (#221). Say so in the report and ask the owner before step 4: they approve those
-     changes in a mode that asks, or add an allow rule for them; a refusal mid-update is raised, never
+     changes in a mode that asks, or add an allow rule for them, or (a settings file) run the one command
+     that applies the file the coordinator prepared (above); a refusal mid-update is raised, never
      worked around (CORE §1.16).
 4. **On the owner's yes,** first **pause** every running session of this project (CORE §1.17), so none
    works under the old rules and scripts while they change: record each one's full session id, then

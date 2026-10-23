@@ -66,7 +66,10 @@ the report notes the interruption and the resume time.
    session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
    - `selftest hooks --settings <file>` on the worker safety file and on every settings file of the
      coordinator's own session that holds the guard (the project's `.claude/settings.json` and
-     `.claude/settings.local.json`, the user's `~/.claude/settings.json`).
+     `.claude/settings.local.json`, the user's `~/.claude/settings.json`). On the coordinator's own files
+     `SKIP hooks: COORD_PROTECTED_ROOT not set` is expected: the protected root does not apply to the
+     coordinator, which writes `coordinator/` inside the root (TOOLKIT *Safety*); any other SKIP there is
+     offered to the owner as in UPDATE-CORE step 3 (#256).
    - **When the probe sessions run** (the owner's decision, #235): only when something they prove can
      have changed — no `probes` record in `CHECKLIST.md` for this `hostname` (a new machine); the update
      changed `scripts/hooks/safety-guard.*`; a settings file they probe differs from its recorded

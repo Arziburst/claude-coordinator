@@ -257,7 +257,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (`start-worker` from the repository's root, EnterWorktree) works in its own copy under
   `.claude/worktrees/`, but an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` with an absolute path can
   still reach the owner's checkout. With `"env": {"COORD_PROTECTED_ROOT": "<the project root>"}` in the
-  **worker** safety file (never the coordinator's own settings: the coordinator edits there) and those
+  **worker** safety file (never the coordinator's own settings: the coordinator edits there — it writes
+  `coordinator/` inside the root — so on its own files `selftest hooks` says `SKIP … COORD_PROTECTED_ROOT
+  not set`, which is expected there and not offered by UPDATE-CORE step 3, #256) and those
   four tools in the guard's matcher (`Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit`, as in the
   settings examples), the guard blocks such a call whose `file_path` (`notebook_path`) lies under the
   root, except under `<root>/.claude/worktrees/`. Both paths are compared in one form: `/` or `\`, a
