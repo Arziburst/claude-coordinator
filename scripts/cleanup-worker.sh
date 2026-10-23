@@ -68,15 +68,16 @@ git -C "$wt" fetch -q || stop_here "FETCH FAILED: cannot confirm $branch is on t
 u=""
 if git -C "$wt" rev-parse -q --verify '@{u}' >/dev/null; then u='@{u}'
 elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then u="origin/$branch"; fi
-# nothing to lose (#257): no remote branch, no upstream configured (not even one whose remote branch is
-# gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
+# nothing to lose (#257): no remote branch (of any remote: refs/remotes/*/<branch>), no upstream configured
+# (not even one whose remote branch is gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
 # itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
 # (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
 # the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
 empty="" base=""
 lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 if [ -z "$u" ] && [ "$branch" != HEAD ] &&
-   [ -z "$(git -C "$wt" config --get "branch.$branch.merge" || true)$(git -C "$wt" config --get "branch.$branch.remote" || true)" ]; then
+   [ -z "$(git -C "$wt" config --get "branch.$branch.merge" || true)$(git -C "$wt" config --get "branch.$branch.remote" || true)" ] &&
+   [ -z "$(git -C "$wt" for-each-ref --format='%(refname)' "refs/remotes/*/$branch")" ]; then
   if git -C "$wt" remote get-url origin >/dev/null 2>&1; then
     o=1; cands="$(git -C "$wt" symbolic-ref -q refs/remotes/origin/HEAD || true) refs/remotes/origin/main refs/remotes/origin/master"
   else o=""; cands="refs/heads/main refs/heads/master"; fi
@@ -184,7 +185,22 @@ if [ -n "$session" ]; then
     fi
   fi
 fi
+# the empty path deletes the branch before the worktree: a failed removal puts it back at the same
+# commit (on the worktree again while git still has it), so a re-run finds it as before
+ra=""
+reattach() {
+  [ -n "$empty" ] && [ "$dry" != 1 ] || return 0
+  if { [ -e "$wt/.git" ] && git -C "$wt" checkout -q -b "$branch"; } ||
+     { [ ! -e "$wt/.git" ] && git -C "$root" branch "$branch" "$up"; }; then
+    ra="; branch $branch put back at ${up:0:7}"
+  else ra="; branch $branch NOT put back: git branch $branch $up"; fi
+}
 if [ -n "$empty" ]; then
+  # a session stopped just now may have committed or changed files after the checks: decided again here,
+  # the worktree still clean, on the branch and at the commit checked
+  { [ -z "$(git -C "$wt" status --porcelain)" ] && [ "$(git -C "$wt" rev-parse HEAD)" = "$up" ] &&
+    [ "$(git -C "$wt" symbolic-ref -q HEAD || true)" = "refs/heads/$branch" ]; } ||
+    stop_here "CHANGED: $wt moved since the checks"
   # an empty branch is deleted from its own worktree, detached at the same commit: `git branch -d` then
   # checks it against that commit, not the main checkout's HEAD (which may be behind the base or on
   # another branch); no file changes. A refused delete re-attaches the branch and changes nothing.
@@ -201,11 +217,11 @@ else
   n=0
   until git -C "$root" worktree remove "$wt"; do
     [ -e "$wt/.git" ] || break
-    n=$((n + 1)); [ "$n" -lt 5 ] || { echo "REMOVE FAILED: git worktree remove $wt" >&2; exit 1; }
+    n=$((n + 1)); [ "$n" -lt 5 ] || { reattach; echo "REMOVE FAILED: git worktree remove $wt$ra" >&2; exit 1; }
     sleep 2
   done
   if [ -d "$wt" ]; then
-    rmdir "$wt" 2>/dev/null || { echo "REMOVE FAILED: $wt is no longer a worktree but not empty - left as is" >&2; exit 1; }
+    rmdir "$wt" 2>/dev/null || { reattach; echo "REMOVE FAILED: $wt is no longer a worktree but not empty - left as is$ra" >&2; exit 1; }
     echo "removed the empty folder git left: $wt"
   fi
 fi

@@ -118,14 +118,15 @@ else {
   git -C $Worktree rev-parse -q --verify "refs/remotes/origin/$branch" *> $null
   if ($LASTEXITCODE -eq 0) { $u = "origin/$branch" }
 }
-# nothing to lose (#257): no remote branch, no upstream configured (not even one whose remote branch is
-# gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
+# nothing to lose (#257): no remote branch (of any remote: refs/remotes/*/<branch>), no upstream configured
+# (not even one whose remote branch is gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
 # itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
 # (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
 # the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
 $empty = $false; $base = ''
 if (-not $u -and $branch -cne 'HEAD') {
   $cfg = "$(git -C $Worktree config --get "branch.$branch.merge" 2>$null)$(git -C $Worktree config --get "branch.$branch.remote" 2>$null)"
+  $cfg += "$(git -C $Worktree for-each-ref --format='%(refname)' "refs/remotes/*/$branch" 2>$null)"
   if (-not $cfg) {
     git -C $Worktree remote get-url origin *> $null
     $o = ($LASTEXITCODE -eq 0)
@@ -256,7 +257,22 @@ if ($Session) {
     }
   }
 }
+# the empty path deletes the branch before the worktree: a failed removal puts it back at the same
+# commit (on the worktree again while git still has it), so a re-run finds it as before
+function Reattach {
+  if (-not $empty -or $DryRun) { return '' }
+  $ok = $false
+  if (Test-Path -LiteralPath (Join-Path $Worktree '.git')) { git -C $Worktree checkout -q -b $branch | Out-Null; $ok = ($LASTEXITCODE -eq 0) }
+  else { git -C $root branch $branch $up | Out-Null; $ok = ($LASTEXITCODE -eq 0) }
+  if ($ok) { "; branch $branch put back at $short" } else { "; branch $branch NOT put back: git branch $branch $up" }
+}
 if ($empty) {
+  # a session stopped just now may have committed or changed files after the checks: decided again here,
+  # the worktree still clean, on the branch and at the commit checked
+  $same = -not (git -C $Worktree status --porcelain)
+  if ($same) { $same = ("$(git -C $Worktree rev-parse HEAD)".Trim() -ceq $up) }
+  if ($same) { $same = ("$(git -C $Worktree symbolic-ref -q HEAD 2>$null)".Trim() -ceq "refs/heads/$branch") }
+  if (-not $same) { StopHere "CHANGED: $Worktree moved since the checks" }
   # an empty branch is deleted from its own worktree, detached at the same commit: `git branch -d` then
   # checks it against that commit, not the main checkout's HEAD (which may be behind the base or on
   # another branch); no file changes. A refused delete re-attaches the branch and changes nothing.
@@ -264,7 +280,7 @@ if ($empty) {
   if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("REMOVE FAILED: git checkout --detach in $Worktree - left as is"); exit 1 }
   Run git @('-C', $Worktree, 'branch', '-d', $branch)
   if ($LASTEXITCODE -ne 0) {
-    git -C $Worktree checkout -q $branch *> $null
+    git -C $Worktree checkout -q $branch
     [Console]::Error.WriteLine("REMOVE FAILED: git branch -d $branch - left as is"); exit 1
   }
 }
@@ -275,11 +291,11 @@ else {
   for ($n = 1; ; $n++) {
     & git -C $root worktree remove $Worktree
     if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath (Join-Path $Worktree '.git'))) { break }
-    if ($n -ge 5) { [Console]::Error.WriteLine("REMOVE FAILED: git worktree remove $Worktree"); exit 1 }
+    if ($n -ge 5) { $ra = Reattach; [Console]::Error.WriteLine("REMOVE FAILED: git worktree remove $Worktree$ra"); exit 1 }
     Start-Sleep -Seconds 2
   }
   if (Test-Path -LiteralPath $Worktree -PathType Container) {
-    if (@(Get-ChildItem -LiteralPath $Worktree -Force).Count) { [Console]::Error.WriteLine("REMOVE FAILED: $Worktree is no longer a worktree but not empty - left as is"); exit 1 }
+    if (@(Get-ChildItem -LiteralPath $Worktree -Force).Count) { $ra = Reattach; [Console]::Error.WriteLine("REMOVE FAILED: $Worktree is no longer a worktree but not empty - left as is$ra"); exit 1 }
     Remove-Item -LiteralPath $Worktree -Force
     "removed the empty folder git left: $Worktree"
   }

@@ -39,6 +39,8 @@ if [ "${1:-}" = stop ] || [ "${1:-}" = rm ]; then
   if [ "$1" = stop ]; then
     [ "$st" = done ] && { echo "$2 is not running" >&2; exit 1; }
     awk -v i="$2" '$1 == i { $3 = "done" } { print }' "$S" > "$S.new" && mv "$S.new" "$S"; echo "stopped $2"
+    # $STUB_STOP_COMMIT: the stopping session makes one last commit in that worktree (#257)
+    [ -z "${STUB_STOP_COMMIT:-}" ] || git -C "$STUB_STOP_COMMIT" -c user.email=t@t -c user.name=t commit -q --allow-empty -m late
   else
     [ -n "${STUB_RM_FAIL:-}" ] && { echo "$STUB_RM_FAIL" >&2; exit 1; }
     awk -v i="$2" '$1 != i' "$S" > "$S.new" && mv "$S.new" "$S"; echo "removed $2"
@@ -614,7 +616,9 @@ if [ "\$3 \$4" = "worktree remove" ] && [ -f "$tmp/leave-folder" ]; then
 fi
 exec "$realgit" "\$@"
 EOF
-printf '%s\n' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
+# (MSYS noglob: the bash started from PowerShell gets git's arguments as given - its own globbing would
+# expand the braces of `<ref>^{commit}`)
+printf '%s\n' '$env:MSYS = ("$env:MSYS noglob").Trim()' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
 mk 26-fix; : > "$tmp/leave-folder"
 PATH="$gw:$PATH" STUB_HEADS="$h" check 0 "cleanup: git leaves the folder empty - it is removed" -- cleanup --worktree "$w"
 expect_in "removed the empty folder git left"
@@ -693,6 +697,39 @@ check 5 "cleanup: an empty branch, a foreign session" -- cleanup --worktree "$w"
 expect_in "SESSION FOREIGN: f0e1d2c3 ("
 kept 36-empty "foreign session"
 grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a foreign session of an empty branch was stopped or removed"; fail=1; }
+# a commit made after the checks, as its session stops: decided again before anything is deleted -
+# CHANGED, exit 3, the branch with the new commit and the worktree kept
+me 40-empty
+printf '%s %s %s %s\n' e4040404 e4040404-1111-4222-8333-444455556666 running "#40 worker: e" > "$SS"
+printf 'e4040404\t%s\n' "$(native "$w")" > "$SS.cwd"
+STUB_STOP_COMMIT="$w" STUB_GH_RC=1 check 3 "cleanup: an empty branch gets a commit as its session stops" -- cleanup --worktree "$w" --session e4040404
+expect_in "CHANGED: "
+expect_in " moved since the checks - left as is"
+kept 40-empty "a commit as the session stops"
+[ "$(git -C "$w" rev-list --count main..HEAD)" = 1 ] || { echo "FAIL: the commit made as the session stopped is gone"; fail=1; }
+# the removal fails (a locked worktree, as a folder a just-stopped session holds): the branch is put
+# back on the worktree at the same commit, and a run once the removal works removes it as EMPTY
+me 41-empty; git -C "$tmp/repo" worktree lock "$w"
+STUB_GH_RC=1 check 1 "cleanup: an empty branch, the removal fails" -- cleanup --worktree "$w"
+expect_in "REMOVE FAILED: git worktree remove "
+expect_in "; branch 41-empty put back at "
+kept 41-empty "the removal fails"
+git -C "$tmp/repo" worktree unlock "$w"
+STUB_GH_RC=1 check 0 "cleanup: an empty branch, run again once the removal works" -- cleanup --worktree "$w"
+expect_in "EMPTY: 41-empty has no commits beyond origin/main and was never pushed - removed"
+gone 41-empty "run again once the removal works"
+# git unregisters the worktree but leaves a file in the folder: the branch is put back in the repository
+me 42-empty; : > "$tmp/leave-folder"
+PATH="$gw:$PATH" STUB_GH_RC=1 LEAVE_FILE=1 check 1 "cleanup: an empty branch, git leaves the folder with a file" -- cleanup --worktree "$w"
+expect_in "is no longer a worktree but not empty - left as is; branch 42-empty put back at "
+git -C "$tmp/repo" show-ref -q --verify refs/heads/42-empty || { echo "FAIL: the branch was not put back after the failed removal"; fail=1; }
+# pushed to another remote only (refs/remotes/backup/<branch>): not never pushed - the usual checks
+git init -q --bare "$tmp/backup.git" && git -C "$tmp/repo" remote add backup "$tmp/backup.git"
+me 43-empty; git -C "$w" push -q backup 43-empty 2>/dev/null
+STUB_GH_RC=1 check 3 "cleanup: an empty branch pushed to another remote" -- cleanup --worktree "$w"
+expect_in "UNKNOWN"
+kept 43-empty "pushed to another remote"
+git -C "$tmp/repo" remote remove backup
 # the main checkout's HEAD behind the base (origin/main moved on, local main did not): the branch is
 # still deleted with git branch -d (checked against its own commit, not the main checkout's HEAD)
 git clone -q "$tmp/remote.git" "$tmp/server2" 2>/dev/null && g -C "$tmp/server2" commit -q --allow-empty -m "main moves on" &&
