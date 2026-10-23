@@ -578,28 +578,33 @@ function CheckoutSeg([string]$dd, [string[]]$a) {
   if (-not $known -and $dd -ne '?') { git -C $dd show-ref -q --verify "refs/heads/$first" 2>$null | Out-Null; $known = ($LASTEXITCODE -eq 0) }
   if ($known) { $script:ovDir = $dd; $script:ovBranch = $first }
 }
-function GitSeg([string[]]$a) {
+function GitSeg([string[]]$a, [bool]$redir = $false) {
   $eff = $script:dir; $i = 0
   while ($i -lt $a.Count) {
     $t = $a[$i]
     if ($t -ceq '-C') { $v = if ($i + 1 -lt $a.Count) { $a[$i + 1] } else { '' }; $eff = Compose $eff $v; $i += 2; continue }
-    if ($t -match '^(-c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix)$') { $i += 2; continue }
+    if ($t -match '^(--git-dir|--work-tree)$') { $redir = $true; $i += 2; continue }
+    if ($t -match '^(--git-dir|--work-tree)=') { $redir = $true; $i++; continue }
+    if ($t -match '^(-c|--namespace|--config-env|--super-prefix)$') { $i += 2; continue }
     if ($t.StartsWith('-')) { $i++; continue }
     break
   }
   if ($i -ge $a.Count) { return }
+  # --git-dir / --work-tree (or GIT_DIR= / GIT_WORK_TREE= before git) point git elsewhere: the folder a
+  # discarding command acts on is not known
+  $deff = if ($redir) { '?' } else { $eff }
   $sub = $a[$i]; $rest = @(if ($i + 1 -lt $a.Count) { $a[($i + 1)..($a.Count - 1)] })
   switch ($sub.ToLowerInvariant()) {
     'push' { PushSeg $eff $rest }
     'branch' { BranchSeg $rest }
     'update-ref' { UpdRefSeg $rest }
-    'checkout' { DiscardSeg $eff 'checkout' $rest; CheckoutSeg $eff $rest }
-    'switch' { DiscardSeg $eff 'switch' $rest; CheckoutSeg $eff $rest }
+    'checkout' { DiscardSeg $deff 'checkout' $rest; CheckoutSeg $eff $rest }
+    'switch' { DiscardSeg $deff 'switch' $rest; CheckoutSeg $eff $rest }
     'worktree' { WorktreeSeg $rest }
-    'clean' { DiscardSeg $eff 'clean' $rest }
-    'reset' { DiscardSeg $eff 'reset' $rest }
-    'restore' { DiscardSeg $eff 'restore' $rest }
-    'stash' { DiscardSeg $eff 'stash' $rest }
+    'clean' { DiscardSeg $deff 'clean' $rest }
+    'reset' { DiscardSeg $deff 'reset' $rest }
+    'restore' { DiscardSeg $deff 'restore' $rest }
+    'stash' { DiscardSeg $deff 'stash' $rest }
   }
 }
 # --- discarding files in a repository's main checkout (#263): git clean -f, reset --hard, checkout -- <paths>
@@ -647,20 +652,24 @@ function DiscardSeg([string]$dd, [string]$sub, [string[]]$a) {
   if (FreeCopy $dd) { return }
   Block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
-# FreeCopy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose folder
-# lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root (OwnForms)
+# FreeCopy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
+# folder (the repository's, not the dir's: a plain or stale folder under .claude/worktrees/ belongs to the
+# project) lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root
+# (OwnForms). rev-parse must print three absolute paths: an older git echoes --path-format back.
 function FreeCopy([string]$dd) {
   if ($dd -eq '?') { return $false }
-  $out = @(git -C $dd rev-parse --path-format=absolute --git-dir --git-common-dir 2>$null)
-  if ($LASTEXITCODE -ne 0 -or $out.Count -lt 2) { return $false }
+  $out = @(git -C $dd rev-parse --path-format=absolute --git-dir --git-common-dir --show-toplevel 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $out.Count -ne 3) { return $false }
+  foreach ($l in $out) { if ("$l" -notmatch '^(/|[A-Za-z]:/)') { return $false } }
   if ($out[0] -cne $out[1]) { return $true }
+  $top = [string]$out[2]
   OwnForms
   $wr = @()
   foreach ($r in $script:wtRel) {
     $x = Canon $r -Keep:$smKeep; if ($x -and $x -ne '.') { $wr += $x }
     $ph = Physical $r -Keep:$smKeep; if ($ph -and $ph -ne '.') { $wr += $ph }
   }
-  $forms = @(Canon $dd -Keep:$smKeep); $ph = Physical $dd -Keep:$smKeep; if ($null -ne $ph) { $forms += $ph }
+  $forms = @(Canon $top -Keep:$smKeep); $ph = Physical $top -Keep:$smKeep; if ($null -ne $ph) { $forms += $ph }
   foreach ($x in $forms) {
     if ("$x/" -match '/\.claude/worktrees/[^/]+/') { continue }
     $in = $false
@@ -813,7 +822,11 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
   $cw = BaseName $words[$i]
   $rest = @(if ($i + 1 -lt $words.Count) { $words[($i + 1)..($words.Count - 1)] })
   switch -regex ($cw) {
-    '^git$' { GitSeg $rest }
+    '^git$' {
+      # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see GitSeg
+      $redir = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^(GIT_DIR|GIT_WORK_TREE)=') { $redir = $true } }
+      GitSeg $rest $redir
+    }
     '^(cd|pushd|chdir|set-location|sl|push-location)$' { CdSeg $rest }
     '^(rm|remove-item|ri|del|erase|rd|rmdir)$' { RmSeg $cw $rest }
     '^find$' { FindSeg $rest }

@@ -198,8 +198,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   by the cwd, a `cd` or `git -C`: `git clean` with `-f` (not with `-n` / `--dry-run`), `git reset
   --hard`, `git checkout -- <paths>` / `<ref> -- <paths>` / `.` / `-f`, `git switch -f` /
   `--discard-changes`, `git restore` of the working tree (not `--staged` alone), `git stash drop` /
-  `clear`; a linked worktree, a folder under `.claude/worktrees/` or a declared worktree root passes, a
-  folder that cannot be known (a variable, not a repository) blocks — with or without
+  `clear`; a linked worktree, or a repository whose top folder lies under `.claude/worktrees/` or a
+  declared worktree root, passes (a plain folder there belongs to the project and does not); a folder
+  that cannot be known (a variable, not a repository, `--git-dir` / `--work-tree` / `GIT_DIR=` /
+  `GIT_WORK_TREE=` pointing elsewhere) blocks — with or without
   `COORD_PROTECTED_ROOT`, which a subagent under the coordinator's own settings does not have. It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,

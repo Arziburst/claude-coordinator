@@ -64,8 +64,10 @@ export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "
 # whose name starts with the project's), b0000003 in another folder with a0000001's name.
 mkdir -p "$tmp/bin" "$tmp/other" "$tmp/work-old" "$tmp/work-wt/14-x" "$tmp/work/coordinator"
 # #263: linked, a linked worktree of work (detached); work-wt/14-x, a repository of its own (a main checkout)
-# under that declared worktree root
-git -C "$tmp/work" worktree add -q --detach "$tmp/linked" && git init -q "$tmp/work-wt/14-x" || { echo "FAIL (worktrees) could not make linked or work-wt/14-x"; fail=1; }
+# under that declared worktree root; work/.claude/worktrees/13-clone, one under work's worktrees' folder
+# (work/.claude/worktrees/12-fix/src stays a plain folder of work)
+git -C "$tmp/work" worktree add -q --detach "$tmp/linked" && git init -q "$tmp/work-wt/14-x" &&
+  git init -q "$tmp/work/.claude/worktrees/13-clone" || { echo "FAIL (worktrees) could not make linked, work-wt/14-x or 13-clone"; fail=1; }
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SG_CLAUDE_LOG"

@@ -2,7 +2,8 @@
 # <expect> <branch> <command>   expect: block | allow; branch: the cwd repo's checked-out branch (main | work;
 # crlf, blank and bad are on work with another deny file: tests/safety-guard/run.sh says which), or a
 # folder inside one (work/.claude/worktrees/12-fix/src: the cwd; the project is still work; linked: a linked
-# worktree of work, detached; work-wt/14-x: a repository of its own under work's declared worktree root); a ps: prefix
+# worktree of work, detached; work-wt/14-x: a repository of its own under work's declared worktree root;
+# work/.claude/worktrees/13-clone: a repository of its own in work's worktrees' folder); a ps: prefix
 # makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
 # of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path.
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
@@ -77,7 +78,7 @@ allow	work	Remove-Item -Recurse .\dist
 allow	main	git status
 allow	main	git pull origin main
 allow	main	git log origin/main..HEAD
-allow	work/.claude/worktrees/12-fix/src	git reset --hard origin/main
+allow	linked	git reset --hard origin/main
 allow	work	git rebase origin/main
 # --- line continuations, tabs (A2) ---
 block	work	git push origin \\nmain
@@ -193,7 +194,7 @@ allow	work	git commit -m "$(cat <<'EOF'\nFix it; don't push to main\n\ngit push 
 allow	work	git commit -m "line one\ngit push origin main"
 allow	work	git push origin main-fix # git push origin main
 allow	work	git log --oneline | grep push
-allow	work/.claude/worktrees/12-fix/src	git checkout main -- README.md && git push
+allow	linked	git checkout main -- README.md && git push
 allow	work	git branch -D 12-fix maintenance
 allow	work	git branch -m main-old
 allow	work	git rebase -i origin/main
@@ -682,13 +683,16 @@ own8	Üw	claude stop a0000004
 own8	ps:Üw	claude rm a0000004
 own8	send:Üw	#16 worker: Fold
 block	Üw	claude stop b0000001
-# --- discarding files in a repository's main checkout (#263): work is a main checkout; a linked worktree, a
-# folder under .claude/worktrees/ and a declared worktree root stay free; no COORD_PROTECTED_ROOT needed ---
+# --- discarding files in a repository's main checkout (#263): work is a main checkout; a linked worktree and a
+# repository whose top folder is under .claude/worktrees/ or a declared worktree root stay free (a plain folder
+# there, 12-fix/src, is work's); no COORD_PROTECTED_ROOT needed ---
 block	work	git clean -ffdx
 block	work/.claude/worktrees/12-fix/src	git -C @PROJECT@ clean -ffdxq
 block	work	git clean -xf
 block	work	git clean --force -d
-allow	work/.claude/worktrees/12-fix/src	git clean -ffdx
+block	work/.claude/worktrees/12-fix/src	git clean -ffdx
+allow	work/.claude/worktrees/13-clone	git clean -ffdx
+block	work	git -C .claude/worktrees/12-fix reset --hard
 allow	work	git clean -n -fdx
 allow	work	git clean -d
 allow	linked	git clean -ffdx
@@ -721,6 +725,18 @@ block	ps:work	git -C @PROJECT_W@ reset --hard
 block	ps:work	git checkout -- .
 block	ps:work	git restore f
 block	ps:work	git stash drop
-allow	ps:work/.claude/worktrees/12-fix/src	git clean -ffdx
+block	ps:work/.claude/worktrees/12-fix/src	git clean -ffdx
+allow	ps:work/.claude/worktrees/13-clone	git clean -ffdx
 allow	ps:work	git restore --staged f
 allow	ps:work	git stash; git stash pop
+# --git-dir / --work-tree and GIT_DIR= / GIT_WORK_TREE= point git elsewhere: a discarding command's folder is not known
+block	linked	git --git-dir=../work/.git --work-tree=../work reset --hard
+block	linked	git --work-tree ../work clean -fdx
+block	linked	GIT_DIR=../work/.git git reset --hard
+block	linked	env GIT_WORK_TREE=../work git clean -fdx
+block	ps:linked	git --git-dir ../work/.git checkout -- .
+allow	linked	GIT_DIR=../work/.git git status
+# procedures/MIGRATE-LAYOUT.md step 4: the folder moved aside around the pull, not the old discarding commands
+allow	work	mv coordinator coordinator.migrating && git pull --ff-only && mv coordinator.migrating coordinator
+block	work	git checkout -- coordinator/
+block	work	git -C coordinator restore .

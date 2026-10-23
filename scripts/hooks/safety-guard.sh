@@ -753,28 +753,33 @@ checkout_seg() {
   fi
 }
 git_seg() {
-  local eff="$dir" sub
+  local eff="$dir" sub deff redir="${git_redir:-0}"
   while [ $# -gt 0 ]; do
     if [ "$1" = "-C" ]; then eff=$(compose "$eff" "${2:-}"); [ $# -ge 2 ] && shift; shift; continue; fi
     case "$1" in
-      -c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix) [ $# -ge 2 ] && shift; shift ;;
+      --git-dir|--work-tree) redir=1; [ $# -ge 2 ] && shift; shift ;;
+      --git-dir=*|--work-tree=*) redir=1; shift ;;
+      -c|--namespace|--config-env|--super-prefix) [ $# -ge 2 ] && shift; shift ;;
       -*) shift ;;
       *) break ;;
     esac
   done
   [ $# -gt 0 ] || return
+  # --git-dir / --work-tree (or GIT_DIR= / GIT_WORK_TREE= before git) point git elsewhere: the folder a
+  # discarding command acts on is not known
+  deff="$eff"; [ "$redir" = 1 ] && deff="?"
   sub="$1"; shift
   case "$sub" in
     push) push_seg "$eff" "$@" ;;
     branch) branch_seg "$@" ;;
     update-ref) updref_seg "$@" ;;
-    checkout) discard_seg "$eff" checkout "$@"; checkout_seg "$eff" "$@" ;;
-    switch) discard_seg "$eff" switch "$@"; checkout_seg "$eff" "$@" ;;
+    checkout) discard_seg "$deff" checkout "$@"; checkout_seg "$eff" "$@" ;;
+    switch) discard_seg "$deff" switch "$@"; checkout_seg "$eff" "$@" ;;
     worktree) worktree_seg "$@" ;;
-    clean) discard_seg "$eff" clean "$@" ;;
-    reset) discard_seg "$eff" reset "$@" ;;
-    restore) discard_seg "$eff" restore "$@" ;;
-    stash) discard_seg "$eff" stash "$@" ;;
+    clean) discard_seg "$deff" clean "$@" ;;
+    reset) discard_seg "$deff" reset "$@" ;;
+    restore) discard_seg "$deff" restore "$@" ;;
+    stash) discard_seg "$deff" stash "$@" ;;
   esac
 }
 # --- discarding files in a repository's main checkout (#263): git clean -f, reset --hard, checkout -- <paths>
@@ -825,13 +830,19 @@ discard_seg() {   # discard_seg <dir> <subcommand> <its arguments>...
   free_copy "$d" && return 0
   block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
-# free_copy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose folder
-# lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root (own_forms)
+# free_copy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
+# folder (the repository's, not the dir's: a plain or stale folder under .claude/worktrees/ belongs to the
+# project) lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root
+# (own_forms). rev-parse must print three absolute paths: an older git echoes --path-format back.
 free_copy() {
-  local d="$1" out l f r ok; local forms=() wr=()
+  local d="$1" out l f r ok gd cm top rest; local forms=() wr=()
   [ "$d" = "?" ] && return 1
-  out=$(git -C "$d" rev-parse --path-format=absolute --git-dir --git-common-dir 2>/dev/null) || return 1
-  [ "${out%%$nl*}" != "${out#*$nl}" ] && return 0
+  out=$(git -C "$d" rev-parse --path-format=absolute --git-dir --git-common-dir --show-toplevel 2>/dev/null) || return 1
+  gd="${out%%$nl*}"; rest="${out#*$nl}"; cm="${rest%%$nl*}"; top="${rest#*$nl}"
+  [ "$rest" != "$out" ] && [ "$top" != "$rest" ] || return 1
+  case "$top" in *"$nl"*) return 1 ;; esac
+  for l in "$gd" "$cm" "$top"; do case "$l" in /*|[A-Za-z]:/*) ;; *) return 1 ;; esac; done
+  [ "$gd" != "$cm" ] && return 0
   own_forms
   if [ ${#wt_rel[@]} -gt 0 ]; then
     while IFS= read -r l; do
@@ -841,7 +852,7 @@ free_copy() {
 $(canon_all "$sm" "${wt_rel[@]}"; physical "$sm" "${wt_rel[@]}")
 FREE_ROOTS_END
   fi
-  out=$(canon_all "$sm" "$d"; physical "$sm" "$d")
+  out=$(canon_all "$sm" "$top"; physical "$sm" "$top")
   forms=("${out%%$nl*}"); l="${out#*$nl}"; [ "$l" != "$out" ] && [ -n "$l" ] && forms+=("${l#.}")
   for f in "${forms[@]}"; do
     case "$f/" in */.claude/worktrees/?*) continue ;; esac
@@ -1018,7 +1029,9 @@ while IFS="$tab" read -r -a T; do
   [ $i -lt $n ] || continue
   w="${A[$i]}"; w="${w#=}"; w="${w##*/}"; w="${w##*\\}"; case "$w" in *.exe) w="${w%????}" ;; esac
   case "$w" in
-    git) git_seg "${A[@]:$((i + 1))}" ;;
+    git) git_redir=0; gk=0   # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see git_seg
+         while [ $gk -lt $i ]; do case "${A[$gk]}" in GIT_DIR=*|GIT_WORK_TREE=*) git_redir=1 ;; esac; gk=$((gk + 1)); done
+         git_seg "${A[@]:$((i + 1))}" ;;
     cd|pushd|chdir|set-location|sl|push-location) cd_seg "${A[@]:$((i + 1))}" ;;
     rm|remove-item|ri|del|erase|rd|rmdir) rm_seg "$w" "${A[@]:$((i + 1))}" ;;
     find) find_seg "${A[@]:$((i + 1))}" ;;
