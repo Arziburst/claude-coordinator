@@ -119,8 +119,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
   local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another.
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
-  `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block between `---`
-  lines holding `id:` and `acceptance:`): an ERROR refuses the start with check-contract's lines, WARNs
+  `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
+  line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
   are printed, no contract found is one notice line and the start goes on. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the

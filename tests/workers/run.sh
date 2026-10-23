@@ -396,24 +396,54 @@ STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 
 expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"
 expect_in "foresight: merge-queue status: 1 open, 0 conflicting, 0 overlapping pairs, 1 touching the task"
 case "$LAST" in *"no touches"*|*"src/a.ts"*) echo "FAIL: the block list was not read as lib/b.ts and docs/"; fail=1 ;; esac
+# the key in its own letter case (a `Touches:` line in the prose is not it); a comment line before the
+# first item and a blank line between items do not end the list; a `#` inside a path is no comment
+B=(--name "#12 worker: Fix" --repo "$tmp/repo" --branch 12-fix --model opus --safety "$tmp/safety.json" --report-to x --dry-run)
+printf 'Do it.\nTouches: the cart\ntouches: [lib/b.ts]\n' > "$tmp/brief-tcase.md"
+printf 'Do it.\ntouches:\n  # the main change\n  - lib/b.ts\n' > "$tmp/brief-tcomment.md"
+printf 'Do it.\ntouches:\n  - docs/\n\n  - lib/b.ts\nThe rest.\n' > "$tmp/brief-tblank.md"
+for b in tcase tcomment tblank; do
+  STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight, brief-$b" -- start "${B[@]}" --brief-file "$tmp/brief-$b.md"
+  expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"
+done
+printf 'Do it.\ntouches: [docs/c#.md]   # the page\n' > "$tmp/brief-thash.md"
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tdocs/c#.md')" check 0 "start: the conflict foresight, a # in a path" -- start "${B[@]}" --brief-file "$tmp/brief-thash.md"
+expect_in "foresight: TOUCHES #31: 31-a - docs/c#.md"
 # the contract passes check-contract before a worker or a lead starts (CORE §4, #267): the one in the brief
-# (a block between `---` lines holding id: and acceptance:; a rule above it is no contract) or --contract
+# (a block after a `---` line holding any key check-contract requires; a rule above it is no contract) or
+# --contract; the temporary copy of the brief's contract is removed (TMPDIR for .sh, TMP / TEMP for .ps1)
 cc="$core/tests/check-contract"
+ct="$tmp/ct"; mkdir -p "$ct"; ctw="$ct"; command -v cygpath >/dev/null 2>&1 && ctw="$(cygpath -m "$ct")"
 { printf 'Do it.\n---\nnot a contract\n'; cat "$cc/budget-time.md"; printf '\nThe rest of the brief.\n'; } > "$tmp/brief-cwarn.md"
 { printf 'Do it.\n\n'; cat "$cc/tests-first-missing.md"; } > "$tmp/brief-cerr.md"
 C=(--repo "$tmp/repo" --branch 67-check --model opus --safety "$tmp/safety.json" --report-to x)
-check 0 "start: a contract in the brief with a WARN starts" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cwarn.md" --dry-run
+TMPDIR="$ct" TMP="$ctw" TEMP="$ctw" check 0 "start: a contract in the brief with a WARN starts" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cwarn.md" --dry-run
 expect_in "contract in the brief: WARN  budget.time (about an hour) is not minutes"
 expect_in "contract in the brief: OK (0 errors, 1 warnings)"
 expect_in "[dry-run] (cd "
 : > "$STUB_LOG"
-check 1 "start: a contract in the brief with an ERROR is refused" -- start --name "#67 lead: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md"
+TMPDIR="$ct" TMP="$ctw" TEMP="$ctw" check 1 "start: a contract in the brief with an ERROR is refused" -- start --name "#67 lead: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md"
 expect_in "contract in the brief: ERROR missing \`tests_first\`"
 expect_in "contract in the brief: FAIL (1 errors, 0 warnings)"
 expect_in "refused: the contract fails check-contract - fix the ERROR lines above before it goes out"
 [ -d "$tmp/repo/.claude/worktrees/67-check" ] && { echo "FAIL: a worktree was created for a contract with an ERROR"; fail=1; }
 git -C "$tmp/repo" show-ref -q --verify refs/heads/67-check && { echo "FAIL: a branch was created for a contract with an ERROR"; fail=1; }
 [ -s "$STUB_LOG" ] && { echo "FAIL: claude was called for a contract with an ERROR"; fail=1; }
+[ -z "$(ls -A "$ct")" ] || { echo "FAIL: the contract's temporary file was left behind:"; ls -A "$ct" | sed 's/^/    /'; fail=1; }
+# a contract missing `id:`, and one left open at the brief's end, are still checked (never "none found");
+# a `---` block holding none of the contract's keys is no contract
+{ printf 'Do it.\n\n'; sed '/^id:/d' "$cc/budget-time-ok.md"; } > "$tmp/brief-cnoid.md"
+{ printf 'Do it.\n\n'; sed '$d' "$cc/tests-first-missing.md"; } > "$tmp/brief-copen.md"
+printf 'Do it.\n---\nNotes: keep it short.\nsee: the docs\n---\nThe rest.\n' > "$tmp/brief-crule.md"
+check 1 "start: a contract in the brief without id is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cnoid.md" --dry-run
+expect_in "contract in the brief: ERROR missing \`id\`"
+expect_in "refused: the contract fails check-contract"
+check 1 "start: an unclosed contract in the brief with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-copen.md" --dry-run
+expect_in "contract in the brief: ERROR missing \`tests_first\`"
+expect_in "refused: the contract fails check-contract"
+check 0 "start: a --- block that is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-crule.md" --dry-run
+expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
+expect_in "[dry-run] (cd "
 check 1 "start: --contract with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --contract "$cc/tests-first-missing.md" --dry-run
 expect_in "tests-first-missing.md: ERROR missing \`tests_first\`"
 expect_in "refused: the contract fails check-contract"

@@ -28,8 +28,8 @@
 # A worker or a lead: before the launch it prints the conflict foresight (CORE section 4a) - merge-queue
 # status with the brief's `touches` - as `foresight:` lines; informational, never a stop.
 # The contract must pass check-contract before it goes out (CORE section 4, #267): -Contract <file>, or for
-# a worker or a lead without it the contract in the brief (a block between `---` lines holding `id:` and
-# `acceptance:`, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
+# a worker or a lead without it the contract in the brief (a block after a `---` line, to the next one or
+# the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
@@ -120,21 +120,25 @@ if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 
 # The contract passes check-contract before it goes out (CORE section 4, #267), checked before anything is
 # created: -Contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
-# the first block between two `---` lines of the brief that holds `id:` and `acceptance:` at its top level
+# the first block after a `---` line of the brief - up to the next `---` or the brief's end - that holds
+# any key check-contract requires at its top level (id, title, intent, acceptance, non_goals,
+# do_not_decide, tests_first): a contract missing some of them is still checked, never "none found"
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $crole = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $crole = $Matches[2] }
 $cFile = $Contract; $cLabel = $Contract; $cTmp = ''
 if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
   # each `---` line ends a candidate block and opens the next (a rule above the contract is no contract)
   $cl = [IO.File]::ReadAllText($BriefFile).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n"
-  $on = $false; $buf = @(); $hasId = $false; $hasAcc = $false; $found = $false
+  $on = $false; $buf = @(); $hasKey = $false; $found = $false
   foreach ($l in $cl) {
     if ($l -match '^---[ \t]*$') {
-      if ($on -and $hasId -and $hasAcc) { $found = $true; break }
-      $on = $true; $buf = @(); $hasId = $false; $hasAcc = $false; continue
+      if ($on -and $hasKey) { $found = $true; break }
+      $on = $true; $buf = @(); $hasKey = $false; continue
     }
-    if ($on) { $buf += $l; if ($l -cmatch '^id:') { $hasId = $true }; if ($l -cmatch '^acceptance:') { $hasAcc = $true } }
+    if ($on) { $buf += $l; if ($l -cmatch '^(id|title|intent|acceptance|non_goals|do_not_decide|tests_first):') { $hasKey = $true } }
   }
+  # a block left open at the brief's end counts too
+  if (-not $found -and $on -and $hasKey) { $found = $true }
   if ($found) {
     $cTmp = [IO.Path]::GetTempFileName(); $cFile = $cTmp; $cLabel = 'contract in the brief'
     [IO.File]::WriteAllText($cTmp, "---`n" + ($buf -join "`n") + "`n---`n", (New-Object System.Text.UTF8Encoding $false))
@@ -309,11 +313,17 @@ $fr = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $fr = $Matches[2] }
 if ($fr -in @('worker', 'lead', '')) {
   $raw = @(); $bl = $briefText.Replace("`r", '') -split "`n"
   for ($i = 0; $i -lt $bl.Count; $i++) {
-    if ($bl[$i] -notmatch '^[ \t]*touches:') { continue }
-    $s = ($bl[$i] -replace '^[ \t]*touches:[ \t]*', '') -replace '[ \t]*#.*$', ''
+    if ($bl[$i] -cnotmatch '^[ \t]*touches:') { continue }
+    # a comment needs a blank before it (docs/c#.md is a path); blank and comment lines inside the list are skipped
+    $s = (($bl[$i] -creplace '^[ \t]*touches:[ \t]*', '') -replace '[ \t]+#.*$', '') -replace '^#.*$', ''
     if ($s.StartsWith('[')) { $raw = @(($s.Substring(1) -replace '\].*$', '') -split ',') }
-    elseif ($s -eq '') { for ($j = $i + 1; $j -lt $bl.Count -and $bl[$j] -match '^[ \t]*-[ \t]'; $j++) {
-      $raw += (($bl[$j] -replace '^[ \t]*-[ \t]*', '') -replace '[ \t]+#.*$', '') } }
+    elseif ($s -eq '') {
+      for ($j = $i + 1; $j -lt $bl.Count; $j++) {
+        if ($bl[$j] -match '^[ \t]*(#.*)?$') { continue }
+        if ($bl[$j] -notmatch '^[ \t]*-[ \t]') { break }
+        $raw += (($bl[$j] -replace '^[ \t]*-[ \t]*', '') -replace '[ \t]+#.*$', '')
+      }
+    }
     break
   }
   $tl = @($raw | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })

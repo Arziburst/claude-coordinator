@@ -31,8 +31,8 @@
 # A worker or a lead: before the launch it prints the conflict foresight (CORE §4a) - merge-queue status
 # with the brief's `touches` - as `foresight:` lines; informational, never a stop.
 # The contract must pass check-contract before it goes out (CORE §4, #267): --contract <file>, or for a
-# worker or a lead without it the contract in the brief (a block between `---` lines holding `id:` and
-# `acceptance:`, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
+# worker or a lead without it the contract in the brief (a block after a `---` line, to the next one or
+# the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
@@ -132,16 +132,21 @@ selftest=$(bash "$hook" --self-test || true)
 
 # The contract passes check-contract before it goes out (CORE §4, #267), checked before anything is
 # created: --contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
-# the first block between two `---` lines of the brief that holds `id:` and `acceptance:` at its top level
+# the first block after a `---` line of the brief - up to the next `---` or the brief's end - that holds
+# any key check-contract requires at its top level (id, title, intent, acceptance, non_goals,
+# do_not_decide, tests_first): a contract missing some of them is still checked, never "none found"
 crole="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
 cfile="$contract" clabel="$contract" ctmp=""
 if [ -z "$contract" ]; then case "$crole" in worker|lead|"")
   ctmp="$(mktemp "${TMPDIR:-/tmp}/start-worker-contract.XXXXXX")"
+  # the temporary file goes on any way out, a kill included (the traps are lifted after the check)
+  trap 'rm -f "$ctmp"' EXIT; trap 'exit 1' HUP INT TERM
   # each `---` line ends a candidate block and opens the next (a rule above the contract is no contract)
   B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"] }
     { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
-    /^---[ \t]*$/ { if (on && id && acc) { printf "---\n%s---\n", buf; exit } on = 1; buf = ""; id = 0; acc = 0; next }
-    on { buf = buf $0 "\n"; if ($0 ~ /^id:/) id = 1; if ($0 ~ /^acceptance:/) acc = 1 }' "$brief" > "$ctmp"
+    /^---[ \t]*$/ { if (on && k) { printf "---\n%s---\n", buf; done = 1; exit } on = 1; buf = ""; k = 0; next }
+    on { buf = buf $0 "\n"; if ($0 ~ /^(id|title|intent|acceptance|non_goals|do_not_decide|tests_first):/) k = 1 }
+    END { if (!done && on && k) printf "---\n%s---\n", buf }' "$brief" > "$ctmp"
   if [ -s "$ctmp" ]; then cfile="$ctmp" clabel="contract in the brief"
   else echo "contract: none found in the brief - check-contract not run (CORE §4)"; fi ;;
 esac; fi
@@ -150,9 +155,9 @@ if [ -n "$cfile" ]; then
   # its lines name the file it read: the brief's contract by that name, not by the temporary file
   printf '%s\n' "$cout" | F="$cfile" L="$clabel" awk 'BEGIN { F = ENVIRON["F"] ": "; L = ENVIRON["L"] ": " }
     index($0, F) == 1 { $0 = L substr($0, length(F) + 1) } { print }'
-  [ -z "$ctmp" ] || rm -f "$ctmp"
   [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
-elif [ -n "$ctmp" ]; then rm -f "$ctmp"; fi
+fi
+[ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
 
@@ -260,11 +265,13 @@ fi
 # `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
 case "$role" in worker|lead|"")
+  # a comment needs a blank before it (docs/c#.md is a path); blank and comment lines inside the list are skipped
   tl="$(tr -d '\r' < "$brief" | awk '
-    !on && /^[ \t]*touches:/ { s = $0; sub(/^[ \t]*touches:[ \t]*/, "", s); sub(/[ \t]*#.*$/, "", s)
+    !on && /^[ \t]*touches:/ { s = $0; sub(/^[ \t]*touches:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/^#.*$/, "", s)
       if (s ~ /^\[/) { sub(/^\[/, "", s); sub(/\].*$/, "", s); print s; exit }
       if (s == "") { on = 1; next }
       exit }
+    on && /^[ \t]*(#.*)?$/ { next }
     on && /^[ \t]*-[ \t]/ { s = $0; sub(/^[ \t]*-[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); out = out (out == "" ? "" : ",") s; next }
     on { exit }
     END { if (on) print out }')"
