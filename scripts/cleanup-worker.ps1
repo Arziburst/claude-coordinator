@@ -1,7 +1,11 @@
 # Clean up after a merged task (Windows; macOS / Linux: cleanup-worker.sh - the same checks and codes):
 # stop and remove the worker session, remove its worktree and branch - only if the worktree exists, is
 # clean, every commit is on the remote and a merged PR has exactly the pushed head (a reused branch name
-# with newer commits does not count) (CORE section 8). Otherwise report and change nothing.
+# with newer commits does not count) (CORE section 8). Also, with no PR, a branch that holds nothing to
+# lose (#257): no commits beyond its base (origin's default branch; with no origin the local main or
+# master), never pushed (no upstream, no remote branch of its name) and the worktree clean -
+# `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
+# Otherwise report and change nothing.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
 # -Session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
@@ -114,39 +118,69 @@ else {
   git -C $Worktree rev-parse -q --verify "refs/remotes/origin/$branch" *> $null
   if ($LASTEXITCODE -eq 0) { $u = "origin/$branch" }
 }
+# nothing to lose (#257): no remote branch, no upstream configured (not even one whose remote branch is
+# gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
+# itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
+# (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
+# the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
+$empty = $false; $base = ''
+if (-not $u -and $branch -cne 'HEAD') {
+  $cfg = "$(git -C $Worktree config --get "branch.$branch.merge" 2>$null)$(git -C $Worktree config --get "branch.$branch.remote" 2>$null)"
+  if (-not $cfg) {
+    git -C $Worktree remote get-url origin *> $null
+    $o = ($LASTEXITCODE -eq 0)
+    if ($o) { $cands = @("$(git -C $Worktree symbolic-ref -q refs/remotes/origin/HEAD 2>$null)".Trim(), 'refs/remotes/origin/main', 'refs/remotes/origin/master') }
+    else { $cands = @('refs/heads/main', 'refs/heads/master') }
+    foreach ($b in $cands) {
+      if (-not $b -or $b -eq "refs/heads/$branch") { continue }   # -eq ignores letter case, as lc in the .sh
+      git -C $Worktree rev-parse -q --verify "$b^{commit}" *> $null
+      if ($LASTEXITCODE -eq 0) { $base = $b; break }
+    }
+    if ($base -and "$(git -C $Worktree rev-list --count "$base..HEAD" 2>$null)".Trim() -eq '0') {
+      if (-not $o) { $empty = $true }
+      else {
+        $rh = @(git -C $Worktree ls-remote --heads origin "refs/heads/$branch" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and -not ($rh -join '').Trim()) { $empty = $true }
+      }
+    }
+    $base = $base -replace '^refs/(remotes|heads)/', ''
+  }
+}
 if ($u) {
   if (git -C $Worktree log --oneline "$u..") { StopHere "UNPUSHED: $branch has commits not on its remote" }
   $up = "$(git -C $Worktree rev-parse $u)".Trim()
 } else { $up = "$(git -C $Worktree rev-parse HEAD)".Trim() }
 $short = $up.Substring(0, [Math]::Min(7, $up.Length))
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { StopHere "NO gh: cannot verify the PR for $branch is merged" }
-Push-Location -LiteralPath $Worktree
-$heads = @(gh pr list --head $branch --state merged --json headRefOid --jq '.[].headRefOid' 2>$null)
-$ghExit = $LASTEXITCODE
-Pop-Location
-if ($ghExit -ne 0) { StopHere "UNKNOWN: could not check the PR for $branch" }
-$heads = @($heads | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
-if (-not $heads.Count) {
-  if ($u) { StopHere "NOT MERGED: no merged PR for $branch" }
-  StopHere "NO UPSTREAM: $branch was never pushed"
-}
-if ($heads -notcontains $up) {
-  # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
-  # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
-  $found = ''
-  foreach ($h in $heads) {
-    git -C $Worktree cat-file -e "$h^{commit}" *> $null
-    if ($LASTEXITCODE -ne 0) { git -C $Worktree fetch -q origin $h *> $null }
-    git -C $Worktree merge-base --is-ancestor $up $h *> $null
-    if ($LASTEXITCODE -eq 0) { $found = $h; break }
+if (-not $empty) {
+  if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { StopHere "NO gh: cannot verify the PR for $branch is merged" }
+  Push-Location -LiteralPath $Worktree
+  $heads = @(gh pr list --head $branch --state merged --json headRefOid --jq '.[].headRefOid' 2>$null)
+  $ghExit = $LASTEXITCODE
+  Pop-Location
+  if ($ghExit -ne 0) { StopHere "UNKNOWN: could not check the PR for $branch" }
+  $heads = @($heads | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  if (-not $heads.Count) {
+    if ($u) { StopHere "NOT MERGED: no merged PR for $branch" }
+    StopHere "NO UPSTREAM: $branch was never pushed"
   }
-  if (-not $found) {
-    if ($u) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $short (branch name reused?)" }
-    StopHere "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head $short"
+  if ($heads -notcontains $up) {
+    # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
+    # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
+    $found = ''
+    foreach ($h in $heads) {
+      git -C $Worktree cat-file -e "$h^{commit}" *> $null
+      if ($LASTEXITCODE -ne 0) { git -C $Worktree fetch -q origin $h *> $null }
+      git -C $Worktree merge-base --is-ancestor $up $h *> $null
+      if ($LASTEXITCODE -eq 0) { $found = $h; break }
+    }
+    if (-not $found) {
+      if ($u) { StopHere "NOT MERGED: no merged PR for $branch has its pushed head $short (branch name reused?)" }
+      StopHere "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head $short"
+    }
+    "merged as $($found.Substring(0, 7)): the PR's head has a server-side commit on top of the pushed head $short"
   }
-  "merged as $($found.Substring(0, 7)): the PR's head has a server-side commit on top of the pushed head $short"
+  if (-not $u) { "its remote branch is gone (deleted after the merge): the merged PR's head contains $short" }
 }
-if (-not $u) { "its remote branch is gone (deleted after the merge): the merged PR's head contains $short" }
 
 $id = ''
 if ($Session) {
@@ -222,6 +256,18 @@ if ($Session) {
     }
   }
 }
+if ($empty) {
+  # an empty branch is deleted from its own worktree, detached at the same commit: `git branch -d` then
+  # checks it against that commit, not the main checkout's HEAD (which may be behind the base or on
+  # another branch); no file changes. A refused delete re-attaches the branch and changes nothing.
+  Run git @('-C', $Worktree, 'checkout', '-q', '--detach')
+  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("REMOVE FAILED: git checkout --detach in $Worktree - left as is"); exit 1 }
+  Run git @('-C', $Worktree, 'branch', '-d', $branch)
+  if ($LASTEXITCODE -ne 0) {
+    git -C $Worktree checkout -q $branch *> $null
+    [Console]::Error.WriteLine("REMOVE FAILED: git branch -d $branch - left as is"); exit 1
+  }
+}
 if ($DryRun) { Run git @('-C', $root, 'worktree', 'remove', $Worktree) }
 else {
   # a just-stopped session's processes may hold the folder for a moment (#238): retry for about 10 s;
@@ -238,8 +284,13 @@ else {
     "removed the empty folder git left: $Worktree"
   }
 }
-Run git @('-C', $root, 'branch', '-d', $branch)
-if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
+if ($empty) {
+  if ($DryRun) { "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed" }
+  else { "EMPTY: $branch has no commits beyond $base and was never pushed - removed" }
+} else {
+  Run git @('-C', $root, 'branch', '-d', $branch)
+  if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
+}
 "cleaned: $(if ($id) { $id } else { 'no session' }) $Worktree"
 exit 0
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

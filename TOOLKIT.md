@@ -136,7 +136,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   never `cleaned`. A session the listing places outside the project (its `cwd` not under the
   repository's main checkout, the worktree or the folder whose `.claude/worktrees` holds it) is never
   touched: `SESSION FOREIGN: <id> (<cwd>): not this project's session - nothing done`, exit 5 (CORE
-  §1.17).
+  §1.17). A branch with nothing to lose needs no merged PR (#257): no commits beyond its base (origin's
+  default branch; with no origin the local main or master), never pushed (no upstream configured, no
+  remote branch of its name, `git ls-remote` included) and the worktree clean (no untracked files
+  either) — `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`, its session
+  handled as for a merged one. It is removed without `--force`: `git branch -d` from the worktree
+  detached at the branch's own commit (so the main checkout's HEAD being behind does not matter), then
+  `git worktree remove`. One commit, a push or a dirty worktree takes the usual checks.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
