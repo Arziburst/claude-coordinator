@@ -194,7 +194,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   tool's path, the project's folder, home and `COORD_PROTECTED_ROOT` are also compared as they lie on
   disk — symlinks and junctions resolved for the part that exists (`cd -P`; in PowerShell the item's link
   target), `..` after a link going to its target's parent, the rest kept as written —, so a link to them
-  is no way around the rules. It parses
+  is no way around the rules. Discarding files in a repository's main checkout is blocked too (#263),
+  by the cwd, a `cd` or `git -C`: `git clean` with `-f` (not with `-n` / `--dry-run`), `git reset
+  --hard`, `git checkout -- <paths>` / `<ref> -- <paths>` / `.` / `-f`, `git switch -f` /
+  `--discard-changes`, `git restore` of the working tree (not `--staged` alone), `git stash drop` /
+  `clear`; a linked worktree, a folder under `.claude/worktrees/` or a declared worktree root passes, a
+  folder that cannot be known (a variable, not a repository) blocks — with or without
+  `COORD_PROTECTED_ROOT`, which a subagent under the coordinator's own settings does not have. It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
   wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf
@@ -202,8 +208,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   command itself: `/usr/bin/env`, `timeout.exe`, `git.exe`), `$(…)`, `bash -c` / `pwsh -Command` (or a prefix
   such as `-Com`) and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
-  reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
-  shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
+  reset, deleting work branches; `reset --hard` outside a main checkout) and tag-only pushes pass. Exit
+  code 2 blocks and shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
   only `tool_input`'s own `command` is read. A project's own patterns (`.claude/coordinator-deny.txt`,
   one regex per line, trimmed, CRLF or LF) block what they match; a pattern that cannot be read blocks
   every call (`project rule cannot be read: <line>`) until the file is fixed, and so does a deny file

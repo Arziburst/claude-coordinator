@@ -160,7 +160,7 @@ function OwnForms {
       if ($out[1] -match '/\.git$') { $rs += $out[1].Substring(0, $out[1].Length - 5) }
     }
   }
-  $more = @()
+  $script:wtRel = @()   # the declared worktree roots as written (also for #263 below)
   foreach ($r in $rs) {
     $pm = "$r/coordinator/PROJECT.md"
     if (-not (Test-Path -LiteralPath $pm -PathType Leaf)) { continue }
@@ -172,11 +172,11 @@ function OwnForms {
         if (-not $x -or $x -eq '-' -or $y -ceq 'none' -or $y -ceq 'n/a' -or $x -cmatch '^<.*>\z') { continue }
         $w = $x.Replace('\', '/')
         if ($w -notmatch '^(/|[A-Za-z]:)') { $w = "$b/$w" }   # .. is taken out by Canon
-        $more += $w
+        $script:wtRel += $w
       }
     }
   }
-  foreach ($r in ($rs + $more)) {
+  foreach ($r in ($rs + $script:wtRel)) {
     $f = Canon $r -Keep:$smKeep; if ($f -and $f -ne '.') { $script:owns += $f }   # / or nothing is no project folder
     $ph = Physical $r -Keep:$smKeep; if ($ph -and $ph -ne '.') { $script:owns += $ph }
   }
@@ -593,10 +593,81 @@ function GitSeg([string[]]$a) {
     'push' { PushSeg $eff $rest }
     'branch' { BranchSeg $rest }
     'update-ref' { UpdRefSeg $rest }
-    'checkout' { CheckoutSeg $eff $rest }
-    'switch' { CheckoutSeg $eff $rest }
+    'checkout' { DiscardSeg $eff 'checkout' $rest; CheckoutSeg $eff $rest }
+    'switch' { DiscardSeg $eff 'switch' $rest; CheckoutSeg $eff $rest }
     'worktree' { WorktreeSeg $rest }
+    'clean' { DiscardSeg $eff 'clean' $rest }
+    'reset' { DiscardSeg $eff 'reset' $rest }
+    'restore' { DiscardSeg $eff 'restore' $rest }
+    'stash' { DiscardSeg $eff 'stash' $rest }
   }
+}
+# --- discarding files in a repository's main checkout (#263): git clean -f, reset --hard, checkout -- <paths>
+# (also <ref> -- <paths>, ., -f), switch -f / --discard-changes, restore of the working tree, stash drop /
+# clear. A linked worktree is free (workers and verifiers wipe their own throwaway copies), and so is a
+# folder under .claude/worktrees/ or under a declared worktree root (a worker's own copy); a folder that
+# cannot be known (a variable, not a repository) is not. COORD_PROTECTED_ROOT plays no part: a subagent
+# under the coordinator's own settings has none.
+function DiscardSeg([string]$dd, [string]$sub, [string[]]$a) {
+  $what = ''; $nx = $false; $dash = $false; $f = $false; $n = $false; $s = $false; $w = $false
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($dash) { if ($sub -ceq 'checkout') { $what = 'checkout' }; break }   # checkout [<ref>] -- <paths>
+    $st = $sub + ':' + $t   # compared with letter case: -f is not -F, -s (a source) is not -S (staged)
+    if ($t -ceq '--') { $dash = $true; if ($sub -cne 'checkout') { break }; continue }
+    if ($st -ceq 'clean:--force') { $f = $true }
+    elseif ($st -ceq 'clean:--dry-run') { $n = $true }
+    elseif ($st -cmatch '^(clean:--exclude|restore:--source|checkout:-[bB]|switch:-[cC]|checkout:--orphan|switch:--(orphan|create|force-create))$') { $nx = $true }
+    elseif ($st -cmatch '^(reset:--hard|checkout:--force|switch:--force|switch:--discard-changes)$') { $what = $sub }
+    elseif ($st -ceq 'restore:--staged') { $s = $true }
+    elseif ($st -ceq 'restore:--worktree') { $w = $true }
+    elseif ($st -cmatch '^checkout:(\.|\./|\.\\|\.\.|\.\./|\.\.\\|:/|\*)$') { $what = 'checkout' }
+    elseif ($sub -ceq 'stash') {
+      if ($t.StartsWith('-')) { continue }
+      if ($t -ceq 'drop' -or $t -ceq 'clear') { $what = "stash $t" }
+      break
+    }
+    elseif ($t.StartsWith('--')) { }
+    elseif ($t.Length -ge 2 -and $t.StartsWith('-')) {
+      # a cluster of short options (-ffdx): its letters; one that takes a value ends it
+      for ($k = 1; $k -lt $t.Length; $k++) {
+        $c = $sub + ':' + $t[$k]
+        if ($c -ceq 'clean:f') { $f = $true }
+        elseif ($c -ceq 'clean:n') { $n = $true }
+        elseif ($c -cmatch '^(checkout|switch):f$') { $what = $sub }
+        elseif ($c -ceq 'restore:S') { $s = $true }
+        elseif ($c -ceq 'restore:W') { $w = $true }
+        elseif ($c -cmatch '^(clean:e|checkout:[bB]|switch:[cC]|restore:s)$') { if ($k -eq $t.Length - 1) { $nx = $true }; break }
+      }
+    }
+  }
+  if ($f -and -not $n) { $what = 'clean' }
+  if ($sub -ceq 'restore' -and ($w -or -not $s)) { $what = 'restore' }
+  if (-not $what) { return }
+  if (FreeCopy $dd) { return }
+  Block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
+}
+# FreeCopy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose folder
+# lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root (OwnForms)
+function FreeCopy([string]$dd) {
+  if ($dd -eq '?') { return $false }
+  $out = @(git -C $dd rev-parse --path-format=absolute --git-dir --git-common-dir 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $out.Count -lt 2) { return $false }
+  if ($out[0] -cne $out[1]) { return $true }
+  OwnForms
+  $wr = @()
+  foreach ($r in $script:wtRel) {
+    $x = Canon $r -Keep:$smKeep; if ($x -and $x -ne '.') { $wr += $x }
+    $ph = Physical $r -Keep:$smKeep; if ($ph -and $ph -ne '.') { $wr += $ph }
+  }
+  $forms = @(Canon $dd -Keep:$smKeep); $ph = Physical $dd -Keep:$smKeep; if ($null -ne $ph) { $forms += $ph }
+  foreach ($x in $forms) {
+    if ("$x/" -match '/\.claude/worktrees/[^/]+/') { continue }
+    $in = $false
+    foreach ($r in $wr) { if ("$x/".Length -gt "$r/".Length -and "$x/".StartsWith("$r/", [StringComparison]::Ordinal)) { $in = $true; break } }
+    if (-not $in) { return $false }
+  }
+  $true
 }
 # git worktree remove --force throws away what the worktree holds: the cleanup script checks first
 function WorktreeSeg([string[]]$a) {
