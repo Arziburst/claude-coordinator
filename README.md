@@ -54,7 +54,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
 - [TOOLKIT.md](TOOLKIT.md) — Claude Code mechanics for a coordinator: named background workers,
   messages, the tick, safety rules and hooks, limits, platform notes, and the **new machine checklist**.
 - [scripts/](scripts/) — reference scripts, one style (TOOLKIT *Scripts*: a `.sh` + `.ps1` pair, nothing to install): `start-worker` (named session
-  in its own worktree; prints the conflict foresight first), `cleanup-worker` (only clean, pushed and merged work),
+  in its own worktree; prints the conflict foresight first), `cleanup-worker` (only clean, pushed and merged work, or an empty branch never pushed),
   `merge-queue` (approved PRs land one at a time; prints the `AFFECTED` sessions and the `AFTER MERGE`
   duties), `check-contract` (a contract is complete before it goes out), `run-stats` and `session-tokens`
   (cost and time from the transcripts; the run log's task row written with `--append`), `hooks/after-compact`
