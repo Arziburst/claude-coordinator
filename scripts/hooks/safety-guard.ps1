@@ -324,6 +324,8 @@ if ($cmd -and (Test-Path -LiteralPath $probeFile -PathType Leaf)) {
   try { $probeTok = [string](Get-Content -LiteralPath $probeFile -TotalCount 1 -ErrorAction Stop) } catch { $probeTok = '' }
   if ($probeTok.Length -ge 16 -and $probeTok -cmatch '^[A-Za-z0-9-]+$' -and $cmd.Contains($probeTok)) { Block "the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds" }
 }
+# Patterns are tested line by line, like grep: ^ and $ are a line's ends.
+function Has([string]$re) { foreach ($l in $lines) { if ($l -match $re) { return $true } }; $false }
 
 # --- split the command into simple commands, each a list of words ---
 # Quote-aware: separators (newline ; | & && || ( ) and { } around words) inside quotes do not split,
