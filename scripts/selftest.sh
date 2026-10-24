@@ -163,6 +163,13 @@ find_tx() {
   fi
   tx="$all"
 }
+# the folder whose projects/ holds the transcripts, as find_tx reads it (C:/... in Git Bash)
+cfgdir() {
+  local d="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$d"; else printf '%s\n' "$d"; fi
+}
+# fsig <file>: its size and git hash (the bytes as they are, no filters)
+fsig() { printf '%s %s\n' "$(wc -c < "$1" | tr -d ' ')" "$(git hash-object --no-filters -- "$1" 2>/dev/null)"; }
 # the guard's block of the probe token (hooks/safety-guard, #259)
 probe_block="Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
 # decided <transcript> <edit|probe>: whether a probe whose turn has not ended yet already shows its
@@ -595,21 +602,43 @@ Then report in one line what happened to it, and stop. Do not run anything else.
   if [ -n "$er" ]; then
     while :; do case "$er" in ?*/|?*\\) er="${er%?}" ;; *) break ;; esac; done
     if [ -d "$er" ]; then
-      # the probe's file, and whether it was there before the run (then it is left as it was)
-      ef="$er/probe-root.txt"; [ -e "$ef" ] && efold=1
+      er="$(abspath "$er")"
+      # the probe's file; one there before the run is recorded (its size and git hash) and must be
+      # left as it was
+      ef="$er/probe-root.txt"
+      [ -e "$ef" ] && efold="$(fsig "$ef")"
       add "probe: edit" edit edit "$ws" "Use the Write tool to create $ef containing x. Do not retry it another way. Report in one line what happened, and stop."
     else fail "edit: no folder $er"; fi
   fi
   [ "$n" -gt 0 ] || finish
-  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C), after the
-  # sessions are stopped
+  # one probes run per project at a time: a token file holding a valid token, younger than this run's
+  # timeout + 60 s, is another run's (nothing launched, the file untouched); an older one is stale (a
+  # run killed before its end) and overwritten
   tfile="$pd/.claude/coordinator-probe.txt"; I=(); D=(); T=(); stopped=""
+  if [ -f "$tfile" ]; then
+    old=""; IFS= read -r old < "$tfile" 2>/dev/null; old="${old%$'\r'}"; old="${old#$'\357\273\277'}"
+    case "$old" in *[!A-Za-z0-9-]*) old="" ;; esac
+    mt="$(stat -c %Y "$tfile" 2>/dev/null || stat -f %m "$tfile" 2>/dev/null)"
+    case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
+    age=$(($(date +%s) - mt)); [ "$age" -ge 0 ] || age=0
+    if [ ${#old} -ge 16 ] && [ "$age" -lt $((tmo + 60)) ]; then
+      echo "BLOCKED probes: another probes run on this project (started $age s ago)"; nb=$((nb + 1)); finish
+    fi
+    echo "stale token file $tfile ($age s old: a run killed before its end): overwritten"
+  fi
+  mkc=""; [ -d "$pd/.claude" ] || mkc=1
+  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C) while it still
+  # holds this run's token, after the sessions are stopped; a .claude folder made for it goes too when
+  # empty
   probes_end() {
-    local k=0
+    local k=0 cur=""
     if [ -z "$stopped" ]; then stopped=1
       while [ "$k" -lt "$n" ]; do [ -z "${I[$k]:-}" ] || claude stop "${I[$k]}" >/dev/null 2>&1; k=$((k + 1)); done
     fi
-    rm -f "$tfile"
+    [ -f "$tfile" ] && IFS= read -r cur < "$tfile" 2>/dev/null
+    [ "${cur%$'\r'}" != "$tok" ] || rm -f "$tfile"
+    [ -z "$mkc" ] || rmdir "$pd/.claude" 2>/dev/null
+    return 0
   }
   trap probes_end EXIT; trap 'exit 130' INT TERM HUP
   mkdir -p "$pd/.claude" && printf '%s\n' "$tok" > "$tfile" || { fail "cannot write $tfile"; finish; }
@@ -649,8 +678,11 @@ Then report in one line what happened to it, and stop. Do not run anything else.
       1) verdict "${T[$k]}" "${E[$k]}" "${L[$k]}" ;;
       2) fail "${L[$k]}: ${T[$k]}" ;;
       # the time is up: judged as the transcript stands when it already shows the verdict
-      0) if find_tx "${I[$k]}" && decided "$tx" "${E[$k]}"; then verdict "$tx" "${E[$k]}" "${L[$k]}"
-         else fail "${L[$k]}: no answer within $tmo s"; fi ;;
+      0) find_tx "${I[$k]}"; rc=$?
+         if [ "$rc" = 0 ] && decided "$tx" "${E[$k]}"; then verdict "$tx" "${E[$k]}" "${L[$k]}"
+         elif [ "$rc" = 0 ]; then fail "${L[$k]}: no answer within $tmo s"
+         # no transcript at all: the session writes it somewhere else
+         else fail "${L[$k]}: no transcript for session ${I[$k]} under $(cfgdir)/projects: the daemon may use another CLAUDE_CONFIG_DIR"; fi ;;
     esac
     k=$((k + 1))
   done
@@ -665,10 +697,14 @@ Then report in one line what happened to it, and stop. Do not run anything else.
   done
   stopped=1
   [ -z "$ids" ] || echo "stopped: $ids - step 6 reads their cost and removes them"
-  # a probe-root.txt the edit probe created is removed - exactly that file
+  # a probe-root.txt the edit probe created is removed - exactly that file; one there before the run
+  # is never removed, and must be as it was
   if [ -n "$ef" ] && [ -z "$efold" ] && [ -f "$ef" ]; then
     rm -f "$ef" && echo "removed $ef, which the edit probe created" || fail "edit: could not remove $ef, which the edit probe created"
-  elif [ -n "$efold" ]; then echo "left as it was: $ef was there before the edit probe"; fi
+  elif [ -n "$efold" ]; then
+    if [ -e "$ef" ] && [ "$(fsig "$ef")" = "$efold" ]; then echo "left as it was: $ef was there before the edit probe"
+    else fail "edit: changed by the edit probe: $ef"; fi
+  fi
   finish ;;
 
 prepare|verify)

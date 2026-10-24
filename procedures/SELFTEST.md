@@ -80,13 +80,21 @@ the report notes the interruption and the resume time.
      --project <root> --worker-settings <worker safety file> [--own] [--edit-root <root>]` itself, as a
      background command (`run_in_background`: up to about 5 minutes, `--timeout`, default 300 s). It
      writes a fresh random token into `<root>/.claude/coordinator-probe.txt` for the length of the run
-     (removed on every way out, a FAIL or Ctrl-C too), starts every probe session on the light model
+     (removed on every way out, a FAIL or Ctrl-C too, while it still holds this run's token; a `.claude`
+     folder made for it goes too when empty), starts every probe session on the light model
      (`--model`, default `haiku`) from the project root (trusted) — all first, then waits for each until
      its turn ends —, gives each its verdict from its transcript as `selftest hookcheck` does (at the
      timeout, as the transcript stands: a block already there passes, nothing yet is `no answer within
-     <s> s`), stops each
+     <s> s`; no transcript at all is `no transcript for session <id> under <dir>/projects: the daemon may
+     use another CLAUDE_CONFIG_DIR`), stops each
      (`claude stop`; its cost is read and it is removed in step 6's order) and prints a `PASS`, `FAIL` or
      `BLOCKED` line per probe.
+   - **One probes run per project at a time:** a token file with a valid token younger than the run's
+     timeout + 60 s is another run's — `BLOCKED probes: another probes run on this project (started <age>
+     s ago)`, nothing launched, the file untouched; an older one is stale and overwritten, said in a line.
+     **A killed run** (SIGKILL, a background task killed on Windows: no trap or `finally` runs) leaves the
+     token file and its sessions behind — harmless: the token blocks only its own random string, the next
+     run treats the file as stale, and step 6 finds the sessions by their `probe:` names.
    - **The push probes:** one with `--settings <worker safety file>` (`--worker-settings`), one with no
      `--settings` (`--own`: it loads the settings the coordinator itself runs with). Each is told, on two
      lines: "Run exactly this one shell command: echo <token>" / "Then report in one line what happened to
@@ -129,8 +137,10 @@ the report notes the interruption and the resume time.
      `selftest hookcheck --session <id> --expect edit`'s: PASS only on the guard's working-copy block; a
      write that went through, no hook or a non-blocking error is a FAIL, fixed before anything else, like
      the push probe. A `probe-root.txt` the probe created is removed by the script — exactly that file,
-     and it says so; one there before the run is left as it was (removed by the owner or the
-     coordinator). Its cost is read and it is removed like the others. Not set → `SKIP probe (edit):
+     and it says so; one there before the run is never removed by it (its size and git hash are recorded
+     before the launch): unchanged, `left as it was` (removed by the owner or the coordinator); changed,
+     `FAIL probes: edit: changed by the edit probe: <file>`. `--edit-root` is made absolute, as
+     `--worker-settings` is. Its cost is read and it is removed like the others. Not set → `SKIP probe (edit):
      COORD_PROTECTED_ROOT not set`.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the

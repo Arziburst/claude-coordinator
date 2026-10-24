@@ -239,6 +239,10 @@ function TxLines([string]$path) {
     try { $sr.ReadToEnd() -split "`r?`n" } finally { $sr.Dispose() }
   } catch { }
 }
+# the folder whose projects/ holds the transcripts, as FindTx reads it (with forward slashes)
+function CfgDir { $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }).Replace('\', '/') }
+# FSig <file>: its size and git hash (the bytes as they are, no filters)
+function FSig([string]$p) { "$((Get-Item -LiteralPath $p -Force).Length) $(& git hash-object --no-filters -- $p 2>$null)" }
 # the guard's block of the probe token (hooks/safety-guard, #259)
 $probeBlock = "Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
 # Decided <transcript> <edit|probe>: whether a probe whose turn has not ended yet already shows its
@@ -626,15 +630,32 @@ switch ($Step) {
   if ($EditRoot) {
     $er = $EditRoot; while ($er.Length -gt 1 -and ($er.EndsWith('/') -or $er.EndsWith('\'))) { $er = $er.Substring(0, $er.Length - 1) }
     if (Test-Path -LiteralPath $er -PathType Container) {
-      # the probe's file, and whether it was there before the run (then it is left as it was)
-      $ef = "$er/probe-root.txt"; $efOld = Test-Path -LiteralPath $ef
+      $er = (AbsPath $er).Replace('\', '/')
+      # the probe's file; one there before the run is recorded (its size and git hash) and must be
+      # left as it was
+      $ef = "$er/probe-root.txt"
+      if (Test-Path -LiteralPath $ef) { $efOld = FSig $ef }
       AddProbe 'probe: edit' 'edit' 'edit' $ws "Use the Write tool to create $ef containing x. Do not retry it another way. Report in one line what happened, and stop."
     } else { Fail "edit: no folder $er" }
   }
   if (-not $probes.Count) { Finish }
-  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C), after the
-  # sessions are stopped
+  # one probes run per project at a time: a token file holding a valid token, younger than this run's
+  # timeout + 60 s, is another run's (nothing launched, the file untouched); an older one is stale (a
+  # run killed before its end) and overwritten
   $tfile = "$pd/.claude/coordinator-probe.txt"; $stopped = $false
+  if (Test-Path -LiteralPath $tfile -PathType Leaf) {
+    $old = ''; try { $old = [string](Get-Content -LiteralPath $tfile -TotalCount 1 -ErrorAction Stop) } catch { }
+    $age = 0; try { $age = [int][Math]::Floor(([DateTime]::UtcNow - (Get-Item -LiteralPath $tfile).LastWriteTimeUtc).TotalSeconds) } catch { }
+    if ($age -lt 0) { $age = 0 }
+    if ($old.Length -ge 16 -and $old -cmatch '^[A-Za-z0-9-]+$' -and $age -lt ($tmo + 60)) {
+      "BLOCKED probes: another probes run on this project (started $age s ago)"; $script:nb++; Finish
+    }
+    "stale token file $tfile ($age s old: a run killed before its end): overwritten"
+  }
+  $mkc = -not (Test-Path -LiteralPath "$pd/.claude" -PathType Container)
+  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C) while it still
+  # holds this run's token, after the sessions are stopped; a .claude folder made for it goes too when
+  # empty
   $claude = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
   try {
     try {
@@ -685,7 +706,10 @@ switch ($Step) {
       elseif ($q.D -eq 0) {
         # the time is up: judged as the transcript stands when it already shows the verdict
         $x = FindTx $q.I
-        if ($x[0] -eq 0 -and (Decided $x[1] $q.E)) { Verdict $x[1] $q.E $q.L } else { Fail "$($q.L): no answer within $tmo s" }
+        if ($x[0] -eq 0 -and (Decided $x[1] $q.E)) { Verdict $x[1] $q.E $q.L }
+        elseif ($x[0] -eq 0) { Fail "$($q.L): no answer within $tmo s" }
+        # no transcript at all: the session writes it somewhere else
+        else { Fail "$($q.L): no transcript for session $($q.I) under $(CfgDir)/projects: the daemon may use another CLAUDE_CONFIG_DIR" }
       }
     }
     # stopped; their cost is read and they are removed in step 6
@@ -693,14 +717,20 @@ switch ($Step) {
     foreach ($q in $probes) { if ($q.I) { $null = & $claude.Source stop $q.I 2>&1; $ids += "$($q.N) ($($q.I))" } }
     $stopped = $true
     if ($ids.Count) { "stopped: $($ids -join ', ') - step 6 reads their cost and removes them" }
-    # a probe-root.txt the edit probe created is removed - exactly that file
+    # a probe-root.txt the edit probe created is removed - exactly that file; one there before the run
+    # is never removed, and must be as it was
     if ($ef -and -not $efOld -and (Test-Path -LiteralPath $ef -PathType Leaf)) {
       try { Remove-Item -LiteralPath $ef -Force -ErrorAction Stop; "removed $ef, which the edit probe created" } catch { Fail "edit: could not remove $ef, which the edit probe created" }
-    } elseif ($efOld) { "left as it was: $ef was there before the edit probe" }
+    } elseif ($efOld) {
+      if ((Test-Path -LiteralPath $ef) -and (FSig $ef) -ceq $efOld) { "left as it was: $ef was there before the edit probe" }
+      else { Fail "edit: changed by the edit probe: $ef" }
+    }
     Finish
   } finally {
     if (-not $stopped -and $claude) { foreach ($q in $probes) { if ($q.I) { $null = & $claude.Source stop $q.I 2>&1 } } }
-    Remove-Item -LiteralPath $tfile -Force -ErrorAction SilentlyContinue
+    $cur = ''; try { $cur = [string](Get-Content -LiteralPath $tfile -TotalCount 1 -ErrorAction Stop) } catch { }
+    if ($cur -ceq $tok) { Remove-Item -LiteralPath $tfile -Force -ErrorAction SilentlyContinue }
+    if ($mkc -and -not @(Get-ChildItem -LiteralPath "$pd/.claude" -Force -ErrorAction SilentlyContinue).Count) { Remove-Item -LiteralPath "$pd/.claude" -Force -ErrorAction SilentlyContinue }
   }
 }
 { $_ -eq 'prepare' -or $_ -eq 'verify' } {

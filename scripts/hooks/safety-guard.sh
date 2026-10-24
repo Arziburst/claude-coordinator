@@ -491,7 +491,8 @@ block() {
 probe_file="${CLAUDE_PROJECT_DIR:-.}/.claude/coordinator-probe.txt"
 if [ -n "$cmd" ] && [ -f "$probe_file" ]; then
   probe_tok=""; IFS= read -r probe_tok < "$probe_file" 2>/dev/null
-  probe_tok="${probe_tok%$'\r'}"
+  # without a CR line end or a UTF-8 BOM before it (Get-Content in the .ps1 drops both)
+  probe_tok="${probe_tok%$'\r'}"; probe_tok="${probe_tok#$'\357\273\277'}"
   case "$probe_tok" in *[!A-Za-z0-9-]*) probe_tok="" ;; esac
   if [ ${#probe_tok} -ge 16 ]; then
     case "$cmd" in *"$probe_tok"*) block "the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds" ;; esac

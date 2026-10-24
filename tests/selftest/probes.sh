@@ -73,6 +73,8 @@ write() {
   printf '{"type":"user","message":{"content":"%s"}}\n' "$(esc "$prompt")"
   case "$scn" in
     block|slowblock) guarded; ended ;;
+    # another run's token takes the file over meanwhile
+    swap) guarded; ended; printf 'coord-probe-1-anotherrun0000\n' > .claude/coordinator-probe.txt ;;
     noend) guarded ;;
     silent) ;;
     noendnb)
@@ -95,7 +97,7 @@ write() {
   esac
 }
 if [ "$scn" = slowblock ]; then ( sleep 2; write >> "$tf" ) >/dev/null 2>&1 < /dev/null &
-else write > "$tf"; fi
+elif [ "$scn" != notx ]; then write > "$tf"; fi
 echo "Started background session $id"
 echo "  claude stop $id      stop this session"
 exit 0
@@ -136,11 +138,13 @@ pr() {
   : > "$STUB_DIR/log"; : > "$STUB_DIR/stops"; : > "$STUB_DIR/ids"; : > "$STUB_DIR/prompts"
   st probes "$@" > "$tmp/one" 2>&1; rc=$?
   n=$((n + 1)); [ "$rc" = "$want" ] || bad "expected exit $want, got $rc"
-  n=$((n + 1)); [ ! -e "$tokf" ] || bad "the token file is still there"
+  # keeptok=1: the file is not this run's to remove
+  n=$((n + 1)); [ -n "${keeptok:-}" ] || [ ! -e "$tokf" ] || bad "the token file is still there"
   n=$((n + 1))
   while IFS= read -r i; do grep -qx "$i" "$STUB_DIR/stops" || bad "session $i was not stopped"; done < "$STUB_DIR/ids"
 }
 has() { n=$((n + 1)); tr -d '\r' < "$tmp/one" | grep -qxF -- "$1" || bad "no line '$1'"; }
+hasre() { n=$((n + 1)); tr -d '\r' < "$tmp/one" | grep -qxE -- "$1" || bad "no line matching '$1'"; }
 lacks() { n=$((n + 1)); ! tr -d '\r' < "$tmp/one" | grep -q -- "$1" || bad "a line matching '$1'"; }
 # launched <name> <field> <value>: the stub's log line of that session has that field (2 model,
 # 3 settings, 4 other flags, 5 cwd, 6 the token file's first line, 7 the token in the prompt)
@@ -163,6 +167,32 @@ launched "probe: push (own settings)" 3 ""; launched "probe: push (own settings)
 n=$((n + 1)); t="$(awk -F'|' 'NR == 1 { print $7 }' "$STUB_DIR/log")"
 case "$t" in coord-probe-*) [ ${#t} -ge 16 ] && ! printf '%s' "$t" | grep -q '[^A-Za-z0-9-]' || bad "a token the guard ignores: $t" ;; *) bad "no token file at launch: $t" ;; esac
 n=$((n + 1)); [ "$(awk -F'|' 'NR == 2 { print $7 }' "$STUB_DIR/log")" = "$t" ] || bad "the two probes got different tokens"
+n=$((n + 1)); [ ! -e "$tmp/proj/.claude" ] || bad "the .claude folder made for the token is still there"
+mkdir -p "$tmp/proj/.claude" && echo keep > "$tmp/proj/.claude/keep.txt"
+
+# one probes run per project at a time: a fresh valid token is another run's - nothing launched, the
+# file untouched; an old one is stale and overwritten; a token another run wrote meanwhile is left
+printf 'coord-probe-9-otherrun00000000\n' > "$tokf"
+keeptok=1 pr "another run going" 1 --project "$proj" --worker-settings "$ws" --own
+hasre "BLOCKED probes: another probes run on this project \(started [0-9]+ s ago\)"
+has "selftest probes: 0 pass, 0 fail, 0 skipped, 1 blocked"
+n=$((n + 1)); [ ! -s "$STUB_DIR/log" ] || bad "a probe was launched"
+n=$((n + 1)); [ "$(cat "$tokf")" = coord-probe-9-otherrun00000000 ] || bad "the other run's token file was changed"
+touch -t 202001010000 "$tokf"
+scn block block editblock
+pr "a stale token file" 0 --project "$proj" --worker-settings "$ws"
+hasre "stale token file .*/proj/\.claude/coordinator-probe\.txt \([0-9]+ s old: a run killed before its end\): overwritten"
+has "PASS probes: push: the command holding the probe token was blocked through Claude Code"
+scn swap block editblock
+keeptok=1 pr "the file taken over meanwhile" 0 --project "$proj" --worker-settings "$ws"
+n=$((n + 1)); [ "$(cat "$tokf" 2>/dev/null)" = coord-probe-1-anotherrun0000 ] || bad "another run's token file was removed"
+rm -f "$tokf"
+n=$((n + 1)); [ -f "$tmp/proj/.claude/keep.txt" ] || bad "a .claude folder that was there was removed"
+
+# a transcript that never appears is not "no answer"
+scn notx block editblock
+pr "no transcript" 1 --project "$proj" --worker-settings "$ws" --timeout 2
+has "FAIL probes: push: no transcript for session $(head -n 1 "$STUB_DIR/ids") under $T/cfg/projects: the daemon may use another CLAUDE_CONFIG_DIR"
 
 # a fresh token per run
 scn block block editblock
@@ -235,7 +265,18 @@ scn block block editblock
 pr "a probe-root.txt from before" 0 --project "$proj" --worker-settings "$ws" --edit-root "$root"
 has "left as it was: $root/probe-root.txt was there before the edit probe"
 n=$((n + 1)); [ "$(cat "$tmp/root/probe-root.txt")" = before ] || bad "the earlier probe-root.txt was changed"
+# ... unless the probe changed it: said, a FAIL, and the file is not removed
+scn block block editwrite
+pr "a probe-root.txt from before, changed" 1 --project "$proj" --worker-settings "$ws" --edit-root "$root"
+has "FAIL probes: edit: changed by the edit probe: $root/probe-root.txt"
+lacks "^removed \|^left as it was"
+n=$((n + 1)); [ "$(cat "$tmp/root/probe-root.txt")" = x ] || bad "the changed probe-root.txt was removed"
 rm "$tmp/root/probe-root.txt"
+# the edit root made absolute, as the worker settings are
+scn block block editblock
+pr "edit root not in its plain form" 0 --project "$proj" --worker-settings "$ws" --edit-root "$root/."
+n=$((n + 1)); grep -qxF "Use the Write tool to create $root/probe-root.txt containing x. Do not retry it another way. Report in one line what happened, and stop." "$STUB_DIR/prompts" ||
+  bad "the edit probe's prompt does not name $root/probe-root.txt"
 
 # what cannot run
 pr "no project folder" 1 --project "$T/nowhere" --own
