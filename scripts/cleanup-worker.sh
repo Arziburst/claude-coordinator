@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Clean up after a merged task: stop and remove the worker session, remove its worktree and branch —
 # only if the worktree exists, is clean, every commit is on the remote and a merged PR has exactly the
-# pushed head (a reused branch name with newer commits does not count) (CORE §8).
+# pushed head (a reused branch name with newer commits does not count) (CORE §8). Also, with no PR, a
+# branch that holds nothing to lose (#257): no commits beyond its base (origin's default branch; with no
+# origin the local main or master), never pushed (no upstream, no remote branch of its name) and the
+# worktree clean - `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
 # Otherwise report and change nothing.
 #   scripts/cleanup-worker.sh --worktree <path> [--session <id>] [--dry-run]
 # --session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
@@ -65,32 +68,57 @@ git -C "$wt" fetch -q || stop_here "FETCH FAILED: cannot confirm $branch is on t
 u=""
 if git -C "$wt" rev-parse -q --verify '@{u}' >/dev/null; then u='@{u}'
 elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then u="origin/$branch"; fi
+# nothing to lose (#257): no remote branch (of any remote: refs/remotes/*/<branch>), no upstream configured
+# (not even one whose remote branch is gone), on a branch (not detached), no commits beyond the base and no remote branch of its name on origin
+# itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
+# (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
+# the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
+empty="" base=""
+lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+if [ -z "$u" ] && [ "$branch" != HEAD ] &&
+   [ -z "$(git -C "$wt" config --get "branch.$branch.merge" || true)$(git -C "$wt" config --get "branch.$branch.remote" || true)" ] &&
+   [ -z "$(git -C "$wt" for-each-ref --format='%(refname)' "refs/remotes/*/$branch")" ]; then
+  if git -C "$wt" remote get-url origin >/dev/null 2>&1; then
+    o=1; cands="$(git -C "$wt" symbolic-ref -q refs/remotes/origin/HEAD || true) refs/remotes/origin/main refs/remotes/origin/master"
+  else o=""; cands="refs/heads/main refs/heads/master"; fi
+  for b in $cands; do
+    [ "$(lc "$b")" != "$(lc "refs/heads/$branch")" ] || continue
+    git -C "$wt" rev-parse -q --verify "$b^{commit}" >/dev/null && { base="$b"; break; }
+  done
+  if [ -n "$base" ] && [ "$(git -C "$wt" rev-list --count "$base..HEAD" 2>/dev/null || true)" = 0 ]; then
+    if [ -z "$o" ]; then empty=1
+    elif rh="$(git -C "$wt" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" && [ -z "$rh" ]; then empty=1; fi
+  fi
+  base="${base#refs/remotes/}"; base="${base#refs/heads/}"
+fi
 if [ -n "$u" ]; then
   [ -n "$(git -C "$wt" log --oneline "$u..")" ] && stop_here "UNPUSHED: $branch has commits not on its remote"
   up="$(git -C "$wt" rev-parse "$u")"
 else up="$(git -C "$wt" rev-parse HEAD)"; fi
-command -v gh >/dev/null 2>&1 || stop_here "NO gh: cannot verify the PR for $branch is merged"
-heads="$(cd "$wt" && gh pr list --head "$branch" --state merged --json headRefOid --jq '.[].headRefOid' 2>/dev/null)" ||
-  stop_here "UNKNOWN: could not check the PR for $branch"
-if [ -z "$heads" ]; then
-  [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch"
-  stop_here "NO UPSTREAM: $branch was never pushed"
-fi
-if ! printf '%s\n' "$heads" | grep -qx "$up"; then
-  # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
-  # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
-  found=""
-  for h in $heads; do
-    git -C "$wt" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$wt" fetch -q origin "$h" 2>/dev/null || true
-    if git -C "$wt" merge-base --is-ancestor "$up" "$h" 2>/dev/null; then found="$h"; break; fi
-  done
-  if [ -z "$found" ]; then
-    [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
-    stop_here "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head ${up:0:7}"
+if [ -z "$empty" ]; then
+  command -v gh >/dev/null 2>&1 || stop_here "NO gh: cannot verify the PR for $branch is merged"
+  heads="$(cd "$wt" && gh pr list --head "$branch" --state merged --json headRefOid --jq '.[].headRefOid' 2>/dev/null)" ||
+    stop_here "UNKNOWN: could not check the PR for $branch"
+  if [ -z "$heads" ]; then
+    [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch"
+    stop_here "NO UPSTREAM: $branch was never pushed"
   fi
-  echo "merged as ${found:0:7}: the PR's head has a server-side commit on top of the pushed head ${up:0:7}"
+  if ! printf '%s\n' "$heads" | grep -qx "$up"; then
+    # a server-side commit on top of the pushed head (gh pr update-branch merges the base into the PR):
+    # the merged PR's head then has the pushed head as an ancestor; a reused name with newer commits does not
+    found=""
+    for h in $heads; do
+      git -C "$wt" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$wt" fetch -q origin "$h" 2>/dev/null || true
+      if git -C "$wt" merge-base --is-ancestor "$up" "$h" 2>/dev/null; then found="$h"; break; fi
+    done
+    if [ -z "$found" ]; then
+      [ -n "$u" ] && stop_here "NOT MERGED: no merged PR for $branch has its pushed head ${up:0:7} (branch name reused?)"
+      stop_here "UNPUSHED: $branch is on no remote branch, and no merged PR for it contains its head ${up:0:7}"
+    fi
+    echo "merged as ${found:0:7}: the PR's head has a server-side commit on top of the pushed head ${up:0:7}"
+  fi
+  [ -n "$u" ] || echo "its remote branch is gone (deleted after the merge): the merged PR's head contains ${up:0:7}"
 fi
-[ -n "$u" ] || echo "its remote branch is gone (deleted after the merge): the merged PR's head contains ${up:0:7}"
 
 id=""
 if [ -n "$session" ]; then
@@ -157,6 +185,31 @@ if [ -n "$session" ]; then
     fi
   fi
 fi
+# the empty path deletes the branch before the worktree: a failed removal puts it back at the same
+# commit (on the worktree again while git still has it), so a re-run finds it as before
+ra=""
+reattach() {
+  [ -n "$empty" ] && [ "$dry" != 1 ] || return 0
+  if { [ -e "$wt/.git" ] && git -C "$wt" checkout -q -b "$branch"; } ||
+     { [ ! -e "$wt/.git" ] && git -C "$root" branch "$branch" "$up"; }; then
+    ra="; branch $branch put back at ${up:0:7}"
+  else ra="; branch $branch NOT put back: git branch $branch $up"; fi
+}
+if [ -n "$empty" ]; then
+  # a session stopped just now may have committed or changed files after the checks: decided again here,
+  # the worktree still clean, on the branch and at the commit checked
+  { [ -z "$(git -C "$wt" status --porcelain)" ] && [ "$(git -C "$wt" rev-parse HEAD)" = "$up" ] &&
+    [ "$(git -C "$wt" symbolic-ref -q HEAD || true)" = "refs/heads/$branch" ]; } ||
+    stop_here "CHANGED: $wt moved since the checks"
+  # an empty branch is deleted from its own worktree, detached at the same commit: `git branch -d` then
+  # checks it against that commit, not the main checkout's HEAD (which may be behind the base or on
+  # another branch); no file changes. A refused delete re-attaches the branch and changes nothing.
+  run git -C "$wt" checkout -q --detach || { echo "REMOVE FAILED: git checkout --detach in $wt - left as is" >&2; exit 1; }
+  if ! run git -C "$wt" branch -d "$branch"; then
+    git -C "$wt" checkout -q "$branch" || true
+    echo "REMOVE FAILED: git branch -d $branch - left as is" >&2; exit 1
+  fi
+fi
 if [ "$dry" = 1 ]; then run git -C "$root" worktree remove "$wt"
 else
   # a just-stopped session's processes may hold the folder for a moment (#238): retry for about 10 s;
@@ -164,13 +217,16 @@ else
   n=0
   until git -C "$root" worktree remove "$wt"; do
     [ -e "$wt/.git" ] || break
-    n=$((n + 1)); [ "$n" -lt 5 ] || { echo "REMOVE FAILED: git worktree remove $wt" >&2; exit 1; }
+    n=$((n + 1)); [ "$n" -lt 5 ] || { reattach; echo "REMOVE FAILED: git worktree remove $wt$ra" >&2; exit 1; }
     sleep 2
   done
   if [ -d "$wt" ]; then
-    rmdir "$wt" 2>/dev/null || { echo "REMOVE FAILED: $wt is no longer a worktree but not empty - left as is" >&2; exit 1; }
+    rmdir "$wt" 2>/dev/null || { reattach; echo "REMOVE FAILED: $wt is no longer a worktree but not empty - left as is$ra" >&2; exit 1; }
     echo "removed the empty folder git left: $wt"
   fi
 fi
-run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"
+if [ -n "$empty" ]; then
+  if [ "$dry" = 1 ]; then echo "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed"
+  else echo "EMPTY: $branch has no commits beyond $base and was never pushed - removed"; fi
+else run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"; fi
 echo "cleaned: ${id:-no session} ${wt}"

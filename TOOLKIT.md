@@ -123,7 +123,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
   trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
-  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another. Its built-in alternative (`claude --worktree <name>`, branch
+  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another.
+  Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
+  `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
+  line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
+  are printed, no contract found is one notice line and the start goes on. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
@@ -142,7 +146,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   never `cleaned`. A session the listing places outside the project (its `cwd` not under the
   repository's main checkout, the worktree or the folder whose `.claude/worktrees` holds it) is never
   touched: `SESSION FOREIGN: <id> (<cwd>): not this project's session - nothing done`, exit 5 (CORE
-  §1.17).
+  §1.17). A branch with nothing to lose needs no merged PR (#257): no commits beyond its base (origin's
+  default branch; with no origin the local main or master), never pushed (no upstream configured, no
+  remote branch of its name on any remote, `git ls-remote` of origin included) and the worktree clean
+  (no untracked files either) — `EMPTY: <branch> has no commits beyond <base> and was never pushed -
+  removed`, its session handled as for a merged one. It is removed without `--force`: `git branch -d`
+  from the worktree detached at the branch's own commit (so the main checkout's HEAD being behind does
+  not matter), then `git worktree remove`. After the session is stopped the worktree is checked again: a
+  commit or change since the checks is `CHANGED: <worktree> moved since the checks - left as is`, exit 3;
+  a failed removal puts the branch back at its commit (`REMOVE FAILED: …; branch <branch> put back at
+  <sha>`, exit 1) — run it again later. One commit, a push or a dirty worktree takes the usual checks.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
@@ -209,7 +222,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   tool's path, the project's folder, home and `COORD_PROTECTED_ROOT` are also compared as they lie on
   disk — symlinks and junctions resolved for the part that exists (`cd -P`; in PowerShell the item's link
   target), `..` after a link going to its target's parent, the rest kept as written —, so a link to them
-  is no way around the rules. It parses
+  is no way around the rules. Discarding files in a repository's main checkout is blocked too (#263),
+  by the cwd, a `cd` or `git -C`: `git clean` with `-f` (not with `-n` / `--dry-run`), `git reset
+  --hard`, `git checkout -- <paths>` / `<ref> -- <paths>` / `.` / `-f`, `git switch -f` /
+  `--discard-changes`, `git restore` of the working tree (not `--staged` alone), `git stash drop` /
+  `clear`; a linked worktree, or a repository whose top folder lies under `.claude/worktrees/` or a
+  declared worktree root, passes (a plain folder there belongs to the project and does not); a folder
+  that cannot be known (a variable, not a repository, `--git-dir` / `--work-tree` / `GIT_DIR=` /
+  `GIT_WORK_TREE=` pointing elsewhere) blocks — with or without
+  `COORD_PROTECTED_ROOT`, which a subagent under the coordinator's own settings does not have. It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
   wrappers are skipped with their options (`sudo -E`, `env -i`, `timeout 30`, `nice -n 5`, `stdbuf
@@ -217,8 +238,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   command itself: `/usr/bin/env`, `timeout.exe`, `git.exe`), `$(…)`, `bash -c` / `pwsh -Command` (or a prefix
   such as `-Com`) and a heredoc fed to a shell
   are checked as commands of their own. Work-branch operations (push, force-push, rebase, amend,
-  reset, deleting work branches) and tag-only pushes pass. Exit code 2 blocks and
-  shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
+  reset, deleting work branches; `reset --hard` outside a main checkout) and tag-only pushes pass. Exit
+  code 2 blocks and shows the reason. Input it cannot read (not a JSON object) blocks; a BOM before the object is dropped;
   only `tool_input`'s own `command` is read. A project's own patterns (`.claude/coordinator-deny.txt`,
   one regex per line, trimmed, CRLF or LF) block what they match; a pattern that cannot be read blocks
   every call (`project rule cannot be read: <line>`) until the file is fixed, and so does a deny file
@@ -272,7 +293,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (`start-worker` from the repository's root, EnterWorktree) works in its own copy under
   `.claude/worktrees/`, but an `Edit` / `Write` / `MultiEdit` / `NotebookEdit` with an absolute path can
   still reach the owner's checkout. With `"env": {"COORD_PROTECTED_ROOT": "<the project root>"}` in the
-  **worker** safety file (never the coordinator's own settings: the coordinator edits there) and those
+  **worker** safety file (never the coordinator's own settings: the coordinator edits there — it writes
+  `coordinator/` inside the root — so on its own files `selftest hooks` says `SKIP … COORD_PROTECTED_ROOT
+  not set`, which is expected there and not offered by UPDATE-CORE step 3, #256) and those
   four tools in the guard's matcher (`Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit`, as in the
   settings examples), the guard blocks such a call whose `file_path` (`notebook_path`) lies under the
   root, except under `<root>/.claude/worktrees/`. Both paths are compared in one form: `/` or `\`, a

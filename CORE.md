@@ -260,7 +260,8 @@ The continuous work:
    strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
-   (an ERROR blocks delegation; a WARN is explained in the brief).
+   (an ERROR blocks delegation; a WARN is explained in the brief); start-worker runs it on the brief's
+   contract (or `--contract <file>`) and refuses to start on an ERROR.
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Saved carts per account`, `#37 verifier: Saved carts
    per account`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
@@ -664,7 +665,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   start-up → keep or cache, per `PROJECT.md`.
 - **Cleanup after integration:** stop the worker, remove its copy, environments and temp folders **only
   if the PR is verified merged, the copy clean and every commit on the remote** (no upstream = unpushed);
-  otherwise report the leftovers, never delete them.
+  a copy whose branch has no commit beyond its base and was never pushed, clean, has nothing to lose and
+  goes without a PR (cleanup-worker, #257); otherwise report the leftovers, never delete them.
 
 ## 9. Autopilot and budget
 
