@@ -329,11 +329,11 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: none known
 
 ### F-WORKERS-02 Worker safety settings checked
-- defined: scripts/start-worker.sh, TOOLKIT.md
-- entry: `--safety` / `-Safety`
-- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message
+- defined: scripts/start-worker.sh, TOOLKIT.md, settings.example.json, settings.example.windows.json, ONE-TIME.md
+- entry: `--safety` / `-Safety`; one-time step `worker-draft-pr`
+- promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message; the worker safety file allows only `gh pr create --draft *` among the writes, a narrow rule auto mode resolves without its classifier (#261)
 - tested by: tests/workers/run.sh (backslash path, PowerShell shell anywhere in the hook object, a wrong PreToolUse path, no PreToolUse guard, a silent self-test, a quoted and an unquoted path with a space)
-- not covered: other wrappers that could swallow the exit code
+- not covered: other wrappers that could swallow the exit code; the draft-PR allow rule: no test or start-worker check reads the allow list, only the one-time step `worker-draft-pr`, and that auto mode skips the classifier for it rests on Claude Code's permission-modes docs, not measured
 
 ### F-WORKERS-03 Start from a trusted folder
 - defined: scripts/start-worker.sh, TOOLKIT.md
@@ -496,7 +496,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-01 Independent verifier
 - defined: roles/verifier.md, CORE.md §6
 - entry: a worker reports ready with green checks
-- promises: the verifier is not the author and changes nothing — it reads another commit with `git show`, `git grep`, `git diff`, `git log` or a scratch worktree, never with checkout, switch, reset, stash or restore in a working copy; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner; the verifier diffs the tester's commit against the reviewed head: a change to the tester's tests other than a build-only edit `test_edits` names is a finding — a weakened, removed or loosened check a Blocker, an unnamed build-only edit a Major (#237)
+- promises: the verifier is not the author and changes nothing — it reads another commit with `git show`, `git grep`, `git diff`, `git log` or a scratch worktree, never with checkout, switch, reset, stash or restore in a working copy; it reads the contract before the report; nothing in the report is established fact; finding nothing is a valid result; each criterion gets confirmed / failed / not verifiable / needs the owner; the verifier diffs the tester's commit against the reviewed head: a change to the tester's tests other than a build-only edit `test_edits` names is a finding — a weakened, removed or loosened check a Blocker, an unnamed build-only edit a Major (#237); the verifier publishes nothing (no PR comment, review, label or ready): the coordinator posts its prepared verdict and marks the PR ready after checking the head is the approved commit (#262)
 - tested by: SELFTEST step 4 (a verifier run)
 - not covered: SELFTEST step 4 checks only that each sub-task has a verdict, not its commit, per-criterion verdicts or evidence classes
 

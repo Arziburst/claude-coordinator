@@ -34,7 +34,14 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   long**: a flake's reproduction, a build or suite over about 10 minutes, a device; a subagent ends with
   its session and its cost is only a lower bound (`out>=`, #232). A lead's tester stays its subagent:
   the lead runs under the worker safety file. A subagent has no session of its own: it appears inside
-  the session that started it, under its role name.
+  the session that started it, under its role name. **A role never silently becomes a subagent:** a
+  subagent runs without the role's safety file and without the MCP servers its session would have; when
+  background sessions cannot start (a new one crashes before init — `EPERM`, its job's state.json
+  `failed` — even when start-worker reported it started; the daemon fails), stop and ask the
+  owner (#265). macOS: after Full Disk Access (TCC) changes, the running `claude` daemon keeps the old
+  state and new background sessions crash with `EPERM`: restart the `claude` client that started it,
+  then `claude daemon stop --any --keep-workers` (running sessions survive); the next `claude --bg`
+  starts a fresh daemon (measured on the reporter's machine, #265).
 - **The coordinator's own name** (CORE §2 step 1): the coordinator name in `PROJECT.md` *Settings*,
   `<Project> Coordinator` by default (INIT 3.1, question 10). It must contain the English word
   `Coordinator`: the roles' fallback looks for it when a report address fails. Several projects on one
@@ -188,6 +195,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   script blocks).
 - **The real enforcement is on the code host:** branch protection — PRs required, checks required, a
   human review required in the strict preset. Rules and hooks on the machine are a safety net, not a wall.
+- **A worker's draft PR:** the worker safety file allows `gh pr create --draft *` (Bash and PowerShell),
+  the one narrow allow rule it holds for a write: Claude Code's auto mode resolves a narrow allow rule
+  without its classifier (permission-modes docs), which had refused some workers' draft PRs; a compound
+  command still needs every part allowed. `gh pr ready` and `gh pr merge` stay denied where the preset
+  denies them (#261).
+- **The guard reads a command's text, not only what will run:** `git push` written inside a string or a
+  here-string of the same command (a brief written to a file) is read as a push and may be blocked.
+  Write such text with the Write tool. The guard does not strip strings on purpose: that would let
+  `pwsh -Command "git push origin main"` through (#264).
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
   rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
   pushing, force-pushing or deleting the protected branches (main / master and those of `COORD_PROTECTED_BRANCHES`,

@@ -29,7 +29,10 @@ resources and launch/test limits, and the phrase that ends your report.
    suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237).
 3. **Your branch only.** Work in your own working copy and branch, never the coordinator's checkout;
    commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its
-   remote); open the PR the contract names. Waiting on CI, keep `gh pr checks <n> --watch` (or an
+   remote); open the PR the contract names as a draft with `gh pr create --draft …` — `--draft`
+   right after `create`: the worker safety file allows exactly that form, so Claude Code's auto-mode
+   classifier does not judge it (#261); refused anyway → the ready command and body file go in your
+   report, never another way. Waiting on CI, keep `gh pr checks <n> --watch` (or an
    equivalent wait) running in the background until you report: a background session idle with
    nothing running may exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite
    the protected branches or anyone else's branch. A throwaway worktree is cleaned (`git -C <it>

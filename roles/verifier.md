@@ -60,6 +60,12 @@ it) would make that work look deleted.
    non_goal or a do_not_decide item.
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
 
+**You publish nothing:** no PR comment, review, label or `gh pr ready` — Claude Code's auto-mode
+classifier may refuse them in a verifier's session ("External System Writes", #262), and a refused one
+is never retried another way. Your verdict goes to your report address; when the project wants it on
+the PR, put the comment's full text in the report (or the file the brief names): the coordinator
+publishes it as written (CORE §6).
+
 Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
 criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
 reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)` (above), `review` (you
