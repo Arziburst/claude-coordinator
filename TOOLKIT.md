@@ -36,7 +36,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   the lead runs under the worker safety file. A subagent has no session of its own: it appears inside
   the session that started it, under its role name. **A role never silently becomes a subagent:** a
   subagent runs without the role's safety file and without the MCP servers its session would have; when
-  background sessions cannot start (one crashes before it is listed, the daemon fails), stop and ask the
+  background sessions cannot start (a new one crashes before init — `EPERM`, its job's state.json
+  `failed` — even when start-worker reported it started; the daemon fails), stop and ask the
   owner (#265). macOS: after Full Disk Access (TCC) changes, the running `claude` daemon keeps the old
   state and new background sessions crash with `EPERM`: restart the `claude` client that started it,
   then `claude daemon stop --any --keep-workers` (running sessions survive); the next `claude --bg`

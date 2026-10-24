@@ -333,7 +333,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - entry: `--safety` / `-Safety`; one-time step `worker-draft-pr`
 - promises: no worker starts unless the hook's self-test passes; a hook path with backslashes is refused; a guard under a PowerShell shell without `; exit $LASTEXITCODE` is refused; every guard path in the file exists (the PreToolUse one, not only the self-test's), quoted when it holds a space; a missing PreToolUse guard or a silent self-test is refused with a message; the worker safety file allows only `gh pr create --draft *` among the writes, a narrow rule auto mode resolves without its classifier (#261)
 - tested by: tests/workers/run.sh (backslash path, PowerShell shell anywhere in the hook object, a wrong PreToolUse path, no PreToolUse guard, a silent self-test, a quoted and an unquoted path with a space)
-- not covered: other wrappers that could swallow the exit code
+- not covered: other wrappers that could swallow the exit code; the draft-PR allow rule: no test or start-worker check reads the allow list, only the one-time step `worker-draft-pr`, and that auto mode skips the classifier for it rests on Claude Code's permission-modes docs, not measured
 
 ### F-WORKERS-03 Start from a trusted folder
 - defined: scripts/start-worker.sh, TOOLKIT.md

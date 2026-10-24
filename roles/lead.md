@@ -112,7 +112,8 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
    A run over twice its estimate, or the total heading past the parent budget → start nothing new;
    tell the coordinator the numbers, what is left and the options (continue, cut scope, a stronger or
    cheaper model).
-7. **Finish.** Open the PR the parent contract names from the integration branch and return the
+7. **Finish.** Open the PR the parent contract names from the integration branch, as a draft
+   (`gh pr create --draft …`, roles/worker.md step 3), and return the
    report (CONTRACT.md *The report*) with every parent criterion's evidence, plus `runs` as shown
    there: one entry per run, each tester and verifier subagent run included, its cost `in lead` (its estimate and estimate_time are the sub-contract's `budget.cost` and
    `budget.time`; `start`, `wall` and `active` as session-tokens printed them; the coordinator writes
