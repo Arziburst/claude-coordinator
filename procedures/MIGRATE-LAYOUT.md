@@ -38,9 +38,15 @@ other clones and teammates, and the one yes this needs.
    (`git worktree add <scratch>/untrack -b <branch>`, so this working copy is never switched),
    `git rm -r --cached coordinator/`, commit, and integrate through the project's change path (PR,
    review, merge per `PROJECT.md`, §1.1). Before pulling that merge: `git -C coordinator status
-   --porcelain` empty (every change is in the new repository, §12b), then `git checkout -- coordinator/`
-   (the project's old view; a journal line written since would otherwise stop the pull). Pulling it deletes the files from this working copy
-   too; restore them at once from the new repository: `git -C coordinator restore .`. If the
+   --porcelain` empty (every change is in the new repository, §12b), then move the folder aside
+   (`mv coordinator coordinator.migrating`), pull with `git pull --no-rebase --ff-only` (a project set to
+   `pull.rebase=true` refuses a rebase over the moved files), and move it back whatever the pull did, in the
+   same tool call (`mv coordinator coordinator.migrating; git pull --no-rebase --ff-only; mv
+   coordinator.migrating coordinator`), then check that `coordinator.migrating` is gone — without the folder
+   the guard under `coordinator/core/` is missing: the pull deletes the project's copies of these files, which are not there, so a journal
+   line written since stops nothing, and the files never leave the disk; `git -C coordinator status
+   --porcelain` is empty again. Not `git checkout -- coordinator/` and `git -C coordinator restore .`, the
+   old way: they discard files in a main checkout, which the guard blocks (#263). If the
    folder is in `.gitignore`, leave it; otherwise add `coordinator/` to the info/exclude file (`git rev-parse --git-path info/exclude`).
    Tell the owner before the merge: **other clones of the project lose these files from their working
    copy on their next pull**, and the files remain in the project's past history (rewriting history is

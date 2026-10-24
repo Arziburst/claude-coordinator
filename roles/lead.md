@@ -80,7 +80,9 @@ your report. Dollar figures (budgets, estimates, costs) are at API list price (C
    to, merge into or rewrite the protected branches. Once a sub-branch's head is in your pushed
    integration branch (`git merge-base --is-ancestor`), remove its worker in step 6's order and
    `git worktree remove` its copy (not cleanup-worker, which needs a merged PR; CORE §8; never
-   `--force`, which the safety guard blocks).
+   `--force`, which the safety guard blocks). A throwaway worktree is cleaned (`git -C <it> clean`, `reset
+   --hard`) only after `git -C <it> rev-parse --show-toplevel` prints that worktree, never the project
+   (#263).
 6. **Spend.** When a worker, tester or verifier run ends, in this order:
    - **Stop** its session, `claude stop <id>` by the **short** id (`id` in `claude agents --json`;
      stop and rm refuse the full `sessionId`, which only `--resume` takes, TOOLKIT *Workers*), so

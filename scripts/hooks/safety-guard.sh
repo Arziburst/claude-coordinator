@@ -293,9 +293,9 @@ $(printf '%s' "$raw" | LC_ALL=C awk "$AGENTS_AWK")
 AGENTS_END
 }
 case "${OSTYPE:-}" in msys*|cygwin*|darwin*) sm="" ;; *) sm=keep ;; esac   # letter case kept on Linux
-owns_read=0; owns=()
+owns_read=0; owns=(); wt_rel=()   # wt_rel: the declared worktree roots as written (also for #263 below)
 own_forms() {
-  local c out common r w l; local raw=() rel=()
+  local c out common r w l; local raw=()
   [ $owns_read = 1 ] && return 0; owns_read=1
   [ -n "${CLAUDE_PROJECT_DIR:-}" ] && raw+=("$CLAUDE_PROJECT_DIR")
   c="${cwd:-${CLAUDE_PROJECT_DIR:-}}"
@@ -311,7 +311,7 @@ own_forms() {
       [ -n "$w" ] || continue
       w="$(printf '%s' "$w" | tr '\\' '/')"
       case "$w" in /*|[A-Za-z]:*) ;; *) w="$r/$w" ;; esac   # .. is taken out by the canon form
-      rel+=("$w")
+      wt_rel+=("$w")
     done <<ROOTS_END
 $(LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
   $2 ~ /^[ \t]*[*]*Worktree roots[*]*[ \t]*$/ { v = $3; gsub(/`/, "", v); n = split(v, a, /[,;]/)
@@ -319,7 +319,7 @@ $(LC_ALL=C awk -F '|' '{ sub(/\r$/, "") }
       if (x != "" && x != "-" && y != "none" && y != "n/a" && x !~ /^<.*>$/) print x } }' "$r/coordinator/PROJECT.md")
 ROOTS_END
   done
-  raw+=("${rel[@]}")
+  raw+=("${wt_rel[@]}")
   [ ${#raw[@]} -gt 0 ] || return 0
   while IFS= read -r l; do
     l="${l#.}"; case "$l" in ''|.) continue ;; esac   # / or nothing is no project folder
@@ -753,24 +753,114 @@ checkout_seg() {
   fi
 }
 git_seg() {
-  local eff="$dir" sub
+  local eff="$dir" sub deff redir="${git_redir:-0}"
   while [ $# -gt 0 ]; do
     if [ "$1" = "-C" ]; then eff=$(compose "$eff" "${2:-}"); [ $# -ge 2 ] && shift; shift; continue; fi
     case "$1" in
-      -c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix) [ $# -ge 2 ] && shift; shift ;;
+      --git-dir|--work-tree) redir=1; [ $# -ge 2 ] && shift; shift ;;
+      --git-dir=*|--work-tree=*) redir=1; shift ;;
+      -c|--namespace|--config-env|--super-prefix) [ $# -ge 2 ] && shift; shift ;;
       -*) shift ;;
       *) break ;;
     esac
   done
   [ $# -gt 0 ] || return
+  # --git-dir / --work-tree (or GIT_DIR= / GIT_WORK_TREE= before git) point git elsewhere: the folder a
+  # discarding command acts on is not known
+  deff="$eff"; [ "$redir" = 1 ] && deff="?"
   sub="$1"; shift
   case "$sub" in
     push) push_seg "$eff" "$@" ;;
     branch) branch_seg "$@" ;;
     update-ref) updref_seg "$@" ;;
-    checkout|switch) checkout_seg "$eff" "$@" ;;
+    checkout) discard_seg "$deff" checkout "$@"; checkout_seg "$eff" "$@" ;;
+    switch) discard_seg "$deff" switch "$@"; checkout_seg "$eff" "$@" ;;
     worktree) worktree_seg "$@" ;;
+    clean) discard_seg "$deff" clean "$@" ;;
+    reset) discard_seg "$deff" reset "$@" ;;
+    restore) discard_seg "$deff" restore "$@" ;;
+    stash) discard_seg "$deff" stash "$@" ;;
   esac
+}
+# --- discarding files in a repository's main checkout (#263): git clean -f, reset --hard, checkout -- <paths>
+# (also <ref> -- <paths>, ., -f), switch -f / --discard-changes, restore of the working tree, stash drop /
+# clear. A linked worktree is free (workers and verifiers wipe their own throwaway copies), and so is a
+# folder under .claude/worktrees/ or under a declared worktree root (a worker's own copy); a folder that
+# cannot be known (a variable, not a repository) is not. COORD_PROTECTED_ROOT plays no part: a subagent
+# under the coordinator's own settings has none.
+discard_seg() {   # discard_seg <dir> <subcommand> <its arguments>...
+  local d="$1" sub="$2" what="" t c k nx=0 dd=0 f=0 n=0 s=0 w=0 ci
+  shift 2
+  ci=$(shopt -p nocasematch); shopt -u nocasematch   # -f is not -F, -s (a source) is not -S (staged)
+  for t in "$@"; do
+    if [ $nx = 1 ]; then nx=0; continue; fi
+    if [ $dd = 1 ]; then [ "$sub" = checkout ] && what=checkout; break; fi   # checkout [<ref>] -- <paths>
+    case "$sub:$t" in
+      *:--) dd=1; [ "$sub" = checkout ] || break ;;
+      clean:--force) f=1 ;;
+      clean:--dry-run) n=1 ;;
+      clean:--exclude|restore:--source|checkout:-[bB]|switch:-[cC]|checkout:--orphan|switch:--orphan|switch:--create|switch:--force-create) nx=1 ;;
+      reset:--hard|checkout:--force|switch:--force|switch:--discard-changes) what="$sub" ;;
+      restore:--staged) s=1 ;;
+      restore:--worktree) w=1 ;;
+      checkout:.|checkout:./|checkout:'.\'|checkout:..|checkout:../|checkout:'..\'|checkout:':/'|checkout:'*') what=checkout ;;
+      stash:-*) ;;
+      stash:drop|stash:clear) what="stash $t"; break ;;
+      stash:*) break ;;
+      *:--*) ;;
+      *:-?*)   # a cluster of short options (-ffdx): its letters; one that takes a value ends it
+        k=1
+        while [ $k -lt ${#t} ]; do
+          c="${t:$k:1}"; k=$((k + 1))
+          case "$sub:$c" in
+            clean:f) f=1 ;;
+            clean:n) n=1 ;;
+            checkout:f|switch:f) what="$sub" ;;
+            restore:S) s=1 ;;
+            restore:W) w=1 ;;
+            clean:e|checkout:[bB]|switch:[cC]|restore:s) [ $k = ${#t} ] && nx=1; break ;;
+          esac
+        done ;;
+    esac
+  done
+  [ $f = 1 ] && [ $n = 0 ] && what=clean
+  [ "$sub" = restore ] && { [ $w = 1 ] || [ $s = 0 ]; } && what=restore
+  eval "$ci"
+  [ -n "$what" ] || return 0
+  free_copy "$d" && return 0
+  block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
+}
+# free_copy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
+# folder (the repository's, not the dir's: a plain or stale folder under .claude/worktrees/ belongs to the
+# project) lies, as written and as on disk, under .claude/worktrees/<name> or a declared worktree root
+# (own_forms). rev-parse must print three absolute paths: an older git echoes --path-format back.
+free_copy() {
+  local d="$1" out l f r ok gd cm top rest; local forms=() wr=()
+  [ "$d" = "?" ] && return 1
+  out=$(git -C "$d" rev-parse --path-format=absolute --git-dir --git-common-dir --show-toplevel 2>/dev/null) || return 1
+  gd="${out%%$nl*}"; rest="${out#*$nl}"; cm="${rest%%$nl*}"; top="${rest#*$nl}"
+  [ "$rest" != "$out" ] && [ "$top" != "$rest" ] || return 1
+  case "$top" in *"$nl"*) return 1 ;; esac
+  for l in "$gd" "$cm" "$top"; do case "$l" in /*|[A-Za-z]:/*) ;; *) return 1 ;; esac; done
+  [ "$gd" != "$cm" ] && return 0
+  own_forms
+  if [ ${#wt_rel[@]} -gt 0 ]; then
+    while IFS= read -r l; do
+      l="${l#.}"; case "$l" in ''|.) continue ;; esac
+      wr+=("$l")
+    done <<FREE_ROOTS_END
+$(canon_all "$sm" "${wt_rel[@]}"; physical "$sm" "${wt_rel[@]}")
+FREE_ROOTS_END
+  fi
+  out=$(canon_all "$sm" "$top"; physical "$sm" "$top")
+  forms=("${out%%$nl*}"); l="${out#*$nl}"; [ "$l" != "$out" ] && [ -n "$l" ] && forms+=("${l#.}")
+  for f in "${forms[@]}"; do
+    case "$f/" in */.claude/worktrees/?*) continue ;; esac
+    ok=0
+    for r in "${wr[@]}"; do case "$f/" in "$r/"?*) ok=1; break ;; esac; done
+    [ $ok = 1 ] || return 1
+  done
+  return 0
 }
 # git worktree remove --force throws away what the worktree holds: the cleanup script checks first
 worktree_seg() {
@@ -939,7 +1029,9 @@ while IFS="$tab" read -r -a T; do
   [ $i -lt $n ] || continue
   w="${A[$i]}"; w="${w#=}"; w="${w##*/}"; w="${w##*\\}"; case "$w" in *.exe) w="${w%????}" ;; esac
   case "$w" in
-    git) git_seg "${A[@]:$((i + 1))}" ;;
+    git) git_redir=0; gk=0   # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see git_seg
+         while [ $gk -lt $i ]; do case "${A[$gk]}" in GIT_DIR=*|GIT_WORK_TREE=*) git_redir=1 ;; esac; gk=$((gk + 1)); done
+         git_seg "${A[@]:$((i + 1))}" ;;
     cd|pushd|chdir|set-location|sl|push-location) cd_seg "${A[@]:$((i + 1))}" ;;
     rm|remove-item|ri|del|erase|rd|rmdir) rm_seg "$w" "${A[@]:$((i + 1))}" ;;
     find) find_seg "${A[@]:$((i + 1))}" ;;

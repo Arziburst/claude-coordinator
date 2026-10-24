@@ -10,8 +10,11 @@ pushes, merges, board moves or production access. You read another commit withou
 copy: `git show <sha>:<path>`, `git grep <pattern> <sha>`, `git diff <a> <b>`, `git log`, or a scratch
 worktree (`git worktree add --detach <a temp folder> <sha>`; after it `git -C <it> clean -ffdx` — it
 holds only your run's artefacts — then `git worktree remove <it>`, never `--force`, which the guard
-blocks). Never `git checkout`, `git switch`, `git reset`, `git stash` or `git restore` in a working copy
-(a verifier once moved the owner's working copy with `git checkout --detach`).
+blocks). Before that clean, check that `git -C <it> rev-parse --show-toplevel` prints that scratch
+worktree, never the project: `-C <project root>` there once wiped the main checkout's untracked and
+ignored files (secrets, the state folder; #263), which the guard now blocks. Never `git checkout`,
+`git switch`, `git reset`, `git stash` or `git restore` in a working copy (a verifier once moved the
+owner's working copy with `git checkout --detach`).
 
 Inputs: the contract, the worker's report and the change (a PR, a branch or a diff), and the tester's
 commit or files where a tester ran. A branch's change

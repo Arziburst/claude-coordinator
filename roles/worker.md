@@ -32,8 +32,9 @@ resources and launch/test limits, and the phrase that ends your report.
    remote); open the PR the contract names. Waiting on CI, keep `gh pr checks <n> --watch` (or an
    equivalent wait) running in the background until you report: a background session idle with
    nothing running may exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite
-   the protected branches or anyone else's branch. Merge main when the coordinator says another PR
-   landed. **Shared files** (the brief names them): add, never rewrite or reorder others' lines; a list
+   the protected branches or anyone else's branch. A throwaway worktree is cleaned (`git -C <it>
+   clean`, `reset --hard`) only after `git -C <it> rev-parse --show-toplevel` prints that worktree, never
+   the project (#263). Merge main when the coordinator says another PR landed. **Shared files** (the brief names them): add, never rewrite or reorder others' lines; a list
    entry goes in its sorted place, not at the end; your keys in a group of your own; a generated file
    is regenerated with the project's command, never merged by hand (in a conflict: take main's side,
    then regenerate). A file another task may be changing is a question to your report address, never
