@@ -374,6 +374,21 @@ session_check() {
   exit 2
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+# gh pr create into another repository (--repo, -R, GH_REPO= before gh): the worker safety file allows
+# `gh pr create --draft *` past Claude Code's classifier (#261), and the * would take in any repository
+# the token reaches; a pull request goes into the repository the command works in, only (-R is compared
+# with test, which nocasematch leaves alone: -r is gh's --reviewer)
+gh_seg() {
+  local t
+  [ "${1:-}" = pr ] && [ "${2:-}" = create ] || return
+  shift 2
+  [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)"
+  for t in "$@"; do
+    if [ "$t" = --repo ] || [ "${t%%=*}" = --repo ] || [ "${t:0:2}" = -R ]; then
+      block "a pull request into another repository (gh pr create ${t%%=*}): only into the current one (#261)"
+    fi
+  done
+}
 claude_seg() {
   local t verb="" nx=0
   for t in "$@"; do
@@ -1037,6 +1052,9 @@ while IFS="$tab" read -r -a T; do
     find) find_seg "${A[@]:$((i + 1))}" ;;
     get-childitem|gci|ls|dir|get-item|gi) list_seg "${A[@]:$((i + 1))}" ;;
     claude) claude_seg "${A[@]:$((i + 1))}" ;;
+    gh) gh_env=0; gk=0   # GH_REPO= before gh (also after env): see gh_seg
+        while [ $gk -lt $i ]; do case "${A[$gk]}" in GH_REPO=*) gh_env=1 ;; esac; gk=$((gk + 1)); done
+        gh_seg "${A[@]:$((i + 1))}" ;;
   esac
 done <<SAFETY_GUARD_SEGMENTS_END
 $segments

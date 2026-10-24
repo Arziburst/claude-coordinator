@@ -217,6 +217,20 @@ function SessionCheck([string]$what, [string]$a, [string]$how) {
   }
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+# gh pr create into another repository (--repo, -R, GH_REPO= before gh): the worker safety file allows
+# `gh pr create --draft *` past Claude Code's classifier (#261), and the * would take in any repository
+# the token reaches; a pull request goes into the repository the command works in, only (-R with
+# letter case: -r is gh's --reviewer)
+function GhSeg([string[]]$a, [bool]$repoEnv) {
+  if ($a.Count -lt 2 -or $a[0] -ne 'pr' -or $a[1] -ne 'create') { return }
+  if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
+  foreach ($t in @($a | Select-Object -Skip 2)) {
+    $k = ($t -split '=', 2)[0]
+    if ($k -eq '--repo' -or $t.StartsWith('-R', [StringComparison]::Ordinal)) {
+      Block "a pull request into another repository (gh pr create $k): only into the current one (#261)"
+    }
+  }
+}
 function ClaudeSeg([string[]]$a) {
   $verb = ''; $nx = $false
   foreach ($t in $a) {
@@ -832,6 +846,11 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^find$' { FindSeg $rest }
     '^(get-childitem|gci|ls|dir|get-item|gi)$' { ListSeg $rest }
     '^claude$' { ClaudeSeg $rest }
+    '^gh$' {
+      # GH_REPO= before gh (also after env): see GhSeg
+      $ghEnv = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^GH_REPO=') { $ghEnv = $true } }
+      GhSeg $rest $ghEnv
+    }
   }
 }
 
