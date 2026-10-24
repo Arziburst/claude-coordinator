@@ -1,5 +1,6 @@
 # The scripted steps of the coordinator's self-test (procedures/SELFTEST.md; macOS / Linux: selftest.sh -
-# the same steps and output). The steps with real sessions are run by the coordinator, not here.
+# the same steps and output). The steps with real sessions are run by the coordinator, not here - but
+# for the guard's probe sessions, which `probes` starts and checks itself.
 #   powershell -File scripts/selftest.ps1 scripts                 1: the core's checks and scripts on fixtures
 #   powershell -File scripts/selftest.ps1 env [-Repo <owner/name>]   2: claude, git and gh versions; read-only GitHub
 # In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
@@ -14,9 +15,17 @@
 #   powershell -File scripts/selftest.ps1 hooks -Settings <settings.json>   the guard hook's command: forward slashes,
 #                                                       no $env:, no PowerShell shell that turns its exit 2 into 1;
 #                                                       env COORD_PROTECTED_ROOT: a folder, edit tools matched
-#   powershell -File scripts/selftest.ps1 hookcheck -Session <id> [-Expect edit]   a session told to push to main
-#                                                       (with edit: to Write into the protected root): its transcript
-#                                                       shows the block, not a non-blocking hook error
+#   powershell -File scripts/selftest.ps1 hookcheck -Session <id> [-Expect edit|probe]   a session told to push to
+#                                                       main (edit: to Write into the protected root; probe: to echo
+#                                                       the probe token): its transcript shows the block, not
+#                                                       a non-blocking hook error
+#   powershell -File scripts/selftest.ps1 probes -Project <root> [-WorkerSettings <file>] [-Own] [-EditRoot <root>]
+#                          [-Model <m>] [-Timeout <s>]   2a: the probe sessions, started from <root> and
+#                                                       checked as hookcheck does: push (the worker file),
+#                                                       push (own settings), edit (a Write into <root>); a
+#                                                       token in <root>/.claude/coordinator-probe.txt for
+#                                                       the run only; each stopped (step 6 removes it).
+#                                                       Model haiku, timeout 300 s by default
 # For the core itself (the maintainer, CI) - a sandbox, kept between runs or removed:
 #   powershell -File scripts/selftest.ps1 sandbox [-In <folder>]   3: a repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -26,11 +35,13 @@
 #                                                    6: no worktree, branch, session or selftest/* branch
 #                                                       left; then the sandbox folder is removed - or, with
 #                                                       -Keep, kept: only main, at the sandbox's first commit
-# Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`.
+# Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`;
+# probes also `BLOCKED <session name> (launch failed: <its first output line>)`, then `, <b> blocked`.
 # Step 1 runs the .ps1 scripts under every PowerShell on the machine (Windows PowerShell 5.1 and pwsh).
-# Exit 1 on any FAIL, 2 on a usage error.
+# Exit 1 on any FAIL or BLOCKED, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Step, [string]$Repo, [string]$Sandbox, [string]$StateRepo, [string]$In,
       [string]$Project, [string]$State, [string]$Core, [string]$Settings, [string]$Session, [string]$Expect, [switch]$Keep,
+      [string]$WorkerSettings, [switch]$Own, [string]$EditRoot, [string]$Model, [string]$Timeout,
       [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -44,17 +55,20 @@ $ErrorActionPreference = 'Continue'
 # What is piped to the scripts goes as UTF-8 without a BOM, as Claude Code sends it (a BOM breaks their JSON)
 $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $coreDir = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 31 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
+function Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 41 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2 }
 if (-not $Step) { Usage }
 # a step takes only its own parameters: anything else (another step's, an unknown one, a stray word) is a
 # usage error, as in selftest.sh
 $given = @($PSBoundParameters.Keys | Where-Object { $_ -ne 'Step' -and $_ -ne 'Rest' })
 function Only([string[]]$ok) { if ($Rest) { Usage }; foreach ($k in $given) { if ($ok -notcontains $k) { Usage } } }
-$script:p = 0; $script:f = 0; $script:s = 0
+$script:p = 0; $script:f = 0; $script:s = 0; $script:nb = 0
 function Pass([string]$m) { "PASS ${Step}: $m"; $script:p++ }
 function Fail([string]$m) { "FAIL ${Step}: $m"; $script:f++ }
 function Skip([string]$m) { "SKIP ${Step}: $m"; $script:s++ }
-function Finish { "selftest ${Step}: $($script:p) pass, $($script:f) fail, $($script:s) skipped"; if ($script:f -gt 0) { exit 1 }; exit 0 }
+function Finish {
+  if ($script:nb -gt 0) { "selftest ${Step}: $($script:p) pass, $($script:f) fail, $($script:s) skipped, $($script:nb) blocked"; exit 1 }
+  "selftest ${Step}: $($script:p) pass, $($script:f) fail, $($script:s) skipped"; if ($script:f -gt 0) { exit 1 }; exit 0
+}
 function G { & git -c user.email=selftest@localhost -c user.name=selftest @args }
 $marker = '.coordinator-selftest'
 # the sandbox's first commit, which sandbox records in the marker as `initial <commit>` (outside the
@@ -202,6 +216,69 @@ function Sessions([string[]]$roots) {
   foreach ($l in $x) { if ($l.StartsWith('F ', [StringComparison]::Ordinal)) { 'SKIP foreign self-test session ' + $l.Substring(2) } }
   $n = @($x | Where-Object { $_.StartsWith('O ', [StringComparison]::Ordinal) } | ForEach-Object { $_.Substring(2) }) -join ', '
   if (-not $n) { Pass 'no self-test session left' } else { Fail "sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): $n" }
+}
+# FindTx <id>: @(0, <the transcript of the session whose id starts with <id>>); else @(1, why) (none yet)
+# or @(2, why) (a pattern or path character in the id, or several transcripts: names none)
+function FindTx([string]$id) {
+  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
+  if ($id -match '[\[\]*?/\\]') { return @(2, "the session id $id holds a pattern or path character") }
+  $base = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'projects'
+  $all = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$id*.jsonl" -ErrorAction SilentlyContinue })
+  if (-not $all.Count) { return @(1, "no transcript for session $id") }
+  if ($all.Count -gt 1) {
+    $ids = [string[]]@($all | ForEach-Object { $_.Name -replace '\.jsonl$', '' }); [Array]::Sort($ids, [StringComparer]::Ordinal)
+    return @(2, "ambiguous session ${id}: $($ids -join ' ')")
+  }
+  @(0, $all[0].FullName)
+}
+# a transcript's lines, read while Claude Code may still be writing it; none when it cannot be read
+function TxLines([string]$path) {
+  try {
+    $fs = New-Object IO.FileStream($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+    $sr = New-Object IO.StreamReader($fs, (New-Object System.Text.UTF8Encoding $false))
+    try { $sr.ReadToEnd() -split "`r?`n" } finally { $sr.Dispose() }
+  } catch { }
+}
+# the folder whose projects/ holds the transcripts, as FindTx reads it (with forward slashes)
+function CfgDir { $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }).Replace('\', '/') }
+# FSig <file>: its size and git hash (the bytes as they are, no filters)
+function FSig([string]$p) { "$((Get-Item -LiteralPath $p -Force).Length) $(& git hash-object --no-filters -- $p 2>$null)" }
+# the guard's block of the probe token (hooks/safety-guard, #259)
+$probeBlock = "Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
+# Decided <transcript> <edit|probe>: whether a probe whose turn has not ended yet already shows its
+# verdict - the block, a non-blocking error, or (edit) a write that went through
+function Decided([string]$tf, [string]$ex) {
+  $lines = @(TxLines $tf)
+  if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) { return $true }
+  if ($ex -ceq 'edit') {
+    return [bool]@($lines | Where-Object { $_.Contains("Blocked by safety-guard: the owner's working copy is never edited by a worker") -or $_.Contains('File created successfully at') -or $_.Contains('has been updated successfully') }).Count
+  }
+  [bool]@($lines | Where-Object { $_.Contains('"tool_result"') -and $_.Contains($probeBlock) }).Count
+}
+# Verdict <transcript> <push|edit|probe> [<label>]: the PASS or FAIL line of a probe session, from its
+# transcript (hookcheck and probes; <label>: before the message)
+function Verdict([string]$tf, [string]$ex, [string]$label) {
+  $pre = if ($label) { "${label}: " } else { '' }
+  $lines = @(TxLines $tf)
+  if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) {
+    Fail "${pre}the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
+  } elseif ($ex -ceq 'edit') {
+    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
+    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
+    if (@($lines | Where-Object { $_.Contains("Blocked by safety-guard: the owner's working copy is never edited by a worker") }).Count) {
+      Pass "${pre}the edit tool's write into the working copy was blocked through Claude Code"
+    } elseif (@($lines | Where-Object { $_.Contains('File created successfully at') -or $_.Contains('has been updated successfully') }).Count) {
+      Fail "${pre}the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
+    } else { Fail "${pre}no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)" }
+  } elseif ($ex -ceq 'probe') {
+    # the token probe: only the guard's block of the probe token, in a tool's result (not a message
+    # quoting it), counts: the hook ran from that session's settings, through its shell, and exit 2 held
+    if (@($lines | Where-Object { $_.Contains('"tool_result"') -and $_.Contains($probeBlock) }).Count) {
+      Pass "${pre}the command holding the probe token was blocked through Claude Code"
+    } else { Fail "${pre}no block: the hook did not run from these settings, or it runs a guard older than this core (no probe-token rule)" }
+  } elseif (@($lines | Where-Object { $_.Contains('Blocked by safety-guard') -and -not $_.Contains("the owner's working copy is never edited") -and -not $_.Contains($probeBlock) }).Count) {
+    Pass "${pre}the push to a protected branch was blocked through Claude Code"
+  } else { Fail "${pre}no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)" }
 }
 function NewTemp([string]$parent) { if (-not $parent) { $parent = [IO.Path]::GetTempPath() }; $d = Join-Path $parent ('coordinator-selftest.' + [IO.Path]::GetRandomFileName().Replace('.', '')); New-Item -ItemType Directory -Path $d | Out-Null; $d }
 
@@ -518,31 +595,148 @@ switch ($Step) {
 'hookcheck' {
   Only @('Session', 'Expect'); if (-not $Session) { Usage }
   if (-not $PSBoundParameters.ContainsKey('Expect')) { $Expect = 'push' }
-  if ($Expect -cne 'push' -and $Expect -cne 'edit') { Usage }
-  $base = Join-Path $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }) 'projects'
-  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
-  if ($Session -match '[\[\]*?/\\]') { Fail "the session id $Session holds a pattern or path character"; Finish }
-  $all = @(Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter "$Session*.jsonl" -ErrorAction SilentlyContinue })
-  if (-not $all.Count) { Fail "no transcript for session $Session"; Finish }
-  if ($all.Count -gt 1) {
-    $ids = [string[]]@($all | ForEach-Object { $_.Name -replace '\.jsonl$', '' }); [Array]::Sort($ids, [StringComparer]::Ordinal)
-    Fail "ambiguous session ${Session}: $($ids -join ' ')"; Finish
-  }
-  $tf = $all[0]
-  $lines = [IO.File]::ReadAllLines($tf.FullName)
-  if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) {
-    Fail 'the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1'
-  } elseif ($Expect -ceq 'edit') {
-    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
-    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
-    if (@($lines | Where-Object { $_.Contains("Blocked by safety-guard: the owner's working copy is never edited by a worker") }).Count) {
-      Pass "the edit tool's write into the working copy was blocked through Claude Code"
-    } elseif (@($lines | Where-Object { $_.Contains('File created successfully at') -or $_.Contains('has been updated successfully') }).Count) {
-      Fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
-    } else { Fail 'no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)' }
-  } elseif (@($lines | Where-Object { $_.Contains('Blocked by safety-guard') -and -not $_.Contains("the owner's working copy is never edited") }).Count) { Pass 'the push to a protected branch was blocked through Claude Code' }
-  else { Fail 'no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)' }
+  if ($Expect -cne 'push' -and $Expect -cne 'edit' -and $Expect -cne 'probe') { Usage }
+  $x = FindTx $Session
+  if ($x[0] -ne 0) { Fail $x[1]; Finish }
+  Verdict $x[1] $Expect ''
   Finish
+}
+'probes' {
+  Only @('Project', 'WorkerSettings', 'Own', 'EditRoot', 'Model', 'Timeout')
+  # at least one probe; the edit probe runs with the worker safety file
+  if (-not $Project -or -not ($WorkerSettings -or $Own -or $EditRoot)) { Usage }
+  if ($EditRoot -and -not $WorkerSettings) { Usage }
+  if ($PSBoundParameters.ContainsKey('Model') -and -not $Model) { Usage }
+  if (-not $Model) { $Model = 'haiku' }
+  if (-not $PSBoundParameters.ContainsKey('Timeout')) { $Timeout = '300' }
+  if ($Timeout -cnotmatch '^[0-9]+\z') { Usage }
+  $tmo = 0; if (-not [int]::TryParse($Timeout, [ref]$tmo) -or $tmo -le 0) { Usage }
+  $poll = 5; if ("$env:COORD_PROBE_POLL" -cmatch '^[0-9]+\z') { $poll = [int]$env:COORD_PROBE_POLL }
+  if (-not (Test-Path -LiteralPath $Project -PathType Container)) { Fail "no folder $Project"; Finish }
+  $pd = (AbsPath $Project).Replace('\', '/')
+  $ws = ''
+  if ($WorkerSettings) {
+    if (-not (Test-Path -LiteralPath $WorkerSettings -PathType Leaf)) { Fail "no settings file $WorkerSettings"; Finish }
+    $ws = (AbsPath $WorkerSettings).Replace('\', '/')
+  }
+  # the probes, in launch order: the session name, a label, what hookcheck expects, --settings, the prompt
+  $probes = New-Object System.Collections.ArrayList
+  $tok = 'coord-probe-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+  $msg = "Run exactly this one shell command: echo $tok`nThen report in one line what happened to it, and stop. Do not run anything else."
+  function AddProbe([string]$n, [string]$l, [string]$e, [string]$st, [string]$pr) { [void]$probes.Add(@{ N = $n; L = $l; E = $e; S = $st; P = $pr; I = ''; D = 0; T = '' }) }
+  if ($ws) { AddProbe 'probe: push' 'push' 'probe' $ws $msg }
+  if ($Own) { AddProbe 'probe: push (own settings)' 'push (own settings)' 'probe' '' $msg }
+  $ef = ''; $efOld = $false
+  if ($EditRoot) {
+    $er = $EditRoot; while ($er.Length -gt 1 -and ($er.EndsWith('/') -or $er.EndsWith('\'))) { $er = $er.Substring(0, $er.Length - 1) }
+    if (Test-Path -LiteralPath $er -PathType Container) {
+      $er = (AbsPath $er).Replace('\', '/')
+      # the probe's file; one there before the run is recorded (its size and git hash) and must be
+      # left as it was
+      $ef = "$er/probe-root.txt"
+      if (Test-Path -LiteralPath $ef) { $efOld = FSig $ef }
+      AddProbe 'probe: edit' 'edit' 'edit' $ws "Use the Write tool to create $ef containing x. Do not retry it another way. Report in one line what happened, and stop."
+    } else { Fail "edit: no folder $er" }
+  }
+  if (-not $probes.Count) { Finish }
+  # one probes run per project at a time: a token file holding a valid token, younger than its run's
+  # timeout (the file's second line; 300 when absent or not a number) + 60 s, is another run's (nothing
+  # launched, the file untouched); an older one, or one dated in the future, is stale (a run killed
+  # before its end) and overwritten
+  $tfile = "$pd/.claude/coordinator-probe.txt"; $stopped = $false
+  if (Test-Path -LiteralPath $tfile -PathType Leaf) {
+    $two = @(); try { $two = @(Get-Content -LiteralPath $tfile -TotalCount 2 -ErrorAction Stop) } catch { }
+    $old = if ($two.Count -ge 1) { [string]$two[0] } else { '' }
+    $otmo = 300; if ($two.Count -ge 2 -and ([string]$two[1]) -cmatch '^[0-9]+\z') { $v = 0; if ([int]::TryParse([string]$two[1], [ref]$v)) { $otmo = $v } }
+    $age = 0; try { $age = [long][Math]::Floor(([DateTime]::UtcNow - (Get-Item -LiteralPath $tfile).LastWriteTimeUtc).TotalSeconds) } catch { }
+    if ($old.Length -ge 16 -and $old -cmatch '^[A-Za-z0-9-]+$' -and $age -ge 0 -and $age -lt ($otmo + 60)) {
+      "BLOCKED probes: another probes run on this project (started $age s ago; if none is running, remove $tfile)"; $script:nb++; Finish
+    }
+    if ($age -lt 0) { "stale token file $tfile (dated in the future): overwritten" }
+    else { "stale token file $tfile ($age s old: a run killed before its end): overwritten" }
+  }
+  $mkc = -not (Test-Path -LiteralPath "$pd/.claude" -PathType Container)
+  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C) while it still
+  # holds this run's token, after the sessions are stopped; a .claude folder made for it goes too when
+  # empty
+  $claude = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+  try {
+    try {
+      $null = New-Item -ItemType Directory -Force -Path "$pd/.claude" -ErrorAction Stop
+      # the token, then this run's timeout (for another run's check above; the guard reads the first line only)
+      [IO.File]::WriteAllText($tfile, "$tok`n$tmo`n", (New-Object System.Text.UTF8Encoding $false))
+    } catch { Fail "cannot write $tfile"; Finish }
+    # all launched first, from the project root (trusted), then all waited for
+    foreach ($q in $probes) {
+      $out = @(); $rc = 1
+      if (-not $claude) { $out = @('claude not found on PATH') }
+      else {
+        # Windows PowerShell 5.1 (and 7.0-7.2) does not escape quotes inside native arguments (start-worker)
+        $an = $q.N; $ap = $q.P
+        if ($PSVersionTable.PSVersion -lt [version]'7.3') {
+          $an = ($an -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
+          $ap = ($ap -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
+        }
+        $sa = @(if ($q.S) { '--settings', $q.S })
+        Push-Location -LiteralPath $pd
+        try { $out = @(& $claude.Source --bg --name $an --model $Model @sa $ap 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE }
+        catch { $out = @("$_") } finally { Pop-Location }
+      }
+      # the short id, from the line `claude stop <id>   stop this session`
+      foreach ($l in $out) { $m = [regex]::Match($l, 'claude stop ([A-Za-z0-9_-]+)'); if ($m.Success) { $q.I = $m.Groups[1].Value; break } }
+      if ($rc -ne 0 -or -not $q.I) {
+        $first = @($out | Where-Object { $_ -match '\S' } | Select-Object -First 1)
+        $why = if ($first.Count) { $first[0].TrimEnd("`r") } else { "no output, exit $rc" }
+        "BLOCKED $($q.N) (launch failed: $why)"; $script:nb++; $q.D = 3
+      }
+    }
+    # each transcript polled until its turn ends (turn_duration) or the time is up
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+      $left = 0
+      foreach ($q in $probes) {
+        if ($q.D -ne 0) { continue }
+        $x = FindTx $q.I
+        if ($x[0] -eq 0 -and @(TxLines $x[1] | Where-Object { $_ -match '"subtype": *"turn_duration"' }).Count) { $q.D = 1; $q.T = $x[1] }
+        elseif ($x[0] -eq 2) { $q.D = 2; $q.T = $x[1] }
+        else { $left++ }
+      }
+      if ($left -eq 0 -or $sw.Elapsed.TotalSeconds -ge $tmo) { break }
+      Start-Sleep -Seconds $poll
+    }
+    foreach ($q in $probes) {
+      if ($q.D -eq 1) { Verdict $q.T $q.E $q.L }
+      elseif ($q.D -eq 2) { Fail "$($q.L): $($q.T)" }
+      elseif ($q.D -eq 0) {
+        # the time is up: judged as the transcript stands when it already shows the verdict
+        $x = FindTx $q.I
+        if ($x[0] -eq 0 -and (Decided $x[1] $q.E)) { Verdict $x[1] $q.E $q.L }
+        elseif ($x[0] -eq 0) { Fail "$($q.L): no answer within $tmo s" }
+        elseif ($x[0] -eq 2) { Fail "$($q.L): $($x[1])" }
+        # no transcript at all: the session writes it somewhere else
+        else { Fail "$($q.L): no transcript for session $($q.I) under $(CfgDir)/projects: the daemon may use another CLAUDE_CONFIG_DIR" }
+      }
+    }
+    # stopped; their cost is read and they are removed in step 6
+    $ids = @()
+    foreach ($q in $probes) { if ($q.I) { $null = & $claude.Source stop $q.I 2>&1; $ids += "$($q.N) ($($q.I))" } }
+    $stopped = $true
+    if ($ids.Count) { "stopped: $($ids -join ', ') - step 6 reads their cost and removes them" }
+    # a probe-root.txt the edit probe created is removed - exactly that file; one there before the run
+    # is never removed, and must be as it was
+    if ($ef -and -not $efOld -and (Test-Path -LiteralPath $ef -PathType Leaf)) {
+      try { Remove-Item -LiteralPath $ef -Force -ErrorAction Stop; "removed $ef, which the edit probe created" } catch { Fail "edit: could not remove $ef, which the edit probe created" }
+    } elseif ($efOld) {
+      if ((Test-Path -LiteralPath $ef) -and (FSig $ef) -ceq $efOld) { "left as it was: $ef was there before the edit probe" }
+      else { Fail "edit: changed by the edit probe: $ef" }
+    }
+    Finish
+  } finally {
+    if (-not $stopped -and $claude) { foreach ($q in $probes) { if ($q.I) { $null = & $claude.Source stop $q.I 2>&1 } } }
+    $cur = ''; try { $cur = [string](Get-Content -LiteralPath $tfile -TotalCount 1 -ErrorAction Stop) } catch { }
+    if ($cur -ceq $tok) { Remove-Item -LiteralPath $tfile -Force -ErrorAction SilentlyContinue }
+    if ($mkc -and -not @(Get-ChildItem -LiteralPath "$pd/.claude" -Force -ErrorAction SilentlyContinue).Count) { Remove-Item -LiteralPath "$pd/.claude" -Force -ErrorAction SilentlyContinue }
+  }
 }
 { $_ -eq 'prepare' -or $_ -eq 'verify' } {
   if ($Step -eq 'prepare') { Only @('Project', 'State', 'Core') } else { Only @('Project', 'State', 'Core', 'StateRepo') }

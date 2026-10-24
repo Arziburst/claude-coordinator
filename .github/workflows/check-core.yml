@@ -103,6 +103,15 @@ jobs:
         run: |
           bash tests/selftest/hooks.sh ps powershell
           bash tests/selftest/hooks.sh ps pwsh
+      - name: selftest - the guard probes against a stub claude (bash)
+        if: runner.os != 'Windows'
+        run: bash tests/selftest/probes.sh sh
+      - name: selftest - the guard probes against a stub claude (PowerShell 7, Linux)
+        if: runner.os == 'Linux'
+        run: bash tests/selftest/probes.sh ps pwsh
+      - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        run: bash tests/selftest/probes.sh ps powershell
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
@@ -416,6 +425,7 @@ jobs:
           for f in tests/selftest/hooks/*.json tests/selftest/hooks/os/*.json; do diff <(bash scripts/selftest.sh hooks --settings $f) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings $f); done
           for id in blocked0 nonblock noblock0 missing0 editblk0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
           for id in editblk0 editok00 editnone blocked0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id --expect edit) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id -Expect edit); done
+          for id in probeblk probeqt0 blocked0 nonblock; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id --expect probe) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id -Expect probe); done
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           diff <(bash scripts/check-scripts.sh . tests) <(pwsh -NoProfile -File scripts/check-scripts.ps1 . tests)
           f="$RUNNER_TEMP/example.md"

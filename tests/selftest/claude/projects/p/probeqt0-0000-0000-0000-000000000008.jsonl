@@ -1,0 +1,4 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo coord-probe-1791042522-4f1c2a9b7e3d"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"coord-probe-1791042522-4f1c2a9b7e3d"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds."}],"stop_reason":"end_turn"}}
+{"type":"system","subtype":"turn_duration","durationMs":3120}

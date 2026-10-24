@@ -247,6 +247,52 @@ case "$(uname -s)" in
     fi ;;
 esac
 
+# The self-test's probe token (#259): a shell command holding the token of the project's
+# .claude/coordinator-probe.txt (CLAUDE_PROJECT_DIR; its first line, 16+ letters, digits and -) is blocked,
+# Bash and PowerShell alike; a short or garbled token, a token on a later line, a missing file, an edit
+# tool's call, and a guard run without CLAUDE_PROJECT_DIR from another folder block nothing.
+mkdir -p "$tmp/probe/.claude" "$tmp/probe-other"
+pdm="$(winpath m "$tmp/probe")"
+ABS=()   # the hook command with its script as an absolute path, run from another folder
+for a in "$@"; do
+  if [ -f "$a" ]; then ABS+=("$(winpath m "$(cd "$(dirname "$a")" && pwd)")/${a##*/}"); else ABS+=("$a"); fi
+done
+ptok() {   # ptok <expect> <what> <the file's bytes, printf format; - for no file> <tool> <command> [nopd]
+  local expect="$1" what="$2" rc got err js; n=$((n + 1))
+  rm -f "$tmp/probe/.claude/coordinator-probe.txt"
+  [ "$3" = - ] || printf "$3" > "$tmp/probe/.claude/coordinator-probe.txt"
+  case "$4" in
+    Write) js="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"notes.txt\",\"content\":\"$5\"},\"cwd\":\"$pdm\"}" ;;
+    *) js="{\"tool_name\":\"$4\",\"tool_input\":{\"command\":\"$5\"},\"cwd\":\"$pdm\"}" ;;
+  esac
+  if [ -z "${6:-}" ]; then err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$pdm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  else err="$(cd "$tmp/probe-other" && printf '%s' "$js" | env -u CLAUDE_PROJECT_DIR "${ABS[@]}" 2>&1 >/dev/null)"; rc=$?; fi
+  got=allow; [ "$rc" = 2 ] && got=block
+  [ "$got" = "$expect" ] || { echo "FAIL (probe token) expected $expect, got $got (exit $rc): $what"; fail=1; return; }
+  [ "$got" = allow ] || case "$err" in
+    *"Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds."*) ;;
+    *) echo "FAIL (probe token) the message is not the probe token's: $what: $err"; fail=1 ;;
+  esac
+}
+tk=coord-probe-1791042522-4f1c2a9b7e3d
+ptok block "the token in a Bash command" "$tk\n" Bash "echo $tk"
+ptok block "the token in a PowerShell command" "$tk\n" PowerShell "echo $tk"
+ptok block "the token in a file with CRLF" "$tk\r\n" Bash "echo $tk"
+ptok block "the token inside a longer command" "$tk\n" Bash "cd x && echo before-$tk-after"
+ptok block "a token of 16 characters" "abcdefghijklmnop\n" Bash "echo abcdefghijklmnop"
+ptok block "a UTF-8 BOM before the token" "\357\273\277$tk\r\n" Bash "echo $tk"
+ptok block "the token, then a second line (the run's timeout)" "$tk\n300\n" Bash "echo $tk"
+ptok allow "a token-like second line" "$tk\ncoord-probe-second-line-0000\n" Bash "echo coord-probe-second-line-0000"
+ptok allow "a command without the token" "$tk\n" Bash "echo coord-probe-0"
+ptok allow "a token of 15 characters" "abcdefghijklmno\n" Bash "echo abcdefghijklmno"
+ptok allow "a token with spaces" "coord probe 1791042522 4f1c\n" Bash "echo coord probe 1791042522 4f1c"
+ptok allow "a token with an underscore" "coord_probe_1791042522_4f1c\n" Bash "echo coord_probe_1791042522_4f1c"
+ptok allow "the token on the second line" "\n$tk\n" Bash "echo $tk"
+ptok allow "no token file" - Bash "echo $tk"
+ptok allow "an edit tool's call holding the token" "$tk\n" Write "$tk"
+ptok allow "no CLAUDE_PROJECT_DIR, run from another folder" "$tk\n" Bash "echo $tk" nopd
+rm -f "$tmp/probe/.claude/coordinator-probe.txt"
+
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
 for a in "$@"; do guard="$a"; done
 case "$guard" in *.sh) flag=--self-test; brk='fi' ;; *.ps1) flag=-SelfTest; brk='exit 2' ;; *) flag="" ;; esac
