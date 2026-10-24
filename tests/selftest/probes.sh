@@ -38,10 +38,10 @@ case "$name" in
   "probe: edit") scn="${STUB_EDIT:-editblock}" ;;
   *) scn=none ;;
 esac
-tok=none; [ -f .claude/coordinator-probe.txt ] && IFS= read -r tok < .claude/coordinator-probe.txt
+tok=none tok2=none; [ -f .claude/coordinator-probe.txt ] && { IFS= read -r tok; IFS= read -r tok2; } < .claude/coordinator-probe.txt
 inp=no; case "$prompt" in *"echo $tok"*) inp=yes ;; esac
 cwd="$(pwd -P)"; command -v cygpath >/dev/null 2>&1 && cwd="$(cygpath -m "$cwd")"
-printf 'launch|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$model" "$settings" "$extra" "$cwd" "$tok" "$inp" >> "$D/log"
+printf 'launch|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$model" "$settings" "$extra" "$cwd" "$tok" "$inp" "$tok2" >> "$D/log"
 printf '%s\n' "$prompt" >> "$D/prompts"
 case "$scn" in
   noid) echo "Started."; exit 0 ;;
@@ -98,6 +98,8 @@ write() {
 }
 if [ "$scn" = slowblock ]; then ( sleep 2; write >> "$tf" ) >/dev/null 2>&1 < /dev/null &
 elif [ "$scn" != notx ]; then write > "$tf"; fi
+# amb: a second transcript whose name starts with the same id
+[ "$scn" != amb ] || cp "$tf" "$dir/$id-copy.jsonl"
 echo "Started background session $id"
 echo "  claude stop $id      stop this session"
 exit 0
@@ -174,7 +176,7 @@ mkdir -p "$tmp/proj/.claude" && echo keep > "$tmp/proj/.claude/keep.txt"
 # file untouched; an old one is stale and overwritten; a token another run wrote meanwhile is left
 printf 'coord-probe-9-otherrun00000000\n' > "$tokf"
 keeptok=1 pr "another run going" 1 --project "$proj" --worker-settings "$ws" --own
-hasre "BLOCKED probes: another probes run on this project \(started [0-9]+ s ago\)"
+hasre "BLOCKED probes: another probes run on this project \(started [0-9]+ s ago; if none is running, remove .*/proj/\.claude/coordinator-probe\.txt\)"
 has "selftest probes: 0 pass, 0 fail, 0 skipped, 1 blocked"
 n=$((n + 1)); [ ! -s "$STUB_DIR/log" ] || bad "a probe was launched"
 n=$((n + 1)); [ "$(cat "$tokf")" = coord-probe-9-otherrun00000000 ] || bad "the other run's token file was changed"
@@ -183,6 +185,26 @@ scn block block editblock
 pr "a stale token file" 0 --project "$proj" --worker-settings "$ws"
 hasre "stale token file .*/proj/\.claude/coordinator-probe\.txt \([0-9]+ s old: a run killed before its end\): overwritten"
 has "PASS probes: push: the command holding the probe token was blocked through Claude Code"
+# the file holds this run's timeout on its second line (the guard reads only the first)
+launched "probe: push" 8 300
+# a token file dated in the future is stale
+printf 'coord-probe-9-otherrun00000000\n300\n' > "$tokf"; touch -t 203001010000 "$tokf"
+pr "a token file dated in the future" 0 --project "$proj" --worker-settings "$ws" --timeout 9
+hasre "stale token file .*/proj/\.claude/coordinator-probe\.txt \(dated in the future\): overwritten"
+launched "probe: push" 8 9
+# the other run's timeout (its second line) decides: 2 minutes old is stale for a run of 1 s, going
+# for a run of 600 s, whatever this run's timeout
+old2="$(($(date +%s) - 120))"; ts="$(date -d "@$old2" +%Y%m%d%H%M.%S 2>/dev/null || date -r "$old2" +%Y%m%d%H%M.%S)"
+printf 'coord-probe-9-otherrun00000000\n1\n' > "$tokf"; touch -t "$ts" "$tokf"
+pr "an old token of a short run" 0 --project "$proj" --worker-settings "$ws" --timeout 600
+hasre "stale token file .*/proj/\.claude/coordinator-probe\.txt \(1[0-9][0-9] s old: a run killed before its end\): overwritten"
+printf 'coord-probe-9-otherrun00000000\n600\n' > "$tokf"; touch -t "$ts" "$tokf"
+keeptok=1 pr "an old token of a long run" 1 --project "$proj" --worker-settings "$ws" --timeout 1
+hasre "BLOCKED probes: another probes run on this project \(started 1[0-9][0-9] s ago; if none is running, remove .*\)"
+printf 'coord-probe-9-otherrun00000000\nsoon\n' > "$tokf"; touch -t "$ts" "$tokf"
+keeptok=1 pr "an old token, its timeout not a number (300)" 1 --project "$proj" --worker-settings "$ws" --timeout 1
+hasre "BLOCKED probes: another probes run on this project \(started 1[0-9][0-9] s ago; if none is running, remove .*\)"
+rm -f "$tokf"
 scn swap block editblock
 keeptok=1 pr "the file taken over meanwhile" 0 --project "$proj" --worker-settings "$ws"
 n=$((n + 1)); [ "$(cat "$tokf" 2>/dev/null)" = coord-probe-1-anotherrun0000 ] || bad "another run's token file was removed"
@@ -193,6 +215,11 @@ n=$((n + 1)); [ -f "$tmp/proj/.claude/keep.txt" ] || bad "a .claude folder that 
 scn notx block editblock
 pr "no transcript" 1 --project "$proj" --worker-settings "$ws" --timeout 2
 has "FAIL probes: push: no transcript for session $(head -n 1 "$STUB_DIR/ids") under $T/cfg/projects: the daemon may use another CLAUDE_CONFIG_DIR"
+# two transcripts for one id: the ambiguous message, not "no transcript"
+scn amb block editblock
+pr "an ambiguous id" 1 --project "$proj" --worker-settings "$ws" --timeout 2
+i="$(head -n 1 "$STUB_DIR/ids")"
+has "FAIL probes: push: ambiguous session $i: $i-0000-4000-8000-000000000001 $i-copy"
 
 # a fresh token per run
 scn block block editblock

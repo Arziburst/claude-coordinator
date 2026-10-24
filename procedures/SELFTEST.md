@@ -89,9 +89,14 @@ the report notes the interruption and the resume time.
      use another CLAUDE_CONFIG_DIR`), stops each
      (`claude stop`; its cost is read and it is removed in step 6's order) and prints a `PASS`, `FAIL` or
      `BLOCKED` line per probe.
-   - **One probes run per project at a time:** a token file with a valid token younger than the run's
-     timeout + 60 s is another run's — `BLOCKED probes: another probes run on this project (started <age>
-     s ago)`, nothing launched, the file untouched; an older one is stale and overwritten, said in a line.
+   - **One probes run per project at a time:** each run writes its timeout as the token file's second
+     line (the guard reads only the first). A token file with a valid token younger than that run's
+     timeout + 60 s (300 s when the line is missing or not a number) is another run's — `BLOCKED probes:
+     another probes run on this project (started <age> s ago; if none is running, remove <file>)`,
+     nothing launched, the file untouched. The coordinator then waits up to that run's timeout + 60 s and
+     runs `selftest probes` again, or, when no probes run is going (none of its `probe:` sessions running,
+     no `selftest probes` command of its own still running), has the file removed and runs again. An older
+     file, or one dated in the future, is stale and overwritten, said in a line.
      **A killed run** (SIGKILL, a background task killed on Windows: no trap or `finally` runs) leaves the
      token file and its sessions behind — harmless: the token blocks only its own random string, the next
      run treats the file as stale, and step 6 finds the sessions by their `probe:` names.

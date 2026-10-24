@@ -611,20 +611,26 @@ Then report in one line what happened to it, and stop. Do not run anything else.
     else fail "edit: no folder $er"; fi
   fi
   [ "$n" -gt 0 ] || finish
-  # one probes run per project at a time: a token file holding a valid token, younger than this run's
-  # timeout + 60 s, is another run's (nothing launched, the file untouched); an older one is stale (a
-  # run killed before its end) and overwritten
+  # one probes run per project at a time: a token file holding a valid token, younger than its run's
+  # timeout (the file's second line; 300 when absent or not a number) + 60 s, is another run's (nothing
+  # launched, the file untouched); an older one, or one dated in the future, is stale (a run killed
+  # before its end) and overwritten
   tfile="$pd/.claude/coordinator-probe.txt"; I=(); D=(); T=(); stopped=""
   if [ -f "$tfile" ]; then
-    old=""; IFS= read -r old < "$tfile" 2>/dev/null; old="${old%$'\r'}"; old="${old#$'\357\273\277'}"
+    old="" otmo=""
+    { IFS= read -r old; IFS= read -r otmo; } < "$tfile" 2>/dev/null
+    old="${old%$'\r'}"; old="${old#$'\357\273\277'}"; otmo="${otmo%$'\r'}"
     case "$old" in *[!A-Za-z0-9-]*) old="" ;; esac
+    case "$otmo" in ''|*[!0-9]*) otmo=300 ;; esac
     mt="$(stat -c %Y "$tfile" 2>/dev/null || stat -f %m "$tfile" 2>/dev/null)"
     case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
-    age=$(($(date +%s) - mt)); [ "$age" -ge 0 ] || age=0
-    if [ ${#old} -ge 16 ] && [ "$age" -lt $((tmo + 60)) ]; then
-      echo "BLOCKED probes: another probes run on this project (started $age s ago)"; nb=$((nb + 1)); finish
+    age=$(($(date +%s) - mt))
+    if [ ${#old} -ge 16 ] && [ "$age" -ge 0 ] && [ "$age" -lt $((otmo + 60)) ]; then
+      echo "BLOCKED probes: another probes run on this project (started $age s ago; if none is running, remove $tfile)"
+      nb=$((nb + 1)); finish
     fi
-    echo "stale token file $tfile ($age s old: a run killed before its end): overwritten"
+    if [ "$age" -lt 0 ]; then echo "stale token file $tfile (dated in the future): overwritten"
+    else echo "stale token file $tfile ($age s old: a run killed before its end): overwritten"; fi
   fi
   mkc=""; [ -d "$pd/.claude" ] || mkc=1
   # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C) while it still
@@ -641,7 +647,8 @@ Then report in one line what happened to it, and stop. Do not run anything else.
     return 0
   }
   trap probes_end EXIT; trap 'exit 130' INT TERM HUP
-  mkdir -p "$pd/.claude" && printf '%s\n' "$tok" > "$tfile" || { fail "cannot write $tfile"; finish; }
+  # the token, then this run's timeout (for another run's check above; the guard reads the first line only)
+  mkdir -p "$pd/.claude" && printf '%s\n%s\n' "$tok" "$tmo" > "$tfile" || { fail "cannot write $tfile"; finish; }
   # all launched first, from the project root (trusted), then all waited for
   k=0
   while [ "$k" -lt "$n" ]; do
@@ -681,6 +688,7 @@ Then report in one line what happened to it, and stop. Do not run anything else.
       0) find_tx "${I[$k]}"; rc=$?
          if [ "$rc" = 0 ] && decided "$tx" "${E[$k]}"; then verdict "$tx" "${E[$k]}" "${L[$k]}"
          elif [ "$rc" = 0 ]; then fail "${L[$k]}: no answer within $tmo s"
+         elif [ "$rc" = 2 ]; then fail "${L[$k]}: $tx"
          # no transcript at all: the session writes it somewhere else
          else fail "${L[$k]}: no transcript for session ${I[$k]} under $(cfgdir)/projects: the daemon may use another CLAUDE_CONFIG_DIR"; fi ;;
     esac

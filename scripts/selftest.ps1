@@ -639,18 +639,21 @@ switch ($Step) {
     } else { Fail "edit: no folder $er" }
   }
   if (-not $probes.Count) { Finish }
-  # one probes run per project at a time: a token file holding a valid token, younger than this run's
-  # timeout + 60 s, is another run's (nothing launched, the file untouched); an older one is stale (a
-  # run killed before its end) and overwritten
+  # one probes run per project at a time: a token file holding a valid token, younger than its run's
+  # timeout (the file's second line; 300 when absent or not a number) + 60 s, is another run's (nothing
+  # launched, the file untouched); an older one, or one dated in the future, is stale (a run killed
+  # before its end) and overwritten
   $tfile = "$pd/.claude/coordinator-probe.txt"; $stopped = $false
   if (Test-Path -LiteralPath $tfile -PathType Leaf) {
-    $old = ''; try { $old = [string](Get-Content -LiteralPath $tfile -TotalCount 1 -ErrorAction Stop) } catch { }
-    $age = 0; try { $age = [int][Math]::Floor(([DateTime]::UtcNow - (Get-Item -LiteralPath $tfile).LastWriteTimeUtc).TotalSeconds) } catch { }
-    if ($age -lt 0) { $age = 0 }
-    if ($old.Length -ge 16 -and $old -cmatch '^[A-Za-z0-9-]+$' -and $age -lt ($tmo + 60)) {
-      "BLOCKED probes: another probes run on this project (started $age s ago)"; $script:nb++; Finish
+    $two = @(); try { $two = @(Get-Content -LiteralPath $tfile -TotalCount 2 -ErrorAction Stop) } catch { }
+    $old = if ($two.Count -ge 1) { [string]$two[0] } else { '' }
+    $otmo = 300; if ($two.Count -ge 2 -and ([string]$two[1]) -cmatch '^[0-9]+\z') { $v = 0; if ([int]::TryParse([string]$two[1], [ref]$v)) { $otmo = $v } }
+    $age = 0; try { $age = [long][Math]::Floor(([DateTime]::UtcNow - (Get-Item -LiteralPath $tfile).LastWriteTimeUtc).TotalSeconds) } catch { }
+    if ($old.Length -ge 16 -and $old -cmatch '^[A-Za-z0-9-]+$' -and $age -ge 0 -and $age -lt ($otmo + 60)) {
+      "BLOCKED probes: another probes run on this project (started $age s ago; if none is running, remove $tfile)"; $script:nb++; Finish
     }
-    "stale token file $tfile ($age s old: a run killed before its end): overwritten"
+    if ($age -lt 0) { "stale token file $tfile (dated in the future): overwritten" }
+    else { "stale token file $tfile ($age s old: a run killed before its end): overwritten" }
   }
   $mkc = -not (Test-Path -LiteralPath "$pd/.claude" -PathType Container)
   # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C) while it still
@@ -660,7 +663,8 @@ switch ($Step) {
   try {
     try {
       $null = New-Item -ItemType Directory -Force -Path "$pd/.claude" -ErrorAction Stop
-      [IO.File]::WriteAllText($tfile, "$tok`n", (New-Object System.Text.UTF8Encoding $false))
+      # the token, then this run's timeout (for another run's check above; the guard reads the first line only)
+      [IO.File]::WriteAllText($tfile, "$tok`n$tmo`n", (New-Object System.Text.UTF8Encoding $false))
     } catch { Fail "cannot write $tfile"; Finish }
     # all launched first, from the project root (trusted), then all waited for
     foreach ($q in $probes) {
@@ -708,6 +712,7 @@ switch ($Step) {
         $x = FindTx $q.I
         if ($x[0] -eq 0 -and (Decided $x[1] $q.E)) { Verdict $x[1] $q.E $q.L }
         elseif ($x[0] -eq 0) { Fail "$($q.L): no answer within $tmo s" }
+        elseif ($x[0] -eq 2) { Fail "$($q.L): $($x[1])" }
         # no transcript at all: the session writes it somewhere else
         else { Fail "$($q.L): no transcript for session $($q.I) under $(CfgDir)/projects: the daemon may use another CLAUDE_CONFIG_DIR" }
       }
