@@ -217,18 +217,30 @@ function SessionCheck([string]$what, [string]$a, [string]$how) {
   }
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
-# gh pr create into another repository (--repo, -R, GH_REPO= before gh): the worker safety file allows
-# `gh pr create --draft *` past Claude Code's classifier (#261), and the * would take in any repository
-# the token reaches; a pull request goes into the repository the command works in, only (-R with
-# letter case: -r is gh's --reviewer)
+# gh pr create into another repository: the worker safety file allows `gh pr create --draft *` past
+# Claude Code's classifier (#261), and the * would take in any repository the token reaches. Blocked:
+# --repo / --repo=x, a single-dash group with an R (-R, -Rx, -dR x: gh reads grouped short flags), the
+# same before `pr` (gh -R x pr create), and GH_REPO= before gh. With letter case: -r is gh's --reviewer.
+function GhRepoFlag([string]$t) {
+  $k = ($t -split '=', 2)[0]
+  if ($k -ceq '--repo') { return $true }
+  if ($k.StartsWith('--', [StringComparison]::Ordinal)) { return $false }
+  return ($k -cmatch '^-[^-=]*R')
+}
 function GhSeg([string[]]$a, [bool]$repoEnv) {
-  if ($a.Count -lt 2 -or $a[0] -ne 'pr' -or $a[1] -ne 'create') { return }
+  $pre = $false; $i = 0
+  while ($i -lt $a.Count) {
+    $t = $a[$i]
+    if ($t.StartsWith('-', [StringComparison]::Ordinal)) { if (GhRepoFlag $t) { $pre = $true }; $i++; continue }
+    if ($t -ceq 'pr') { break }
+    if (-not $pre) { return }
+    $i++   # after gh -R: its value
+  }
+  if ($i + 1 -ge $a.Count -or $a[$i] -cne 'pr' -or $a[$i + 1] -cne 'create') { return }
   if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
-  foreach ($t in @($a | Select-Object -Skip 2)) {
-    $k = ($t -split '=', 2)[0]
-    if ($k -eq '--repo' -or $t.StartsWith('-R', [StringComparison]::Ordinal)) {
-      Block "a pull request into another repository (gh pr create $k): only into the current one (#261)"
-    }
+  if ($pre) { Block 'a pull request into another repository (gh -R before pr create): only into the current one (#261)' }
+  foreach ($t in @($a | Select-Object -Skip ($i + 2))) {
+    if (GhRepoFlag $t) { Block "a pull request into another repository (gh pr create $(($t -split '=', 2)[0])): only into the current one (#261)" }
   }
 }
 function ClaudeSeg([string[]]$a) {

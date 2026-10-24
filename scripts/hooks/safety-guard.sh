@@ -374,19 +374,33 @@ session_check() {
   exit 2
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
-# gh pr create into another repository (--repo, -R, GH_REPO= before gh): the worker safety file allows
-# `gh pr create --draft *` past Claude Code's classifier (#261), and the * would take in any repository
-# the token reaches; a pull request goes into the repository the command works in, only (-R is compared
-# with test, which nocasematch leaves alone: -r is gh's --reviewer)
+# gh pr create into another repository: the worker safety file allows `gh pr create --draft *` past
+# Claude Code's classifier (#261), and the * would take in any repository the token reaches. Blocked:
+# --repo / --repo=x, a single-dash group with an R (-R, -Rx, -dR x: gh reads grouped short flags), the
+# same before `pr` (gh -R x pr create), and GH_REPO= before gh. Letters are compared with test, which
+# nocasematch leaves alone: -r is gh's --reviewer.
+gh_repo_flag() {
+  local s
+  { [ "$1" = --repo ] || [ "${1%%=*}" = --repo ]; } && return 0
+  case "$1" in --*) return 1 ;; -?*) ;; *) return 1 ;; esac
+  s="${1%%=*}"; s="${s#-}"
+  while [ -n "$s" ]; do [ "${s:0:1}" = R ] && return 0; s="${s:1}"; done
+  return 1
+}
 gh_seg() {
-  local t
+  local t pre=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -*) gh_repo_flag "$1" && pre=1; shift ;;
+      *) [ "$1" = pr ] && break; [ $pre = 1 ] || return; shift ;;   # after gh -R: its value
+    esac
+  done
   [ "${1:-}" = pr ] && [ "${2:-}" = create ] || return
   shift 2
   [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)"
+  [ $pre = 1 ] && block "a pull request into another repository (gh -R before pr create): only into the current one (#261)"
   for t in "$@"; do
-    if [ "$t" = --repo ] || [ "${t%%=*}" = --repo ] || [ "${t:0:2}" = -R ]; then
-      block "a pull request into another repository (gh pr create ${t%%=*}): only into the current one (#261)"
-    fi
+    gh_repo_flag "$t" && block "a pull request into another repository (gh pr create ${t%%=*}): only into the current one (#261)"
   done
 }
 claude_seg() {

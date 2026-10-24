@@ -752,6 +752,15 @@ block	work	bash -c "gh pr create --draft -R other/x"
 block	work	gh.exe pr create --draft --repo other/x
 block	ps:work	gh pr create --draft --repo other/x --title t
 block	ps:work	gh pr create --draft -R other/x
+block	work	gh pr create --draft -dR other/x --title t
+block	work	gh pr create --draft -dRother/x
+block	ps:work	gh pr create --draft -fR other/x
+block	work	gh -R other/x pr create --draft
+block	work	gh --repo other/x pr create --draft
+block	ps:work	gh --repo=other/x pr create --draft
+allow	work	gh pr create --draft -dr alice
+allow	ps:work	gh pr create --draft -dr alice
+allow	work	gh --help pr create
 allow	work	gh pr create --draft --title t --body-file b.md
 allow	work	gh pr create --draft --title t -r alice
 allow	work	gh pr create --draft --title "fix the --repo flag" --body b
