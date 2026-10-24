@@ -737,6 +737,6 @@ block	linked	env GIT_WORK_TREE=../work git clean -fdx
 block	ps:linked	git --git-dir ../work/.git checkout -- .
 allow	linked	GIT_DIR=../work/.git git status
 # procedures/MIGRATE-LAYOUT.md step 4: the folder moved aside around the pull, not the old discarding commands
-allow	work	mv coordinator coordinator.migrating && git pull --ff-only && mv coordinator.migrating coordinator
+allow	work	mv coordinator coordinator.migrating; git pull --no-rebase --ff-only; mv coordinator.migrating coordinator
 block	work	git checkout -- coordinator/
 block	work	git -C coordinator restore .
