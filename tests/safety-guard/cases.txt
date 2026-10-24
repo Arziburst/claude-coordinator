@@ -758,6 +758,9 @@ block	ps:work	gh pr create --draft -fR other/x
 block	work	gh -R other/x pr create --draft
 block	work	gh --repo other/x pr create --draft
 block	ps:work	gh --repo=other/x pr create --draft
+block	work	gh pr -R other/x create --draft
+block	ps:work	gh pr --repo other/x create --draft
+allow	work	gh pr -R other/x list
 allow	work	gh pr create --draft -dr alice
 allow	ps:work	gh pr create --draft -dr alice
 allow	work	gh --help pr create

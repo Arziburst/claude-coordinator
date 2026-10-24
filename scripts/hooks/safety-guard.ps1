@@ -236,7 +236,17 @@ function GhSeg([string[]]$a, [bool]$repoEnv) {
     if (-not $pre) { return }
     $i++   # after gh -R: its value
   }
-  if ($i + 1 -ge $a.Count -or $a[$i] -cne 'pr' -or $a[$i + 1] -cne 'create') { return }
+  if ($i -ge $a.Count -or $a[$i] -cne 'pr') { return }
+  $i++
+  while ($i -lt $a.Count) {   # flags between pr and its subcommand: gh pr -R x create
+    $t = $a[$i]
+    if ($t.StartsWith('-', [StringComparison]::Ordinal)) { if (GhRepoFlag $t) { $pre = $true }; $i++; continue }
+    if ($t -ceq 'create') { break }
+    if (-not $pre) { return }
+    $i++
+  }
+  if ($i -ge $a.Count -or $a[$i] -cne 'create') { return }
+  $i--   # the scan below skips pr and create: here, the word before create
   if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
   if ($pre) { Block 'a pull request into another repository (gh -R before pr create): only into the current one (#261)' }
   foreach ($t in @($a | Select-Object -Skip ($i + 2))) {

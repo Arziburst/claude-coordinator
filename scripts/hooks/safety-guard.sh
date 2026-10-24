@@ -395,8 +395,16 @@ gh_seg() {
       *) [ "$1" = pr ] && break; [ $pre = 1 ] || return; shift ;;   # after gh -R: its value
     esac
   done
-  [ "${1:-}" = pr ] && [ "${2:-}" = create ] || return
-  shift 2
+  [ "${1:-}" = pr ] || return
+  shift
+  while [ $# -gt 0 ]; do   # flags between pr and its subcommand: gh pr -R x create
+    case "$1" in
+      -*) gh_repo_flag "$1" && pre=1; shift ;;
+      *) [ "$1" = create ] && break; [ $pre = 1 ] || return; shift ;;
+    esac
+  done
+  [ "${1:-}" = create ] || return
+  shift
   [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)"
   [ $pre = 1 ] && block "a pull request into another repository (gh -R before pr create): only into the current one (#261)"
   for t in "$@"; do
