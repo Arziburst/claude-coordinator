@@ -374,6 +374,43 @@ session_check() {
   exit 2
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+# gh pr create into another repository: the worker safety file allows `gh pr create --draft *` past
+# Claude Code's classifier (#261), and the * would take in any repository the token reaches. Blocked:
+# --repo / --repo=x, a single-dash group with an R (-R, -Rx, -dR x: gh reads grouped short flags), the
+# same before `pr` (gh -R x pr create), and GH_REPO= before gh. Letters are compared with test, which
+# nocasematch leaves alone: -r is gh's --reviewer.
+gh_repo_flag() {
+  local s
+  { [ "$1" = --repo ] || [ "${1%%=*}" = --repo ]; } && return 0
+  case "$1" in --*) return 1 ;; -?*) ;; *) return 1 ;; esac
+  s="${1%%=*}"; s="${s#-}"
+  while [ -n "$s" ]; do [ "${s:0:1}" = R ] && return 0; s="${s:1}"; done
+  return 1
+}
+gh_seg() {
+  local t pre=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -*) gh_repo_flag "$1" && pre=1; shift ;;
+      *) [ "$1" = pr ] && break; [ $pre = 1 ] || return; shift ;;   # after gh -R: its value
+    esac
+  done
+  [ "${1:-}" = pr ] || return
+  shift
+  while [ $# -gt 0 ]; do   # flags between pr and its subcommand: gh pr -R x create
+    case "$1" in
+      -*) gh_repo_flag "$1" && pre=1; shift ;;
+      *) [ "$1" = create ] && break; [ $pre = 1 ] || return; shift ;;
+    esac
+  done
+  [ "${1:-}" = create ] || return
+  shift
+  [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)"
+  [ $pre = 1 ] && block "a pull request into another repository (gh -R before pr create): only into the current one (#261)"
+  for t in "$@"; do
+    gh_repo_flag "$t" && block "a pull request into another repository (gh pr create ${t%%=*}): only into the current one (#261)"
+  done
+}
 claude_seg() {
   local t verb="" nx=0
   for t in "$@"; do
@@ -1037,6 +1074,9 @@ while IFS="$tab" read -r -a T; do
     find) find_seg "${A[@]:$((i + 1))}" ;;
     get-childitem|gci|ls|dir|get-item|gi) list_seg "${A[@]:$((i + 1))}" ;;
     claude) claude_seg "${A[@]:$((i + 1))}" ;;
+    gh) gh_env=0; gk=0   # GH_REPO= before gh (also after env): see gh_seg
+        while [ $gk -lt $i ]; do case "${A[$gk]}" in GH_REPO=*) gh_env=1 ;; esac; gk=$((gk + 1)); done
+        gh_seg "${A[@]:$((i + 1))}" ;;
   esac
 done <<SAFETY_GUARD_SEGMENTS_END
 $segments

@@ -740,3 +740,33 @@ allow	linked	GIT_DIR=../work/.git git status
 allow	work	mv coordinator coordinator.migrating; git pull --no-rebase --ff-only; mv coordinator.migrating coordinator
 block	work	git checkout -- coordinator/
 block	work	git -C coordinator restore .
+# --- gh pr create into another repository (#261: the worker safety file allows gh pr create --draft * past the classifier) ---
+block	work	gh pr create --draft --repo other/x --title t --body b
+block	work	gh pr create --draft --repo=other/x --title t
+block	work	gh pr create --draft -R other/x --title t
+block	work	gh pr create --draft -Rother/x --title t
+block	work	GH_REPO=other/x gh pr create --draft --title t
+block	work	env GH_REPO=other/x gh pr create --draft --title t
+block	work	git push -u origin 12-fix && gh pr create --draft --repo other/x
+block	work	bash -c "gh pr create --draft -R other/x"
+block	work	gh.exe pr create --draft --repo other/x
+block	ps:work	gh pr create --draft --repo other/x --title t
+block	ps:work	gh pr create --draft -R other/x
+block	work	gh pr create --draft -dR other/x --title t
+block	work	gh pr create --draft -dRother/x
+block	ps:work	gh pr create --draft -fR other/x
+block	work	gh -R other/x pr create --draft
+block	work	gh --repo other/x pr create --draft
+block	ps:work	gh --repo=other/x pr create --draft
+block	work	gh pr -R other/x create --draft
+block	ps:work	gh pr --repo other/x create --draft
+allow	work	gh pr -R other/x list
+allow	work	gh pr create --draft -dr alice
+allow	ps:work	gh pr create --draft -dr alice
+allow	work	gh --help pr create
+allow	work	gh pr create --draft --title t --body-file b.md
+allow	work	gh pr create --draft --title t -r alice
+allow	work	gh pr create --draft --title "fix the --repo flag" --body b
+allow	work	gh pr list --repo other/x
+allow	work	gh issue create -R other/x --title t
+allow	ps:work	gh pr create --draft --title t -r alice

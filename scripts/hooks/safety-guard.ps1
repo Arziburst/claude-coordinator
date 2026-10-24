@@ -217,6 +217,42 @@ function SessionCheck([string]$what, [string]$a, [string]$how) {
   }
 }
 # claude stop | rm | respawn | attach <id>..., claude ... --resume <id> (-r <id>, --resume=<id>)
+# gh pr create into another repository: the worker safety file allows `gh pr create --draft *` past
+# Claude Code's classifier (#261), and the * would take in any repository the token reaches. Blocked:
+# --repo / --repo=x, a single-dash group with an R (-R, -Rx, -dR x: gh reads grouped short flags), the
+# same before `pr` (gh -R x pr create), and GH_REPO= before gh. With letter case: -r is gh's --reviewer.
+function GhRepoFlag([string]$t) {
+  $k = ($t -split '=', 2)[0]
+  if ($k -ceq '--repo') { return $true }
+  if ($k.StartsWith('--', [StringComparison]::Ordinal)) { return $false }
+  return ($k -cmatch '^-[^-=]*R')
+}
+function GhSeg([string[]]$a, [bool]$repoEnv) {
+  $pre = $false; $i = 0
+  while ($i -lt $a.Count) {
+    $t = $a[$i]
+    if ($t.StartsWith('-', [StringComparison]::Ordinal)) { if (GhRepoFlag $t) { $pre = $true }; $i++; continue }
+    if ($t -ceq 'pr') { break }
+    if (-not $pre) { return }
+    $i++   # after gh -R: its value
+  }
+  if ($i -ge $a.Count -or $a[$i] -cne 'pr') { return }
+  $i++
+  while ($i -lt $a.Count) {   # flags between pr and its subcommand: gh pr -R x create
+    $t = $a[$i]
+    if ($t.StartsWith('-', [StringComparison]::Ordinal)) { if (GhRepoFlag $t) { $pre = $true }; $i++; continue }
+    if ($t -ceq 'create') { break }
+    if (-not $pre) { return }
+    $i++
+  }
+  if ($i -ge $a.Count -or $a[$i] -cne 'create') { return }
+  $i--   # the scan below skips pr and create: here, the word before create
+  if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
+  if ($pre) { Block 'a pull request into another repository (gh -R before pr create): only into the current one (#261)' }
+  foreach ($t in @($a | Select-Object -Skip ($i + 2))) {
+    if (GhRepoFlag $t) { Block "a pull request into another repository (gh pr create $(($t -split '=', 2)[0])): only into the current one (#261)" }
+  }
+}
 function ClaudeSeg([string[]]$a) {
   $verb = ''; $nx = $false
   foreach ($t in $a) {
@@ -832,6 +868,11 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^find$' { FindSeg $rest }
     '^(get-childitem|gci|ls|dir|get-item|gi)$' { ListSeg $rest }
     '^claude$' { ClaudeSeg $rest }
+    '^gh$' {
+      # GH_REPO= before gh (also after env): see GhSeg
+      $ghEnv = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^GH_REPO=') { $ghEnv = $true } }
+      GhSeg $rest $ghEnv
+    }
   }
 }
 

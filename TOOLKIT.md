@@ -199,7 +199,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   the one narrow allow rule it holds for a write: Claude Code's auto mode resolves a narrow allow rule
   without its classifier (permission-modes docs), which had refused some workers' draft PRs; a compound
   command still needs every part allowed. `gh pr ready` and `gh pr merge` stay denied where the preset
-  denies them (#261).
+  denies them (#261). The `*` would also take in `--repo <any repository>`: the guard blocks `gh pr create`
+  with `--repo` / `--repo=x`, a short-flag group holding `R` (`-R x`, `-Rx`, `-dR x`), the same before `pr`
+  (`gh -R x pr create`), or `GH_REPO=` before gh in the same command. It cannot see a `GH_REPO` exported
+  earlier or inherited from the session's environment, nor which remote gh takes the base repository
+  from: keep `GH_REPO` out of the worker safety file's `env`.
 - **The guard reads a command's text, not only what will run:** `git push` written inside a string or a
   here-string of the same command (a brief written to a file) is read as a push and may be blocked.
   Write such text with the Write tool. The guard does not strip strings on purpose: that would let
