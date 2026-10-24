@@ -82,7 +82,9 @@ the report notes the interruption and the resume time.
      writes a fresh random token into `<root>/.claude/coordinator-probe.txt` for the length of the run
      (removed on every way out, a FAIL or Ctrl-C too), starts every probe session on the light model
      (`--model`, default `haiku`) from the project root (trusted) — all first, then waits for each until
-     its turn ends —, gives each its verdict from its transcript as `selftest hookcheck` does, stops each
+     its turn ends —, gives each its verdict from its transcript as `selftest hookcheck` does (at the
+     timeout, as the transcript stands: a block already there passes, nothing yet is `no answer within
+     <s> s`), stops each
      (`claude stop`; its cost is read and it is removed in step 6's order) and prints a `PASS`, `FAIL` or
      `BLOCKED` line per probe.
    - **The push probes:** one with `--settings <worker safety file>` (`--worker-settings`), one with no

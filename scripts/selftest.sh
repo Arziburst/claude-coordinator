@@ -165,6 +165,13 @@ find_tx() {
 }
 # the guard's block of the probe token (hooks/safety-guard, #259)
 probe_block="Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
+# decided <transcript> <edit|probe>: whether a probe whose turn has not ended yet already shows its
+# verdict - the block, a non-blocking error, or (edit) a write that went through
+decided() {
+  grep '"hook_non_blocking_error"' "$1" | grep -q 'safety-guard' && return 0
+  if [ "$2" = edit ]; then grep -Eq "Blocked by safety-guard: the owner's working copy is never edited by a worker|File created successfully at|has been updated successfully" "$1"
+  else grep '"tool_result"' "$1" | grep -qF "$probe_block"; fi
+}
 # verdict <transcript> <push|edit|probe> [<label>]: the PASS or FAIL line of a probe session, from its
 # transcript (hookcheck and probes; <label>: before the message)
 verdict() {
@@ -641,7 +648,9 @@ Then report in one line what happened to it, and stop. Do not run anything else.
     case "${D[$k]}" in
       1) verdict "${T[$k]}" "${E[$k]}" "${L[$k]}" ;;
       2) fail "${L[$k]}: ${T[$k]}" ;;
-      0) fail "${L[$k]}: no answer within $tmo s" ;;
+      # the time is up: judged as the transcript stands when it already shows the verdict
+      0) if find_tx "${I[$k]}" && decided "$tx" "${E[$k]}"; then verdict "$tx" "${E[$k]}" "${L[$k]}"
+         else fail "${L[$k]}: no answer within $tmo s"; fi ;;
     esac
     k=$((k + 1))
   done

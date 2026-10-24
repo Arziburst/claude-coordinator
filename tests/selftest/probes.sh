@@ -74,6 +74,11 @@ write() {
   case "$scn" in
     block|slowblock) guarded; ended ;;
     noend) guarded ;;
+    silent) ;;
+    noendnb)
+      printf '{"type":"attachment","attachment":{"type":"hook_non_blocking_error","hookName":"PreToolUse:Bash","stderr":"Failed with non-blocking status code: Blocked by safety-guard: the self-test%ss probe token (.claude/coordinator-probe.txt): this hook runs and its block holds.","exitCode":1}}\n' "'"
+      result "$tok" ;;
+    editnoend) result "PreToolUse:Write hook error: [bash guard]: Blocked by safety-guard: the owner's working copy is never edited by a worker (x); work in your worktree. If this is a false positive, ask the owner." error ;;
     noblock) result "${tok}"; ended ;;
     nonblock)
       printf '{"type":"attachment","attachment":{"type":"hook_non_blocking_error","hookName":"PreToolUse:Bash","stderr":"Failed with non-blocking status code: Blocked by safety-guard: the self-test%ss probe token (.claude/coordinator-probe.txt): this hook runs and its block holds.","exitCode":1}}\n' "'"
@@ -198,9 +203,18 @@ has "PASS probes: push: the command holding the probe token was blocked through 
 has "BLOCKED probe: push (own settings) (launch failed: Started.)"
 has "selftest probes: 1 pass, 0 fail, 0 skipped, 1 blocked"
 
-scn noend block editblock
-pr "no end of the turn" 1 --project "$proj" --worker-settings "$ws" --timeout 2
+# the time is up: judged as the transcript stands - a block already there passes, nothing yet fails
+scn silent silent editblock
+pr "no end of the turn, nothing yet" 1 --project "$proj" --worker-settings "$ws" --own --timeout 2
 has "FAIL probes: push: no answer within 2 s"
+has "FAIL probes: push (own settings): no answer within 2 s"
+scn noend nonblock editblock
+pr "no end of the turn, the block there" 0 --project "$proj" --worker-settings "$ws" --timeout 2
+has "PASS probes: push: the command holding the probe token was blocked through Claude Code"
+scn noendnb block editnoend
+pr "no end of the turn, a non-blocking error, an edit block" 1 --project "$proj" --worker-settings "$ws" --edit-root "$root" --timeout 2
+has "FAIL probes: push: the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
+has "PASS probes: edit: the edit tool's write into the working copy was blocked through Claude Code"
 
 # the edit probe: the guard's working-copy block; a file it created is removed (exactly that file);
 # one there before the run is left
@@ -236,10 +250,13 @@ has "PASS probes: push: the command holding the probe token was blocked through 
 # Ctrl-C and the like: the token file goes and the sessions are stopped (bash: a trap; the .ps1's
 # finally is not reached by a signal from outside, so only the .sh is tested here)
 if [ "$kind" = sh ]; then
-  cur="interrupted"; scn noend block editblock; : > "$STUB_DIR/stops"; : > "$STUB_DIR/ids"
+  cur="interrupted"; scn silent block editblock; : > "$STUB_DIR/stops"; : > "$STUB_DIR/ids"
   bash scripts/selftest.sh probes --project "$proj" --worker-settings "$ws" --timeout 60 > "$tmp/one" 2>&1 &
   pid=$!; i=0
+  # signalled once it waits for the transcript (a signal during the launch itself loses the id it
+  # has not read yet)
   while [ $i -lt 30 ] && ! [ -s "$STUB_DIR/ids" ]; do sleep 1; i=$((i + 1)); done
+  sleep 3
   kill -TERM "$pid"; wait "$pid"
   n=$((n + 1)); [ ! -e "$tokf" ] || bad "the token file is still there"
   n=$((n + 1)); [ -s "$STUB_DIR/ids" ] && grep -qx "$(head -n 1 "$STUB_DIR/ids")" "$STUB_DIR/stops" || bad "the session was not stopped"

@@ -109,11 +109,9 @@ jobs:
       - name: selftest - the guard probes against a stub claude (PowerShell 7, Linux)
         if: runner.os == 'Linux'
         run: bash tests/selftest/probes.sh ps pwsh
-      - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1 and pwsh)
+      - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
-        run: |
-          bash tests/selftest/probes.sh ps powershell
-          bash tests/selftest/probes.sh ps pwsh
+        run: bash tests/selftest/probes.sh ps powershell
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell

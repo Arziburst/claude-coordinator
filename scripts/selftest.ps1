@@ -241,6 +241,16 @@ function TxLines([string]$path) {
 }
 # the guard's block of the probe token (hooks/safety-guard, #259)
 $probeBlock = "Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
+# Decided <transcript> <edit|probe>: whether a probe whose turn has not ended yet already shows its
+# verdict - the block, a non-blocking error, or (edit) a write that went through
+function Decided([string]$tf, [string]$ex) {
+  $lines = @(TxLines $tf)
+  if (@($lines | Where-Object { $_.Contains('"hook_non_blocking_error"') -and $_.Contains('safety-guard') }).Count) { return $true }
+  if ($ex -ceq 'edit') {
+    return [bool]@($lines | Where-Object { $_.Contains("Blocked by safety-guard: the owner's working copy is never edited by a worker") -or $_.Contains('File created successfully at') -or $_.Contains('has been updated successfully') }).Count
+  }
+  [bool]@($lines | Where-Object { $_.Contains('"tool_result"') -and $_.Contains($probeBlock) }).Count
+}
 # Verdict <transcript> <push|edit|probe> [<label>]: the PASS or FAIL line of a probe session, from its
 # transcript (hookcheck and probes; <label>: before the message)
 function Verdict([string]$tf, [string]$ex, [string]$label) {
@@ -672,7 +682,11 @@ switch ($Step) {
     foreach ($q in $probes) {
       if ($q.D -eq 1) { Verdict $q.T $q.E $q.L }
       elseif ($q.D -eq 2) { Fail "$($q.L): $($q.T)" }
-      elseif ($q.D -eq 0) { Fail "$($q.L): no answer within $tmo s" }
+      elseif ($q.D -eq 0) {
+        # the time is up: judged as the transcript stands when it already shows the verdict
+        $x = FindTx $q.I
+        if ($x[0] -eq 0 -and (Decided $x[1] $q.E)) { Verdict $x[1] $q.E $q.L } else { Fail "$($q.L): no answer within $tmo s" }
+      }
     }
     # stopped; their cost is read and they are removed in step 6
     $ids = @()
