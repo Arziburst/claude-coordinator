@@ -2,7 +2,7 @@
 # Start a named worker session in its own git worktree, with the safety settings applied.
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
-#       --report-to <coordinator session> [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
+#       --report-to <coordinator session> [--contract <file>] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -29,12 +29,17 @@
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
 # A worker or a lead: before the launch it prints the conflict foresight (CORE §4a) - merge-queue status
-# with the brief's `touches: [...]` - as `foresight:` lines; informational, never a stop.
+# with the brief's `touches` - as `foresight:` lines; informational, never a stop.
+# The contract must pass check-contract before it goes out (CORE §4, #267): --contract <file>, or for a
+# worker or a lead without it the contract in the brief (a block after a `---` line, to the next one or
+# the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
+# the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
+# lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" dry=0
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" dry=0
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -51,6 +56,7 @@ while [ $# -gt 0 ]; do
     --launch-from) need "$@"; from="$2"; shift 2 ;;
     --worktree-root) need "$@"; wtroot="$2"; shift 2 ;;
     --report-to) need "$@"; report="$2"; shift 2 ;;
+    --contract) need "$@"; contract="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -61,7 +67,8 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
+[ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
 eff=(); [ -z "$effort" ] || eff=(--effort "$effort")
@@ -122,6 +129,35 @@ grep -q 'bgIsolation' "$safety" || { echo "safety settings: add \"worktree\": {\
 selftest=$(bash "$hook" --self-test || true)
 [ -n "$selftest" ] || { echo "safety settings: the hook's self-test printed nothing ($hook)" >&2; exit 1; }
 [ "$selftest" = "safety-guard: OK" ] || { echo "$selftest" >&2; exit 1; }
+
+# The contract passes check-contract before it goes out (CORE §4, #267), checked before anything is
+# created: --contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
+# the first block after a `---` line of the brief - up to the next `---` or the brief's end - that holds
+# any key check-contract requires at its top level but title (id, intent, acceptance, non_goals,
+# do_not_decide, tests_first; title is common in quoted front matter, #267): a contract missing some of them is still checked, never "none found"
+crole="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
+cfile="$contract" clabel="$contract" ctmp=""
+if [ -z "$contract" ]; then case "$crole" in worker|lead|"")
+  ctmp="$(mktemp "${TMPDIR:-/tmp}/start-worker-contract.XXXXXX")"
+  # the temporary file goes on any way out, a kill included (the traps are lifted after the check)
+  trap 'rm -f "$ctmp"' EXIT; trap 'exit 1' HUP INT TERM
+  # each `---` line ends a candidate block and opens the next (a rule above the contract is no contract)
+  B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"] }
+    { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
+    /^---[ \t]*$/ { if (on && k) { printf "---\n%s---\n", buf; done = 1; exit } on = 1; buf = ""; k = 0; next }
+    on { buf = buf $0 "\n"; if ($0 ~ /^(id|intent|acceptance|non_goals|do_not_decide|tests_first):/) k = 1 }
+    END { if (!done && on && k) printf "---\n%s---\n", buf }' "$brief" > "$ctmp"
+  if [ -s "$ctmp" ]; then cfile="$ctmp" clabel="contract in the brief"
+  else echo "contract: none found in the brief - check-contract not run (CORE §4)"; fi ;;
+esac; fi
+if [ -n "$cfile" ]; then
+  crc=0; cout="$(bash "$(dirname "$0")/check-contract.sh" "$cfile" 2>&1)" || crc=$?
+  # its lines name the file it read: the brief's contract by that name, not by the temporary file
+  printf '%s\n' "$cout" | F="$cfile" L="$clabel" awk 'BEGIN { F = ENVIRON["F"] ": "; L = ENVIRON["L"] ": " }
+    index($0, F) == 1 { $0 = L substr($0, length(F) + 1) } { print }'
+  [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
+fi
+[ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
 
@@ -225,12 +261,22 @@ if [ -n "$role" ] && [ -f "$rolef" ]; then
   if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then echo "role $role: already in the brief"
   else roletext="$body"; echo "role $role: roles/$role.md heads the brief"; fi
 fi
-# conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches: [...]` names,
+# conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names - inline
+# `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
 case "$role" in worker|lead|"")
-  tl="$(tr -d '\r' < "$brief" | sed -n 's/^[[:space:]]*touches:[[:space:]]*\[\([^]]*\)\].*/\1/p' | head -n 1)"
-  if [ -z "$tl" ]; then
-    echo "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE §4a)"
+  # a comment needs a blank before it (docs/c#.md is a path); blank and comment lines inside the list are skipped
+  tl="$(tr -d '\r' < "$brief" | awk '
+    !on && /^[ \t]*touches:/ { s = $0; sub(/^[ \t]*touches:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/^#.*$/, "", s)
+      if (s ~ /^\[/) { sub(/^\[/, "", s); sub(/\].*$/, "", s); print s; exit }
+      if (s == "") { on = 1; next }
+      exit }
+    on && /^[ \t]*(#.*)?$/ { next }
+    on && /^[ \t]*-[ \t]/ { s = $0; sub(/^[ \t]*-[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); out = out (out == "" ? "" : ",") s; next }
+    on { exit }
+    END { if (on) print out }')"
+  if [ -z "$(printf '%s' "$tl" | tr -d ' ,')" ]; then
+    echo "foresight: no touches in the brief - check the open PRs against the task yourself (CORE §4a)"
   else
     ta=(); set -f; oifs="$IFS"; IFS=','
     for t in $tl; do t="$(printf '%s' "$t" | sed "s/^[[:space:]\"']*//; s/[[:space:]\"']*\$//")"; [ -z "$t" ] || ta+=(--touches "$t"); done

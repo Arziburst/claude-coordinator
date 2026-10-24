@@ -117,7 +117,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
   trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
-  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another. Its built-in alternative (`claude --worktree <name>`, branch
+  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another.
+  Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
+  `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
+  line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
+  are printed, no contract found is one notice line and the start goes on. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
@@ -136,7 +140,16 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   never `cleaned`. A session the listing places outside the project (its `cwd` not under the
   repository's main checkout, the worktree or the folder whose `.claude/worktrees` holds it) is never
   touched: `SESSION FOREIGN: <id> (<cwd>): not this project's session - nothing done`, exit 5 (CORE
-  §1.17).
+  §1.17). A branch with nothing to lose needs no merged PR (#257): no commits beyond its base (origin's
+  default branch; with no origin the local main or master), never pushed (no upstream configured, no
+  remote branch of its name on any remote, `git ls-remote` of origin included) and the worktree clean
+  (no untracked files either) — `EMPTY: <branch> has no commits beyond <base> and was never pushed -
+  removed`, its session handled as for a merged one. It is removed without `--force`: `git branch -d`
+  from the worktree detached at the branch's own commit (so the main checkout's HEAD being behind does
+  not matter), then `git worktree remove`. After the session is stopped the worktree is checked again: a
+  commit or change since the checks is `CHANGED: <worktree> moved since the checks - left as is`, exit 3;
+  a failed removal puts the branch back at its commit (`REMOVE FAILED: …; branch <branch> put back at
+  <sha>`, exit 1) — run it again later. One commit, a push or a dirty worktree takes the usual checks.
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when

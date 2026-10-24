@@ -39,6 +39,8 @@ if [ "${1:-}" = stop ] || [ "${1:-}" = rm ]; then
   if [ "$1" = stop ]; then
     [ "$st" = done ] && { echo "$2 is not running" >&2; exit 1; }
     awk -v i="$2" '$1 == i { $3 = "done" } { print }' "$S" > "$S.new" && mv "$S.new" "$S"; echo "stopped $2"
+    # $STUB_STOP_COMMIT: the stopping session makes one last commit in that worktree (#257)
+    [ -z "${STUB_STOP_COMMIT:-}" ] || git -C "$STUB_STOP_COMMIT" -c user.email=t@t -c user.name=t commit -q --allow-empty -m late
   else
     [ -n "${STUB_RM_FAIL:-}" ] && { echo "$STUB_RM_FAIL" >&2; exit 1; }
     awk -v i="$2" '$1 != i' "$S" > "$S.new" && mv "$S.new" "$S"; echo "removed $2"
@@ -92,7 +94,7 @@ start() {
         --launch-from) a+=(-LaunchFrom "$2"); shift 2 ;;
         --report-to) a+=(-ReportTo "$2"); shift 2 ;;
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
-        --effort) a+=(-Effort "$2"); shift 2 ;;
+        --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -378,7 +380,7 @@ check 0 "start: --effort in the dry run" -- start "${S[@]}" --effort xhigh --dry
 expect_in "--model opus --effort xhigh --permission-mode auto"
 # the conflict foresight before a worker's launch (#242): merge-queue status with the brief's touches
 # (the stub gh prints $STUB_HEADS as the open PRs' list); informational, never a stop
-expect_in "foresight: no 'touches: [...]' line in the brief - check the open PRs against the task yourself (CORE §4a)"
+expect_in "foresight: no touches in the brief - check the open PRs against the task yourself (CORE §4a)"
 printf 'Do it.\ntouches: [src/a.ts, "docs/"]   # what it changes\n' > "$tmp/brief-touches.md"
 T=(--repo "$tmp/repo" --branch 12-fix --model opus --brief-file "$tmp/brief-touches.md" --safety "$tmp/safety.json" --report-to x --dry-run)
 STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight" -- start --name "#12 worker: Fix" "${T[@]}"
@@ -388,6 +390,77 @@ STUB_GH_RC=1 check 0 "start: the conflict foresight, gh failing" -- start --name
 expect_in "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a)"
 check 0 "start: no conflict foresight for a verifier" -- start --name "#12 verifier: Fix" "${T[@]}"
 case "$LAST" in *foresight*) echo "FAIL: a verifier start printed the conflict foresight"; fail=1 ;; esac
+# touches as a YAML block list, which check-contract takes too (#258): one `- path` per line, a comment
+# after the key and after an item, a quoted item; the list ends at the first line that is no item
+printf 'Do it.\ntouches:   # what it changes\n  - lib/b.ts   # the helper\n  - "docs/"\ndepends_on: [31]\n' > "$tmp/brief-block.md"
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight from a block list" -- \
+  start --name "#12 worker: Fix" --repo "$tmp/repo" --branch 12-fix --model opus --brief-file "$tmp/brief-block.md" --safety "$tmp/safety.json" --report-to x --dry-run
+expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"
+expect_in "foresight: merge-queue status: 1 open, 0 conflicting, 0 overlapping pairs, 1 touching the task"
+case "$LAST" in *"no touches"*|*"src/a.ts"*) echo "FAIL: the block list was not read as lib/b.ts and docs/"; fail=1 ;; esac
+# the key in its own letter case (a `Touches:` line in the prose is not it); a comment line before the
+# first item and a blank line between items do not end the list; a `#` inside a path is no comment
+B=(--name "#12 worker: Fix" --repo "$tmp/repo" --branch 12-fix --model opus --safety "$tmp/safety.json" --report-to x --dry-run)
+printf 'Do it.\nTouches: the cart\ntouches: [lib/b.ts]\n' > "$tmp/brief-tcase.md"
+printf 'Do it.\ntouches:\n  # the main change\n  - lib/b.ts\n' > "$tmp/brief-tcomment.md"
+printf 'Do it.\ntouches:\n  - docs/\n\n  - lib/b.ts\nThe rest.\n' > "$tmp/brief-tblank.md"
+for b in tcase tcomment tblank; do
+  STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight, brief-$b" -- start "${B[@]}" --brief-file "$tmp/brief-$b.md"
+  expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"
+done
+printf 'Do it.\ntouches: [docs/c#.md]   # the page\n' > "$tmp/brief-thash.md"
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tdocs/c#.md')" check 0 "start: the conflict foresight, a # in a path" -- start "${B[@]}" --brief-file "$tmp/brief-thash.md"
+expect_in "foresight: TOUCHES #31: 31-a - docs/c#.md"
+# the contract passes check-contract before a worker or a lead starts (CORE §4, #267): the one in the brief
+# (a block after a `---` line holding any key check-contract requires; a rule above it is no contract) or
+# --contract; the temporary copy of the brief's contract is removed (TMPDIR for .sh, TMP / TEMP for .ps1)
+cc="$core/tests/check-contract"
+ct="$tmp/ct"; mkdir -p "$ct"; ctw="$ct"; command -v cygpath >/dev/null 2>&1 && ctw="$(cygpath -m "$ct")"
+{ printf 'Do it.\n---\nnot a contract\n'; cat "$cc/budget-time.md"; printf '\nThe rest of the brief.\n'; } > "$tmp/brief-cwarn.md"
+{ printf 'Do it.\n\n'; cat "$cc/tests-first-missing.md"; } > "$tmp/brief-cerr.md"
+C=(--repo "$tmp/repo" --branch 67-check --model opus --safety "$tmp/safety.json" --report-to x)
+TMPDIR="$ct" TMP="$ctw" TEMP="$ctw" check 0 "start: a contract in the brief with a WARN starts" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cwarn.md" --dry-run
+expect_in "contract in the brief: WARN  budget.time (about an hour) is not minutes"
+expect_in "contract in the brief: OK (0 errors, 1 warnings)"
+expect_in "[dry-run] (cd "
+: > "$STUB_LOG"
+TMPDIR="$ct" TMP="$ctw" TEMP="$ctw" check 1 "start: a contract in the brief with an ERROR is refused" -- start --name "#67 lead: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md"
+expect_in "contract in the brief: ERROR missing \`tests_first\`"
+expect_in "contract in the brief: FAIL (1 errors, 0 warnings)"
+expect_in "refused: the contract fails check-contract - fix the ERROR lines above before it goes out"
+[ -d "$tmp/repo/.claude/worktrees/67-check" ] && { echo "FAIL: a worktree was created for a contract with an ERROR"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/67-check && { echo "FAIL: a branch was created for a contract with an ERROR"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: claude was called for a contract with an ERROR"; fail=1; }
+[ -z "$(ls -A "$ct")" ] || { echo "FAIL: the contract's temporary file was left behind:"; ls -A "$ct" | sed 's/^/    /'; fail=1; }
+# a contract missing `id:`, and one left open at the brief's end, are still checked (never "none found");
+# a `---` block holding none of the contract's keys is no contract
+{ printf 'Do it.\n\n'; sed '/^id:/d' "$cc/budget-time-ok.md"; } > "$tmp/brief-cnoid.md"
+{ printf 'Do it.\n\n'; sed '$d' "$cc/tests-first-missing.md"; } > "$tmp/brief-copen.md"
+printf 'Do it.\n---\nNotes: keep it short.\nsee: the docs\n---\nThe rest.\n' > "$tmp/brief-crule.md"
+check 1 "start: a contract in the brief without id is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cnoid.md" --dry-run
+expect_in "contract in the brief: ERROR missing \`id\`"
+expect_in "refused: the contract fails check-contract"
+check 1 "start: an unclosed contract in the brief with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-copen.md" --dry-run
+expect_in "contract in the brief: ERROR missing \`tests_first\`"
+expect_in "refused: the contract fails check-contract"
+check 0 "start: a --- block that is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-crule.md" --dry-run
+expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
+expect_in "[dry-run] (cd "
+# quoted Markdown front matter (title: is common there) is no contract either (#267)
+printf 'Make docs/p.md with:\n---\ntitle: My page\nlayout: post\n---\nBody.\n' > "$tmp/brief-cfront.md"
+check 0 "start: quoted front matter with title: is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cfront.md" --dry-run
+expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
+check 1 "start: --contract with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --contract "$cc/tests-first-missing.md" --dry-run
+expect_in "tests-first-missing.md: ERROR missing \`tests_first\`"
+expect_in "refused: the contract fails check-contract"
+case "$LAST" in *"[dry-run]"*) echo "FAIL: the dry run went on after the contract's ERROR"; fail=1 ;; esac
+check 0 "start: --contract that passes" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --contract "$cc/budget-time-ok.md" --dry-run
+expect_in "budget-time-ok.md: OK (0 errors, 0 warnings)"
+case "$LAST" in *"contract in the brief"*) echo "FAIL: --contract given, the brief's contract was checked too"; fail=1 ;; esac
+check 0 "start: a brief without a contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --dry-run
+expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
+check 0 "start: no contract check for a verifier" -- start --name "#67 verifier: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --dry-run
+case "$LAST" in *"check-contract"*|*"contract in the brief"*) echo "FAIL: a verifier start checked the contract"; fail=1 ;; esac
 : > "$STUB_LOG"
 check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low
 grep -q -- "--bg --name #54 worker: e --model opus --effort low --permission-mode auto" "$STUB_LOG" ||
@@ -399,6 +472,8 @@ wt="$tmp/repo/.claude/worktrees/12-fix"
 check 3 "cleanup: mistyped worktree path" -- cleanup --worktree "$tmp/repo/.claude/worktrees/12-fxi" --session s1
 expect_in "NO WORKTREE"
 check 3 "cleanup: the main checkout" -- cleanup --worktree "$tmp/repo"
+# a commit of its own: never pushed is refused (an empty never-pushed branch is removed, #257, below)
+g -C "$wt" commit -q --allow-empty -m first
 check 3 "cleanup: never pushed" -- cleanup --worktree "$wt"
 expect_in "NO UPSTREAM"
 g -C "$wt" commit -q --allow-empty -m work && git -C "$wt" push -q -u origin 12-fix 2>/dev/null
@@ -612,7 +687,9 @@ if [ "\$3 \$4" = "worktree remove" ] && [ -f "$tmp/leave-folder" ]; then
 fi
 exec "$realgit" "\$@"
 EOF
-printf '%s\n' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
+# (MSYS noglob: the bash started from PowerShell gets git's arguments as given - its own globbing would
+# expand the braces of `<ref>^{commit}`)
+printf '%s\n' '$env:MSYS = ("$env:MSYS noglob").Trim()' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
 mk 26-fix; : > "$tmp/leave-folder"
 PATH="$gw:$PATH" STUB_HEADS="$h" check 0 "cleanup: git leaves the folder empty - it is removed" -- cleanup --worktree "$w"
 expect_in "removed the empty folder git left"
@@ -621,6 +698,128 @@ mk 27-fix; : > "$tmp/leave-folder"
 PATH="$gw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: git leaves the folder with a file - kept, reported" -- cleanup --worktree "$w"
 expect_in "is no longer a worktree but not empty - left as is"
 [ -f "$w/held" ] || { echo "FAIL: a folder with a file in it was touched"; fail=1; }
+
+# --- nothing to lose (#257): a branch with no commits beyond its base, never pushed, in a clean worktree
+# is removed without a merged PR (gh is not needed: it fails here); a commit, a push, an upstream or a
+# dirty worktree keeps today's checks and leaves everything as is ---
+me() {   # me <branch> [<start>]: a worktree on a new branch with no commits of its own, not pushed
+  w="$tmp/repo/.claude/worktrees/$1"
+  git -C "$tmp/repo" worktree add -q --no-track -b "$1" "$w" "${2:-main}"
+}
+kept() {   # kept <branch> <what>: the worktree, the branch and the checkout are all still there
+  [ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify "refs/heads/$1" &&
+    [ "$(git -C "$w" symbolic-ref -q HEAD)" = "refs/heads/$1" ] || { echo "FAIL ($2): the worktree or branch $1 was touched"; fail=1; }
+}
+gone() {   # gone <branch> <what>: the worktree and the branch are removed
+  [ -d "$w" ] && { echo "FAIL ($2): the worktree $w is still there"; fail=1; }
+  git -C "$tmp/repo" show-ref -q --verify "refs/heads/$1" && { echo "FAIL ($2): the branch $1 is still there"; fail=1; }
+}
+me 30-empty
+printf '%s %s %s %s\n' e3030303 e3030303-1111-4222-8333-444455556666 running "#30 worker: e" > "$SS"
+printf 'e3030303\t%s\n' "$(native "$w")" > "$SS.cwd"
+: > "$STUB_LOG"
+STUB_GH_RC=1 check 0 "cleanup: an empty never-pushed branch, dry run" -- cleanup --worktree "$w" --session e3030303 --dry-run
+expect_in "EMPTY: 30-empty has no commits beyond origin/main and was never pushed - would be removed"
+expect_in "[dry-run] git -C"
+kept 30-empty "empty branch, dry run"
+grep -v -x 'agents --json --all' "$STUB_LOG" | grep -q . && { echo "FAIL: the empty-branch dry run called claude beyond the listing:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+STUB_GH_RC=1 check 0 "cleanup: an empty never-pushed branch" -- cleanup --worktree "$w" --session e3030303
+expect_in "EMPTY: 30-empty has no commits beyond origin/main and was never pushed - removed"
+expect_in "cleaned: e3030303"
+gone 30-empty "empty branch"
+grep -qx "stop e3030303" "$STUB_LOG" && grep -qx "rm e3030303" "$STUB_LOG" || { echo "FAIL: the empty branch's session was not stopped and removed"; fail=1; }
+# one commit, never pushed: refused as before
+me 31-empty; g -C "$w" commit -q --allow-empty -m one
+STUB_GH_RC=1 check 3 "cleanup: one commit, never pushed" -- cleanup --worktree "$w"
+expect_in "UNKNOWN"
+check 3 "cleanup: one commit, never pushed (gh works)" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"
+kept 31-empty "one commit"
+# no commits but pushed with -u: the merged-PR checks as before
+me 32-empty; git -C "$w" push -q -u origin 32-empty 2>/dev/null
+check 3 "cleanup: an empty branch pushed with -u" -- cleanup --worktree "$w"
+expect_in "NOT MERGED"
+kept 32-empty "pushed with -u"
+# its upstream configured but the remote branch and its local copy gone: still not "never pushed"
+me 33-empty; git -C "$w" push -q -u origin 33-empty 2>/dev/null; git -C "$w" push -q origin --delete 33-empty 2>/dev/null
+git -C "$tmp/repo" update-ref -d refs/remotes/origin/33-empty 2>/dev/null
+check 3 "cleanup: an empty branch with an upstream configured" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"
+kept 33-empty "upstream configured"
+# pushed without -u and its origin/<branch> not fetched (a narrow fetch refspec): ls-remote finds it
+me 34-empty; git -C "$w" push -q origin 34-empty 2>/dev/null
+git -C "$tmp/repo" update-ref -d refs/remotes/origin/34-empty 2>/dev/null
+git -C "$tmp/repo" config remote.origin.fetch '+refs/heads/main:refs/remotes/origin/main'
+check 3 "cleanup: an empty branch on origin, not fetched" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"
+git -C "$tmp/repo" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+kept 34-empty "on origin, not fetched"
+# a dirty worktree (an untracked file): refused as before
+me 35-empty; echo dirt > "$w/dirt.txt"
+STUB_GH_RC=1 check 3 "cleanup: an empty branch, untracked file" -- cleanup --worktree "$w"
+expect_in "NOT CLEAN"
+kept 35-empty "untracked file"
+rm -f "$w/dirt.txt"
+# a session of another folder: SESSION FOREIGN as for a merged branch, nothing touched
+me 36-empty; : > "$STUB_LOG"
+printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#36 worker: e" > "$SS"
+printf 'f0e1d2c3\t%s\n' "$(native "$tmp/other")" > "$SS.cwd"
+check 5 "cleanup: an empty branch, a foreign session" -- cleanup --worktree "$w" --session f0e1d2c3
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+kept 36-empty "foreign session"
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a foreign session of an empty branch was stopped or removed"; fail=1; }
+# a commit made after the checks, as its session stops: decided again before anything is deleted -
+# CHANGED, exit 3, the branch with the new commit and the worktree kept
+me 40-empty
+printf '%s %s %s %s\n' e4040404 e4040404-1111-4222-8333-444455556666 running "#40 worker: e" > "$SS"
+printf 'e4040404\t%s\n' "$(native "$w")" > "$SS.cwd"
+STUB_STOP_COMMIT="$w" STUB_GH_RC=1 check 3 "cleanup: an empty branch gets a commit as its session stops" -- cleanup --worktree "$w" --session e4040404
+expect_in "CHANGED: "
+expect_in " moved since the checks - left as is"
+kept 40-empty "a commit as the session stops"
+[ "$(git -C "$w" rev-list --count main..HEAD)" = 1 ] || { echo "FAIL: the commit made as the session stopped is gone"; fail=1; }
+# the removal fails (a locked worktree, as a folder a just-stopped session holds): the branch is put
+# back on the worktree at the same commit, and a run once the removal works removes it as EMPTY
+me 41-empty; git -C "$tmp/repo" worktree lock "$w"
+STUB_GH_RC=1 check 1 "cleanup: an empty branch, the removal fails" -- cleanup --worktree "$w"
+expect_in "REMOVE FAILED: git worktree remove "
+expect_in "; branch 41-empty put back at "
+kept 41-empty "the removal fails"
+git -C "$tmp/repo" worktree unlock "$w"
+STUB_GH_RC=1 check 0 "cleanup: an empty branch, run again once the removal works" -- cleanup --worktree "$w"
+expect_in "EMPTY: 41-empty has no commits beyond origin/main and was never pushed - removed"
+gone 41-empty "run again once the removal works"
+# git unregisters the worktree but leaves a file in the folder: the branch is put back in the repository
+me 42-empty; : > "$tmp/leave-folder"
+PATH="$gw:$PATH" STUB_GH_RC=1 LEAVE_FILE=1 check 1 "cleanup: an empty branch, git leaves the folder with a file" -- cleanup --worktree "$w"
+expect_in "is no longer a worktree but not empty - left as is; branch 42-empty put back at "
+git -C "$tmp/repo" show-ref -q --verify refs/heads/42-empty || { echo "FAIL: the branch was not put back after the failed removal"; fail=1; }
+# pushed to another remote only (refs/remotes/backup/<branch>): not never pushed - the usual checks
+git init -q --bare "$tmp/backup.git" && git -C "$tmp/repo" remote add backup "$tmp/backup.git"
+me 43-empty; git -C "$w" push -q backup 43-empty 2>/dev/null
+STUB_GH_RC=1 check 3 "cleanup: an empty branch pushed to another remote" -- cleanup --worktree "$w"
+expect_in "UNKNOWN"
+kept 43-empty "pushed to another remote"
+git -C "$tmp/repo" remote remove backup
+# the main checkout's HEAD behind the base (origin/main moved on, local main did not): the branch is
+# still deleted with git branch -d (checked against its own commit, not the main checkout's HEAD)
+git clone -q "$tmp/remote.git" "$tmp/server2" 2>/dev/null && g -C "$tmp/server2" commit -q --allow-empty -m "main moves on" &&
+  git -C "$tmp/server2" push -q origin main 2>/dev/null
+git -C "$tmp/repo" fetch -q
+me 37-empty origin/main
+STUB_GH_RC=1 check 0 "cleanup: an empty branch ahead of the main checkout's HEAD" -- cleanup --worktree "$w"
+expect_in "EMPTY: 37-empty has no commits beyond origin/main and was never pushed - removed"
+gone 37-empty "ahead of the main checkout's HEAD"
+# no origin at all (a local-only repository): the base is the local main
+git init -q -b main "$tmp/local" && g -C "$tmp/local" commit -q --allow-empty -m init
+w="$tmp/local/.claude/worktrees/38-empty"; git -C "$tmp/local" worktree add -q -b 38-empty "$w" main
+STUB_GH_RC=1 check 0 "cleanup: an empty branch, no origin" -- cleanup --worktree "$w"
+expect_in "EMPTY: 38-empty has no commits beyond main and was never pushed - removed"
+[ -d "$w" ] && { echo "FAIL (no origin): the worktree is still there"; fail=1; }
+git -C "$tmp/local" show-ref -q --verify refs/heads/38-empty && { echo "FAIL (no origin): the branch is still there"; fail=1; }
+w="$tmp/local/.claude/worktrees/39-empty"; git -C "$tmp/local" worktree add -q -b 39-empty "$w" main && g -C "$w" commit -q --allow-empty -m one
+STUB_GH_RC=1 check 3 "cleanup: one commit, no origin" -- cleanup --worktree "$w"
+[ -d "$w" ] && git -C "$tmp/local" show-ref -q --verify refs/heads/39-empty || { echo "FAIL (one commit, no origin): touched"; fail=1; }
 
 # --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
 ac() { local role="$1"; shift
