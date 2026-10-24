@@ -409,6 +409,10 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
 
 ## 6. Review standard
 
+- **The coordinator publishes the verdict:** the verifier publishes nothing (roles/verifier.md); the
+  coordinator posts its prepared comment where the team reads it (§11) and marks the PR ready per
+  `PROJECT.md`, after checking the PR's head is the approved commit (#262) — the flow by design, not a
+  retry of a refused action (TOOLKIT *Modes*).
 - The reviewer runs the **verifier role** ([roles/verifier.md](roles/verifier.md)) on the contract, the
   report and the change (and the tester's commit, where a tester ran, #237): contract first, `oracle` checks run itself, every result keeps its evidence class
   (oracle / review / claim, [CONTRACT.md](CONTRACT.md)); each criterion is checked against the source it
