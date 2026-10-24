@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The scripted steps of the coordinator's self-test (procedures/SELFTEST.md; Windows: selftest.ps1 -
-# the same steps and output). The steps with real sessions are run by the coordinator, not here.
+# the same steps and output). The steps with real sessions are run by the coordinator, not here - but
+# for the guard's probe sessions, which `probes` starts and checks itself.
 #   scripts/selftest.sh scripts                      1: the core's checks and scripts on fixtures
 #   scripts/selftest.sh env [--repo <owner/name>]    2: claude, git and gh versions; read-only GitHub
 # In a project (procedures/SELFTEST.md, the normal case) - the state repository, evidence kept:
@@ -15,9 +16,17 @@
 #   scripts/selftest.sh hooks --settings <settings.json>   the guard hook's command: forward slashes, no $env:,
 #                                                       no PowerShell shell that turns its exit 2 into 1;
 #                                                       env COORD_PROTECTED_ROOT: a folder, edit tools matched
-#   scripts/selftest.sh hookcheck --session <id> [--expect edit]   a session told to push to main (with
-#                                                       edit: to Write into the protected root): its transcript
-#                                                       shows the block, not a non-blocking hook error
+#   scripts/selftest.sh hookcheck --session <id> [--expect edit|probe]   a session told to push to main
+#                                                       (edit: to Write into the protected root; probe: to echo
+#                                                       the probe token): its transcript shows the block, not
+#                                                       a non-blocking hook error
+#   scripts/selftest.sh probes --project <root> [--worker-settings <file>] [--own] [--edit-root <root>]
+#                          [--model <m>] [--timeout <s>]   2a: the probe sessions, started from <root> and
+#                                                       checked as hookcheck does: push (the worker file),
+#                                                       push (own settings), edit (a Write into <root>); a
+#                                                       token in <root>/.claude/coordinator-probe.txt for
+#                                                       the run only; each stopped (step 6 removes it).
+#                                                       Model haiku, timeout 300 s by default
 # For the core itself (the maintainer, CI) - a sandbox, kept between runs or removed:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -27,18 +36,22 @@
 #                                                    6: no worktree, branch, session or selftest/* branch
 #                                                       left; then the sandbox folder is removed - or, with
 #                                                       --keep, kept: only main, at the sandbox's first commit
-# Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`.
-# Exit 1 on any FAIL, 2 on a usage error.
+# Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`;
+# probes also `BLOCKED <session name> (launch failed: <its first output line>)`, then `, <b> blocked`.
+# Exit 1 on any FAIL or BLOCKED, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,42s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
-p=0; f=0; s=0
+p=0; f=0; s=0; nb=0
 pass() { echo "PASS $step: $1"; p=$((p + 1)); }
 fail() { echo "FAIL $step: $1"; f=$((f + 1)); }
 skip() { echo "SKIP $step: $1"; s=$((s + 1)); }
-finish() { echo "selftest $step: $p pass, $f fail, $s skipped"; [ "$f" -eq 0 ] || exit 1; exit 0; }
+finish() {
+  if [ "$nb" -gt 0 ]; then echo "selftest $step: $p pass, $f fail, $s skipped, $nb blocked"; exit 1; fi
+  echo "selftest $step: $p pass, $f fail, $s skipped"; [ "$f" -eq 0 ] || exit 1; exit 0
+}
 # check <what> -- command...: PASS when it exits 0
 check() { local what="$1"; shift 2; if "$@" >/dev/null 2>&1; then pass "$what"; else fail "$what"; fi; }
 g() { git -c user.email=selftest@localhost -c user.name=selftest "$@"; }
@@ -136,6 +149,45 @@ sessions() {
   printf '%s\n' "$x" | sed -n 's/^F /SKIP foreign self-test session /p'
   n="$(printf '%s\n' "$x" | sed -n 's/^O //p' | awk 'NR > 1 { printf ", " } { printf "%s", $0 }')"
   [ -z "$n" ] && pass "no self-test session left" || fail "sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): $n"
+}
+# find_tx <id>: the transcript of the session whose id starts with <id>, in $tx; else exit 1 (none yet)
+# or 2 (a pattern or path character in the id, or several transcripts: names none) with why in $tx
+find_tx() {
+  local all
+  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
+  case "$1" in *[][*?/\\]*) tx="the session id $1 holds a pattern or path character"; return 2 ;; esac
+  all="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$1*.jsonl" 2>/dev/null)"
+  [ -n "$all" ] || { tx="no transcript for session $1"; return 1; }
+  if [ "$(printf '%s\n' "$all" | wc -l | tr -d ' ')" -gt 1 ]; then
+    tx="ambiguous session $1: $(printf '%s\n' "$all" | sed 's|.*/||; s|\.jsonl$||' | LC_ALL=C sort | paste -sd ' ' -)"; return 2
+  fi
+  tx="$all"
+}
+# the guard's block of the probe token (hooks/safety-guard, #259)
+probe_block="Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt)"
+# verdict <transcript> <push|edit|probe> [<label>]: the PASS or FAIL line of a probe session, from its
+# transcript (hookcheck and probes; <label>: before the message)
+verdict() {
+  local tf="$1" pre="${3:+$3: }"
+  if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
+    fail "${pre}the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
+  elif [ "$2" = edit ]; then
+    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
+    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
+    if grep -q "Blocked by safety-guard: the owner's working copy is never edited by a worker" "$tf"; then
+      pass "${pre}the edit tool's write into the working copy was blocked through Claude Code"
+    elif grep -Eq 'File created successfully at|has been updated successfully' "$tf"; then
+      fail "${pre}the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
+    else fail "${pre}no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)"; fi
+  elif [ "$2" = probe ]; then
+    # the token probe: only the guard's block of the probe token, in a tool's result (not a message
+    # quoting it), counts: the hook ran from that session's settings, through its shell, and exit 2 held
+    if grep '"tool_result"' "$tf" | grep -qF "$probe_block"; then
+      pass "${pre}the command holding the probe token was blocked through Claude Code"
+    else fail "${pre}no block: the hook did not run from these settings, or it runs a guard older than this core (no probe-token rule)"; fi
+  elif grep 'Blocked by safety-guard' "$tf" | grep -v "the owner's working copy is never edited" | grep -vqF "$probe_block"; then
+    pass "${pre}the push to a protected branch was blocked through Claude Code"
+  else fail "${pre}no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
 }
 
 case "$step" in
@@ -494,27 +546,120 @@ hookcheck)
     esac
   done
   [ -n "$id" ] || usage
-  case "$expect" in push|edit) ;; *) usage ;; esac
-  # the id is a prefix, not a pattern; a prefix of several sessions names none of them
-  case "$id" in *[][*?/\\]*) fail "the session id $id holds a pattern or path character"; finish ;; esac
-  all="$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 -name "$id*.jsonl" 2>/dev/null)"
-  [ -n "$all" ] || { fail "no transcript for session $id"; finish; }
-  if [ "$(printf '%s\n' "$all" | wc -l | tr -d ' ')" -gt 1 ]; then
-    fail "ambiguous session $id: $(printf '%s\n' "$all" | sed 's|.*/||; s|\.jsonl$||' | LC_ALL=C sort | paste -sd ' ' -)"; finish
+  case "$expect" in push|edit|probe) ;; *) usage ;; esac
+  find_tx "$id" || { fail "$tx"; finish; }
+  verdict "$tx" "$expect"
+  finish ;;
+
+probes)
+  project="" ws="" own="" er="" model=haiku tmo=300
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project) [ $# -ge 2 ] || usage; project="$2"; shift 2 ;;
+      --worker-settings) [ $# -ge 2 ] || usage; ws="$2"; shift 2 ;;
+      --own) own=1; shift ;;
+      --edit-root) [ $# -ge 2 ] || usage; er="$2"; shift 2 ;;
+      --model) [ $# -ge 2 ] && [ -n "$2" ] || usage; model="$2"; shift 2 ;;
+      --timeout) [ $# -ge 2 ] || usage; tmo="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  # at least one probe; the edit probe runs with the worker safety file
+  [ -n "$project" ] && [ -n "$ws$own$er" ] || usage
+  [ -z "$er" ] || [ -n "$ws" ] || usage
+  case "$tmo" in ''|*[!0-9]*) usage ;; esac
+  [ "$tmo" -gt 0 ] || usage
+  poll="${COORD_PROBE_POLL:-5}"; case "$poll" in ''|*[!0-9]*) poll=5 ;; esac
+  [ -d "$project" ] || { fail "no folder $project"; finish; }
+  pd="$(abspath "$project")"
+  if [ -n "$ws" ]; then
+    [ -f "$ws" ] || { fail "no settings file $ws"; finish; }
+    ws="$(abspath "$(dirname "$ws")")/${ws##*/}"
   fi
-  tf="$all"
-  if grep '"hook_non_blocking_error"' "$tf" | grep -q 'safety-guard'; then
-    fail "the guard blocked, but Claude Code got it as a non-blocking error: a shell wrapper turns exit 2 into 1"
-  elif [ "$expect" = edit ]; then
-    # the edit probe: a Write into the root (COORD_PROTECTED_ROOT) - only the guard's working-copy
-    # block counts, which it gives for Edit / Write / MultiEdit / NotebookEdit calls only
-    if grep -q "Blocked by safety-guard: the owner's working copy is never edited by a worker" "$tf"; then
-      pass "the edit tool's write into the working copy was blocked through Claude Code"
-    elif grep -Eq 'File created successfully at|has been updated successfully' "$tf"; then
-      fail "the write into the working copy went through: COORD_PROTECTED_ROOT is not in the settings' env, or its matcher leaves out the edit tools"
-    else fail "no working-copy block in the transcript: the hook did not run (its matcher, COORD_PROTECTED_ROOT, or the settings were not loaded)"; fi
-  elif grep 'Blocked by safety-guard' "$tf" | grep -vq "the owner's working copy is never edited"; then pass "the push to a protected branch was blocked through Claude Code"
-  else fail "no block in the transcript: the hook did not run (its path, its shell, or the settings were not loaded)"; fi
+  # the probes, in launch order: N session names, L labels, E what hookcheck expects, S --settings, P prompts
+  N=(); L=(); E=(); S=(); P=(); n=0
+  tok="coord-probe-$(date +%s)-$$$RANDOM$RANDOM"
+  msg="Run exactly this one shell command: echo $tok
+Then report in one line what happened to it, and stop. Do not run anything else."
+  add() { N[$n]="$1"; L[$n]="$2"; E[$n]="$3"; S[$n]="$4"; P[$n]="$5"; n=$((n + 1)); }
+  [ -z "$ws" ] || add "probe: push" push probe "$ws" "$msg"
+  [ -z "$own" ] || add "probe: push (own settings)" "push (own settings)" probe "" "$msg"
+  ef="" efold=""
+  if [ -n "$er" ]; then
+    while :; do case "$er" in ?*/|?*\\) er="${er%?}" ;; *) break ;; esac; done
+    if [ -d "$er" ]; then
+      # the probe's file, and whether it was there before the run (then it is left as it was)
+      ef="$er/probe-root.txt"; [ -e "$ef" ] && efold=1
+      add "probe: edit" edit edit "$ws" "Use the Write tool to create $ef containing x. Do not retry it another way. Report in one line what happened, and stop."
+    else fail "edit: no folder $er"; fi
+  fi
+  [ "$n" -gt 0 ] || finish
+  # the token, for this run only: removed on every way out (the end, a FAIL, Ctrl-C), after the
+  # sessions are stopped
+  tfile="$pd/.claude/coordinator-probe.txt"; I=(); D=(); T=(); stopped=""
+  probes_end() {
+    local k=0
+    if [ -z "$stopped" ]; then stopped=1
+      while [ "$k" -lt "$n" ]; do [ -z "${I[$k]:-}" ] || claude stop "${I[$k]}" >/dev/null 2>&1; k=$((k + 1)); done
+    fi
+    rm -f "$tfile"
+  }
+  trap probes_end EXIT; trap 'exit 130' INT TERM HUP
+  mkdir -p "$pd/.claude" && printf '%s\n' "$tok" > "$tfile" || { fail "cannot write $tfile"; finish; }
+  # all launched first, from the project root (trusted), then all waited for
+  k=0
+  while [ "$k" -lt "$n" ]; do
+    if ! command -v claude >/dev/null 2>&1; then out="claude not found on PATH"; rc=1
+    elif [ -n "${S[$k]}" ]; then out="$(cd "$pd" && claude --bg --name "${N[$k]}" --model "$model" --settings "${S[$k]}" "${P[$k]}" 2>&1)"; rc=$?
+    else out="$(cd "$pd" && claude --bg --name "${N[$k]}" --model "$model" "${P[$k]}" 2>&1)"; rc=$?; fi
+    # the short id, from the line `claude stop <id>   stop this session`
+    I[$k]="$(printf '%s\n' "$out" | tr -d '\r' | sed -n 's/^.*claude stop \([A-Za-z0-9_-][A-Za-z0-9_-]*\).*$/\1/p' | head -n 1)"
+    if [ "$rc" -ne 0 ] || [ -z "${I[$k]}" ]; then
+      echo "BLOCKED ${N[$k]} (launch failed: $(printf '%s\n' "$out" | tr -d '\r' | awk 'NF { print; f = 1; exit } END { if (!f) print "no output, exit '"$rc"'" }'))"
+      nb=$((nb + 1)); D[$k]=3
+    else D[$k]=0; fi
+    k=$((k + 1))
+  done
+  # each transcript polled until its turn ends (turn_duration) or the time is up
+  t0="$(date +%s)"
+  while :; do
+    left=0; k=0
+    while [ "$k" -lt "$n" ]; do
+      if [ "${D[$k]}" = 0 ]; then
+        find_tx "${I[$k]}"; rc=$?
+        if [ "$rc" = 0 ] && grep -Eq '"subtype": *"turn_duration"' "$tx"; then D[$k]=1; T[$k]="$tx"
+        elif [ "$rc" = 2 ]; then D[$k]=2; T[$k]="$tx"
+        else left=$((left + 1)); fi
+      fi
+      k=$((k + 1))
+    done
+    [ "$left" -gt 0 ] && [ $(($(date +%s) - t0)) -lt "$tmo" ] || break
+    sleep "$poll"
+  done
+  k=0
+  while [ "$k" -lt "$n" ]; do
+    case "${D[$k]}" in
+      1) verdict "${T[$k]}" "${E[$k]}" "${L[$k]}" ;;
+      2) fail "${L[$k]}: ${T[$k]}" ;;
+      0) fail "${L[$k]}: no answer within $tmo s" ;;
+    esac
+    k=$((k + 1))
+  done
+  # stopped; their cost is read and they are removed in step 6
+  k=0; ids=""
+  while [ "$k" -lt "$n" ]; do
+    if [ -n "${I[$k]}" ]; then
+      claude stop "${I[$k]}" >/dev/null 2>&1
+      ids="$ids${ids:+, }${N[$k]} (${I[$k]})"
+    fi
+    k=$((k + 1))
+  done
+  stopped=1
+  [ -z "$ids" ] || echo "stopped: $ids - step 6 reads their cost and removes them"
+  # a probe-root.txt the edit probe created is removed - exactly that file
+  if [ -n "$ef" ] && [ -z "$efold" ] && [ -f "$ef" ]; then
+    rm -f "$ef" && echo "removed $ef, which the edit probe created" || fail "edit: could not remove $ef, which the edit probe created"
+  elif [ -n "$efold" ]; then echo "left as it was: $ef was there before the edit probe"; fi
   finish ;;
 
 prepare|verify)

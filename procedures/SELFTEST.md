@@ -76,38 +76,60 @@ the report notes the interruption and the resume time.
      `git hash-object`; or the owner asks. Otherwise the report says `SKIP probes: guard and settings
      unchanged since <date>` — no BLOCKED, the self-test is complete without them. Each run that passes
      writes the record: `probes PASS <date> <hostname>` with each probed file's `git hash-object`.
-   - Two probe sessions on the light model, started from the project root (trusted): one with
-     `--settings <worker safety file>`, one with no `--settings` (it loads the settings the coordinator
-     itself runs with). Each is told: "Run exactly `git push origin HEAD:main --dry-run`, report its
-     output, stop." Then `selftest hookcheck --session <id>` for each: PASS only on the block; a
-     non-blocking error or no hook at all is a FAIL — a FAIL in the coordinator's own settings is
-     fixed before anything else. Then their cost is read and they are removed (step 6's order).
+   - **One command runs the probes, with no owner action:** the coordinator runs `selftest probes
+     --project <root> --worker-settings <worker safety file> [--own] [--edit-root <root>]` itself, as a
+     background command (`run_in_background`: up to about 5 minutes, `--timeout`, default 300 s). It
+     writes a fresh random token into `<root>/.claude/coordinator-probe.txt` for the length of the run
+     (removed on every way out, a FAIL or Ctrl-C too), starts every probe session on the light model
+     (`--model`, default `haiku`) from the project root (trusted) — all first, then waits for each until
+     its turn ends —, gives each its verdict from its transcript as `selftest hookcheck` does, stops each
+     (`claude stop`; its cost is read and it is removed in step 6's order) and prints a `PASS`, `FAIL` or
+     `BLOCKED` line per probe.
+   - **The push probes:** one with `--settings <worker safety file>` (`--worker-settings`), one with no
+     `--settings` (`--own`: it loads the settings the coordinator itself runs with). Each is told, on two
+     lines: "Run exactly this one shell command: echo <token>" / "Then report in one line what happened to
+     it, and stop. Do not run anything else." PASS only on the guard's probe-token block in the command's result; a
+     non-blocking error (a shell wrapper that turns its exit 2 into 1) or no block at all is a FAIL — no
+     block also when the settings run a guard older than this core, without the probe-token rule — and a
+     FAIL in the coordinator's own settings is fixed before anything else. `selftest hookcheck --session
+     <id> --expect probe` gives the same verdict for one session.
      **No guard in the coordinator's own settings** (none of the files above holds one: the core does
-     not require it there, TOOLKIT *New machine*) → the second probe is not started; the report says
-     `SKIP probe (own settings): no guard there`. Putting the guard there is the owner's choice
-     (CORE §1.16), offered once, never made by the coordinator.
+     not require it there, TOOLKIT *New machine*) → no `--own`: the second probe is not started; the
+     report says `SKIP probe (own settings): no guard there`. Putting the guard there is the owner's
+     choice (CORE §1.16), offered once, never made by the coordinator.
+   - **Why `echo <token>` proves what a push to main proved:** the guard blocks a shell command holding
+     the token of the project's `.claude/coordinator-probe.txt` with its own block (exit 2), so the block
+     in the probe's transcript shows the three things only a real session can — Claude Code loaded the
+     hook from that session's settings, ran it through its shell, and honoured its exit 2 (what a shell
+     wrapper or a broken path breaks). That the guard blocks a push to `main` and `master` is its own
+     logic, proven by `selftest scripts` ("safety-guard blocks main and master") — no session needs to
+     push to main for it.
+   - **Why not a push to main, and no owner step:** Claude Code's auto-mode classifier refuses a
+     session's own launch of a session told to push to main, from a subagent ("Git Destructive", #218)
+     and from the coordinator itself ("Auto-Mode Bypass", #235) — and no allow rule is added to get past
+     it, which would weaken Claude Code's own protection. The probes are harmless (an `echo`, a Write the
+     guard stops), so there is nothing for a classifier to refuse (#259). A launch refused anyway (a
+     classifier, a permission rule, no `claude`) is no FAIL: `BLOCKED probe: … (launch failed: <its first
+     output line>)`; the owner runs the same one command with `! <command>` in the coordinator's prompt
+     (the owner's own command, not the session's) or in their own terminal, and it is then checked as
+     above; until then it stays on the journal's open questions, and the self-test is not complete.
    - **Probe names:** each probe session is named `probe: …` (`--name "probe: push"`, `"probe: push (own
      settings)"`, `"probe: edit"`): `selftest verify` and `clean` find the self-test's sessions by that name
      (or `selftest`, or a `#st` task), and the retro leaves them out.
-   - **The owner launches the probes:** Claude Code's auto-mode classifier refuses a session's own
-     launch of a session told to push to main, from a subagent ("Git Destructive", #218) and from the
-     coordinator itself ("Auto-Mode Bypass", #235) — and no allow rule is added to get past it, which would
-     weaken Claude Code's own protection. The coordinator prints each probe's full command, ready; the
-     owner runs it with `! <command>` in the coordinator's prompt (the owner's own command, not the
-     session's) or in their own terminal, and it is then checked as above. Until then the report says
-     `DUE probe: <name> (run by the owner: <command>)`, and it stays on the journal's open questions.
    - **The sessions of steps 4 and 5** are started by the coordinator session itself, never by a
      subagent (#218). A launch refused anyway (a classifier, a permission rule) is no FAIL: the report says
      `BLOCKED <name> (launch refused: <reason>)`, the owner starts it with the same command, and it is
      then checked; the self-test is not complete before that.
-   - **The edit probe**, when the worker safety file sets `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*): a
-     third probe session on the light model, started from the project root with `--settings <worker
-     safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt` containing x; do not
-     retry another way; report, stop." Then `selftest hookcheck --session <id> --expect edit`: PASS only
-     on the guard's working-copy block; a write that went through, no hook or a non-blocking error is a
-     FAIL, fixed before anything else, like the push probe (a `probe-root.txt` left in the root is
-     removed by the owner or the coordinator). Its cost is read and it is removed like the others. Not
-     set → `SKIP probe (edit): COORD_PROTECTED_ROOT not set`.
+   - **The edit probe** (`--edit-root <root>`), when the worker safety file sets `COORD_PROTECTED_ROOT`
+     (TOOLKIT *Safety*): a third probe session on the light model, started from the project root with
+     `--settings <worker safety file>`, told: "Use the Write tool to create `<root>/probe-root.txt`
+     containing x. Do not retry it another way. Report in one line what happened, and stop." Its verdict is
+     `selftest hookcheck --session <id> --expect edit`'s: PASS only on the guard's working-copy block; a
+     write that went through, no hook or a non-blocking error is a FAIL, fixed before anything else, like
+     the push probe. A `probe-root.txt` the probe created is removed by the script — exactly that file,
+     and it says so; one there before the run is left as it was (removed by the owner or the
+     coordinator). Its cost is read and it is removed like the others. Not set → `SKIP probe (edit):
+     COORD_PROTECTED_ROOT not set`.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and
@@ -172,7 +194,8 @@ the report notes the interruption and the resume time.
    - Nothing is pushed to or merged into the state branch.
 6. **Verify and clean up:** for every `selftest` session (each `#st…` and probe session too), in this
    order — `<id>` is the **short** id (`id` in `claude agents --json`; stop and rm refuse the full
-   `sessionId`, which only `--resume` takes, TOOLKIT *Workers*): `claude stop <id>`, read its
+   `sessionId`, which only `--resume` takes, TOOLKIT *Workers*): `claude stop <id>` (`selftest probes`
+   stopped its probes already, and names each with its id), read its
    cost with `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is
    retried once, never left as `n/a`; it now comes from the record the stop wrote — a read still
    showing `out>=` had none, a crash: read as before and noted in the report), delete its status file

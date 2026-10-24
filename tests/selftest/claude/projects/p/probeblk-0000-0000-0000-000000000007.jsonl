@@ -1,0 +1,5 @@
+{"type":"attachment","attachment":{"type":"hook_success","hookName":"SessionStart:startup","exitCode":0}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo coord-probe-1791042522-4f1c2a9b7e3d"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"PreToolUse:Bash hook error: [bash C:/core/scripts/hooks/safety-guard.sh]: Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds. If this is a false positive, ask the owner.","is_error":true}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"The command was blocked by the safety-guard hook."}],"stop_reason":"end_turn"}}
+{"type":"system","subtype":"turn_duration","durationMs":4210}

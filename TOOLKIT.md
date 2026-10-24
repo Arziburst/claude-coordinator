@@ -263,7 +263,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   as much as to the workers'. Hooks load at session start: a fixed settings file is proven only in a
   new session. Checks: `selftest hooks --settings <file>` reads a settings file; `selftest hookcheck
   --session <id>` reads the transcript of a session told to push to `main` — the block, or the
-  non-blocking error, or no hook at all. So the settings example runs the
+  non-blocking error, or no hook at all (`--expect probe`: a session told to `echo` the self-test's probe
+  token; `--expect edit`: the edit probe). `selftest probes` starts the probe sessions itself and checks
+  each the same way, with no owner step (SELFTEST step 2a): while it runs, the guard blocks a Bash or
+  PowerShell command holding the token it writes into the project's `.claude/coordinator-probe.txt`
+  (the first line, 16+ letters, digits and `-`; read from `CLAUDE_PROJECT_DIR`), so a harmless `echo`
+  shows the hook loaded, run and its exit 2 honoured, with nothing for the auto mode's classifier to
+  refuse (#259). So the settings example runs the
   hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`: a
   push to `main` must block and a work-branch push must pass, so a guard that blocks everything — a
   syntax error does — fails too); a failure there means: fix before starting workers.
@@ -418,7 +424,9 @@ BOM, models priced apart),
   a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
   / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
-  errors), `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
+  errors), `tests/selftest/probes.sh` (`selftest probes` against a stub `claude` that feeds the token
+  probe's `echo` to this core's guard and writes the transcript; `hookcheck --expect probe`),
+  `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
   Windows, the ones that read native output or print `§` run the `.ps1` with the console on code page 866,
   as on a Russian Windows.
@@ -479,10 +487,11 @@ BOM, models priced apart),
   message instead of a parse error, and check-scripts parses it with `pwsh` (skipped where there is
   none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
   where it exists.
-  `scripts/selftest.sh|.ps1 scripts|env|hooks|hookcheck|prepare|verify` (in a project: the state repository, evidence kept)
+  `scripts/selftest.sh|.ps1 scripts|env|hooks|hookcheck|probes|prepare|verify` (in a project: the state repository, evidence kept;
+  `probes` starts the guard's probe sessions itself, up to about 5 minutes: a background command)
   and `sandbox|clean` (the core itself: a sandbox at a fixed path, which `clean --keep` resets to its
   first commit and keeps, so the owner trusts its repo once; a full `clean` removes it) — the scripted steps of the self-test
-  ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines, exit 1 on a FAIL. The
+  ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines (`probes`: `BLOCKED` too), exit 1 on a FAIL (or a `BLOCKED`). The
   `.ps1` runs the `.ps1` scripts under every PowerShell on the machine (5.1 and pwsh).
 
 ## Usage and limits
