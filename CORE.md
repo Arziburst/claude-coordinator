@@ -662,7 +662,8 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   start-up → keep or cache, per `PROJECT.md`.
 - **Cleanup after integration:** stop the worker, remove its copy, environments and temp folders **only
   if the PR is verified merged, the copy clean and every commit on the remote** (no upstream = unpushed);
-  otherwise report the leftovers, never delete them.
+  a copy whose branch has no commit beyond its base and was never pushed, clean, has nothing to lose and
+  goes without a PR (cleanup-worker, #257); otherwise report the leftovers, never delete them.
 
 ## 9. Autopilot and budget
 

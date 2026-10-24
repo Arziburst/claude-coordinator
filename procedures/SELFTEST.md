@@ -25,7 +25,13 @@ passed here, so the owner can go back to a proven version. It does **not** repla
   branch), `selftest/<commit>/st1` (the lead's integration branch), `selftest/<commit>/st1.<n>` (its
   workers), `selftest/<commit>/task-1` (the PR flow). Nothing is ever merged into the state branch.
 - Their **worktrees** live under the project's trusted root, `<project>/.claude/worktrees/` (the
-  project's git ignores it — `selftest prepare` checks and, if needed, adds it to `info/exclude`).
+  project's git ignores it — `selftest prepare` checks and, if needed, adds it to `info/exclude`):
+  each at `<project>/.claude/worktrees/selftest/<commit>/<name>` (start-worker puts a worktree at
+  `<worktree root>/<branch>`). **Never** under the state repository's own `coordinator/.claude/worktrees/`
+  (start-worker's default for `--repo <project>/coordinator` without `--worktree-root`, or a `git -C
+  coordinator worktree add .claude/worktrees/…`): that folder lies inside the project root, and with
+  `COORD_PROTECTED_ROOT` set (TOOLKIT *Safety*) the guard refuses a worker's `Write` / `Edit` there — it
+  exempts only `<project>/.claude/worktrees/` (#260).
 - Every test session starts from the **project root** (trusted at init) with start-worker
   `--repo <project>/coordinator --launch-from <project> --worktree-root <project>/.claude/worktrees`:
   start-worker then tells it to work in its worktree **by absolute path, without EnterWorktree**
@@ -60,7 +66,10 @@ the report notes the interruption and the resume time.
    session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
    - `selftest hooks --settings <file>` on the worker safety file and on every settings file of the
      coordinator's own session that holds the guard (the project's `.claude/settings.json` and
-     `.claude/settings.local.json`, the user's `~/.claude/settings.json`).
+     `.claude/settings.local.json`, the user's `~/.claude/settings.json`). On the coordinator's own files
+     `SKIP hooks: COORD_PROTECTED_ROOT not set` is expected: the protected root does not apply to the
+     coordinator, which writes `coordinator/` inside the root (TOOLKIT *Safety*); any other SKIP there is
+     offered to the owner as in UPDATE-CORE step 3 (#256).
    - **When the probe sessions run** (the owner's decision, #235): only when something they prove can
      have changed — no `probes` record in `CHECKLIST.md` for this `hostname` (a new machine); the update
      changed `scripts/hooks/safety-guard.*`; a settings file they probe differs from its recorded
@@ -102,7 +111,9 @@ the report notes the interruption and the resume time.
    - A settings file fixed during the test is proven again in a **new** session: hooks load at start.
 3. **Prepare:** `selftest prepare --project <root> --state <root>/coordinator --core <c>` — the
    project's git ignores `.claude/worktrees`; `selftest/<c>/base` is created from the state branch and
-   pushed where there is a remote. It refuses a commit already tested here. It also checks
+   pushed where there is a remote, with its worktree at `<project>/.claude/worktrees/selftest/<c>/base`
+   (for step 4's merge); the `worktrees:` line names the folder the run's worktrees go to and the
+   worktree root to pass. It refuses a commit already tested here. It also checks
    `coordinator/CORE-FINDINGS.md`: present, with the template's table header, every row's status a
    known one.
 4. **Mini block**, with the project's real start-worker (BINDINGS) and worker safety file:
@@ -118,7 +129,8 @@ the report notes the interruption and the resume time.
    - **Lead:** start-worker (the flags above) `--branch selftest/<c>/st1 --base selftest/<c>/base
      --name "#st1 lead: selftest <P>" --model sonnet --effort low --report-to <the coordinator>`; the brief
      is `roles/lead.md`, the contract `tests/selftest/contract.md` with `<c>` filled in, and the
-     start-worker command for its workers (the same flags, `--base selftest/<c>/st1`, branches
+     start-worker command for its workers (the same flags — `--worktree-root <project>/.claude/worktrees`
+     too, so each lands in `<project>/.claude/worktrees/selftest/<c>/st1.<n>` — `--base selftest/<c>/st1`, branches
      `selftest/<c>/st1.<n>`, `--report-to "#st1 lead: selftest <P>"`, the light model, `--effort low`, at most
      two at once, names `#st1.<n> worker: selftest <P> …`): "no PR: merge each approved sub-branch into
      `selftest/<c>/st1` and push it where there is a remote".
@@ -131,7 +143,8 @@ the report notes the interruption and the resume time.
      **verifier** subagent gives a verdict on each; the lead merges them and reports (`runs` included).
    - **The coordinator** checks the oracles itself (`git show selftest/<c>/st1:a.txt` → `a`, `b.txt` →
      `b`), then merges `selftest/<c>/st1` into `selftest/<c>/base` (a worktree of the base under
-     `.claude/worktrees/`, `merge --no-ff`, pushed where there is a remote).
+     `.claude/worktrees/`: the one `selftest prepare` made, `<project>/.claude/worktrees/selftest/<c>/base`;
+     `merge --no-ff`, pushed where there is a remote).
    - **Tester, scout, researcher:** each started as a subagent on the light model with "read
      `<core>/roles/<role>.md` (the absolute path); answer in one line: `role: <the name in its
      frontmatter>; contract: st1`". PASS only when the line gives the exact role name (`tester`,
@@ -167,7 +180,9 @@ the report notes the interruption and the resume time.
    <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (a session
    is any that `claude agents --json --all` lists, `done` too, named with `selftest` or `probe:` or
    starting with `#st`; the FAIL names each with its short id; clean, merged worktrees are
-   removed; only a session whose `cwd` is inside the run's own folders counts — the project root, the
+   removed — wherever git lists them, so one an older self-test left at the old place,
+   `coordinator/.claude/worktrees/`, too: one on another run's branch counts as merged into that run's
+   `selftest/<commit>/base`; only a session whose `cwd` is inside the run's own folders counts — the project root, the
    state repository, the worktree roots of `PROJECT.md` (for `clean`: the sandbox) — while another
    project's on the same machine gets a line `SKIP foreign self-test session <id> (<cwd>)` and is never
    advised for removal), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
