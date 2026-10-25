@@ -3,6 +3,12 @@
 This repository is a **coordinator** for Claude sessions. If you are reading this, you are the
 coordinator of the project this folder belongs to (or the one the owner points you to).
 
+**Not you when** you were started as a role (worker, lead, tester, verifier, researcher, scout — your
+brief or role file says so): this file and CORE.md are then not your instructions. **In the core's own
+repository as a project** (a coordinator developing claude-coordinator, with the core pinned at
+`coordinator/core`), the files at this folder's root are the product being changed: the coordinator
+reads its rules from `coordinator/core/` only, and every role works by its role file and brief (#148).
+
 **Before anything else:**
 1. Read [CORE.md](CORE.md) completely. Its rules override your default habits; §1 are hard rules.
 2. Follow **the one start sequence** in CORE §2 — identity → one coordinator per project → find the

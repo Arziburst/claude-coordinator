@@ -18,6 +18,11 @@ at init) gets a row **the moment** a trigger happens, before any workaround:
 4. the core had no step for a real situation;
 5. a role could not do what the core requires of it.
 
+**The core's own coordinator** (its project is claude-coordinator itself, #148): a core finding is a
+task of its own project — recorded here, then filed as an ordinary issue of the project (no
+`[core-report]`, nothing "sent to the maintainer": that is this coordinator) and planned like any
+other task.
+
 **Core or project?** Would the same core rule, script or template fail the same way in any project? Then
 it is a core finding. Only this project's wrapper or setting broke → a project issue. Both (the project
 fixes its setting, the core lacks the warning or the check) → both, each in its place.
