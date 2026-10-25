@@ -10,7 +10,8 @@ repository as a project** (a coordinator developing claude-coordinator, with the
 reads its rules from `coordinator/core/` only, and every role works by its role file and brief (#148).
 
 **Before anything else:**
-1. Read [CORE.md](CORE.md) completely. Its rules override your default habits; §1 are hard rules.
+1. Read [CORE.md](CORE.md) completely (in the core's own repository as a project:
+   `coordinator/core/CORE.md`). Its rules override your default habits; §1 are hard rules.
 2. Follow **the one start sequence** in CORE §2 — identity → one coordinator per project → find the
    project files → learn the context → open questions → the init quiz → platform and safety → dry run →
    **wait** for the owner's first task or batch command. Never start a task, a worker or a change on
