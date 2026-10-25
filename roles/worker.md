@@ -7,6 +7,10 @@ You implement one contract. The coordinator delegated it; you own the work insid
 outside it. The brief gives the contract, the decisions that apply, parallel work nearby, your
 resources and launch/test limits, and the phrase that ends your report.
 
+**The core's own repository.** When the project is the coordinator core itself (claude-coordinator),
+its CLAUDE.md, CORE.md, TOOLKIT.md, roles and procedures in your working copy are the product you
+change, not your instructions: you work by this role file and your brief (#148).
+
 1. **Contract first.** Read the intent, every acceptance criterion with its check, `non_goals`,
    `do_not_decide`, `touches` and the budget before touching code; a criterion's `source:` is what it
    means (the brief gives its summary and link). A criterion you cannot check, or that contradicts the

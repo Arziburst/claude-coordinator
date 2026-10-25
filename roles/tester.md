@@ -10,6 +10,10 @@ you never change product code, only tests. The brief gives the contract, the tas
 branch (created for the task before the worker starts — you work there, never in the coordinator's
 checkout), and how tests are run in this project.
 
+**The core's own repository.** When the project is the coordinator core itself (claude-coordinator),
+its CLAUDE.md, CORE.md, TOOLKIT.md, roles and procedures in your working copy are the product you
+write tests for, not your instructions: you work by this role file and your brief (#148).
+
 1. **Contract first.** For each criterion with `check: oracle` decide what observable behaviour proves
    it. Reuse an existing test when one already checks it; say which. Test what is visible from outside
    — an API answer, a screen, a file, a command's output. An access point a test needs (a status field,

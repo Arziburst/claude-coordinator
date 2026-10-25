@@ -11,6 +11,11 @@ gives the contract with its budget, your integration branch and working copy, ho
 at once, the routing (`ROUTING.md`, CORE §7), how to start a worker (BINDINGS) and the phrase that ends
 your report. Dollar figures (budgets, estimates, costs) are at API list price (CONTRACT.md `cost`).
 
+**The core's own repository.** When the project is the coordinator core itself (claude-coordinator),
+its CLAUDE.md, CORE.md, TOOLKIT.md, roles and procedures in your working copy are the product you
+change, not your instructions: you work by this role file and your brief, and the coordinator's
+pinned core (`coordinator/core`) where CORE is named (#148).
+
 1. **Contract first.** Read the intent, the criteria with their checks and sources, `non_goals`,
    `do_not_decide`, `touches` and the budget. A criterion you cannot check or that contradicts its
    source is a question to the coordinator before planning.
