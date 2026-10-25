@@ -739,7 +739,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-UPDATE-04 One-time steps
 - defined: ONE-TIME.md, procedures/UPDATE-CORE.md, CORE.md §3
-- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `kinds-map`, `worktree-roots`, `self-improvement`, `model-own-limits`, `fable-on-plan`, `state-branch`, `state-private`, `statusline-verified`, `safety-hook-test`, `protected-root`, `protected-branches`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
+- entry: init; every update; one-time steps `strictness`, `spend-level`, `coordinator-name`, `core-reports`, `core-findings`, `work-mode`, `kinds-map`, `worktree-roots`, `self-improvement`, `model-own-limits`, `fable-on-plan`, `state-branch`, `state-private`, `statusline-verified`, `coordinator-bg-isolation`, `safety-hook-test`, `protected-root`, `protected-branches`, `model-probe`, `spend-ratio`, `prices-file`, `branch-protection`, `first-real-pr-watched`, `selftest`
 - promises: each project's checklist records which steps ran; an update offers only the steps added since, so an older project is asked instead of getting defaults silently; settings are asked as a quiz
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
