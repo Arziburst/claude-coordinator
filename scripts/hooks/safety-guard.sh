@@ -482,6 +482,23 @@ block() {
   echo "Blocked by safety-guard: $1. If this is a false positive, ask the owner." >&2
   exit 2
 }
+# --- the self-test's probe (SELFTEST step 2a, #259): `selftest probes` writes a random token into the
+# project's .claude/coordinator-probe.txt for the length of its run and starts sessions told to run
+# `echo <token>`; a Bash / PowerShell command holding the token is blocked. That block in a probe's
+# transcript shows Claude Code runs this hook from that session's settings and honours exit 2, with
+# nothing in the probe a classifier could refuse (sessions told to push to main were refused, #218,
+# #235). A file that is missing, unreadable or holds no token of 16+ letters, digits and - is ignored. ---
+probe_file="${CLAUDE_PROJECT_DIR:-.}/.claude/coordinator-probe.txt"
+if [ -n "$cmd" ] && [ -f "$probe_file" ]; then
+  probe_tok=""; IFS= read -r probe_tok < "$probe_file" 2>/dev/null
+  # without a CR line end or a UTF-8 BOM before it (Get-Content in the .ps1 drops both)
+  probe_tok="${probe_tok%$'\r'}"; probe_tok="${probe_tok#$'\357\273\277'}"
+  case "$probe_tok" in *[!A-Za-z0-9-]*) probe_tok="" ;; esac
+  if [ ${#probe_tok} -ge 16 ]; then
+    case "$cmd" in *"$probe_tok"*) block "the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds" ;; esac
+  fi
+fi
+
 has() { printf '%s' "$lines" | grep -Eiq -- "$1"; }
 
 # --- split the command into simple commands, one per line, words separated by tabs ---

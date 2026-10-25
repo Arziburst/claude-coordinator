@@ -311,6 +311,19 @@ function Block([string]$why) {
   [Console]::Error.WriteLine("Blocked by safety-guard: $why. If this is a false positive, ask the owner.")
   exit 2
 }
+# --- the self-test's probe (SELFTEST step 2a, #259): `selftest probes` writes a random token into the
+# project's .claude/coordinator-probe.txt for the length of its run and starts sessions told to run
+# `echo <token>`; a Bash / PowerShell command holding the token is blocked. That block in a probe's
+# transcript shows Claude Code runs this hook from that session's settings and honours exit 2, with
+# nothing in the probe a classifier could refuse (sessions told to push to main were refused, #218,
+# #235). A file that is missing, unreadable or holds no token of 16+ letters, digits and - is ignored. ---
+$probePd = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { '.' }
+$probeFile = Join-Path (Join-Path $probePd '.claude') 'coordinator-probe.txt'
+if ($cmd -and (Test-Path -LiteralPath $probeFile -PathType Leaf)) {
+  $probeTok = ''
+  try { $probeTok = [string](Get-Content -LiteralPath $probeFile -TotalCount 1 -ErrorAction Stop) } catch { $probeTok = '' }
+  if ($probeTok.Length -ge 16 -and $probeTok -cmatch '^[A-Za-z0-9-]+$' -and $cmd.Contains($probeTok)) { Block "the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds" }
+}
 # Patterns are tested line by line, like grep: ^ and $ are a line's ends.
 function Has([string]$re) { foreach ($l in $lines) { if ($l -match $re) { return $true } }; $false }
 
