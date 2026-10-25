@@ -22,6 +22,9 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   [SOURCES.md](SOURCES.md) §3. Then install the core's roles into
   `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no question.
 - **Safety check:**
+  - **The coordinator's own background session** — run in the background in the isolating mode, it is
+    refused every Edit / Write into `coordinator/`; one-time step `coordinator-bg-isolation`
+    (ONE-TIME.md, #283) asks the owner for the project's local `worktree.bgIsolation: "none"`.
   - **Branch protection on the code host** — each protected branch (`PROJECT.md` *Protected
     branches*, question 14; not only the default branch) requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it

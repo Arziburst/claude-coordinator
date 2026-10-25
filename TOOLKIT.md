@@ -125,6 +125,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
   local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another.
+  The coordinator's own session needs the same setting when it runs in the background in the isolating
+  mode (measured on 2.1.310, Windows: whether a background session isolates depends on how it was
+  started, not the version — two coordinators started differently on the same version were never
+  refused): one-time step `coordinator-bg-isolation` (#283).
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
