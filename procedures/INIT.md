@@ -267,7 +267,7 @@ through "Coordinator, settings" (#237).
   checks and adds it before every start, so an older project gets it at its next worker; likewise
   `/.lead/`, where a lead keeps its notes inside its worktree (roles/lead.md). Never
   `.gitignore`: that is a project file its team and the client would see. Nothing else of the
-  coordinator is written into the project's tree but the `.claude/skills` link (excluded the same way) (the roles go to `~/.claude/agents/`, the hook is
+  coordinator is written into the project's tree but the `.claude/skills` link (excluded the same way) and, on the owner's yes, the local setting of the one-time step `coordinator-bg-isolation` (the roles go to `~/.claude/agents/`, the hook is
   referenced by its absolute path in `coordinator/core/`).
 - **The voice** is not asked: artifacts are always in the owner's voice, with no AI co-author lines
   (§11).
