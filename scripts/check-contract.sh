@@ -16,13 +16,22 @@
 #   - budget.model, budget.escalate_to, budget.cost or touches missing; no criterion with an oracle check;
 #   - budget.time (optional, never missed) present but not minutes or a range of them (25, 18-40).
 # Reads the structure line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
-[ $# -gt 0 ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
+#   scripts/check-contract.sh --field <key> <contract> - read-only: the same checks, and when the contract
+#   passes only the key's value as they read it (its text with continuation lines, comment and quotes
+#   removed) on one line, exit 0; else the usual ERROR and FAIL lines and exit 1 (start-worker's
+#   tests_first gate, #276)
+[ $# -gt 0 ] || { sed -n '2,22s/^# \{0,1\}//p' "$0"; exit 2; }
+field=""
+if [ "$1" = --field ]; then
+  [ $# -ge 3 ] && [ -n "$2" ] || { sed -n '2,22s/^# \{0,1\}//p' "$0"; exit 2; }
+  field="$2"; shift 2
+fi
 failed=0
 for f in "$@"; do
   { [ -f "$f" ] && [ -r "$f" ]; } || { echo "$f: cannot read"; failed=1; continue; }
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" B="$(printf '\357\273\277')" awk '
-    BEGIN { F = ENVIRON["F"]; B = ENVIRON["B"]; q = sprintf("%c", 39) }
+  F="$f" K="$field" B="$(printf '\357\273\277')" awk '
+    BEGIN { F = ENVIRON["F"]; K = ENVIRON["K"]; B = ENVIRON["B"]; q = sprintf("%c", 39) }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
       if (length(s) >= 2 && (a == "\"" || a == q) && substr(s, length(s), 1) == a) s = substr(s, 2, length(s) - 2); return s }
@@ -31,7 +40,7 @@ for f in "$@"; do
     # a top-level value that holds nothing: comments, block markers, blanks or empty quotes only
     function blank(k,   t) { t = txt[k]; gsub(/#[^\n]*/, "", t); gsub(/[>|\n \t]/, "", t); return t == "" || t == "\"\"" || t == q q }
     function err(m) { print F ": ERROR " m; ne++ }
-    function warn(m) { print F ": WARN  " m; nw++ }
+    function warn(m) { if (K == "") print F ": WARN  " m; nw++ }
     # the value of a budget key; the fixed model names in order of strength (0: a name not on this list)
     function bval(t, k,   v) { if (!match(t, "\n[ \t]+" k ":[ \t]*[^ \t\n#]+")) return ""
                               v = substr(t, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", v); return v }
@@ -131,6 +140,8 @@ for f in "$@"; do
       }
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
+      # --field: the value of the key as read above, its lines joined into one
+      if (K != "" && !ne) { v = val(txt[K]); gsub(/[ \t]*\n[ \t]*/, " ", v); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit 0 }
       print F ": " (ne ? "FAIL" : "OK") " (" ne+0 " errors, " nw+0 " warnings)"
       exit (ne ? 1 : 0)
     }' "$f" || failed=1

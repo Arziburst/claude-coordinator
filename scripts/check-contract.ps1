@@ -9,14 +9,17 @@
 # that cannot be read (`<file>: cannot read`). WARN: budget.model, .escalate_to, .cost or touches missing; no
 # oracle criterion; budget.time (optional) present but not minutes or a range (25, 18-40).
 # Reads line by line (no YAML parser), so keep the CONTRACT.md layout; values may be quoted.
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files)
+#   -Field <key> <contract>: read-only - the same checks, and when the contract passes only the key's
+#   value as they read it (its text with continuation lines, comment and quotes removed) on one line,
+#   exit 0; else the usual ERROR and FAIL lines and exit 1 (start-worker's tests_first gate, #276).
+param([string]$Field = '', [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$Files)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 11 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -152,7 +155,9 @@ foreach ($f in $Files) {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }
   # errors first, then warnings, as check-contract.sh prints them in order of the checks
-  foreach ($m in $out) { "${f}: $m" }
+  # -Field: the key's value as read above, its lines joined into one; warnings left out
+  if ($Field -and -not $ne) { ((Val $txt[$Field]) -creplace '[ \t]*\r?\n[ \t]*', ' ').Trim(' ', "`t"); continue }
+  foreach ($m in $out) { if (-not $Field -or $m.StartsWith('ERROR')) { "${f}: $m" } }
   "${f}: $(if ($ne) { 'FAIL' } else { 'OK' }) ($ne errors, $nw warnings)"
   if ($ne) { $failed = 1 }
 }

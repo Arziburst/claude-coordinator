@@ -37,9 +37,9 @@
 # only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
 # ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
 # existing file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it
-# is refused (exit 1) before anything is created (-DryRun too). `tests_first` is read from the contract
-# block as check-contract reads it (the front matter, or a top-level `contract:`), never the rest of the
-# file. A start with either flag prints one line naming the tester's tests; both flags together are
+# is refused (exit 1) before anything is created (-DryRun too). `tests_first` comes from check-contract
+# itself (`check-contract.ps1 -Field tests_first`, one parser): its contract block (the front matter, or a
+# top-level `contract:`), never the rest of the file. A start with either flag prints one line naming the tester's tests; both flags together are
 # refused. A lead or a tester start is not gated.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
@@ -160,41 +160,24 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
 }
 # the tests_first gate (CORE section 4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
-# - read from the contract block as check-contract reads it: the front matter, else the body of a
-# top-level `contract:` (dedented), else the whole file; its value without comment and quotes
+# - its value as check-contract itself reads it (its -Field option: one parser, so the two never
+# disagree), asked once the contract has passed it
 $tfYes = $false
-if ($cFile -and $crole -in @('worker', '')) {
-  $L = @([IO.File]::ReadAllText($cFile).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n")
-  $s = 0; $e = $L.Count - 1
-  if ($L.Count -and $L[0] -cmatch '^---[ \t]*$') {
-    $s = 1
-    for ($i = 1; $i -lt $L.Count; $i++) { if ($L[$i] -cmatch '^---[ \t]*$') { $e = $i - 1; break } }
-  } else {
-    for ($i = 0; $i -lt $L.Count; $i++) {
-      if ($L[$i] -cmatch '^contract:[ \t]*$') {
-        $s = $i + 1; $e = $L.Count - 1; $ind = 1000
-        for ($j = $s; $j -lt $L.Count; $j++) {
-          if ($L[$j] -cmatch '^[^ \t]') { $e = $j - 1; break }
-          if ($L[$j] -cmatch '[^ \t]') { $w = ([regex]::Match($L[$j], '^[ \t]*')).Length; if ($w -lt $ind) { $ind = $w } }
-        }
-        for ($j = $s; $j -le $e; $j++) { $L[$j] = if ($L[$j].Length -gt $ind) { $L[$j].Substring($ind) } else { '' } }
-        break
-      }
+if ($cFile) {
+  $cOut = @(); $cRc = 1; $tfOut = @(); $tfRc = 0
+  try {
+    $cOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') $cFile 2>&1 } | ForEach-Object { "$_" }); $cRc = $LASTEXITCODE
+    if ($cRc -eq 0 -and $crole -in @('worker', '')) {
+      $tfOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Field tests_first $cFile 2>&1 } | ForEach-Object { "$_" }); $tfRc = $LASTEXITCODE
     }
   }
-  $v = ''; for ($i = $s; $i -le $e; $i++) { if ($L[$i] -cmatch '^tests_first:') { $v = $L[$i].Substring(12) } }
-  $v = ($v -replace '[ \t]+#.*$', '').Trim()
-  if ($v.Length -ge 2 -and ($v[0] -eq '"' -or $v[0] -eq "'") -and $v[$v.Length - 1] -eq $v[0]) { $v = $v.Substring(1, $v.Length - 2) }
-  $tfYes = $v.ToLower() -cmatch '^yes([ \t,:;(]|$)'
-}
-if ($cFile) {
-  $cOut = @(); $cRc = 1
-  try { $cOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') $cFile 2>&1 } | ForEach-Object { "$_" }); $cRc = $LASTEXITCODE }
   catch { $cOut = @("$_") }
   finally { if ($cTmp) { Remove-Item -LiteralPath $cTmp -Force -ErrorAction SilentlyContinue } }
   # its lines name the file it read: the brief's contract by that name, not by the temporary file
   $cOut | ForEach-Object { if ($_.StartsWith("${cFile}: ")) { "${cLabel}: " + $_.Substring($cFile.Length + 2) } else { $_ } }
   if ($cRc -ne 0) { Fail "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE ${sect}4)" }
+  if ($tfRc -ne 0) { $tfOut | ForEach-Object { [Console]::Error.WriteLine($_) }; Fail "refused: check-contract could not read tests_first (CORE ${sect}4 step 3)" }
+  $tfYes = ((@($tfOut) -join "`n").Trim().ToLower()) -cmatch '^yes([ \t,:;(]|$)'
 }
 if ($tfYes -and -not $TesterCommit -and -not $TesterTests) {
   Fail "refused: $cLabel has tests_first: yes - start the worker with the tester's tests: -TesterCommit <sha> or -TesterTests <path> (CORE ${sect}4 step 3)"
