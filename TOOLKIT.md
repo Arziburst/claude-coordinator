@@ -136,7 +136,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
   `--tester-commit <sha>` / `-TesterCommit` (a commit that is the start point or an ancestor of it — a
   reused worktree's HEAD, else the branch, else the base) or `--tester-tests <path>` / `-TesterTests`
-  (an existing file or folder, a lead's case); it then prints one line naming them. Its built-in alternative (`claude --worktree <name>`, branch
+  (an existing file or folder, a lead's case) — one of them, both together are refused; it then prints
+  one line naming them. `tests_first` is read from the contract block as check-contract reads it (the
+  front matter, or a top-level `contract:`), never from the rest of the file. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*

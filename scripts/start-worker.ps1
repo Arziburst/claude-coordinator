@@ -37,8 +37,10 @@
 # only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
 # ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
 # existing file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it
-# is refused (exit 1) before anything is created (-DryRun too). A start with either flag prints one line
-# naming the tester's tests. A lead or a tester start is not gated.
+# is refused (exit 1) before anything is created (-DryRun too). `tests_first` is read from the contract
+# block as check-contract reads it (the front matter, or a top-level `contract:`), never the rest of the
+# file. A start with either flag prints one line naming the tester's tests; both flags together are
+# refused. A lead or a tester start is not gated.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
@@ -70,8 +72,11 @@ foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Mo
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
 if ($Contract -and -not (Test-Path -LiteralPath $Contract -PathType Leaf)) { Fail "-Contract: $Contract does not exist" }
-# Absolute paths: both files are used from inside the worktree.
+if ($TesterCommit -and $TesterTests) { Fail "-TesterCommit and -TesterTests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE $([char]0x00A7)4 step 3)" }
+# Absolute paths: both files are used from inside the worktree; the contract is read by .NET, whose
+# current folder is not PowerShell's.
 $Safety = (Resolve-Path -LiteralPath $Safety).Path; $BriefFile = (Resolve-Path -LiteralPath $BriefFile).Path
+$cLabel0 = $Contract; if ($Contract) { $Contract = (Resolve-Path -LiteralPath $Contract).Path }
 # a relative -WorktreeRoot is taken from the current folder (git would resolve it against the repository)
 if ($WorktreeRoot -and -not [IO.Path]::IsPathRooted($WorktreeRoot)) { $WorktreeRoot = Join-Path (Get-Location).Path $WorktreeRoot }
 
@@ -134,7 +139,7 @@ if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 # do_not_decide, tests_first; title is common in quoted front matter, #267): a contract missing some of them is still checked, never "none found"
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $crole = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $crole = $Matches[2] }
-$cFile = $Contract; $cLabel = $Contract; $cTmp = ''
+$cFile = $Contract; $cLabel = $cLabel0; $cTmp = ''
 if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
   # each `---` line ends a candidate block and opens the next (a rule above the contract is no contract)
   $cl = [IO.File]::ReadAllText($BriefFile).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n"
@@ -155,9 +160,32 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
 }
 # the tests_first gate (CORE section 4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
+# - read from the contract block as check-contract reads it: the front matter, else the body of a
+# top-level `contract:` (dedented), else the whole file; its value without comment and quotes
 $tfYes = $false
 if ($cFile -and $crole -in @('worker', '')) {
-  $tfYes = [bool](@([IO.File]::ReadAllText($cFile).Replace("`r", '') -split "`n") -match "^tests_first:\s*[`"']?yes([^\w-]|$)")
+  $L = @([IO.File]::ReadAllText($cFile).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n")
+  $s = 0; $e = $L.Count - 1
+  if ($L.Count -and $L[0] -cmatch '^---[ \t]*$') {
+    $s = 1
+    for ($i = 1; $i -lt $L.Count; $i++) { if ($L[$i] -cmatch '^---[ \t]*$') { $e = $i - 1; break } }
+  } else {
+    for ($i = 0; $i -lt $L.Count; $i++) {
+      if ($L[$i] -cmatch '^contract:[ \t]*$') {
+        $s = $i + 1; $e = $L.Count - 1; $ind = 1000
+        for ($j = $s; $j -lt $L.Count; $j++) {
+          if ($L[$j] -cmatch '^[^ \t]') { $e = $j - 1; break }
+          if ($L[$j] -cmatch '[^ \t]') { $w = ([regex]::Match($L[$j], '^[ \t]*')).Length; if ($w -lt $ind) { $ind = $w } }
+        }
+        for ($j = $s; $j -le $e; $j++) { $L[$j] = if ($L[$j].Length -gt $ind) { $L[$j].Substring($ind) } else { '' } }
+        break
+      }
+    }
+  }
+  $v = ''; for ($i = $s; $i -le $e; $i++) { if ($L[$i] -cmatch '^tests_first:') { $v = $L[$i].Substring(12) } }
+  $v = ($v -replace '[ \t]+#.*$', '').Trim()
+  if ($v.Length -ge 2 -and ($v[0] -eq '"' -or $v[0] -eq "'") -and $v[$v.Length - 1] -eq $v[0]) { $v = $v.Substring(1, $v.Length - 2) }
+  $tfYes = $v.ToLower() -cmatch '^yes([ \t,:;(]|$)'
 }
 if ($cFile) {
   $cOut = @(); $cRc = 1

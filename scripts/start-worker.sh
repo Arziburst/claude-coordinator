@@ -40,8 +40,10 @@
 # with the tester's tests - --tester-commit <sha>, a commit that is the worker's start point or an ancestor
 # of it (a reused worktree's HEAD, else the branch, else the base), or --tester-tests <path>, an existing
 # file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it is
-# refused (exit 1) before anything is created (--dry-run too). A start with either flag prints one line
-# naming the tester's tests. A lead or a tester start is not gated.
+# refused (exit 1) before anything is created (--dry-run too). `tests_first` is read from the contract
+# block as check-contract reads it (the front matter, or a top-level `contract:`), never the rest of the
+# file. A start with either flag prints one line naming the tester's tests; both flags together are
+# refused. A lead or a tester start is not gated.
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
@@ -78,6 +80,7 @@ fi
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
+[ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
 eff=(); [ -z "$effort" ] || eff=(--effort "$effort")
@@ -168,9 +171,27 @@ if [ -n "$cfile" ]; then
 fi
 # the tests_first gate (CORE §4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
+# - read from the contract block as check-contract reads it: the front matter, else the body of a
+# top-level `contract:` (dedented), else the whole file; its value without comment and quotes
 tfyes=0
 if [ -n "$cfile" ]; then case "$crole" in worker|"")
-  tr -d '\r' < "$cfile" | grep -Eiq "^tests_first:[[:space:]]*[\"']?yes([^[:alnum:]_-]|\$)" && tfyes=1 ;; esac; fi
+  tfyes="$(B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"]; q = sprintf("%c", 39) }
+    { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1); L[++n] = $0 }
+    END { s = 1; e = n
+      if (L[1] ~ /^---[ \t]*$/) { s = 2; for (i = 2; i <= n; i++) if (L[i] ~ /^---[ \t]*$/) { e = i - 1; break } }
+      else for (i = 1; i <= n; i++) if (L[i] ~ /^contract:[ \t]*$/) {
+        s = i + 1; e = n; ind = 1000
+        for (j = s; j <= n; j++) {
+          if (L[j] ~ /^[^ \t]/) { e = j - 1; break }
+          if (L[j] ~ /[^ \t]/) { match(L[j], /^[ \t]*/); if (RLENGTH < ind) ind = RLENGTH }
+        }
+        for (j = s; j <= e; j++) L[j] = substr(L[j], ind + 1)
+        break
+      }
+      v = ""; for (i = s; i <= e; i++) if (L[i] ~ /^tests_first:/) { v = L[i]; sub(/^tests_first:/, "", v) }
+      sub(/[ \t]+#.*$/, "", v); gsub(/^[ \t]+|[ \t]+$/, "", v); a = substr(v, 1, 1)
+      if (length(v) >= 2 && (a == "\"" || a == q) && substr(v, length(v), 1) == a) v = substr(v, 2, length(v) - 2)
+      print (tolower(v) ~ /^yes([ \t,:;(]|$)/) ? 1 : 0 }' "$cfile")" ;; esac; fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 if [ "$tfyes" = 1 ] && [ -z "$tcommit" ] && [ -z "$ttests" ]; then
   echo "refused: $clabel has tests_first: yes - start the worker with the tester's tests: --tester-commit <sha> or --tester-tests <path> (CORE §4 step 3)" >&2; exit 1
