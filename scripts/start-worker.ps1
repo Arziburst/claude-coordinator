@@ -2,7 +2,8 @@
 # (Windows; macOS / Linux: start-worker.sh - the same steps and checks).
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
-#       -ReportTo <coordinator session> [-Contract <file>] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
+#       -ReportTo <coordinator session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>]
+#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -32,9 +33,16 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
+# The tests_first gate (CORE section 4 step 3, #276): a worker whose contract says `tests_first: yes` starts
+# only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
+# ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
+# existing file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it
+# is refused (exit 1) before anything is created (-DryRun too). A start with either flag prints one line
+# naming the tester's tests. A lead or a tester start is not gated.
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
-      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '')
+      [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
+      [string]$TesterCommit = '', [string]$TesterTests = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -51,11 +59,12 @@ if ($BriefFile) {
 }
 if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
-                  @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract))) {
+                  @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
@@ -144,6 +153,12 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
     [IO.File]::WriteAllText($cTmp, "---`n" + ($buf -join "`n") + "`n---`n", (New-Object System.Text.UTF8Encoding $false))
   } else { "contract: none found in the brief - check-contract not run (CORE ${sect}4)" }
 }
+# the tests_first gate (CORE section 4 step 3, #276): a worker's contract with `tests_first: yes` needs the
+# tester's tests; a lead runs its own tester, a tester writes them
+$tfYes = $false
+if ($cFile -and $crole -in @('worker', '')) {
+  $tfYes = [bool](@([IO.File]::ReadAllText($cFile).Replace("`r", '') -split "`n") -match "^tests_first:\s*[`"']?yes([^\w-]|$)")
+}
 if ($cFile) {
   $cOut = @(); $cRc = 1
   try { $cOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') $cFile 2>&1 } | ForEach-Object { "$_" }); $cRc = $LASTEXITCODE }
@@ -153,9 +168,58 @@ if ($cFile) {
   $cOut | ForEach-Object { if ($_.StartsWith("${cFile}: ")) { "${cLabel}: " + $_.Substring($cFile.Length + 2) } else { $_ } }
   if ($cRc -ne 0) { Fail "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE ${sect}4)" }
 }
+if ($tfYes -and -not $TesterCommit -and -not $TesterTests) {
+  Fail "refused: $cLabel has tests_first: yes - start the worker with the tester's tests: -TesterCommit <sha> or -TesterTests <path> (CORE ${sect}4 step 3)"
+}
+if ($TesterTests) {
+  if (-not (Test-Path -LiteralPath $TesterTests)) { Fail "-TesterTests: $TesterTests does not exist - give the tester's tests file or folder (CORE ${sect}4 step 3)" }
+  "tester's tests: $TesterTests"
+}
+$tFull = ''
+if ($TesterCommit) {
+  $tFull = & { $ErrorActionPreference = 'Continue'; "$(git -C $root rev-parse -q --verify "$TesterCommit^{commit}" 2>$null)".Trim() }
+  if (-not $tFull) { Fail "-TesterCommit: $TesterCommit is not a commit in ${root} - give the sha of the tester's commit (CORE ${sect}4 step 3)" }
+}
 
 function Run([string]$exe, [string[]]$a) {
   if ($DryRun) { "[dry-run] $exe $($a -join ' ')" } else { & $exe @a; if ($LASTEXITCODE -ne 0) { Fail "$exe failed" } }
+}
+
+# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
+# a base not on origin yet (a lead's integration branch before its first push): the local one too
+$origin = git -C $root config --get remote.origin.url
+if ($origin) {
+  # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read it as records.
+  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
+  # once: a transient DNS or network error should not stop a start
+  $lsr = {
+    $ErrorActionPreference = 'Continue'
+    $out = @(git -C $root ls-remote -q --exit-code --heads origin $Base 2>&1)
+    $script:lsErr = @($out | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } |
+      ForEach-Object { "$_".Trim() } | Where-Object { $_ }) | Select-Object -First 1
+    $LASTEXITCODE
+  }
+  $rc = & $lsr
+  if ($rc -ne 0 -and $rc -ne 2) { "origin did not answer: retrying once in 3 s"; Start-Sleep -Seconds 3; $rc = & $lsr }
+  if ($rc -eq 0) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" }
+  else {
+    git -C $root show-ref -q --verify "refs/heads/$Base" *> $null
+    $local = ($LASTEXITCODE -eq 0)
+    if ($rc -eq 2 -and $local) { "base $Base is not on origin yet: the branch starts from the local $Base"; $start = $Base }
+    elseif ($rc -eq 2) { Fail "base ${Base}: not on origin and no local branch" }
+    else { Fail "cannot reach origin to read the base ${Base}: $script:lsErr" }
+  }
+} else { $start = $Base }
+# the tester's commit is on the worker's start point (it or an ancestor of it): a reused worktree's HEAD,
+# else the existing branch, else the base - still before anything is created
+if ($tFull) {
+  if (Test-Path -LiteralPath (Join-Path $wt '.git')) {
+    $sp = & { $ErrorActionPreference = 'Continue'; "$(git -C $wt rev-parse -q --verify HEAD 2>$null)".Trim() }; $spl = "the worktree's HEAD"
+  } elseif ($hasBranch) { $sp = "refs/heads/$Branch"; $spl = "the branch $Branch" }
+  else { $sp = $start; $spl = "the base $start" }
+  $anc = & { $ErrorActionPreference = 'Continue'; if (-not $sp) { return 1 }; git -C $root merge-base --is-ancestor $tFull $sp 2>$null; $LASTEXITCODE }
+  if ($anc -ne 0) { Fail "-TesterCommit: $TesterCommit is not on the worker's start point (${spl}): neither it nor an ancestor of it - the tester's commit goes on the task branch or its base (CORE ${sect}4 step 3)" }
+  "tester's tests: commit $($tFull.Substring(0, 7)), on $spl"
 }
 
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
@@ -222,31 +286,6 @@ if ($ign -ne 0) {
   }
 }
 
-# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
-# a base not on origin yet (a lead's integration branch before its first push): the local one too
-$origin = git -C $root config --get remote.origin.url
-if ($origin) {
-  # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read it as records.
-  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
-  # once: a transient DNS or network error should not stop a start
-  $lsr = {
-    $ErrorActionPreference = 'Continue'
-    $out = @(git -C $root ls-remote -q --exit-code --heads origin $Base 2>&1)
-    $script:lsErr = @($out | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } |
-      ForEach-Object { "$_".Trim() } | Where-Object { $_ }) | Select-Object -First 1
-    $LASTEXITCODE
-  }
-  $rc = & $lsr
-  if ($rc -ne 0 -and $rc -ne 2) { "origin did not answer: retrying once in 3 s"; Start-Sleep -Seconds 3; $rc = & $lsr }
-  if ($rc -eq 0) { Run git @('-C', $root, 'fetch', '-q', 'origin', $Base); $start = "origin/$Base" }
-  else {
-    git -C $root show-ref -q --verify "refs/heads/$Base" *> $null
-    $local = ($LASTEXITCODE -eq 0)
-    if ($rc -eq 2 -and $local) { "base $Base is not on origin yet: the branch starts from the local $Base"; $start = $Base }
-    elseif ($rc -eq 2) { Fail "base ${Base}: not on origin and no local branch" }
-    else { Fail "cannot reach origin to read the base ${Base}: $script:lsErr" }
-  }
-} else { $start = $Base }
 if (Test-Path -LiteralPath $wt) {
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
   $ok = & {
@@ -264,8 +303,10 @@ if (Test-Path -LiteralPath $wt) {
   "reusing worktree $wt"
 }
 else {
-  if ($hasBranch) { Run git @('-C', $root, 'worktree', 'add', $wt, $Branch) }
-  else { Run git @('-C', $root, 'worktree', 'add', '--no-track', '-b', $Branch, $wt, $start) }
+  # with a tester's commit, git's own "HEAD is now at <sha>" is left out: the line above names the commit
+  $wq = @(if ($tFull) { '-q' })
+  if ($hasBranch) { Run git (@('-C', $root, 'worktree', 'add') + $wq + @($wt, $Branch)) }
+  else { Run git (@('-C', $root, 'worktree', 'add') + $wq + @('--no-track', '-b', $Branch, $wt, $start)) }
 }
 
 $wtFwd = $wt.Replace('\', '/')

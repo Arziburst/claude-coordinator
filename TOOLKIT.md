@@ -132,7 +132,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
-  are printed, no contract found is one notice line and the start goes on. Its built-in alternative (`claude --worktree <name>`, branch
+  are printed, no contract found is one notice line and the start goes on. A worker whose contract has
+  `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
+  `--tester-commit <sha>` / `-TesterCommit` (a commit that is the start point or an ancestor of it — a
+  reused worktree's HEAD, else the branch, else the base) or `--tester-tests <path>` / `-TesterTests`
+  (an existing file or folder, a lead's case); it then prints one line naming them. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*

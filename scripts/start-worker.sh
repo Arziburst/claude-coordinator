@@ -2,7 +2,8 @@
 # Start a named worker session in its own git worktree, with the safety settings applied.
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
-#       --report-to <coordinator session> [--contract <file>] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
+#       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
+#       [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -35,11 +36,17 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
+# The tests_first gate (CORE §4 step 3, #276): a worker whose contract says `tests_first: yes` starts only
+# with the tester's tests - --tester-commit <sha>, a commit that is the worker's start point or an ancestor
+# of it (a reused worktree's HEAD, else the branch, else the base), or --tester-tests <path>, an existing
+# file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it is
+# refused (exit 1) before anything is created (--dry-run too). A start with either flag prints one line
+# naming the tester's tests. A lead or a tester start is not gated.
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" dry=0
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -57,6 +64,8 @@ while [ $# -gt 0 ]; do
     --worktree-root) need "$@"; wtroot="$2"; shift 2 ;;
     --report-to) need "$@"; report="$2"; shift 2 ;;
     --contract) need "$@"; contract="$2"; shift 2 ;;
+    --tester-commit) need "$@"; tcommit="$2"; shift 2 ;;
+    --tester-tests) need "$@"; ttests="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -67,7 +76,7 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
@@ -157,9 +166,57 @@ if [ -n "$cfile" ]; then
     index($0, F) == 1 { $0 = L substr($0, length(F) + 1) } { print }'
   [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
 fi
+# the tests_first gate (CORE §4 step 3, #276): a worker's contract with `tests_first: yes` needs the
+# tester's tests; a lead runs its own tester, a tester writes them
+tfyes=0
+if [ -n "$cfile" ]; then case "$crole" in worker|"")
+  tr -d '\r' < "$cfile" | grep -Eiq "^tests_first:[[:space:]]*[\"']?yes([^[:alnum:]_-]|\$)" && tfyes=1 ;; esac; fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
+if [ "$tfyes" = 1 ] && [ -z "$tcommit" ] && [ -z "$ttests" ]; then
+  echo "refused: $clabel has tests_first: yes - start the worker with the tester's tests: --tester-commit <sha> or --tester-tests <path> (CORE §4 step 3)" >&2; exit 1
+fi
+if [ -n "$ttests" ]; then
+  [ -e "$ttests" ] || { echo "--tester-tests: $ttests does not exist - give the tester's tests file or folder (CORE §4 step 3)" >&2; exit 1; }
+  echo "tester's tests: $ttests"
+fi
+tfull=""
+if [ -n "$tcommit" ]; then
+  tfull="$(git -C "$root" rev-parse -q --verify "$tcommit^{commit}" 2>/dev/null)" ||
+    { echo "--tester-commit: $tcommit is not a commit in $root - give the sha of the tester's commit (CORE §4 step 3)" >&2; exit 1; }
+fi
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 failed" >&2; exit 1; }; fi; }
+
+# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
+# a base not on origin yet (a lead's integration branch before its first push): the local one too
+if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
+  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
+  # once: a transient DNS or network error should not stop a start
+  lsr() { err="$(git -C "$root" ls-remote -q --exit-code --heads origin "$base" 2>&1 >/dev/null)"; }
+  rc=0; lsr || rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+    echo "origin did not answer: retrying once in 3 s"; sleep 3; rc=0; lsr || rc=$?
+  fi
+  if [ "$rc" -eq 0 ]; then run git -C "$root" fetch -q origin "$base"; start="origin/$base"
+  elif [ "$rc" -eq 2 ] && git -C "$root" show-ref -q --verify "refs/heads/$base"; then
+    echo "base $base is not on origin yet: the branch starts from the local $base"; start="$base"
+  elif [ "$rc" -eq 2 ]; then echo "base $base: not on origin and no local branch" >&2; exit 1
+  else
+    err="$(printf '%s\n' "$err" | tr -d '\r' | grep -v '^ *$' | head -n 1)"
+    echo "cannot reach origin to read the base $base: $err" >&2; exit 1
+  fi
+else start="$base"; fi
+# the tester's commit is on the worker's start point (it or an ancestor of it): a reused worktree's HEAD,
+# else the existing branch, else the base - still before anything is created
+if [ -n "$tfull" ]; then
+  if [ -e "$wt/.git" ]; then sp="$(git -C "$wt" rev-parse -q --verify HEAD 2>/dev/null || true)" spl="the worktree's HEAD"
+  elif [ "$has_branch" = 1 ]; then sp="refs/heads/$branch" spl="the branch $branch"
+  else sp="$start" spl="the base $start"; fi
+  tshort="$(printf '%s' "$tfull" | cut -c1-7)"
+  [ -n "$sp" ] && git -C "$root" merge-base --is-ancestor "$tfull" "$sp" 2>/dev/null ||
+    { echo "--tester-commit: $tcommit is not on the worker's start point ($spl): neither it nor an ancestor of it - the tester's commit goes on the task branch or its base (CORE §4 step 3)" >&2; exit 1; }
+  echo "tester's tests: commit $tshort, on $spl"
+fi
 
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
 # local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
@@ -203,25 +260,6 @@ if ! git -C "$root" check-ignore -q .lead/x; then
   fi
 fi
 
-# no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
-# a base not on origin yet (a lead's integration branch before its first push): the local one too
-if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
-  # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
-  # once: a transient DNS or network error should not stop a start
-  lsr() { err="$(git -C "$root" ls-remote -q --exit-code --heads origin "$base" 2>&1 >/dev/null)"; }
-  rc=0; lsr || rc=$?
-  if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
-    echo "origin did not answer: retrying once in 3 s"; sleep 3; rc=0; lsr || rc=$?
-  fi
-  if [ "$rc" -eq 0 ]; then run git -C "$root" fetch -q origin "$base"; start="origin/$base"
-  elif [ "$rc" -eq 2 ] && git -C "$root" show-ref -q --verify "refs/heads/$base"; then
-    echo "base $base is not on origin yet: the branch starts from the local $base"; start="$base"
-  elif [ "$rc" -eq 2 ]; then echo "base $base: not on origin and no local branch" >&2; exit 1
-  else
-    err="$(printf '%s\n' "$err" | tr -d '\r' | grep -v '^ *$' | head -n 1)"
-    echo "cannot reach origin to read the base $base: $err" >&2; exit 1
-  fi
-else start="$base"; fi
 if [ -d "$wt" ]; then
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
   wtop="$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null || true)"
@@ -232,10 +270,11 @@ if [ -d "$wt" ]; then
   cur="$(git -C "$wt" symbolic-ref --short -q HEAD || true)"
   [ "$cur" = "$branch" ] || { echo "$wt has ${cur:-a detached HEAD} checked out, not $branch" >&2; exit 1; }
   echo "reusing worktree $wt"
-elif [ "$has_branch" = 1 ]; then
-  run git -C "$root" worktree add "$wt" "$branch"
 else
-  run git -C "$root" worktree add --no-track -b "$branch" "$wt" "$start"
+  # with a tester's commit, git's own "HEAD is now at <sha>" is left out: the line above names the commit
+  wq=(); [ -z "$tfull" ] || wq=(-q)
+  if [ "$has_branch" = 1 ]; then run git -C "$root" worktree add ${wq[@]+"${wq[@]}"} "$wt" "$branch"
+  else run git -C "$root" worktree add ${wq[@]+"${wq[@]}"} --no-track -b "$branch" "$wt" "$start"; fi
 fi
 
 if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then

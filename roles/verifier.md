@@ -55,6 +55,9 @@ it) would make that work look deleted.
      the head>`). Every change must be a build-only edit the worker's
      `test_edits` names (roles/worker.md step 2); a check weakened, removed or loosened is a Blocker, an
      unnamed build-only edit a Major (#237).
+   - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
+     report says for each round whether its new or changed tests came from the tester (its commit) or
+     from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
      `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
