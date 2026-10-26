@@ -560,6 +560,58 @@ for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contra
   expect_in "[dry-run] (cd "
   case "$vn" in *tester*) ;; *) case "$LAST" in *--tester*|*-Tester*|*"tester's"*) echo "FAIL: $vn names a tester at an unchanged start"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac ;; esac
 done
+# round 2 (#276, the review of PR #286): the gate reads the contract block as check-contract does - the
+# front matter, or the body of a top-level `contract:` (check-contract.sh line 5) - and only that block
+cbody() { sed '1d;$d' "$1" | sed 's/^/  /'; }   # the front matter's lines, indented two spaces
+{ printf 'contract:\n'; cbody "$cc/budget-time-ok.md"; } > "$tmp/c276-cblock-yes.md"
+{ printf 'contract:\n'; cbody "$tmp/c276-no.md"; } > "$tmp/c276-cblock-no.md"
+{ tfno "$cc/budget-time-ok.md"; printf '\n## An example\n\ntests_first: yes\n'; } > "$tmp/c276-body-yes.md"
+{ printf 'Do it.\n\n'; cat "$tmp/c276-body-yes.md"; } > "$tmp/brief-body-yes.md"
+grep -q '^  tests_first: yes$' "$tmp/c276-cblock-yes.md" && grep -q '^  tests_first: no - ' "$tmp/c276-cblock-no.md" &&
+  grep -q '^tests_first: no - ' "$tmp/c276-body-yes.md" && [ "$(grep -c '^tests_first: yes$' "$tmp/c276-body-yes.md")" = 1 ] ||
+  { echo "FAIL: could not write the round-2 contracts"; fail=1; }
+: > "$STUB_LOG"
+check 1 "start: tests_first yes in a contract: block, no tester flag, dry run" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md" --dry-run
+expect_in "c276-cblock-yes.md: OK"; expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
+check 1 "start: tests_first yes in a contract: block, no tester flag" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md"
+expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
+for v in "--contract|$tmp/c276-cblock-no.md" "--contract|$tmp/c276-body-yes.md" "--brief-file|$tmp/brief-body-yes.md"; do
+  vf="${v%%|*}"; vp="${v#*|}"
+  if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
+  check 0 "start: unchanged, #83 worker: G $vf $(basename "$vp")" -- start --name "#83 worker: G" "${F[@]}" --branch 83-gate "${va[@]}" --dry-run
+  expect_in "[dry-run] (cd "
+  case "$LAST" in *--tester*|*-Tester*|*"tester's"*) echo "FAIL: $(basename "$vp") names a tester at an unchanged start"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac
+done
+# the existing-branch start point: the task branch is there, its worktree removed; the tester's commit is
+# the branch's tip, then an ancestor of it (a regression guard: the worker starts, one line names it)
+wtb="$tmp/repo/.claude/worktrees/84-gate"
+git -C "$tmp/repo" worktree add -q -b 84-gate "$wtb" main && g -C "$wtb" commit -q --allow-empty -m "test: t8 (tester)"
+tb="$(git -C "$wtb" rev-parse HEAD)"; tbs="$(printf '%s' "$tb" | cut -c1-7)"
+git -C "$tmp/repo" worktree remove --force "$wtb"
+[ -d "$wtb" ] && { echo "FAIL: could not remove the 84-gate worktree"; fail=1; }
+: > "$STUB_LOG"
+check 0 "start: tests_first yes, --tester-commit the existing branch's tip, no worktree" -- start --name "#84 worker: G" "${F[@]}" --branch 84-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$tb"
+one_line "$tbs"
+grep -qF -- "--bg --name #84 worker: G" "$STUB_LOG" || { echo "FAIL: the worker on the existing branch's tip was not started"; fail=1; }
+[ "$(git -C "$wtb" rev-parse HEAD 2>/dev/null)" = "$tb" ] || { echo "FAIL: the worktree is not on the existing branch's tip"; fail=1; }
+g -C "$wtb" commit -q --allow-empty -m "work on top"; git -C "$tmp/repo" worktree remove --force "$wtb"
+: > "$STUB_LOG"
+check 0 "start: tests_first yes, --tester-commit an ancestor of the existing branch's tip, no worktree" -- start --name "#84 worker: G" "${F[@]}" --branch 84-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$tb"
+one_line "$tbs"
+grep -qF -- "--bg --name #84 worker: G" "$STUB_LOG" || { echo "FAIL: the worker on an ancestor of the branch's tip was not started"; fail=1; }
+git -C "$tmp/repo" worktree remove --force "$wtb" 2>/dev/null
+# --tester-commit and --tester-tests are alternatives: both together are refused with their own message,
+# before anything is created (each value valid on its own)
+both_named() {
+  printf '%s\n' "$LAST" | grep -E -- '--tester-commit|-TesterCommit' | grep -Eq -- '--tester-tests|-TesterTests' ||
+    { echo "FAIL: no line names both --tester-commit and --tester-tests"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  case "$LAST" in *"has tests_first: yes"*|*"tester's tests:"*) echo "FAIL: both flags: not their own message"; fail=1 ;; esac
+}
+: > "$STUB_LOG"
+check 1 "start: both --tester-commit and --tester-tests, dry run" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276" --dry-run
+both_named; nothing_made 85-gate
+check 1 "start: both --tester-commit and --tester-tests" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276"
+both_named; nothing_made 85-gate
 git -C "$tmp/repo" worktree remove --force "$wtg" 2>/dev/null; git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/78-gate" 2>/dev/null
 : > "$STUB_LOG"
 check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low
