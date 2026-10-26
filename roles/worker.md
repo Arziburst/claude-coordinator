@@ -31,6 +31,9 @@ change, not your instructions: you work by this role file and your brief (#148).
    starting state made non-random (set, not rolled) with every check unchanged and a negative control
    that still fails. **CI time is a budget:** a change that adds more than the project's threshold to the full
    suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237).
+   **A later round** that changes behaviour (a review finding, a changed rule) on a §5 task or a
+   `tests_first: yes` task starts with the tester: a message without the tester's new commit leaves the
+   round incomplete — ask your report address for it, never write those tests yourself (#276).
 3. **Your branch only.** Work in your own working copy and branch, never the coordinator's checkout;
    commit and push as you go (the first push `git push -u origin <branch>`, so the branch tracks its
    remote); open the PR the contract names as a draft with `gh pr create --draft …` — `--draft`

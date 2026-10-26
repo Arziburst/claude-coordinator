@@ -41,7 +41,11 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    tests, you keep a copy in `.lead/` for the sub-contract's verifier (roles/verifier.md step 2, #237), you
    pass them in the sub-worker's brief and the sub-worker commits them on its own branch
    (your subagents work in your worktree and cannot commit in a sub-worker's) — on the sub-branch that
-   needs them, never on your integration branch, so the other sub-branches keep building. Each worker
+   needs them, never on your integration branch, so the other sub-branches keep building. Its
+   start-worker call names them: `--tester-tests <the .lead copy>` (or `--tester-commit <sha>` where a
+   tester committed), else start-worker refuses a `tests_first: yes` worker; a later sub-round that
+   changes behaviour starts with the tester again, and your message to the sub-worker names its new
+   tests (CORE §4 step 5, #276). Each worker
    is a background session named `#<task>.<n> worker: <title>` (TOOLKIT), started with the project's
    start-worker on a branch from your integration branch (`--base <it>`; unpushed, the local one is
    used — push it with `-u` at its first commit), never from main. A branch you make yourself (a stage

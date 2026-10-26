@@ -222,6 +222,7 @@ is lost (#242).
 |---|---|
 | A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
 | A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; the session named and subscribed (steps 3–4 below); its journal line (§12) |
+| A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
 | A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a); a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12) |
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
@@ -279,6 +280,8 @@ The continuous work:
    records the decision every time: `yes`, or `no` with its reason (no `oracle` criterion needs a new
    test, and the change is not §5); check-contract refuses a contract without it (#212). Under a lead
    the lead runs the tester for each sub-contract whose `tests_first` is `yes` (roles/lead.md step 3).
+   start-worker refuses a worker whose contract has `tests_first: yes` unless it names the tester's
+   tests: `--tester-commit <sha>` (on the worker's start point) or, a lead's case, `--tester-tests <path>` (#276).
 4. **Control:** every session started, by any script, gets `SendMessage(to: <its name>,
    notify_when_idle: true)` right after it starts (start-worker prints the line), and its brief names
    the coordinator's current session name as the report address (`--report-to`), never a guessed
@@ -308,7 +311,9 @@ The continuous work:
    issue and a journal line, still runnable by hand. Only "Coordinator, settings" changes the quarantine
    or its confirmation; init never asks it and the update never offers it (#237).
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
-   approved.
+   approved. On a §5 task or a `tests_first: yes` task, every later round that changes behaviour (a
+   review finding, a changed rule) starts with the tester again, and the coordinator's message that
+   sends the worker back names the tester's new commit (#276).
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
    question, steps, expected result, possible answers); read logs yourself where they answer it. Wishes
    voiced in acceptance are handled per `PROJECT.md`.

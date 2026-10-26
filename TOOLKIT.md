@@ -132,7 +132,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
-  are printed, no contract found is one notice line and the start goes on. Its built-in alternative (`claude --worktree <name>`, branch
+  are printed, no contract found is one notice line and the start goes on. A worker whose contract has
+  `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
+  `--tester-commit <sha>` / `-TesterCommit` (a commit that is the start point or an ancestor of it — a
+  reused worktree's HEAD, else the branch, else the base) or `--tester-tests <path>` / `-TesterTests`
+  (an existing file or folder, a lead's case) — one of them, both together are refused; it then prints
+  one line naming them. `tests_first` comes from check-contract itself (`--field tests_first`, *Checks*):
+  its contract block (the front matter, or a top-level `contract:`), never from the rest of the file. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
@@ -481,7 +487,9 @@ BOM, models priced apart),
 
 ## Checks
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
-  delegation, WARN goes into the brief. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
+  delegation, WARN goes into the brief. `--field <key>` / `-Field <key>` (read-only): when the contract
+  passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
+  and exit 1 — start-worker's tests_first gate asks it, one parser (#276). `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
