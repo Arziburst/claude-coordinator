@@ -612,6 +612,113 @@ check 1 "start: both --tester-commit and --tester-tests, dry run" -- start --nam
 both_named; nothing_made 85-gate
 check 1 "start: both --tester-commit and --tester-tests" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276"
 both_named; nothing_made 85-gate
+# round 3 (#276, the re-review of 2fe293c): one parser - start-worker takes tests_first from check-contract
+# itself, so the two cannot disagree. Access point: check-contract's read-only option that prints the value
+# of a key as its own extraction reads it (the key's text with its continuation lines, comment and quotes
+# removed), exit 0 and the value on one line when the contract passes, else its usual errors and exit -
+# `check-contract.sh --<fopt> tests_first <file>` / `check-contract.ps1 -<fopt> tests_first <file>`; the
+# worker names it: set fopt to that name (PowerShell takes it in any case)
+fopt=field
+cc_run() {   # cc_run [option args] <file>: check-contract of this kind, its output without CRs
+  if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "$@" 2>&1 | tr -d '\r'
+  else bash "$core/scripts/check-contract.sh" "$@" 2>&1 | tr -d '\r'; fi
+  return "${PIPESTATUS[0]}"
+}
+cc_decide() {   # cc_decide <file>: what check-contract reads - fail, yes or no into GD (a FAIL if its option and check-contract disagree)
+  local out rc prc v d=--
+  [ "$kind" = ps ] && d=-
+  cc_run "$1" > /dev/null; prc=$?
+  out="$(cc_run "$d$fopt" tests_first "$1")"; rc=$?
+  if [ "$rc" != "$prc" ]; then
+    echo "FAIL: check-contract's $fopt option exits $rc on $(basename "$1"), check-contract itself $prc"
+    printf '%s\n' "$out" | sed 's/^/    /'; fail=1; GD=fail; return
+  fi
+  [ "$rc" = 0 ] || { GD=fail; return; }
+  [ "$(printf '%s\n' "$out" | grep -c .)" = 1 ] ||
+    { echo "FAIL: check-contract's $fopt option printed not one line on $(basename "$1")"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1; }
+  v="$(printf '%s\n' "$out" | grep . | head -n 1)"
+  if printf '%s\n' "$v" | grep -Eiq '^yes([[:space:],:;(]|$)'; then GD=yes; else GD=no; fi
+}
+gate_as() {   # gate_as <decision> <label>: the last start did what check-contract read (fail / yes; no: its exit 0)
+  case "$1" in
+    fail) case "$LAST" in *"refused: the contract fails check-contract"*) ;;
+      *) echo "FAIL: $2: check-contract fails it, start-worker did not refuse on it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac ;;
+    yes) printf '%s\n' "$LAST" | grep tests_first | grep -q '§4 step 3' ||
+      { echo "FAIL: $2: check-contract reads tests_first yes, no gate refusal"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; } ;;
+  esac
+}
+drop_gate() {   # drop_gate <branch>: a start these cases wrongly let through leaves nothing for the next case
+  git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/$1" 2>/dev/null; git -C "$tmp/repo" branch -q -D "$1" 2>/dev/null; : > "$STUB_LOG"
+}
+# N1: a quoted tests_first value spanning lines reads as yes in check-contract - the gate refuses it too
+for qn in dq sq; do
+  if [ "$qn" = dq ]; then qc='"'; else qc="'"; fi
+  sed "s/^tests_first: yes\$/tests_first: ${qc}yes, because\\
+  it is cheap${qc}/" "$cc/budget-time-ok.md" > "$tmp/c276-span-$qn.md"
+  { printf 'contract:\n'; cbody "$tmp/c276-span-$qn.md"; } > "$tmp/c276-cspan-$qn.md"
+  { printf 'Do it.\n\n'; cat "$tmp/c276-span-$qn.md"; } > "$tmp/brief-span-$qn.md"
+  grep -q "^tests_first: ${qc}yes, because\$" "$tmp/c276-span-$qn.md" && grep -q "^  it is cheap${qc}\$" "$tmp/c276-span-$qn.md" &&
+    grep -q "^    it is cheap${qc}\$" "$tmp/c276-cspan-$qn.md" || { echo "FAIL: could not write the spanning contracts ($qn)"; fail=1; }
+  # the precondition: check-contract passes them (its own reading is yes: the gate's to agree with)
+  cc_run "$tmp/c276-span-$qn.md" > /dev/null || { echo "FAIL: check-contract does not pass c276-span-$qn.md"; fail=1; }
+  cc_run "$tmp/c276-cspan-$qn.md" > /dev/null || { echo "FAIL: check-contract does not pass c276-cspan-$qn.md"; fail=1; }
+  : > "$STUB_LOG"
+  check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md" --dry-run
+  expect_gate "c276-span-$qn.md"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md"
+  expect_gate "c276-span-$qn.md"; nothing_made 86-gate; drop_gate 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), a contract: block, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cspan-$qn.md" --dry-run
+  expect_gate "c276-cspan-$qn.md"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md" --dry-run
+  expect_gate "contract in the brief"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md"
+  expect_gate "contract in the brief"; nothing_made 86-gate; drop_gate 86-gate
+done
+# N2: a valid tests_first yes contract saved with CR-only line endings - check-contract fails it (then
+# start-worker refuses on its ERROR) or passes it (then the gate refuses it); never a start without the tester
+tr '\n' '\r' < "$cc/budget-time-ok.md" > "$tmp/c276-cr.md"
+[ "$(tr -cd '\n' < "$tmp/c276-cr.md" | wc -c | tr -d ' ')" = 0 ] && grep -q 'tests_first: yes' "$tmp/c276-cr.md" ||
+  { echo "FAIL: could not write the CR-only contract"; fail=1; }
+crd=fail; cc_run "$tmp/c276-cr.md" > /dev/null && crd=yes
+: > "$STUB_LOG"
+check 1 "start: tests_first yes with CR-only line endings, no tester flag, dry run" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md" --dry-run
+gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
+check 1 "start: tests_first yes with CR-only line endings, no tester flag" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md"
+gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
+# the agreement guard: for every contract the gate's cases use, and the forms the round-2 review tried,
+# start-worker (no tester flag, dry run) does what check-contract reads: refuses on its ERROR, refuses at
+# the gate on yes, starts on no - by --contract, and in a brief for the front-matter forms
+sed 's/^tests_first: yes$/tests_first: "yes"/' "$cc/budget-time-ok.md" > "$tmp/g276-dq.md"
+sed "s/^tests_first: yes\$/tests_first: 'Yes'/" "$cc/budget-time-ok.md" > "$tmp/g276-sq-cap.md"
+sed 's/^tests_first: yes$/tests_first: yes   # the oracles have no tests yet/' "$cc/budget-time-ok.md" > "$tmp/g276-comment.md"
+sed 's/^\(tests_first: no - .*\)$/\1   # yes, really/' "$tmp/c276-no.md" > "$tmp/g276-no-comment.md"
+{ printf 'contract:\n'; sed '1d;$d' "$cc/budget-time-ok.md" | sed 's/^/    /'; } > "$tmp/g276-cblock4.md"
+{ printf 'contract:\n'; sed '1d;$d' "$cc/budget-time-ok.md" | sed "s/^/$(printf '\t')/"; } > "$tmp/g276-cblock-tab.md"
+{ printf '# Task\n\nSome words.\n\ncontract:\n'; cbody "$tmp/c276-no.md"; printf 'notes: after the block\ntests_first: yes\n'; } > "$tmp/g276-cblock-later.md"
+{ cat "$tmp/c276-no.md"; printf '\ncontract:\n'; cbody "$cc/budget-time-ok.md"; } > "$tmp/g276-fm-then-cblock.md"
+sed 's/$/\r/' "$cc/budget-time-ok.md" > "$tmp/g276-crlf.md"
+{ printf '\357\273\277'; cat "$cc/budget-time-ok.md"; } > "$tmp/g276-bom.md"
+gi=0
+for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c276-cblock-yes.md" "$tmp/c276-cblock-no.md" "$tmp/c276-body-yes.md" \
+  "$cc/budget-time.md" "$cc/quoted.md" "$cc/tests-first-missing.md" "$cc/tests-first-bad.md" "$cc/tests-first-no-reason.md" \
+  "$tmp/c276-span-dq.md" "$tmp/c276-span-sq.md" "$tmp/c276-cspan-dq.md" "$tmp/c276-cspan-sq.md" "$tmp/c276-cr.md" \
+  "$tmp/g276-dq.md" "$tmp/g276-sq-cap.md" "$tmp/g276-comment.md" "$tmp/g276-no-comment.md" "$tmp/g276-cblock4.md" "$tmp/g276-cblock-tab.md" \
+  "$tmp/g276-cblock-later.md" "$tmp/g276-fm-then-cblock.md" "$tmp/g276-crlf.md" "$tmp/g276-bom.md"; do
+  gi=$((gi + 1)); gb="$(basename "$gf")"
+  [ -f "$gf" ] || { echo "FAIL: the guard's fixture $gb is missing"; fail=1; continue; }
+  cc_decide "$gf"; gd="$GD"; gw=1; [ "$gd" = no ] && gw=0
+  : > "$STUB_LOG"
+  check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run
+  gate_as "$gd" "$gb"; [ "$gw" = 0 ] || nothing_made 88-gate
+  # a brief holding it: the front-matter forms with LF endings and no BOM (a brief's contract follows its text)
+  case "$gb" in g276-crlf.md|g276-bom.md|c276-cr.md) continue ;; esac
+  [ "$(head -n 1 "$gf")" = "---" ] || continue
+  { printf 'Do it.\n\n'; cat "$gf"; } > "$tmp/brief-g$gi.md"
+  : > "$STUB_LOG"
+  check "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief-g$gi.md" --dry-run
+  gate_as "$gd" "brief with $gb"; [ "$gw" = 0 ] || nothing_made 88-gate
+done
+drop_gate 88-gate
 git -C "$tmp/repo" worktree remove --force "$wtg" 2>/dev/null; git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/78-gate" 2>/dev/null
 : > "$STUB_LOG"
 check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low

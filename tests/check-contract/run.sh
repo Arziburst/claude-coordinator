@@ -36,5 +36,42 @@ if [ "$kind" = ps ] && [ -n "$win" ]; then
       *) echo "FAIL: the caller's encoding is not back after check-contract.ps1$a (expected cp=866): $got"; fail=1 ;; esac
   done
 fi
+# the read-only option that prints a key's value as check-contract's own extraction reads it (#276: the
+# tests_first gate of start-worker takes it from here): the key's text with its continuation lines, the
+# comment and quotes removed, on one line, exit 0 when the contract passes; else the usual errors and exit.
+# The worker names the option: set fopt to that name (`--<fopt> tests_first <file>` / `-<fopt> ...`)
+fopt=field
+sed 's/^tests_first: yes$/tests_first: yes   # the oracles have no tests yet/' budget-time-ok.md > tf-comment.md
+tr '\n' '\r' < budget-time-ok.md > tf-cr.md
+cfield() {   # cfield <file>: the option's output (no CRs) in FO, its exit in FRC; check-contract's own exit in PRC
+  if [ "$kind" = ps ]; then
+    FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" tests_first "$1" 2>&1)"; FRC=$?
+    "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "$1" > /dev/null 2>&1; PRC=$?
+  else
+    FO="$(bash "$core/scripts/check-contract.sh" "--$fopt" tests_first "$1" 2>&1)"; FRC=$?
+    bash "$core/scripts/check-contract.sh" "$1" > /dev/null 2>&1; PRC=$?
+  fi
+  FO="$(printf '%s\n' "$FO" | tr -d '\r')"
+}
+fval() {   # fval <file> <extended regex for the whole one line>: passes, and prints exactly that value
+  cfield "$1"
+  [ "$FRC" = 0 ] && [ "$(printf '%s\n' "$FO" | grep -c .)" = 1 ] && printf '%s\n' "$FO" | grep . | grep -Eq "^$2\$" ||
+    { echo "FAIL: $fopt tests_first $1: expected exit 0 and one line matching '$2', got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
+}
+fval budget-time-ok.md 'yes'
+fval quoted.md 'no - tests/sort.sh and tests/empty.sh exist'
+fval tf-comment.md 'yes'
+fval tests-first-span.md 'yes, because[[:space:]]+it is cheap'
+fval tests-first-span-single.md 'yes, because[[:space:]]+it is cheap'
+for f in tests-first-no-reason.md tests-first-missing.md missing.md; do
+  cfield "$f"
+  [ "$FRC" = 1 ] || { echo "FAIL: $fopt tests_first $f: expected exit 1 (the contract fails), got $FRC"; fail=1; }
+  case "$f:$FO" in tests-first-no-reason.md:*"ERROR \`tests_first\` is neither"*|tests-first-missing.md:*"ERROR missing \`tests_first\`"*|missing.md:*"cannot read"*) ;;
+    *) echo "FAIL: $fopt tests_first $f: check-contract's usual error is not there:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1 ;; esac
+done
+# whatever check-contract makes of a CR-only file, the option says the same (pass and the value, or fail)
+cfield tf-cr.md
+[ "$FRC" = "$PRC" ] || { echo "FAIL: $fopt tests_first tf-cr.md exits $FRC, check-contract itself $PRC"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
+[ "$PRC" != 0 ] || fval tf-cr.md 'yes'
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
