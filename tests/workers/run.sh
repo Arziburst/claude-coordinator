@@ -95,6 +95,7 @@ start() {
         --report-to) a+=(-ReportTo "$2"); shift 2 ;;
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
+        --tester-commit) a+=(-TesterCommit "$2"); shift 2 ;; --tester-tests) a+=(-TesterTests "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -416,7 +417,10 @@ expect_in "foresight: TOUCHES #31: 31-a - docs/c#.md"
 # --contract; the temporary copy of the brief's contract is removed (TMPDIR for .sh, TMP / TEMP for .ps1)
 cc="$core/tests/check-contract"
 ct="$tmp/ct"; mkdir -p "$ct"; ctw="$ct"; command -v cygpath >/dev/null 2>&1 && ctw="$(cygpath -m "$ct")"
-{ printf 'Do it.\n---\nnot a contract\n'; cat "$cc/budget-time.md"; printf '\nThe rest of the brief.\n'; } > "$tmp/brief-cwarn.md"
+# these worker cases check check-contract itself: their contracts say `tests_first: no - <reason>`, so the
+# tests_first gate (#276, below) does not stand in their way
+tfno() { sed 's/^tests_first: yes$/tests_first: no - tests\/sort.sh exists already/' "$1"; }
+{ printf 'Do it.\n---\nnot a contract\n'; tfno "$cc/budget-time.md"; printf '\nThe rest of the brief.\n'; } > "$tmp/brief-cwarn.md"
 { printf 'Do it.\n\n'; cat "$cc/tests-first-missing.md"; } > "$tmp/brief-cerr.md"
 C=(--repo "$tmp/repo" --branch 67-check --model opus --safety "$tmp/safety.json" --report-to x)
 TMPDIR="$ct" TMP="$ctw" TEMP="$ctw" check 0 "start: a contract in the brief with a WARN starts" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cwarn.md" --dry-run
@@ -434,7 +438,7 @@ git -C "$tmp/repo" show-ref -q --verify refs/heads/67-check && { echo "FAIL: a b
 [ -z "$(ls -A "$ct")" ] || { echo "FAIL: the contract's temporary file was left behind:"; ls -A "$ct" | sed 's/^/    /'; fail=1; }
 # a contract missing `id:`, and one left open at the brief's end, are still checked (never "none found");
 # a `---` block holding none of the contract's keys is no contract
-{ printf 'Do it.\n\n'; sed '/^id:/d' "$cc/budget-time-ok.md"; } > "$tmp/brief-cnoid.md"
+{ printf 'Do it.\n\n'; tfno "$cc/budget-time-ok.md" | sed '/^id:/d'; } > "$tmp/brief-cnoid.md"
 { printf 'Do it.\n\n'; sed '$d' "$cc/tests-first-missing.md"; } > "$tmp/brief-copen.md"
 printf 'Do it.\n---\nNotes: keep it short.\nsee: the docs\n---\nThe rest.\n' > "$tmp/brief-crule.md"
 check 1 "start: a contract in the brief without id is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cnoid.md" --dry-run
@@ -454,13 +458,109 @@ check 1 "start: --contract with an ERROR is refused" -- start --name "#67 worker
 expect_in "tests-first-missing.md: ERROR missing \`tests_first\`"
 expect_in "refused: the contract fails check-contract"
 case "$LAST" in *"[dry-run]"*) echo "FAIL: the dry run went on after the contract's ERROR"; fail=1 ;; esac
-check 0 "start: --contract that passes" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --contract "$cc/budget-time-ok.md" --dry-run
+tfno "$cc/budget-time-ok.md" > "$tmp/budget-time-ok.md"
+check 0 "start: --contract that passes" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --contract "$tmp/budget-time-ok.md" --dry-run
 expect_in "budget-time-ok.md: OK (0 errors, 0 warnings)"
 case "$LAST" in *"contract in the brief"*) echo "FAIL: --contract given, the brief's contract was checked too"; fail=1 ;; esac
 check 0 "start: a brief without a contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --dry-run
 expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
 check 0 "start: no contract check for a verifier" -- start --name "#67 verifier: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --dry-run
 case "$LAST" in *"check-contract"*|*"contract in the brief"*) echo "FAIL: a verifier start checked the contract"; fail=1 ;; esac
+# the tests_first gate (#276): a worker whose contract (in the brief, or --contract) says `tests_first: yes`
+# starts only with the tester's tests - --tester-commit <sha> (a commit that is the start point or an
+# ancestor of it: a reused worktree's HEAD, else the base) or --tester-tests <path> (an existing file or
+# folder, a lead's case); a refusal names the contract, the missing flag and CORE §4 step 3, and comes
+# before anything is created (--dry-run too). Access points: the flags --tester-commit / -TesterCommit and
+# --tester-tests / -TesterTests; a start with either prints one line naming the commit or the path.
+{ printf 'Do it.\n\n'; cat "$cc/budget-time-ok.md"; } > "$tmp/brief-tfyes.md"
+{ printf 'Do it.\n\n'; tfno "$cc/budget-time-ok.md"; } > "$tmp/brief-tfno.md"
+cp "$cc/budget-time-ok.md" "$tmp/c276-yes.md"; tfno "$cc/budget-time-ok.md" > "$tmp/c276-no.md"
+grep -q '^tests_first: yes$' "$tmp/brief-tfyes.md" && grep -q '^tests_first: no - ' "$tmp/brief-tfno.md" ||
+  { echo "FAIL: could not write the tests_first briefs"; fail=1; }
+F=(--repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to x)
+expect_gate() {   # expect_gate <contract label>: the refusal's content, not its wording
+  printf '%s\n' "$LAST" | grep -F -- "$1" | grep -q tests_first ||
+    { echo "FAIL: no line names the contract ($1) and tests_first"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  case "$LAST" in *--tester-commit*|*-TesterCommit*|*--tester-tests*|*-TesterTests*) ;;
+    *) echo "FAIL: the refusal does not name the missing flag (--tester-commit / --tester-tests)"; fail=1 ;; esac
+  expect_in "§4 step 3"
+}
+nothing_made() {   # nothing_made <branch>: no worktree, no branch, no claude, no launch line
+  [ -d "$tmp/repo/.claude/worktrees/$1" ] && { echo "FAIL: a worktree was created ($1)"; fail=1; }
+  git -C "$tmp/repo" show-ref -q --verify "refs/heads/$1" && { echo "FAIL: a branch was created ($1)"; fail=1; }
+  grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL: claude was started ($1)"; fail=1; }
+  case "$LAST" in *"[dry-run] (cd "*) echo "FAIL: the dry run went on to the launch ($1)"; fail=1 ;; esac
+}
+one_line() {   # one_line <text>: exactly one output line names the tester's tests
+  [ "$(printf '%s\n' "$LAST" | grep -cF -- "$1")" = 1 ] ||
+    { echo "FAIL: not exactly one line names the tester's tests ($1)"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+: > "$STUB_LOG"
+check 1 "start: tests_first yes in the brief, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md" --dry-run
+expect_gate "contract in the brief"; nothing_made 76-gate
+check 1 "start: tests_first yes by --contract, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --dry-run
+expect_gate "c276-yes.md"; nothing_made 76-gate
+check 1 "start: tests_first yes by --contract, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
+expect_gate "c276-yes.md"; nothing_made 76-gate
+check 1 "start: tests_first yes in the brief, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md"
+expect_gate "contract in the brief"; nothing_made 76-gate
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/76-gate" 2>/dev/null; git -C "$tmp/repo" branch -q -D 76-gate 2>/dev/null
+# a valid --tester-commit: the reused worktree's HEAD (the tester's commit on the task branch), then an
+# ancestor of it; on a new branch, a commit of the base
+wtg="$tmp/repo/.claude/worktrees/77-gate"
+git -C "$tmp/repo" worktree add -q -b 77-gate "$wtg" main && g -C "$wtg" commit -q --allow-empty -m "test: t8 (tester)"
+tc="$(git -C "$wtg" rev-parse HEAD)"; tcs="$(printf '%s' "$tc" | cut -c1-7)"
+: > "$STUB_LOG"
+check 0 "start: tests_first yes, --tester-commit the worktree's HEAD" -- start --name "#77 worker: G" "${F[@]}" --branch 77-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$tc"
+expect_in "reusing worktree"; one_line "$tcs"
+grep -qF -- "--bg --name #77 worker: G" "$STUB_LOG" || { echo "FAIL: the worker with --tester-commit was not started"; fail=1; }
+g -C "$wtg" commit -q --allow-empty -m "work on top"
+: > "$STUB_LOG"
+check 0 "start: tests_first yes, --tester-commit an ancestor of the worktree's HEAD" -- start --name "#77 worker: G" "${F[@]}" --branch 77-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --tester-commit "$tc"
+one_line "$tcs"
+grep -qF -- "--bg --name #77 worker: G" "$STUB_LOG" || { echo "FAIL: the worker with an ancestor --tester-commit was not started"; fail=1; }
+bc="$(git -C "$tmp/repo" rev-parse main)"; bcs="$(printf '%s' "$bc" | cut -c1-7)"
+: > "$STUB_LOG"
+check 0 "start: tests_first yes, --tester-commit on the base, a new branch" -- start --name "#78 worker: G" "${F[@]}" --branch 78-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc"
+one_line "$bcs"
+[ -d "$tmp/repo/.claude/worktrees/78-gate" ] || { echo "FAIL: no worktree for a valid --tester-commit on the base"; fail=1; }
+grep -qF -- "--bg --name #78 worker: G" "$STUB_LOG" || { echo "FAIL: the worker with a base --tester-commit was not started"; fail=1; }
+# --tester-tests: the tests a lead's tester subagent returned, a folder or a file (kept in .lead/)
+mkdir -p "$tmp/lead276/.lead/tt276" && echo 'exit 1' > "$tmp/lead276/.lead/tt276/t276-red.sh"
+check 0 "start: tests_first yes, --tester-tests a folder" -- start --name "#79 worker: G" "${F[@]}" --branch 79-gate --brief-file "$tmp/brief-tfyes.md" --tester-tests "$tmp/lead276/.lead/tt276" --dry-run
+expect_in "[dry-run] (cd "; one_line "tt276"
+check 0 "start: tests_first yes, --tester-tests a file" -- start --name "#79 worker: G" "${F[@]}" --branch 79-gate --brief-file "$tmp/brief-tfyes.md" --tester-tests "$tmp/lead276/.lead/tt276/t276-red.sh" --dry-run
+expect_in "[dry-run] (cd "; one_line "t276-red.sh"
+: > "$STUB_LOG"
+check 1 "start: tests_first yes, --tester-tests that does not exist" -- start --name "#79 worker: G" "${F[@]}" --branch 79-gate --brief-file "$tmp/brief-tfyes.md" --tester-tests "$tmp/lead276/no-tt276"
+expect_in "no-tt276"; nothing_made 79-gate
+# a --tester-commit that does not exist, and one that is not on the start point: each its own message
+nx=0123456789abcdef0123456789abcdef01234567
+off="$(g -C "$tmp/repo" commit-tree -p main -m "off the start point" "main^{tree}")"; offs="$(printf '%s' "$off" | cut -c1-7)"
+: > "$STUB_LOG"
+check 1 "start: a --tester-commit that does not exist, dry run" -- start --name "#80 worker: G" "${F[@]}" --branch 80-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$nx" --dry-run
+expect_in "0123456"; nothing_made 80-gate
+check 1 "start: a --tester-commit that does not exist" -- start --name "#80 worker: G" "${F[@]}" --branch 80-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$nx"
+expect_in "0123456"; nothing_made 80-gate
+m1="$(printf '%s\n' "$LAST" | sed "s/0123456[0-9a-f]*/SHA/g")"
+check 1 "start: a --tester-commit not on the start point" -- start --name "#80 worker: G" "${F[@]}" --branch 80-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$off"
+expect_in "$offs"; nothing_made 80-gate
+m2="$(printf '%s\n' "$LAST" | sed "s/$offs[0-9a-f]*/SHA/g")"
+[ "$m1" != "$m2" ] || { echo "FAIL: the same message for a commit that does not exist and one not on the start point"; fail=1; }
+: > "$STUB_LOG"
+check 1 "start: a --tester-commit not on the reused worktree's HEAD" -- start --name "#77 worker: G" "${F[@]}" --branch 77-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$off"
+expect_in "$offs"
+grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL: claude was started with a --tester-commit off the worktree's HEAD"; fail=1; }
+# unchanged starts, no new flag: tests_first no - <reason> (brief, --contract), a lead, a tester
+# (a brief with no contract: "start: a brief without a contract" above)
+for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contract|$tmp/c276-no.md" "#81 lead: G|--brief-file|$tmp/brief-tfyes.md" "#81 tester: G|--brief-file|$tmp/brief-tfyes.md"; do
+  vn="${v%%|*}"; vr="${v#*|}"; vf="${vr%%|*}"; vp="${vr#*|}"
+  if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
+  check 0 "start: unchanged, $vn $vf $(basename "$vp")" -- start --name "$vn" "${F[@]}" --branch 81-gate "${va[@]}" --dry-run
+  expect_in "[dry-run] (cd "
+  case "$vn" in *tester*) ;; *) case "$LAST" in *--tester*|*-Tester*|*"tester's"*) echo "FAIL: $vn names a tester at an unchanged start"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac ;; esac
+done
+git -C "$tmp/repo" worktree remove --force "$wtg" 2>/dev/null; git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/78-gate" 2>/dev/null
 : > "$STUB_LOG"
 check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#54 worker: e" --branch 54-effort "${W[@]}" --safety "$tmp/safety.json" --effort low
 grep -q -- "--bg --name #54 worker: e --model opus --effort low --permission-mode auto" "$STUB_LOG" ||
