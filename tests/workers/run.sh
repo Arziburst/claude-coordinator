@@ -121,7 +121,7 @@ check() {   # check <expected exit> <description> -- command...
   n=$((n + 1))
   out="$("$@" 2>&1)"; rc=$?
   [ "$rc" = "$want" ] || { echo "FAIL ($what): expected exit $want, got $rc"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1; }
-  LAST="$out"
+  LAST="$out"; LRC=$rc
 }
 expect_in() { case "$LAST" in *"$1"*) ;; *) echo "FAIL: output lacks '$1'"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac; }
 S=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "Core lead")
@@ -420,6 +420,16 @@ ct="$tmp/ct"; mkdir -p "$ct"; ctw="$ct"; command -v cygpath >/dev/null 2>&1 && c
 # these worker cases check check-contract itself: their contracts say `tests_first: no - <reason>`, so the
 # tests_first gate (#276, below) does not stand in their way
 tfno() { sed 's/^tests_first: yes$/tests_first: no - tests\/sort.sh exists already/' "$1"; }
+# a worker's dry-run start without a tester flag that the agreement guard (below) would repeat - the same
+# contract by --contract, or a brief of the same bytes - is kept: the guard checks its exit and output
+# instead of starting it again (#287). A start by --contract matches on the contract's path alone: --contract
+# takes precedence over the brief's own contract (the "--contract that passes" start below, given brief-cerr.md,
+# asserts that), so its brief does not change what the guard checks
+mkdir -p "$tmp/kept"; : > "$tmp/kept/index"; kn=0 nr=0
+kept() {   # kept <contract | brief> <file>: the last start, by --contract <file> or --brief-file <file>
+  kn=$((kn + 1)); printf '%s\n' "$LAST" > "$tmp/kept/$kn.out"; echo "$LRC" > "$tmp/kept/$kn.rc"
+  printf '%s\t%s\t%s\n' "$1" "$2" "$kn" >> "$tmp/kept/index"
+}
 { printf 'Do it.\n---\nnot a contract\n'; tfno "$cc/budget-time.md"; printf '\nThe rest of the brief.\n'; } > "$tmp/brief-cwarn.md"
 { printf 'Do it.\n\n'; cat "$cc/tests-first-missing.md"; } > "$tmp/brief-cerr.md"
 C=(--repo "$tmp/repo" --branch 67-check --model opus --safety "$tmp/safety.json" --report-to x)
@@ -460,6 +470,7 @@ expect_in "refused: the contract fails check-contract"
 case "$LAST" in *"[dry-run]"*) echo "FAIL: the dry run went on after the contract's ERROR"; fail=1 ;; esac
 tfno "$cc/budget-time-ok.md" > "$tmp/budget-time-ok.md"
 check 0 "start: --contract that passes" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cerr.md" --contract "$tmp/budget-time-ok.md" --dry-run
+kept contract "$tmp/budget-time-ok.md"
 expect_in "budget-time-ok.md: OK (0 errors, 0 warnings)"
 case "$LAST" in *"contract in the brief"*) echo "FAIL: --contract given, the brief's contract was checked too"; fail=1 ;; esac
 check 0 "start: a brief without a contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief.md" --dry-run
@@ -497,9 +508,9 @@ one_line() {   # one_line <text>: exactly one output line names the tester's tes
 }
 : > "$STUB_LOG"
 check 1 "start: tests_first yes in the brief, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md" --dry-run
-expect_gate "contract in the brief"; nothing_made 76-gate
+kept brief "$tmp/brief-tfyes.md"; expect_gate "contract in the brief"; nothing_made 76-gate
 check 1 "start: tests_first yes by --contract, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --dry-run
-expect_gate "c276-yes.md"; nothing_made 76-gate
+kept contract "$tmp/c276-yes.md"; expect_gate "c276-yes.md"; nothing_made 76-gate
 check 1 "start: tests_first yes by --contract, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
 expect_gate "c276-yes.md"; nothing_made 76-gate
 check 1 "start: tests_first yes in the brief, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md"
@@ -557,6 +568,7 @@ for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contra
   vn="${v%%|*}"; vr="${v#*|}"; vf="${vr%%|*}"; vp="${vr#*|}"
   if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
   check 0 "start: unchanged, $vn $vf $(basename "$vp")" -- start --name "$vn" "${F[@]}" --branch 81-gate "${va[@]}" --dry-run
+  case "$vn" in *worker*) if [ "$vf" = --contract ]; then kept contract "$vp"; else kept brief "$vp"; fi ;; esac
   expect_in "[dry-run] (cd "
   case "$vn" in *tester*) ;; *) case "$LAST" in *--tester*|*-Tester*|*"tester's"*) echo "FAIL: $vn names a tester at an unchanged start"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac ;; esac
 done
@@ -572,13 +584,14 @@ grep -q '^  tests_first: yes$' "$tmp/c276-cblock-yes.md" && grep -q '^  tests_fi
   { echo "FAIL: could not write the round-2 contracts"; fail=1; }
 : > "$STUB_LOG"
 check 1 "start: tests_first yes in a contract: block, no tester flag, dry run" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md" --dry-run
-expect_in "c276-cblock-yes.md: OK"; expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
+kept contract "$tmp/c276-cblock-yes.md"; expect_in "c276-cblock-yes.md: OK"; expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
 check 1 "start: tests_first yes in a contract: block, no tester flag" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md"
 expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
 for v in "--contract|$tmp/c276-cblock-no.md" "--contract|$tmp/c276-body-yes.md" "--brief-file|$tmp/brief-body-yes.md"; do
   vf="${v%%|*}"; vp="${v#*|}"
   if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
   check 0 "start: unchanged, #83 worker: G $vf $(basename "$vp")" -- start --name "#83 worker: G" "${F[@]}" --branch 83-gate "${va[@]}" --dry-run
+  if [ "$vf" = --contract ]; then kept contract "$vp"; else kept brief "$vp"; fi
   expect_in "[dry-run] (cd "
   case "$LAST" in *--tester*|*-Tester*|*"tester's"*) echo "FAIL: $(basename "$vp") names a tester at an unchanged start"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac
 done
@@ -664,13 +677,13 @@ for qn in dq sq; do
   cc_run "$tmp/c276-cspan-$qn.md" > /dev/null || { echo "FAIL: check-contract does not pass c276-cspan-$qn.md"; fail=1; }
   : > "$STUB_LOG"
   check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md" --dry-run
-  expect_gate "c276-span-$qn.md"; nothing_made 86-gate
+  kept contract "$tmp/c276-span-$qn.md"; expect_gate "c276-span-$qn.md"; nothing_made 86-gate
   check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md"
   expect_gate "c276-span-$qn.md"; nothing_made 86-gate; drop_gate 86-gate
   check 1 "start: tests_first yes spanning lines ($qn), a contract: block, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cspan-$qn.md" --dry-run
-  expect_gate "c276-cspan-$qn.md"; nothing_made 86-gate
+  kept contract "$tmp/c276-cspan-$qn.md"; expect_gate "c276-cspan-$qn.md"; nothing_made 86-gate
   check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md" --dry-run
-  expect_gate "contract in the brief"; nothing_made 86-gate
+  kept brief "$tmp/brief-span-$qn.md"; expect_gate "contract in the brief"; nothing_made 86-gate
   check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md"
   expect_gate "contract in the brief"; nothing_made 86-gate; drop_gate 86-gate
 done
@@ -682,12 +695,14 @@ tr '\n' '\r' < "$cc/budget-time-ok.md" > "$tmp/c276-cr.md"
 crd=fail; cc_run "$tmp/c276-cr.md" > /dev/null && crd=yes
 : > "$STUB_LOG"
 check 1 "start: tests_first yes with CR-only line endings, no tester flag, dry run" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md" --dry-run
-gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
+kept contract "$tmp/c276-cr.md"; gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
 check 1 "start: tests_first yes with CR-only line endings, no tester flag" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md"
 gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
 # the agreement guard: for every contract the gate's cases use, and the forms the round-2 review tried,
 # start-worker (no tester flag, dry run) does what check-contract reads: refuses on its ERROR, refuses at
-# the gate on yes, starts on no - by --contract, and in a brief for the front-matter forms
+# the gate on yes, starts on no - by --contract, and in a brief for the front-matter forms; a start an earlier
+# case kept (the same contract by --contract, or a brief of the same bytes) is not run again: the guard's
+# checks run on its exit and output
 sed 's/^tests_first: yes$/tests_first: "yes"/' "$cc/budget-time-ok.md" > "$tmp/g276-dq.md"
 sed "s/^tests_first: yes\$/tests_first: 'Yes'/" "$cc/budget-time-ok.md" > "$tmp/g276-sq-cap.md"
 sed 's/^tests_first: yes$/tests_first: yes   # the oracles have no tests yet/' "$cc/budget-time-ok.md" > "$tmp/g276-comment.md"
@@ -698,6 +713,17 @@ sed 's/^\(tests_first: no - .*\)$/\1   # yes, really/' "$tmp/c276-no.md" > "$tmp
 { cat "$tmp/c276-no.md"; printf '\ncontract:\n'; cbody "$cc/budget-time-ok.md"; } > "$tmp/g276-fm-then-cblock.md"
 sed 's/$/\r/' "$cc/budget-time-ok.md" > "$tmp/g276-crlf.md"
 { printf '\357\273\277'; cat "$cc/budget-time-ok.md"; } > "$tmp/g276-bom.md"
+reused() {   # reused <contract | brief> <file> <expected exit> <label>: a kept start of the same file and form, as the last start
+  local k f m
+  while IFS="$(printf '\t')" read -r k f m; do
+    [ "$k" = "$1" ] || continue
+    if [ "$k" = contract ]; then [ "$f" = "$2" ] || continue; else cmp -s "$f" "$2" || continue; fi
+    LAST="$(cat "$tmp/kept/$m.out")"; LRC="$(cat "$tmp/kept/$m.rc")"; nr=$((nr + 1))
+    [ "$LRC" = "$3" ] || { echo "FAIL ($4, the start kept from an earlier case): expected exit $3, got $LRC"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+    return 0
+  done < "$tmp/kept/index"
+  return 1
+}
 gi=0
 for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c276-cblock-yes.md" "$tmp/c276-cblock-no.md" "$tmp/c276-body-yes.md" \
   "$cc/budget-time.md" "$cc/quoted.md" "$cc/tests-first-missing.md" "$cc/tests-first-bad.md" "$cc/tests-first-no-reason.md" \
@@ -708,6 +734,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   [ -f "$gf" ] || { echo "FAIL: the guard's fixture $gb is missing"; fail=1; continue; }
   cc_decide "$gf"; gd="$GD"; gw=1; [ "$gd" = no ] && gw=0
   : > "$STUB_LOG"
+  reused contract "$gf" "$gw" "guard: --contract $gb (check-contract reads: $gd)" ||
   check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run
   gate_as "$gd" "$gb"; [ "$gw" = 0 ] || nothing_made 88-gate
   # a brief holding it: the front-matter forms with LF endings and no BOM (a brief's contract follows its text)
@@ -715,6 +742,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   [ "$(head -n 1 "$gf")" = "---" ] || continue
   { printf 'Do it.\n\n'; cat "$gf"; } > "$tmp/brief-g$gi.md"
   : > "$STUB_LOG"
+  reused brief "$tmp/brief-g$gi.md" "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" ||
   check "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief-g$gi.md" --dry-run
   gate_as "$gd" "brief with $gb"; [ "$gw" = 0 ] || nothing_made 88-gate
 done
@@ -1107,5 +1135,5 @@ expect_in '"additionalContext":"The conversation was just compacted'
 out="$(printf '%s' "$j" | ac nobody 2>/dev/null)"; rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: after-compact with an unknown role: exit $rc, printed '$out'"; fail=1; }
 
-echo "worker scripts ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
+echo "worker scripts ($kind): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

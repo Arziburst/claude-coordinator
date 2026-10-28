@@ -2,7 +2,7 @@
 # Run tests/safety-guard/cases.txt against a safety hook (macOS / Linux; Windows: run.ps1).
 #   tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
 #   tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-# Exit 1 if any verdict differs from the expected one.
+# Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores).
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
@@ -112,8 +112,22 @@ function subst(s) {
   s = rep(s, "@PROJECT_UML@", ENVIRON["SG_PROJECT_UML"])
   s = rep(s, "@LINK@", ENVIRON["SG_LINK"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
 }'
+# The cases run in parallel, each still through a process of the hook of its own: SG_JOBS shards at once
+# (default: the machine's cores), shard k taking every SG_JOBS-th case from the k-th. A shard writes its FAIL
+# lines keyed by the case's line in cases.txt (printed in that order, without the key) and then
+# "<cases run> <fail> <cases in cases.txt>"; a shard that did not finish, or fewer cases run than
+# cases.txt holds, is a failure.
+CMD=("$@")
+jobs="${SG_JOBS:-${NUMBER_OF_PROCESSORS:-}}"
+[ -n "$jobs" ] || jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)"
+case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
+shard() {   # shard <k> <shards>
+  local ln=0 i=0
+  n=0 fail=0
 while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
+  ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
+  i=$((i + 1)); [ $(((i - 1) % $2)) = "$1" ] || continue
   [ "$expect" = fold ] && expect=$fold
   [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8
   cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"   # a checkout with CRLF line ends
@@ -150,16 +164,30 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
       else if (tool == "SendMessage") ti = "{\"to\":\"" $0 "\",\"message\":\"x\"}"
       else ti = "{\"command\":\"" $0 "\"}"
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
-  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "$@" >/dev/null 2>&1
+  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
+  echo "$n $fail $i" > "$tmp/shard.$1.done"
+}
+k=0
+while [ $k -lt "$jobs" ]; do shard $k "$jobs" > "$tmp/shard.$k.out" 2>&1 & k=$((k + 1)); done
+wait
+ran=0; total=""; k=0
+while [ $k -lt "$jobs" ]; do
+  if [ -f "$tmp/shard.$k.done" ]; then
+    read -r sn sf total < "$tmp/shard.$k.done"; ran=$((ran + sn)); [ "$sf" = 0 ] || fail=1
+  else echo "FAIL (cases) shard $k of $jobs did not finish"; fail=1; fi
+  k=$((k + 1))
+done
+cat "$tmp"/shard.*.out | sort -n -k1,1 | sed 's/^[0-9]* //'
+[ -n "$total" ] && [ "$ran" = "$total" ] || { echo "FAIL (cases) $ran of ${total:-?} cases of cases.txt ran"; fail=1; }
+n=$((n + ran))
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
 # (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
-CMD=("$@")
 sess() {   # sess <expect> <what> <tool call JSON> [env assignments...]
   local expect="$1" what="$2" js="$3" rc got d; shift 3; n=$((n + 1)); d="$(winpath m "$tmp/work")"
   printf '%s' "$js" | sed "s#@CWD@#$d#" | env CLAUDE_PROJECT_DIR="$d" "$@" "${CMD[@]}" >/dev/null 2>&1; rc=$?
@@ -312,5 +340,5 @@ if [ -n "$flag" ]; then
     [ "$out" != "safety-guard: OK" ] || { echo "FAIL (self-test) a guard that blocks every call still says OK"; fail=1; }
   fi
 fi
-echo "safety-guard cases: $n, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
+echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

@@ -1,8 +1,30 @@
 name: check-core
+# The heavy steps and their inputs (#287). On a pull request a heavy step runs only when the PR changes a
+# file that matches one of its line's patterns (extended regular expressions on the path in the repository;
+# a pattern starting with + matches a file the PR adds or removes, by its path), or anything under
+# .github/workflows/ or .gitattributes; every other step runs always. On a push to main, the nightly schedule
+# and a manual run (workflow_dispatch) every step runs, with no filter. In doubt a path goes on the line - a
+# test that reads another test's folder or fixture names it too. The step "Which heavy steps run" reads the
+# lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
+# without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
+#need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$  # selftest's guard settings, transcripts, probes, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template
+#need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
+#need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
+#need insights   ^scripts/session-insights\. ^tests/session-insights/ ^tests/retro/claude/  # session-insights on its fixture transcripts (and the retro's fixture transcripts)
+#need retro      ^scripts/retro\. ^scripts/session-insights\. ^tests/retro/ +.  # retro (it runs session-insights; a proposal's names are checked against the core's own file list)
+#need statusline ^scripts/statusline\. ^tests/statusline/ ^tests/selftest/status\.json$  # the status line (and selftest's status fixture)
+#need runstats   ^scripts/run-stats\. ^tests/run-stats/  # run-stats on its fixture run logs
+#need guard      ^scripts/hooks/ ^tests/safety-guard/  # the guard's cases in every shell (the step without jq also runs selftest's settings: selftest's line too)
+#need workers    ^scripts/start-worker\. ^scripts/cleanup-worker\. ^scripts/check-contract\. ^scripts/merge-queue\. ^scripts/hooks/ ^roles/ ^settings\.example ^tests/workers/ ^tests/check-contract/  # start-worker and cleanup-worker: the scripts they run, the guard and its settings examples, the role files, the contract fixtures
+#need mergequeue ^scripts/merge-queue\. ^tests/merge-queue/  # merge-queue against a stub gh
+#need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '27 2 * * *'
+  workflow_dispatch:
 jobs:
   check:
     strategy:
@@ -15,6 +37,43 @@ jobs:
         shell: bash   # bash --noprofile --norc -eo pipefail: a failing command anywhere in a pipeline fails the step
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # a pull request's merge commit and its first parent, the base it is tested against
+      - name: Which heavy steps run (a pull request - by the files it changes; any other run - all)
+        id: need
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          # the files the pull request changes (both paths of a rename; non-ASCII names as they are), and
+          # those it adds or removes; any other event, a change under .github/workflows/ or to .gitattributes,
+          # or a diff that cannot be read: every step runs
+          all=1
+          if [ "$EVENT" = pull_request ] && changed="$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)" &&
+            addrm="$(git -c core.quotePath=false diff --name-only --no-renames --diff-filter=AD HEAD^1 HEAD)"; then
+            all=""; printf '%s\n' "$changed" | grep -E '^(\.github/workflows/|\.gitattributes$)' > /dev/null && all=1
+            printf 'changed:\n%s\n' "$changed"
+          fi
+          w=.github/workflows/check-core.yml
+          map="$(grep '^#need ' "$w" | sed 's/ *# .*//')"
+          # every key a step's if: names has its line
+          for k in $(grep -o 'steps\.need\.outputs\.[A-Za-z0-9_-]*' "$w" | sed 's/.*\.//' | sort -u); do
+            printf '%s\n' "$map" | awk -v k="$k" '$2 == k { f = 1 } END { exit !f }' || { echo "no #need line for the key $k"; exit 1; }
+          done
+          set -f   # the patterns are not file names
+          while read -r _ key pats; do
+            need=false
+            if [ -n "$all" ]; then need=true
+            elif [ -z "$pats" ]; then echo "$key has no patterns: it runs"; need=true
+            else
+              for p in $pats; do
+                case "$p" in +*) l="$addrm"; p="${p#+}" ;; *) l="$changed" ;; esac
+                # grep: 0 a match, 1 none, 2 a pattern it cannot read - then the step runs
+                rc=0; { [ -z "$l" ] || printf '%s\n' "$l"; } | grep -E -- "$p" > /dev/null || rc=$?
+                case "$rc" in 0) need=true ;; 1) ;; *) echo "$key: the pattern $p cannot be read (grep exit $rc): it runs"; need=true ;; esac
+              done
+            fi
+            echo "$key=$need" | tee -a "$GITHUB_OUTPUT"
+          done <<< "$map"
       - name: macOS runs the scripts with the system bash 3.2, not Homebrew's
         if: runner.os == 'macOS'
         run: |
@@ -79,7 +138,7 @@ jobs:
             [ "$a" = "$b" ] || { echo "differ on $d"; printf '%s\n--\n%s\n' "$a" "$b"; exit 1; }
           done
       - name: selftest - the guard's settings and transcripts (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.selftest == 'true'
         run: |
           # every settings fixture against tests/selftest/hooks/expected.txt (with jq here; the step
           # without jq runs the awk reader), and a step given another step's parameter is a usage error
@@ -96,24 +155,24 @@ jobs:
             if bash $s hookcheck --session $id --expect edit; then echo "$id must fail --expect edit"; exit 1; fi
           done
       - name: selftest - the guard's settings (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/hooks.sh ps pwsh
       - name: selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         run: |
           bash tests/selftest/hooks.sh ps powershell
           bash tests/selftest/hooks.sh ps pwsh
       - name: selftest - the guard probes against a stub claude (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh sh
       - name: selftest - the guard probes against a stub claude (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps pwsh
       - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps powershell
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         shell: powershell
         run: |
           $h = 'tests/selftest/hooks'
@@ -152,13 +211,13 @@ jobs:
           if (-not ((.\scripts\check-contract.ps1 "$env:RUNNER_TEMP\same.md") -match 'is not stronger than budget.model')) { 'an escalate_to no stronger than the model must warn'; exit 1 }
           exit 0
       - name: check-contract on the fixture contracts (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.contract == 'true'
         run: bash tests/check-contract/run.sh sh
       - name: check-contract on the fixture contracts (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.contract == 'true'
         run: bash tests/check-contract/run.sh ps pwsh
       - name: check-contract on the fixture contracts (Windows PowerShell 5.1 and pwsh, console code page 866)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.contract == 'true'
         run: |
           bash tests/check-contract/run.sh ps powershell
           bash tests/check-contract/run.sh ps pwsh
@@ -187,72 +246,72 @@ jobs:
           bash tests/check-core/run.sh ps powershell
           bash tests/check-core/run.sh ps pwsh
       - name: session-tokens counts the fixture exactly (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.tokens == 'true'
         run: bash tests/session-tokens/run.sh sh
       - name: session-tokens counts the fixture exactly (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.tokens == 'true'
         run: bash tests/session-tokens/run.sh ps pwsh
       - name: session-tokens counts the fixture exactly (PowerShell)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.tokens == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
           bash tests/session-tokens/run.sh ps pwsh
       - name: session-insights reads the fixture transcripts (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.insights == 'true'
         run: bash tests/session-insights/run.sh sh
       - name: session-insights reads the fixture transcripts (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.insights == 'true'
         run: bash tests/session-insights/run.sh ps pwsh
       - name: session-insights reads the fixture transcripts (PowerShell)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.insights == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-insights/run.sh ps powershell
           bash tests/session-insights/run.sh ps pwsh
       - name: retro measures the fixture weeks (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.retro == 'true'
         run: bash tests/retro/run.sh sh
       - name: retro measures the fixture weeks (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.retro == 'true'
         run: bash tests/retro/run.sh ps pwsh
       - name: retro measures the fixture weeks (PowerShell)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.retro == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/retro/run.sh ps powershell
           bash tests/retro/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.statusline == 'true'
         run: bash tests/statusline/run.sh sh
       - name: The status line saves its files and leaves no temp file (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.statusline == 'true'
         run: bash tests/statusline/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (PowerShell)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.statusline == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/statusline/run.sh ps powershell
           bash tests/statusline/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh sh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.runstats == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/run-stats/run.sh ps powershell
           bash tests/run-stats/run.sh ps pwsh
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.guard == 'true'
         run: |
           bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
           bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
       - name: safety-guard without jq (bash, the sed / awk JSON reader)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && (steps.need.outputs.guard == 'true' || steps.need.outputs.selftest == 'true')
         run: |
           # a PATH of symlinks to every command except jq
           nojq="$RUNNER_TEMP/nojq"; mkdir -p "$nojq"
@@ -269,30 +328,30 @@ jobs:
           # selftest hooks reads the settings files with its awk JSON reader too
           PATH="$nojq" bash tests/selftest/hooks.sh sh
       - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.guard == 'true'
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
           bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
       - name: safety-guard.ps1 under PowerShell 7 too (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.guard == 'true'
         run: bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
       - name: start-worker and cleanup-worker against temporary repositories (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh sh
       - name: start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh ps pwsh
       - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh ps powershell
       - name: merge-queue against a stub gh (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.mergequeue == 'true'
         run: bash tests/merge-queue/run.sh sh
       - name: merge-queue against a stub gh (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.mergequeue == 'true'
         run: bash tests/merge-queue/run.sh ps pwsh
       - name: merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.mergequeue == 'true'
         run: |
           bash tests/merge-queue/run.sh sh
           bash tests/merge-queue/run.sh ps powershell
@@ -387,24 +446,24 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $d)) { 'the merged sandbox was not removed'; exit 1 }
           exit 0
       - name: selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/prepare.sh sh
       - name: selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/prepare.sh ps pwsh
       - name: selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (Windows PowerShell 5.1 and pwsh, code page 866)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         run: |
           bash tests/selftest/prepare.sh ps powershell
           bash tests/selftest/prepare.sh ps pwsh
       - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/sandbox.sh sh
       - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (PowerShell 7, Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/sandbox.sh ps pwsh
       - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Windows PowerShell 5.1 and pwsh)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         run: |
           bash tests/selftest/sandbox.sh ps powershell
           bash tests/selftest/sandbox.sh ps pwsh
@@ -417,11 +476,14 @@ jobs:
       - name: The checks on a project's cloned core copy (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         run: bash tests/selftest/core-copy.sh ps powershell
-      - name: Both variants print the same (pwsh on Linux)
+      - name: Both variants print the same - check-core and selftest scripts, which read every document (pwsh on Linux)
         if: runner.os == 'Linux'
         run: |
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           diff <(bash scripts/selftest.sh scripts) <(pwsh -NoProfile -File scripts/selftest.ps1 scripts)
+      - name: Both variants print the same (pwsh on Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.variants == 'true'
+        run: |
           for f in tests/selftest/hooks/*.json tests/selftest/hooks/os/*.json; do diff <(bash scripts/selftest.sh hooks --settings $f) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings $f); done
           for id in blocked0 nonblock noblock0 missing0 editblk0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
           for id in editblk0 editok00 editnone blocked0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id --expect edit) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id -Expect edit); done
