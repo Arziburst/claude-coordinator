@@ -2,15 +2,17 @@ name: check-core
 # The heavy steps and their inputs (#287). On a pull request a heavy step runs only when the PR changes a
 # file that matches one of its line's patterns (extended regular expressions on the path in the repository;
 # a pattern starting with + matches a file the PR adds or removes, by its path), or anything under
-# .github/workflows/; every other step runs always. On a push to main, the nightly schedule and a manual run
-# (workflow_dispatch) every step runs, with no filter. In doubt a path goes on the line. The step "Which heavy
-# steps run" reads the lines below as they are (#need <key> <patterns> # <what the step reads>).
+# .github/workflows/ or .gitattributes; every other step runs always. On a push to main, the nightly schedule
+# and a manual run (workflow_dispatch) every step runs, with no filter. In doubt a path goes on the line - a
+# test that reads another test's folder or fixture names it too. The step "Which heavy steps run" reads the
+# lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
+# without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
 #need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$  # selftest's guard settings, transcripts, probes, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template
-#need contract   ^scripts/check-contract\. ^tests/check-contract/  # check-contract on the fixture contracts
+#need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
-#need insights   ^scripts/session-insights\. ^tests/session-insights/  # session-insights on its fixture transcripts
+#need insights   ^scripts/session-insights\. ^tests/session-insights/ ^tests/retro/claude/  # session-insights on its fixture transcripts (and the retro's fixture transcripts)
 #need retro      ^scripts/retro\. ^scripts/session-insights\. ^tests/retro/ +.  # retro (it runs session-insights; a proposal's names are checked against the core's own file list)
-#need statusline ^scripts/statusline\. ^tests/statusline/  # the status line
+#need statusline ^scripts/statusline\. ^tests/statusline/ ^tests/selftest/status\.json$  # the status line (and selftest's status fixture)
 #need runstats   ^scripts/run-stats\. ^tests/run-stats/  # run-stats on its fixture run logs
 #need guard      ^scripts/hooks/ ^tests/safety-guard/  # the guard's cases in every shell (the step without jq also runs selftest's settings: selftest's line too)
 #need workers    ^scripts/start-worker\. ^scripts/cleanup-worker\. ^scripts/check-contract\. ^scripts/merge-queue\. ^scripts/hooks/ ^roles/ ^settings\.example ^tests/workers/ ^tests/check-contract/  # start-worker and cleanup-worker: the scripts they run, the guard and its settings examples, the role files, the contract fixtures
@@ -42,23 +44,32 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          # the files the pull request changes (both paths of a rename), and those it adds or removes; any
-          # other event, a change under .github/workflows/ or a diff that cannot be read: every step runs
+          # the files the pull request changes (both paths of a rename; non-ASCII names as they are), and
+          # those it adds or removes; any other event, a change under .github/workflows/ or to .gitattributes,
+          # or a diff that cannot be read: every step runs
           all=1
-          if [ "$EVENT" = pull_request ] && changed="$(git diff --name-only --no-renames HEAD^1 HEAD)" &&
-            addrm="$(git diff --name-only --no-renames --diff-filter=AD HEAD^1 HEAD)"; then
-            all=""; printf '%s\n' "$changed" | grep '^\.github/workflows/' > /dev/null && all=1
+          if [ "$EVENT" = pull_request ] && changed="$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)" &&
+            addrm="$(git -c core.quotePath=false diff --name-only --no-renames --diff-filter=AD HEAD^1 HEAD)"; then
+            all=""; printf '%s\n' "$changed" | grep -E '^(\.github/workflows/|\.gitattributes$)' > /dev/null && all=1
             printf 'changed:\n%s\n' "$changed"
           fi
-          map="$(grep '^#need ' .github/workflows/check-core.yml | sed 's/ *# .*//')"
+          w=.github/workflows/check-core.yml
+          map="$(grep '^#need ' "$w" | sed 's/ *# .*//')"
+          # every key a step's if: names has its line
+          for k in $(grep -o 'steps\.need\.outputs\.[A-Za-z0-9_-]*' "$w" | sed 's/.*\.//' | sort -u); do
+            printf '%s\n' "$map" | awk -v k="$k" '$2 == k { f = 1 } END { exit !f }' || { echo "no #need line for the key $k"; exit 1; }
+          done
           set -f   # the patterns are not file names
           while read -r _ key pats; do
             need=false
             if [ -n "$all" ]; then need=true
+            elif [ -z "$pats" ]; then echo "$key has no patterns: it runs"; need=true
             else
               for p in $pats; do
                 case "$p" in +*) l="$addrm"; p="${p#+}" ;; *) l="$changed" ;; esac
-                [ -n "$l" ] && printf '%s\n' "$l" | grep -E -- "$p" > /dev/null && need=true
+                # grep: 0 a match, 1 none, 2 a pattern it cannot read - then the step runs
+                rc=0; { [ -z "$l" ] || printf '%s\n' "$l"; } | grep -E -- "$p" > /dev/null || rc=$?
+                case "$rc" in 0) need=true ;; 1) ;; *) echo "$key: the pattern $p cannot be read (grep exit $rc): it runs"; need=true ;; esac
               done
             fi
             echo "$key=$need" | tee -a "$GITHUB_OUTPUT"

@@ -422,7 +422,9 @@ ct="$tmp/ct"; mkdir -p "$ct"; ctw="$ct"; command -v cygpath >/dev/null 2>&1 && c
 tfno() { sed 's/^tests_first: yes$/tests_first: no - tests\/sort.sh exists already/' "$1"; }
 # a worker's dry-run start without a tester flag that the agreement guard (below) would repeat - the same
 # contract by --contract, or a brief of the same bytes - is kept: the guard checks its exit and output
-# instead of starting it again (#287)
+# instead of starting it again (#287). A start by --contract matches on the contract's path alone: --contract
+# takes precedence over the brief's own contract (the "--contract that passes" start below, given brief-cerr.md,
+# asserts that), so its brief does not change what the guard checks
 mkdir -p "$tmp/kept"; : > "$tmp/kept/index"; kn=0 nr=0
 kept() {   # kept <contract | brief> <file>: the last start, by --contract <file> or --brief-file <file>
   kn=$((kn + 1)); printf '%s\n' "$LAST" > "$tmp/kept/$kn.out"; echo "$LRC" > "$tmp/kept/$kn.rc"
