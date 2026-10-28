@@ -106,3 +106,5 @@ to a script's arguments (required, or the meaning of an optional one) or to the 
 with** `Breaking for project wrappers: <script> - <what changed, what a wrapper must do>` into its
 commit message (the squash commit's body), so "update the core" finds it with an anchored grep
 (UPDATE-CORE step 3); a message that only mentions the rule never starts a line with it.
+
+<!-- scratch: a docs-only change to measure the CI filters of #287; never merged -->
