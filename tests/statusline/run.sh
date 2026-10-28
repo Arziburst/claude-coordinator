@@ -88,3 +88,4 @@ EOF
 fi
 [ "$fail" = 0 ] && echo "statusline: $n cases passed" || echo "statusline: failures above ($n cases)"
 exit "$fail"
+# scratch: a statusline test change to measure the CI filters of #287; never merged
