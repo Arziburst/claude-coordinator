@@ -26,6 +26,8 @@
 # backslashes, and a hook that fails to run blocks nothing.
 # The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
 # worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
+# A lead gets a notes folder beside its worktree, <worktree>.lead/ (made, or an existing one kept), named
+# in its launch text (#310); a dry run says it would make it.
 # A worker or a lead: before the launch it prints the conflict foresight (CORE section 4a) - merge-queue
 # status with the brief's `touches` - as `foresight:` lines; informational, never a stop.
 # The contract must pass check-contract before it goes out (CORE section 4, #267): -Contract <file>, or for
@@ -36,7 +38,7 @@
 # The tests_first gate (CORE section 4 step 3, #276): a worker whose contract says `tests_first: yes` starts
 # only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
 # ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
-# existing file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it
+# existing file or folder (a lead's case: the tests its tester subagent returned, kept in its notes folder); else it
 # is refused (exit 1) before anything is created (-DryRun too). `tests_first` comes from check-contract
 # itself (`check-contract.ps1 -Field tests_first`, one parser): its contract block (the front matter, or a
 # top-level `contract:`), never the rest of the file. A start with either flag prints one line naming the tester's tests; both flags together are
@@ -292,6 +294,27 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
     else { $roleText = $bodyText; $roleMsg = "role ${role}: roles/$role.md heads the brief" }
   }
 }
+# a lead's notes (sub-contracts, briefs, run notes, the tester's test copies, evidence) live beside its
+# worktree, in <worktree>.lead/, where the project's own checks (test runners, linters) never read them (#310)
+$notes = ''
+if ($Name -cmatch '^(#\S* )?([a-z]+):' -and $Matches[2] -ceq 'lead') {
+  $notes = "$wtFwd.lead"
+  # never a git working copy (a registered worktree, or a folder holding a .git entry): its files would be
+  # mixed with the notes and lost at the cleanup - refused before anything is created
+  $nFold = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS
+  $nForm = { param([string]$x) $x = $x.Replace('\', '/').TrimEnd('/'); if ($nFold) { $x.ToLowerInvariant() } else { $x } }
+  $nwc = Test-Path -LiteralPath (Join-Path $notes '.git')
+  $nc = & $nForm $notes
+  $np = ''; if (Test-Path -LiteralPath $notes -PathType Container) { $np = & $nForm (Resolve-Path -LiteralPath $notes).Path }
+  $wl = & { $ErrorActionPreference = 'Continue'; git -C $root worktree list --porcelain 2>$null }
+  foreach ($l in @($wl)) {
+    if ("$l" -cmatch '^worktree (.+)$') { $x = & $nForm $Matches[1].Trim(); if ($x -ceq $nc -or ($np -and $x -ceq $np)) { $nwc = $true } }
+  }
+  if ($nwc) { Fail "refused: the lead's notes path $notes is a git working copy (a worktree or a folder holding .git) - a notes folder never is one; move that worktree away or start the lead on another branch" }
+  # the one exception to "never change files outside it", right after the first line
+  $i = $first.IndexOf("`n")
+  $first = $first.Substring(0, $i) + "`nYour notes folder: $notes - the one exception to `"never change files outside it`": beside your worktree, never inside it; your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)." + $first.Substring($i)
+}
 $full = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
 # characters as the .sh counts them: a surrogate pair is one
 $nChars = $full.Length - [regex]::Matches($full, '[\uDC00-\uDFFF]').Count
@@ -346,8 +369,8 @@ if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
     }
   }
 }
-# A lead keeps its sub-contracts, briefs and run notes in <its worktree>/.lead/ (roles/lead.md), never
-# committed: one line, which info/exclude applies to every worktree of the repository
+# An older lead kept its sub-contracts, briefs and run notes in <its worktree>/.lead/ (now beside it, #310),
+# never committed: one line, which info/exclude applies to every worktree of the repository
 $ign = & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q .lead/x 2>$null; $LASTEXITCODE }
 if ($ign -ne 0) {
   if ($DryRun) { "[dry-run] add /.lead/ to the repository's .git/info/exclude" }
@@ -389,6 +412,16 @@ else {
   else { Run git (@('-C', $root, 'worktree', 'add') + $wq + @('--no-track', '-b', $Branch, $wt, $start)) }
 }
 
+# the lead's notes folder beside its worktree: made once, an existing one kept as it is
+if ($notes) {
+  if ($DryRun) { "[dry-run] create the notes folder $notes" }
+  elseif (Test-Path -LiteralPath $notes -PathType Container) { "notes folder: $notes (kept)" }
+  else {
+    try { New-Item -ItemType Directory -Force -Path $notes -ErrorAction Stop | Out-Null }
+    catch { Fail "cannot create the notes folder $notes. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch" }
+    "notes folder: $notes"
+  }
+}
 if ($notice) { $notice }
 if ($roleMsg) { $roleMsg }
 # conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches` names - inline

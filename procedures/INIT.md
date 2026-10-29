@@ -265,7 +265,8 @@ through "Coordinator, settings" (#237).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
   `.git/info/exclude` (`/.claude/worktrees/`) unless the project's git already ignores it — start-worker
   checks and adds it before every start, so an older project gets it at its next worker; likewise
-  `/.lead/`, where a lead keeps its notes inside its worktree (roles/lead.md). Never
+  `/.lead/`, where an older lead kept its notes inside its worktree (a lead's notes now live beside it,
+  in `<worktree>.lead/` inside `.claude/worktrees/`, roles/lead.md). Never
   `.gitignore`: that is a project file its team and the client would see. Nothing else of the
   coordinator is written into the project's tree but the `.claude/skills` link (excluded the same way) and, on the owner's yes, the local setting of the one-time step `coordinator-bg-isolation` (the roles go to `~/.claude/agents/`, the hook is
   referenced by its absolute path in `coordinator/core/`).

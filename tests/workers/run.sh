@@ -864,6 +864,84 @@ n=$((n + 1)); LAST="$(STUB_BG_RC=3 start "${big0[@]}" --branch 91-fail --brief-f
 case "$LAST" in *91-fail*cleanup-worker*|*cleanup-worker*91-fail*) ;; *) echo "FAIL: a failed launch does not name what it created and cleanup-worker"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac
 git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/91-fail" 2>/dev/null
 
+# --- a lead's notes beside its worktree (#310): start-worker makes <worktree>.lead/ (same parent, the
+# worktree's folder name plus .lead) for a lead only, keeps an existing one, and names its absolute path
+# in the launch text on a line that says notes; a dry run says it would create it and creates nothing ---
+nwt="$tmp/repo/.claude/worktrees"
+L=(--repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to "Core lead")
+names_notes() {   # names_notes <launch text> <branch>: a line says notes and gives <worktree>.lead by absolute path
+  local l p
+  l="$(printf '%s\n' "$1" | tr -d '\r' | grep -i notes | grep -F "$2.lead" | head -n 1)"
+  [ -n "$l" ] || { echo "FAIL: the launch text has no line naming the notes folder $2.lead"; fail=1; return; }
+  p="$(printf '%s' "$l" | grep -oE "(/|[A-Za-z]:[/\\\\])[^ \"'<>()]*$2\\.lead" | head -n 1)"
+  [ -n "$p" ] && command -v cygpath >/dev/null 2>&1 && p="$(cygpath -u "$p")"
+  [ -n "$p" ] && [ -d "$p" ] && [ "$(cd "$p" && pwd -P)" = "$(cd "$nwt/$2.lead" 2>/dev/null && pwd -P)" ] ||
+    { echo "FAIL: the notes line does not give $nwt/$2.lead by absolute path: $l"; fail=1; }
+}
+: > "$STUB_LOG"
+check 0 "start: a lead, dry run - the notes folder" -- start "${L[@]}" --name "#310 lead: Notes" --branch 310-dry --brief-file "$tmp/brief.md" --dry-run
+printf '%s\n' "$LAST" | grep -F '[dry-run]' | grep -qF "310-dry.lead" ||
+  { echo "FAIL: a lead's dry run does not say it would create 310-dry.lead"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -e "$nwt/310-dry.lead" ] && { echo "FAIL: a lead's dry run created the notes folder"; fail=1; }
+[ -e "$nwt/310-dry" ] && { echo "FAIL: a lead's dry run created the worktree"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: a lead's dry run called claude"; fail=1; }
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead - the notes folder beside the worktree" -- start "${L[@]}" --name "#310 lead: Notes" --branch 310-lead --brief-file "$tmp/brief.md"
+[ -d "$nwt/310-lead.lead" ] || { echo "FAIL: no notes folder $nwt/310-lead.lead after a lead's start"; fail=1; }
+[ -e "$nwt/310-lead/.lead" ] && { echo "FAIL: the notes folder was made inside the worktree"; fail=1; }
+names_notes "$(cat "$STUB_LOG.arg" 2>/dev/null)" 310-lead
+# an existing notes folder is kept: a file in it survives the start
+mkdir -p "$nwt/311-lead.lead" && echo kept > "$nwt/311-lead.lead/sub-1.md"
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead, the notes folder there already" -- start "${L[@]}" --name "#311 lead: Notes" --branch 311-lead --brief-file "$tmp/brief.md"
+[ "$(cat "$nwt/311-lead.lead/sub-1.md" 2>/dev/null)" = kept ] || { echo "FAIL: the existing notes folder's file did not survive the start"; fail=1; }
+names_notes "$(cat "$STUB_LOG.arg" 2>/dev/null)" 311-lead
+# a big brief: the launch file names the notes folder
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead, a big brief - the notes folder in the launch file" -- start "${L[@]}" --name "#312 lead: Notes" --branch 312-lead --brief-file "$tmp/brief-big.md"
+[ -d "$nwt/312-lead.lead" ] || { echo "FAIL: no notes folder $nwt/312-lead.lead after a lead's start with a big brief"; fail=1; }
+if f310="$(argfile "$(cat "$STUB_LOG.arg" 2>/dev/null)")"; then names_notes "$(cat "$f310" 2>/dev/null)" 312-lead
+else echo "FAIL: a lead's big brief went through no launch file"; fail=1; fi
+# a worker, a tester and a session with no role: no notes folder, none named
+for v in "#313 worker: N|313-w" "#313 tester: N|313-t" "Plain session|313-n"; do
+  vn="${v%%|*}" vb="${v#*|}"; rm -f "$STUB_LOG.arg"
+  check 0 "start: $vn - no notes folder" -- start "${L[@]}" --name "$vn" --branch "$vb" --brief-file "$tmp/brief.md"
+  [ -e "$nwt/$vb.lead" ] && { echo "FAIL ($vn): a notes folder $vb.lead was made"; fail=1; }
+  grep -qF "$vb.lead" "$STUB_LOG.arg" 2>/dev/null && { echo "FAIL ($vn): the launch text names a notes folder"; fail=1; }
+done
+for b in 310-lead 311-lead 312-lead 313-w 313-t 313-n; do git -C "$tmp/repo" worktree remove --force "$nwt/$b" 2>/dev/null; done
+# a lead's notes path that is another git worktree (a branch <x>.lead checked out there) is never used:
+# start-worker refuses (exit 1) before anything is created, naming the conflict (#310, round 2)
+git -C "$tmp/repo" worktree add -q -b 314-lead.lead "$nwt/314-lead.lead" main && echo precious > "$nwt/314-lead.lead/uncommitted.txt"
+: > "$STUB_LOG"
+check 1 "start: a lead whose notes path is another worktree - refused" -- start "${L[@]}" --name "#314 lead: Notes" --branch 314-lead --brief-file "$tmp/brief.md"
+printf '%s\n' "$LAST" | grep -qF "314-lead.lead" || { echo "FAIL: the refusal does not name the notes path 314-lead.lead"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -e "$nwt/314-lead" ] && { echo "FAIL: a refused lead's start created the worktree"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/314-lead && { echo "FAIL: a refused lead's start created the branch"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: a refused lead's start called claude"; fail=1; }
+[ "$(cat "$nwt/314-lead.lead/uncommitted.txt" 2>/dev/null)" = precious ] || { echo "FAIL: the other worktree's file did not survive"; fail=1; }
+git -C "$tmp/repo" worktree remove --force "$nwt/314-lead" 2>/dev/null; git -C "$tmp/repo" worktree remove --force "$nwt/314-lead.lead" 2>/dev/null
+# the lead's first line - work only inside the worktree - names the notes folder as the exception, on
+# that line or the one right after it, in both launch shapes; a worker's and a tester's first two lines
+# stay as they were and name no notes folder
+first2() { printf '%s\n' "$(cat "$STUB_LOG.arg" 2>/dev/null)" | tr -d '\r' | sed -n '1,2p'; }
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead - the first line names the notes folder" -- start "${L[@]}" --name "#315 lead: Notes" --branch 315-lead --brief-file "$tmp/brief.md"
+first2 | grep -qF "315-lead.lead" ||
+  { echo "FAIL: the lead's first-action line and the line after it do not name the notes folder 315-lead.lead"; first2 | sed 's/^/    /'; fail=1; }
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead launched from another folder - the first line names the notes folder" -- start "${L[@]}" --name "#316 lead: Notes" --branch 316-lead --brief-file "$tmp/brief.md" --launch-from "$tmp/launch"
+first2 | grep -qF "316-lead.lead" ||
+  { echo "FAIL: the lead's working-copy line and the line after it do not name the notes folder 316-lead.lead"; first2 | sed 's/^/    /'; fail=1; }
+for v in "#317 worker: N|317-w" "#317 tester: N|317-t"; do
+  vn="${v%%|*}" vb="${v#*|}"; rm -f "$STUB_LOG.arg"
+  check 0 "start: $vn - the first two lines as before" -- start "${L[@]}" --name "$vn" --branch "$vb" --brief-file "$tmp/brief.md"
+  first2 | sed -n 1p | grep -qxE "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/$vb\. Work only inside it; never change files outside it\." &&
+    first2 | sed -n 2p | grep -qxF 'Report to: the session named "Core lead" (SendMessage) - your report and your questions.' ||
+    { echo "FAIL ($vn): the first two lines changed"; first2 | sed 's/^/    /'; fail=1; }
+done
+for b in 315-lead 316-lead 317-w 317-t; do git -C "$tmp/repo" worktree remove --force "$nwt/$b" 2>/dev/null; done
+
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
 check 3 "cleanup: mistyped worktree path" -- cleanup --worktree "$tmp/repo/.claude/worktrees/12-fxi" --session s1
@@ -1217,6 +1295,69 @@ git -C "$tmp/local" show-ref -q --verify refs/heads/38-empty && { echo "FAIL (no
 w="$tmp/local/.claude/worktrees/39-empty"; git -C "$tmp/local" worktree add -q -b 39-empty "$w" main && g -C "$w" commit -q --allow-empty -m one
 STUB_GH_RC=1 check 3 "cleanup: one commit, no origin" -- cleanup --worktree "$w"
 [ -d "$w" ] && git -C "$tmp/local" show-ref -q --verify refs/heads/39-empty || { echo "FAIL (one commit, no origin): touched"; fail=1; }
+
+# --- a lead's notes beside its worktree (#310): <worktree>.lead/ is removed with the worktree (one line
+# says so, naming the folder), kept whenever the worktree is left (a dry run, NOT CLEAN, NOT MERGED,
+# CHANGED, a failed removal); a worktree with no notes folder is cleaned as before ---
+notes() { mkdir -p "$w.lead" && echo n > "$w.lead/run-notes.md"; }
+nkept() { [ -f "$w.lead/run-notes.md" ] || { echo "FAIL ($1): the notes folder $w.lead was removed"; fail=1; }; }
+ngone() {   # ngone <branch> <what>: the notes folder is gone and one output line names it as notes
+  [ -e "$w.lead" ] && { echo "FAIL ($2): the notes folder $1.lead is still there"; fail=1; }
+  printf '%s\n' "$LAST" | grep -i notes | grep -qF "$1.lead" ||
+    { echo "FAIL ($2): no output line says the notes folder $1.lead was removed"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+mk 50-lead; notes
+STUB_HEADS="$h" check 0 "cleanup: merged, dry run - the notes folder kept" -- cleanup --worktree "$w" --dry-run
+nkept "merged, dry run"
+STUB_HEADS="$h" check 0 "cleanup: merged - the notes folder removed with the worktree" -- cleanup --worktree "$w"
+ngone 50-lead "merged"
+me 51-lead origin/main; notes
+STUB_GH_RC=1 check 0 "cleanup: an empty never-pushed branch - the notes folder removed with the worktree" -- cleanup --worktree "$w"
+ngone 51-lead "empty branch"
+mk 52-lead; notes; echo dirt > "$w/dirt.txt"
+STUB_HEADS="$h" check 3 "cleanup: NOT CLEAN - the notes folder kept" -- cleanup --worktree "$w"
+expect_in "NOT CLEAN"; nkept "not clean"
+rm -f "$w/dirt.txt"
+mk 53-lead; notes
+STUB_HEADS="" check 3 "cleanup: NOT MERGED - the notes folder kept" -- cleanup --worktree "$w"
+expect_in "NOT MERGED"; nkept "not merged"
+me 54-lead origin/main; notes
+printf '%s %s %s %s\n' e5454545 e5454545-1111-4222-8333-444455556666 running "#54 lead: n" > "$SS"
+printf 'e5454545\t%s\n' "$(native "$w")" > "$SS.cwd"
+STUB_STOP_COMMIT="$w" STUB_GH_RC=1 check 3 "cleanup: CHANGED - the notes folder kept" -- cleanup --worktree "$w" --session e5454545
+expect_in "CHANGED: "; nkept "changed"
+mk 55-lead; notes; : > "$tmp/leave-folder"
+PATH="$gw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: a failed removal - the notes folder kept" -- cleanup --worktree "$w"
+expect_in "not empty - left as is"; nkept "failed removal"
+mk 56-lead
+STUB_HEADS="$h" check 0 "cleanup: merged, no notes folder - no error" -- cleanup --worktree "$w"
+expect_in "cleaned: "
+[ -d "$w" ] && { echo "FAIL (no notes folder): the worktree is still there"; fail=1; }
+# a lead's notes path that is another git worktree (a branch <x>.lead checked out there) is never removed:
+# its uncommitted file survives, it stays a listed, not prunable worktree, and one line names it as a
+# git working copy that was left (#310, round 2); the exit code is the script's choice
+nwtree() { git -C "$tmp/repo" worktree add -q -b "$1.lead" "$w.lead" main && echo precious > "$w.lead/uncommitted.txt"; }
+nwkept() {   # nwkept <branch> <what>
+  [ "$(cat "$w.lead/uncommitted.txt" 2>/dev/null)" = precious ] || { echo "FAIL ($2): the uncommitted file in $1.lead was removed"; fail=1; }
+  git -C "$tmp/repo" worktree list --porcelain | tr -d '\r' |
+    awk -v s="/$1.lead" 'BEGIN { RS = "" } { p = $2; if (substr(p, length(p) - length(s) + 1) == s) { f = 1; if ($0 ~ /prunable/) b = 1 } } END { exit !(f && !b) }' ||
+    { echo "FAIL ($2): the worktree $1.lead is no longer a listed, not prunable worktree"; git -C "$tmp/repo" worktree list --porcelain | sed 's/^/    /'; fail=1; }
+  printf '%s\n' "$LAST" | tr -d '\r' | grep -F "$1.lead" | sed 's#[^ ]*[/\\][^ ]*##g' | grep -qiE 'worktree|working copy' ||
+    { echo "FAIL ($2): no output line says the notes path $1.lead is a git working copy and was left"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  git -C "$tmp/repo" worktree remove --force "$w.lead" 2>/dev/null
+}
+mk 57-lead; nwtree 57-lead; n=$((n + 1))
+LAST="$(STUB_HEADS="$h" cleanup --worktree "$w" 2>&1)"
+nwkept 57-lead "merged, the notes path a worktree"
+me 58-lead origin/main; nwtree 58-lead; n=$((n + 1))
+LAST="$(STUB_GH_RC=1 cleanup --worktree "$w" 2>&1)"
+nwkept 58-lead "empty branch, the notes path a worktree"
+# a worktree path given with a trailing backslash (Windows) - its notes folder goes with it, as in the .ps1
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+  mk 59-lead; notes
+  STUB_HEADS="$h" check 0 "cleanup: merged, a trailing backslash - the notes folder removed" -- cleanup --worktree "$(native "$w")\\"
+  ngone 59-lead "a trailing backslash" ;;
+esac
 
 # --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
 ac() { local role="$1"; shift

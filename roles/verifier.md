@@ -50,8 +50,9 @@ it) would make that work look deleted.
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
      refuses a worktree-isolated session's commands there (measured: pwsh tests in a temp copy, #228).
    - **The tester's commit** (the brief names it; under a lead, the test files the tester returned, kept
-     in the lead's `.lead/`): compare its test files with the reviewed head (`git diff <the tester's
-     commit> <head> -- <its test files>`; under a lead, `git diff --no-index <the .lead copy> <the file at
+     in the lead's notes folder beside its worktree, `<worktree>.lead/`): compare its test files with the
+     reviewed head (`git diff <the tester's commit> <head> -- <its test files>`; under a lead,
+     `git diff --no-index <the notes-folder copy> <the file at
      the head>`). Every change must be a build-only edit the worker's
      `test_edits` names (roles/worker.md step 2); a check weakened, removed or loosened is a Blocker, an
      unnamed build-only edit a Major (#237).

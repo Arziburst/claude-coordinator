@@ -34,17 +34,19 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    over the budget is the coordinator's call, never yours. Otherwise send the plan in one message
    (sub-contracts, order, touches — together your task's footprint, which the coordinator orders
    against the other tasks, CORE §4a — and estimates) and start; you need no approval inside your
-   task. Sub-contracts, briefs and run notes live in `<your worktree>/.lead/` (start-worker keeps it
-   out of git), never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed under a
-   new job.
+   task. Sub-contracts, briefs and run notes live in your notes folder beside your worktree, the folder
+   your brief names (`<your worktree>.lead/`; start-worker makes it and keeps it out of git), never
+   where the project's own checks read them (inside your worktree, where its test runners and linters
+   glob the files), and never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed
+   under a new job.
 3. **Delegate.** Your own task gets no task-level tester: its contract says `tests_first: no - the lead
    runs the tester per sub-contract`, `yes` belongs only in your sub-contracts, and start-worker refuses
    a lead started with `tests_first: yes` or with `--tester-commit` / `--tester-tests` (#289). Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
-   tests, you keep a copy in `.lead/` for the sub-contract's verifier (roles/verifier.md step 2, #237), you
+   tests, you keep a copy in your notes folder for the sub-contract's verifier (roles/verifier.md step 2, #237), you
    pass them in the sub-worker's brief and the sub-worker commits them on its own branch
    (your subagents work in your worktree and cannot commit in a sub-worker's) — on the sub-branch that
    needs them, never on your integration branch, so the other sub-branches keep building. Its
-   start-worker call names them: `--tester-tests <the .lead copy>` (or `--tester-commit <sha>` where a
+   start-worker call names them: `--tester-tests <the copy in your notes folder>` (or `--tester-commit <sha>` where a
    tester committed), else start-worker refuses a `tests_first: yes` worker; a later sub-round that
    changes behaviour starts with the tester again, and your message to the sub-worker names its new
    tests (CORE §4 step 5, #276). Each worker

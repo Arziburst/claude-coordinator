@@ -5,7 +5,8 @@
 # lose (#257): no commits beyond its base (origin's default branch; with no origin the local main or
 # master), never pushed (no upstream, no remote branch of its name) and the worktree clean -
 # `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
-# Otherwise report and change nothing.
+# Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
+# is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
 # -Session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
@@ -306,6 +307,25 @@ if ($empty) {
 } else {
   Run git @('-C', $root, 'branch', '-d', $branch)
   if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
+}
+# a lead's notes folder beside its worktree (#310) goes with the worktree, never before it
+# (a trailing / or \ dropped); a git working copy there (a registered worktree, or a folder holding a .git
+# entry) is never removed
+$nd = $Worktree.TrimEnd('/', '\') + '.lead'
+if (Test-Path -LiteralPath $nd -PathType Container) {
+  $nwc = Test-Path -LiteralPath (Join-Path $nd '.git')
+  $nc = Canon $nd; $np = Canon (Resolve-Path -LiteralPath $nd).Path
+  $wl = & { $ErrorActionPreference = 'Continue'; git -C $root worktree list --porcelain 2>$null }
+  foreach ($l in @($wl)) {
+    if ("$l" -cmatch '^worktree (.+)$') { $x = Canon $Matches[1].Trim(); if ($x -ceq $nc -or $x -ceq $np) { $nwc = $true } }
+  }
+  if ($nwc) { "notes path $nd left as is: it is a git working copy (a worktree or a folder holding .git), never a notes folder to remove" }
+  elseif ($DryRun) { "[dry-run] remove the notes folder $nd" }
+  else {
+    try { Remove-Item -LiteralPath $nd -Recurse -Force -ErrorAction Stop }
+    catch { [Console]::Error.WriteLine("REMOVE FAILED: the notes folder $nd - the worktree is removed, but part of the notes folder may be left: remove it by hand (a re-run stops at NO WORKTREE)"); exit 1 }
+    "removed the notes folder $nd"
+  }
 }
 "cleaned: $(if ($id) { $id } else { 'no session' }) $Worktree"
 exit 0
