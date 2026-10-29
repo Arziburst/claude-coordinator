@@ -76,6 +76,8 @@ the report notes the interruption and the resume time.
      `git hash-object`; or the owner asks. Otherwise the report says `SKIP probes: guard and settings
      unchanged since <date>` — no BLOCKED, the self-test is complete without them. Each run that passes
      writes the record: `probes PASS <date> <hostname>` with each probed file's `git hash-object`.
+   - **A declined full self-test** (UPDATE-CORE step 4) still runs `selftest probes` when they are due by
+     the rule above, so they never stay due (#331).
    - **One command runs the probes, with no owner action:** the coordinator runs `selftest probes
      --project <root> --worker-settings <worker safety file> [--own] [--edit-root <root>]` itself, as a
      background command (`run_in_background`: up to about 5 minutes, `--timeout`, default 300 s). It
@@ -173,6 +175,9 @@ the report notes the interruption and the resume time.
      `selftest/<c>/st1.<n>`, `--report-to "#st1 lead: selftest <P>"`, the light model, `--effort low`, at most
      two at once, names `#st1.<n> worker: selftest <P> …`): "no PR: merge each approved sub-branch into
      `selftest/<c>/st1` and push it where there is a remote".
+   - **The contract goes into the brief file:** start-worker's `--contract` only checks a contract — the
+     session reads the brief alone (a `--contract` whose `id:` and `title:` lines are not in the brief is a
+     WARN line). The lead's brief holds the filled `tests/selftest/contract.md` itself (#323, #331).
    - **The budget stop:** the contract's `budget.cost` is below any real plan on purpose, so the lead
      must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
      coordinator checks that no `#st1.<n>` session runs and no `selftest/<c>/st1.<n>` branch exists —
@@ -196,7 +201,9 @@ the report notes the interruption and the resume time.
    - A worker (`#st2 worker: selftest PR <P>`, start-worker with the flags above, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
      file, commits it as exactly `selftest: task-1` (never the project's own message format or an issue
-     number from its history), pushes and opens a **draft** PR into `selftest/<c>/base`. Its brief says to push
+     number from its history), pushes and opens a **draft** PR into `selftest/<c>/base` — the command names
+     the state repository: `gh pr create --draft -R <owner/name> --base selftest/<c>/base --head
+     selftest/<c>/task-1 …` (#322). Its brief says to push
      **without** `-u` (`git push origin selftest/<c>/task-1`) on purpose, so every run proves
      cleanup-worker's fallback to `origin/<branch>` (roles/worker.md pushes with `-u`).
    - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
@@ -225,7 +232,9 @@ the report notes the interruption and the resume time.
    `selftest/<commit>/base`; only a session whose `cwd` is inside the run's own folders counts — the project root, the
    state repository, the worktree roots of `PROJECT.md` (for `clean`: the sandbox) — while another
    project's on the same machine gets a line `SKIP foreign self-test session <id> (<cwd>)` and is never
-   advised for removal), the evidence is there (`base`, `st1` merged into it, the merged PR). **No branch and no PR
+   advised for removal), the evidence is there (`base`, `st1` merged into it, the merged PR), and with
+   `--state-repo` no PR has a mini-block worker branch `selftest/<c>/st1.<n>` as its head (each one a FAIL
+   naming it: its sub-contract names no PR, #331). **No branch and no PR
    is deleted.**
 7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost at API list
    price (the sum of step 6). Each run is one line in `coordinator/CHECKLIST.md`

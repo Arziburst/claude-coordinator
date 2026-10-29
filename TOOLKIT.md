@@ -136,7 +136,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
-  are printed, no contract found is one notice line and the start goes on. A worker whose contract has
+  are printed, no contract found is one notice line and the start goes on. `--contract` / `-Contract` only
+  checks a contract: the session reads the brief alone, so the contract's text goes into the brief file;
+  a `--contract` whose `id:` and `title:` lines are both absent from the brief prints one WARN line saying
+  so, and the start goes on (`--dry-run` too; the brief is never changed, #331). A worker whose contract has
   `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
   `--tester-commit <sha>` / `-TesterCommit` (a commit that is the start point or an ancestor of it — a
   reused worktree's HEAD, else the branch, else the base) or `--tester-tests <path>` / `-TesterTests`

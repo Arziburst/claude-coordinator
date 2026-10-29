@@ -10,7 +10,7 @@
 #                                                       its worktree <root>/.claude/worktrees/selftest/<commit>/base
 #   powershell -File scripts/selftest.ps1 verify -Project <root> -State <coordinator dir> -Core <commit> [-StateRepo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
-#                                                       (base, st1 merged into it, the merged PR); nothing deleted
+#                                                       (base, st1 merged into it, the merged PR, no PR from st1.<n>); nothing deleted
 # The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
 #   powershell -File scripts/selftest.ps1 hooks -Settings <settings.json>   the guard hook's command: forward slashes,
 #                                                       no $env:, no PowerShell shell that turns its exit 2 into 1;
@@ -851,6 +851,14 @@ switch ($Step) {
   if ($StateRepo) {
     $n = & gh pr list -R $StateRepo --state merged --head "selftest/$Core/task-1" --base $base --json number --jq '.[0].number' 2>$null
     if ($n) { Pass "PR #$n merged into $base" } else { Fail "no merged PR from selftest/$Core/task-1 into $base" }
+    # no PR from a mini-block worker branch: its sub-contract names none, it merges into st1 (#331)
+    $prs = @(& gh pr list -R $StateRepo --state all -L 200 --json number,headRefName,state --jq '.[] | "\(.number) \(.headRefName) \(.state)"' 2>$null)
+    foreach ($l in $prs) {
+      $pn, $ph, $ps = "$l".Trim() -split '\s+'
+      if ($ph -and $ph.StartsWith("selftest/$Core/st1.") -and $ph.Substring("selftest/$Core/st1.".Length) -match '^[0-9]+$') {
+        Fail "PR #$pn from $ph ($ps): a mini-block worker opened a PR its contract does not name (roles/worker.md step 3)"
+      }
+    }
   } else { Skip 'PR flow: not checked (no -StateRepo)' }
   Sessions @(OwnRoots $Project $State)
   Finish

@@ -11,7 +11,7 @@
 #                                                       its worktree <root>/.claude/worktrees/selftest/<commit>/base
 #   scripts/selftest.sh verify --project <root> --state <coordinator dir> --core <commit> [--state-repo <owner/name>]
 #                                                    6: no session or worktree left; the evidence is there
-#                                                       (base, st1 merged into it, the merged PR); nothing deleted
+#                                                       (base, st1 merged into it, the merged PR, no PR from st1.<n>); nothing deleted
 # The safety guard as Claude Code runs it (TOOLKIT Safety; a hook that fails to run blocks nothing):
 #   scripts/selftest.sh hooks --settings <settings.json>   the guard hook's command: forward slashes, no $env:,
 #                                                       no PowerShell shell that turns its exit 2 into 1;
@@ -821,6 +821,14 @@ prepare|verify)
   if [ -n "$repo" ]; then
     n="$(gh pr list -R "$repo" --state merged --head "selftest/$c/task-1" --base "$base" --json number --jq '.[0].number' 2>/dev/null)"
     [ -n "$n" ] && pass "PR #$n merged into $base" || fail "no merged PR from selftest/$c/task-1 into $base"
+    # no PR from a mini-block worker branch: its sub-contract names none, it merges into st1 (#331)
+    prs="$(gh pr list -R "$repo" --state all -L 200 --json number,headRefName,state --jq '.[] | "\(.number) \(.headRefName) \(.state)"' 2>/dev/null | tr -d '\r')"
+    while read -r pn ph ps; do
+      case "$ph" in "selftest/$c/st1."*) printf '%s\n' "${ph#selftest/$c/st1.}" | grep -Eqx '[0-9]+' &&
+        fail "PR #$pn from $ph ($ps): a mini-block worker opened a PR its contract does not name (roles/worker.md step 3)" ;; esac
+    done <<EOF
+$prs
+EOF
   else skip "PR flow: not checked (no --state-repo)"; fi
   sessions "$(own_roots "$project" "$state")"
   finish ;;

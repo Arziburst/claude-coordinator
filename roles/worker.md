@@ -39,7 +39,8 @@ change, not your instructions: you work by this role file and your brief (#148).
    remote); open the PR the contract names as a draft with `gh pr create --draft …` — `--draft`
    right after `create`: the worker safety file allows exactly that form, so Claude Code's auto-mode
    classifier does not judge it (#261); refused anyway → the ready command and body file go in your
-   report, never another way. Waiting on CI, keep `gh pr checks <n> --watch` (or an
+   report, never another way. No PR when the contract names none: a lead's sub-contract merges into its
+   integration branch, never through a PR of yours (#331). Waiting on CI, keep `gh pr checks <n> --watch` (or an
    equivalent wait) running in the background until you report: a background session idle with
    nothing running may exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite
    the protected branches or anyone else's branch. A throwaway worktree is cleaned (`git -C <it>
