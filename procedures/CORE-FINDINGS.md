@@ -73,10 +73,14 @@ is read-only but the new issue, the reaction and the comment):
    fixed in a newer commit — the script finds a closed issue whose body holds the exact `Signature:` line
    (an exact-phrase search: an apostrophe in a git error otherwise finds nothing), closed as completed, and
    prints `FIXED UPSTREAM #<n>` (exit 3) → no issue; the row becomes `fixed upstream <commit>` and the
-   owner hears "update the core". Closed as not planned is no fix: the checks go on. The local core already
-   holding that fix → the bug came back: a comment on `#<n>` with the core commit and the evidence, never
-   a second issue.
-2. **Already reported?** An open issue with the same signature (the same exact-phrase search) → a 👍 (+1)
+   owner hears "update the core". Closed as not planned is no fix: the checks go on. On `FIXED UPSTREAM`
+   the coordinator compares the fix's commit with the project's core commit: the core lacks it → "update
+   the core"; the core already holds it → the bug came back: the same command again with `--regression`
+   (Windows `-Regression`), which files one new issue, the title as given, its body holding `Regression of
+   #<n>` and still ending with the `Signature:` line; nothing is written on `#<n>`. One issue per
+   regression: every other project finds it open and reacts (2).
+2. **Already reported?** An open issue with the same signature (the same exact-phrase search; an open one
+   wins over a closed one, so a reported regression is a repeat, never `FIXED UPSTREAM`) → a 👍 (+1)
    reaction on it from the owner's account instead of a new issue or a comment (`REPEAT #<n>`, exit 0;
    a reaction already there from this account is not added twice); the row gets that issue's number. A
    comment only with something new — another OS, version, scenario or evidence: `--comment-file <file>`

@@ -3,15 +3,18 @@
 # fixed signature, an existing issue found before a new one, a repeat marked with a reaction (#338).
 #   scripts/report-issue.sh signature --source <script or core file> [--step <step>] [--exit <code>] --error <text>
 #   scripts/report-issue.sh file --repo <owner/name> --title <title> --body-file <file> --signature <sig>
-#                                [--keywords <words>] [--checked <n,n,...>] [--comment-file <file>] [--dry-run]
+#                                [--keywords <words>] [--checked <n,n,...>] [--comment-file <file>] [--regression]
+#                                [--dry-run]
 # signature: one line `<source>: <step>: exit <code>: <words>` - the error text lower-cased (ASCII), URLs,
 # dates and times, paths (absolute, with a drive letter, UNC, ~ or ./), hex ids (0x..., or 7+ characters)
 # and numbers replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
-# file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on a closed issue
-# closed as completed -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes
-# on); (2) on an open issue -> a +1 reaction from this account (none added when it is already there), with
-# --comment-file that comment too, `REPEAT #<n>`; (3) the keyword search (--keywords, else the title; title
+# file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
+# a +1 reaction from this account (none added when it is already there), with --comment-file that comment
+# too, `REPEAT #<n>` - an open issue wins over a closed one; (2) only on a closed issue closed as completed
+# -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes on); with --regression
+# (this core already holds that fix) one new issue instead, its body holding `Regression of #<n>`, nothing
+# written on #<n>; (3) the keyword search (--keywords, else the title; title
 # and body, open and closed, updated in the last 90 days, at most 5): a candidate not in --checked ->
 # `CHECK #<a> #<b> ...` and each candidate's title, nothing filed - read them, then run again with them in
 # --checked; (4) none left -> the issue filed, its body ending `Checked: #a, #b` (when any) and
@@ -22,10 +25,10 @@
 set -uo pipefail
 export LC_ALL=C   # byte-wise and ASCII-only: the same signature under any locale
 
-usage="usage: signature --source <s> [--step <s>] [--exit <code>] --error <text> | file --repo <owner/name> --title <t> --body-file <f> --signature <sig> [--keywords <words>] [--checked <n,n,...>] [--comment-file <f>] [--dry-run]"
+usage="usage: signature --source <s> [--step <s>] [--exit <code>] --error <text> | file --repo <owner/name> --title <t> --body-file <f> --signature <sig> [--keywords <words>] [--checked <n,n,...>] [--comment-file <f>] [--regression] [--dry-run]"
 mode="${1:-}"; [ $# -gt 0 ] && shift
 case "$mode" in signature|file) ;; *) echo "$usage" >&2; exit 1 ;; esac
-source="" step="" code="" error="" have_error=0 repo="" title="" body_file="" sig="" keywords="" checked="" comment_file="" dry=0
+source="" step="" code="" error="" have_error=0 repo="" title="" body_file="" sig="" keywords="" checked="" comment_file="" regress=0 dry=0
 need() { [ $# -ge 2 ] || { echo "missing value for $1; $usage" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -40,6 +43,7 @@ while [ $# -gt 0 ]; do
     --keywords) need "$@"; keywords="$2"; shift 2 ;;
     --checked) need "$@"; checked="$2"; shift 2 ;;
     --comment-file) need "$@"; comment_file="$2"; shift 2 ;;
+    --regression) regress=1; shift ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 1 ;;
   esac
@@ -113,10 +117,6 @@ done <<EOF
 $exact
 EOF
 
-if [ -n "$fixed" ]; then
-  printf 'FIXED UPSTREAM #%s: %s\n' "${fixed%%"$TAB"*}" "${fixed#*"$TAB"}"
-  exit 3
-fi
 if [ -n "$open" ]; then
   n="${open%%"$TAB"*}" t="${open#*"$TAB"}"
   login="$(q api user --jq .login)" || exit 1
@@ -133,36 +133,48 @@ if [ -n "$open" ]; then
   printf 'REPEAT #%s: %s\n' "$n" "$t"
   exit 0
 fi
-
-# (3): the keyword search over the last 90 days; candidates not read yet stop the filing
-now="$(date -u +%s)"; t0=$((now - 90 * 86400))
-since="$(date -u -d "@$t0" +%Y-%m-%d 2>/dev/null || date -u -r "$t0" +%Y-%m-%d)"
-words="$(oneline "${keywords:-$title}" | tr -d '"')"
-cands="$(q issue list --repo "$repo" --state all --search "$words in:title,body updated:>=$since" --json number,state,stateReason,title --limit 5 --jq ".[] | $ROW")" || exit 1
-new="" lines=""
-while IFS="$TAB" read -r n st why t; do
-  [ -n "$n" ] || continue
-  case " $nums " in *" $n "*) continue ;; esac
-  new="$new #$n"; lines="$lines#$n $st${why:+ $why}: $t
-"
-done <<EOF
-$cands
-EOF
-if [ -n "$new" ]; then
-  all="$nums"; for n in $new; do all="${all:+$all,}${n#\#}"; done
-  printf 'CHECK%s\n%s' "$new" "$lines"
-  printf 'read each: the same problem -> a +1 reaction there (gh api --method POST repos/%s/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with --checked %s\n' "$repo" "$(printf '%s' "$all" | tr ' ' ',')"
-  exit 4
+reg=""
+if [ -n "$fixed" ]; then
+  # --regression: this core already holds the fix, the bug came back - a new issue naming the old one
+  if [ "$regress" = 1 ]; then reg="${fixed%%"$TAB"*}"; else
+    printf 'FIXED UPSTREAM #%s: %s\n' "${fixed%%"$TAB"*}" "${fixed#*"$TAB"}"
+    exit 3
+  fi
 fi
 
-# (4): file it, the body's own Signature and Checked lines replaced by the script's
-{ tr -d '\r' < "$body_file" | grep -vE '^(Signature|Checked):' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+# (3): the keyword search over the last 90 days; candidates not read yet stop the filing (a regression
+# has its issue already: the closed one it names)
+if [ -z "$reg" ]; then
+  now="$(date -u +%s)"; t0=$((now - 90 * 86400))
+  since="$(date -u -d "@$t0" +%Y-%m-%d 2>/dev/null || date -u -r "$t0" +%Y-%m-%d)"
+  words="$(oneline "${keywords:-$title}" | tr -d '"')"
+  cands="$(q issue list --repo "$repo" --state all --search "$words in:title,body updated:>=$since" --json number,state,stateReason,title --limit 5 --jq ".[] | $ROW")" || exit 1
+  new="" lines=""
+  while IFS="$TAB" read -r n st why t; do
+    [ -n "$n" ] || continue
+    case " $nums " in *" $n "*) continue ;; esac
+    new="$new #$n"; lines="$lines#$n $st${why:+ $why}: $t
+"
+  done <<EOF
+$cands
+EOF
+  if [ -n "$new" ]; then
+    all="$nums"; for n in $new; do all="${all:+$all,}${n#\#}"; done
+    printf 'CHECK%s\n%s' "$new" "$lines"
+    printf 'read each: the same problem -> a +1 reaction there (gh api --method POST repos/%s/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with --checked %s\n' "$repo" "$(printf '%s' "$all" | tr ' ' ',')"
+    exit 4
+  fi
+fi
+
+# (4): file it, the body's own Regression, Signature and Checked lines replaced by the script's
+{ tr -d '\r' < "$body_file" | grep -vE '^(Signature|Checked):|^Regression of #' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
   printf '\n'
+  [ -n "$reg" ] && printf 'Regression of #%s\n' "$reg"
   [ -n "$nums" ] && printf 'Checked: #%s\n' "$(printf '%s' "$nums" | sed 's/ /, #/g')"
   printf 'Signature: %s\n' "$sig"; } > "$tmp/body.md"
 if [ "$dry" = 1 ]; then
   printf 'WOULD FILE in %s (dry run): %s\n' "$repo" "$title"
-  sed -n '/^Checked:/p; /^Signature:/p' "$tmp/body.md"
+  sed -n '/^Regression of #/p; /^Checked:/p; /^Signature:/p' "$tmp/body.md"
   exit 0
 fi
 url="$(q issue create --repo "$repo" --title "$title" --body-file "$tmp/body.md")" || exit 1

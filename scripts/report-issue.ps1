@@ -4,15 +4,18 @@
 #   powershell -File scripts\report-issue.ps1 signature -Source <script or core file> [-Step <step>] [-Exit <code>]
 #                    -ErrorText <text>
 #   powershell -File scripts\report-issue.ps1 file -Repo <owner/name> -Title <title> -BodyFile <file>
-#                    -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <file>] [-DryRun]
+#                    -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <file>] [-Regression]
+#                    [-DryRun]
 # signature: one line `<source>: <step>: exit <code>: <words>` - the error text lower-cased (ASCII), URLs,
 # dates and times, paths (absolute, with a drive letter, UNC, ~ or ./), hex ids (0x..., or 7+ characters)
 # and numbers replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
-# file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on a closed issue
-# closed as completed -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes
-# on); (2) on an open issue -> a +1 reaction from this account (none added when it is already there), with
-# -CommentFile that comment too, `REPEAT #<n>`; (3) the keyword search (-Keywords, else the title; title
+# file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
+# a +1 reaction from this account (none added when it is already there), with -CommentFile that comment
+# too, `REPEAT #<n>` - an open issue wins over a closed one; (2) only on a closed issue closed as completed
+# -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes on); with -Regression
+# (this core already holds that fix) one new issue instead, its body holding `Regression of #<n>`, nothing
+# written on #<n>; (3) the keyword search (-Keywords, else the title; title
 # and body, open and closed, updated in the last 90 days, at most 5): a candidate not in -Checked ->
 # `CHECK #<a> #<b> ...` and each candidate's title, nothing filed - read them, then run again with them in
 # -Checked; (4) none left -> the issue filed, its body ending `Checked: #a, #b` (when any) and
@@ -22,12 +25,12 @@
 # UPSTREAM; 4 CHECK. -ErrorText, not -Error: $Error is PowerShell's own.
 param([Parameter(Position = 0)][string]$Mode, [string]$Source, [string]$Step, [string]$Exit, [string]$ErrorText,
       [string]$Repo, [string]$Title, [string]$BodyFile, [string]$Signature, [string]$Keywords, [string]$Checked,
-      [string]$CommentFile, [switch]$DryRun)
+      [string]$CommentFile, [switch]$Regression, [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
 # page; the caller's console gets its own encoding back on every way out
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: signature -Source <s> [-Step <s>] [-Exit <code>] -ErrorText <text> | file -Repo <owner/name> -Title <t> -BodyFile <f> -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <f>] [-DryRun]'
+$usage = 'usage: signature -Source <s> [-Step <s>] [-Exit <code>] -ErrorText <text> | file -Repo <owner/name> -Title <t> -BodyFile <f> -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <f>] [-Regression] [-DryRun]'
 function Usage([string]$m) { [Console]::Error.WriteLine($(if ($m) { "$m; $usage" } else { $usage })); exit 1 }
 if ($Mode -cne 'signature' -and $Mode -cne 'file') { Usage '' }
 
@@ -116,10 +119,6 @@ foreach ($l in @(Q @('issue', 'list', '--repo', $Repo, '--state', 'all', '--sear
   elseif ($f[1] -ceq 'CLOSED' -and $f[2] -ceq 'COMPLETED' -and -not $fixed) { $fixed = $f }
 }
 
-if ($fixed) {
-  "FIXED UPSTREAM #$($fixed[0]): $($fixed[3])"
-  exit 3
-}
 if ($open) {
   $n = $open[0]; $t = $open[3]
   $login = (@(Q @('api', 'user', '--jq', '.login')) -join '').Trim()
@@ -136,35 +135,48 @@ if ($open) {
   "REPEAT #${n}: $t"
   exit 0
 }
-
-# (3): the keyword search over the last 90 days; candidates not read yet stop the filing
-$since = [DateTime]::UtcNow.AddDays(-90).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
-$words = (OneLine $(if ($Keywords) { $Keywords } else { $Title })) -creplace '"', ''
-$new = @(); $lines = @()
-foreach ($l in @(Q @('issue', 'list', '--repo', $Repo, '--state', 'all', '--search', "$words in:title,body updated:>=$since", '--json', 'number,state,stateReason,title', '--limit', '5', '--jq', ".[] | $ROW"))) {
-  $f = $l -split "`t", 4; if ($f.Count -lt 4) { continue }
-  if ($nums -contains $f[0]) { continue }
-  $new += "#$($f[0])"; $lines += "#$($f[0]) $($f[1])$(if ($f[2]) { " $($f[2])" }): $($f[3])"
-}
-if ($new.Count) {
-  $all = @($nums) + @($new | ForEach-Object { $_.TrimStart('#') })
-  "CHECK $($new -join ' ')"
-  $lines
-  "read each: the same problem -> a +1 reaction there (gh api --method POST repos/$Repo/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with --checked $($all -join ',')"
-  exit 4
+$reg = ''
+if ($fixed) {
+  # -Regression: this core already holds the fix, the bug came back - a new issue naming the old one
+  if ($Regression) { $reg = $fixed[0] } else {
+    "FIXED UPSTREAM #$($fixed[0]): $($fixed[3])"
+    exit 3
+  }
 }
 
-# (4): file it, the body's own Signature and Checked lines replaced by the script's
+# (3): the keyword search over the last 90 days; candidates not read yet stop the filing (a regression
+# has its issue already: the closed one it names)
+if (-not $reg) {
+  $since = [DateTime]::UtcNow.AddDays(-90).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+  $words = (OneLine $(if ($Keywords) { $Keywords } else { $Title })) -creplace '"', ''
+  $new = @(); $lines = @()
+  foreach ($l in @(Q @('issue', 'list', '--repo', $Repo, '--state', 'all', '--search', "$words in:title,body updated:>=$since", '--json', 'number,state,stateReason,title', '--limit', '5', '--jq', ".[] | $ROW"))) {
+    $f = $l -split "`t", 4; if ($f.Count -lt 4) { continue }
+    if ($nums -contains $f[0]) { continue }
+    $new += "#$($f[0])"; $lines += "#$($f[0]) $($f[1])$(if ($f[2]) { " $($f[2])" }): $($f[3])"
+  }
+  if ($new.Count) {
+    $all = @($nums) + @($new | ForEach-Object { $_.TrimStart('#') })
+    "CHECK $($new -join ' ')"
+    $lines
+    "read each: the same problem -> a +1 reaction there (gh api --method POST repos/$Repo/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with --checked $($all -join ',')"
+    exit 4
+  }
+}
+
+# (4): file it, the body's own Regression, Signature and Checked lines replaced by the script's
 $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $BodyFile).ProviderPath) -creplace "`r", ''
 $kept = [Collections.Generic.List[string]]@($text -split "`n")
 if ($kept.Count -and $kept[$kept.Count - 1] -eq '') { $kept.RemoveAt($kept.Count - 1) }
-$kept = [Collections.Generic.List[string]]@($kept | Where-Object { $_ -cnotmatch '^(Signature|Checked):' })
+$kept = [Collections.Generic.List[string]]@($kept | Where-Object { $_ -cnotmatch '^(Signature|Checked):|^Regression of #' })
 while ($kept.Count -and $kept[$kept.Count - 1] -eq '') { $kept.RemoveAt($kept.Count - 1) }
 $body = (-join @($kept | ForEach-Object { "$_`n" })) + "`n"
+if ($reg) { $body += "Regression of #$reg`n" }
 if ($nums.Count) { $body += "Checked: #$($nums -join ', #')`n" }
 $body += "Signature: $sig`n"
 if ($DryRun) {
   "WOULD FILE in $Repo (dry run): $Title"
+  if ($reg) { "Regression of #$reg" }
   if ($nums.Count) { "Checked: #$($nums -join ', #')" }
   "Signature: $sig"
   exit 0
