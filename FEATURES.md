@@ -252,9 +252,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORK-07 Leads for large tasks
 - defined: roles/lead.md, CORE.md §4, TOOLKIT.md
 - entry: a task that would not fit one worker, or whose pieces must land together
-- promises: the lead splits into sub-contracts, starts and verifies its workers, integrates on its own branch only and returns one PR and one report with every run's spend; a lead over its budget starts nothing new; its own share (often 30–100% of its workers' sum) is planned for and read at each stage by `$CLAUDE_CODE_SESSION_ID` (a reading that never holds the whole turn in progress: zero or partial on the first turn); while any worker runs it keeps one background wait alive so it stays reachable, and one gone `done` is resumed by the coordinator with the report that fell back to it; its sub-contracts, briefs and run notes live in `<its worktree>/.lead/`, never in the job's tmp; its verifier reviews the sub-branch's change and the lead runs the build and test oracles on its integration branch right after each merge, a failure going back to the worker
+- promises: the lead splits into sub-contracts, starts and verifies its workers, integrates on its own branch only and returns one PR and one report with every run's spend; a lead over its budget starts nothing new; its own share (often 30–100% of its workers' sum) is planned for and read at each stage by `$CLAUDE_CODE_SESSION_ID` (a reading that never holds the whole turn in progress: zero or partial on the first turn); while any worker runs it keeps one background wait alive so it stays reachable, and one gone `done` is resumed by the coordinator with the report that fell back to it; its sub-contracts, briefs and run notes live in `<its worktree>/.lead/`, never in the job's tmp; its verifier reviews the sub-branch's change and the lead runs the build and test oracles on its integration branch right after each merge, a failure going back to the worker; once the verdict on its PR is given the lead is closed (its session stopped, its spend read and the session removed; its working copy kept until the after-merge cleanup and reused), a small later round on that PR goes to a fresh worker on the integration branch with a short contract from the finding (the tester first where CORE §4 step 5 requires it), reviewed by the coordinator's verifier, as do, for that PR, the merge queue's CONFLICT, its HEAD MOVED / NOT APPROVED (or the verifier, for a new commit), a FAILED classified as code and a merge of main, and a lead is resumed only to re-split a round into several sub-contracts (#292)
 - tested by: SELFTEST step 4 (a lead with two workers); tests/workers/run.sh (the `.lead/` exclude line, F-WORKERS-05)
-- not covered: the background wait, the self-read and the oracles after each merge rest on the lead following the rule; whether an idle background session exits depends on the Claude Code version (seen on 2.1.296)
+- not covered: the background wait, the self-read and the oracles after each merge rest on the lead following the rule; closing the lead after its verdict and sending later rounds to fresh workers rest on the coordinator (#292); whether an idle background session exits depends on the Claude Code version (seen on 2.1.296)
 
 ### F-WORK-08 The worker role
 - defined: roles/worker.md, CONTRACT.md
@@ -524,7 +524,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-05 Red checks classified
 - defined: CORE.md §4, CORE.md §1, TOOLKIT.md
 - entry: a red or cancelled check
-- promises: cancelled → read the current head's run; code → back to the worker; infrastructure → its own bug, fixed first, named as the blocker; flake → one re-run on the same commit, a second red is a flake bug; a flake bug gets one fix round, then — with the flake quarantine on (the default; changed only through "Coordinator, settings", never asked at init) and, by default, the owner's quiz answer — the check leaves CI for the manual set through a PR, with an issue and a journal line, still runnable by hand; a project without the row has it on, confirmed (#237)
+- promises: cancelled → read the current head's run; code → back to the worker; a check red only on the build, types or lint, with no behaviour change needed, goes instead to a fresh light-rung worker with a contract of kind `trivial` and the non_goal "no behaviour change", a fix that needs more stops and goes back (#292, #302); infrastructure → its own bug, fixed first, named as the blocker; flake → one re-run on the same commit, a second red is a flake bug; a flake bug gets one fix round, then — with the flake quarantine on (the default; changed only through "Coordinator, settings", never asked at init) and, by default, the owner's quiz answer — the check leaves CI for the manual set through a PR, with an issue and a journal line, still runnable by hand; a project without the row has it on, confirmed (#237)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -543,9 +543,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: the restart itself rests on the sessions following the rule
 
 ### F-REVIEW-08 Re-review scope
-- defined: CORE.md §6, roles/verifier.md
+- defined: CORE.md §6, roles/verifier.md, CORE.md §4, TOOLKIT.md
 - entry: a fix after review
-- promises: only failed criteria, findings and criteria whose files the fix touched are reviewed again; untouched confirmed criteria keep their evidence and commit
+- promises: only failed criteria, findings and criteria whose files the fix touched are reviewed again; untouched confirmed criteria keep their evidence and commit; a fix round may go to a fresh worker on the pushed branch with a short note when the session's context has grown long (CORE §4 step 5, #292)
 - tested by: none
 - not covered: a criterion affected indirectly (behaviour, not files) can be missed
 
