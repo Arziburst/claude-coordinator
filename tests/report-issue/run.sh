@@ -172,6 +172,61 @@ if [ "$kind" = ps ]; then
   [ -n "$s1" ] && [ "$s1" = "$sh_sig" ] && ok || bad ".ps1 [$s1] .sh [$sh_sig]"
 fi
 
+# --- signature, round 3 of #338: quoted paths with spaces, scp remotes, negative exit codes ---
+# (the signature goes to a public issue: a path's tail and the names in it never reach it). Unquoted paths
+# with spaces cannot be told from words in general and are not tested.
+# sig <args>: run signature; under ps also .sh with the same arguments - the two lines byte for byte
+sig() {
+  run signature "$@"
+  if [ "$kind" = ps ]; then
+    local o="$out" r="$rc" s
+    s="$(bash "$core/scripts/report-issue.sh" signature "$@" 2>&1 | tr -d '\r')"
+    [ "$o" = "$s" ] && ok || bad ".ps1 [$o] .sh [$s]"
+    out="$o"; rc="$r"
+  fi; }
+# same <error A> <error B> <word>...: both errors give one signature, holding none of the words
+same() {
+  local a="$1" b="$2" s
+  shift 2
+  sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error "$a"; code 0; s="$out"
+  sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error "$b"; code 0
+  [ -n "$s" ] && [ "$s" = "$out" ] && ok || bad "two signatures: [$s] [$out]"
+  local x; out="$s"; for x in "$@"; do hasnt "$x"; done; }
+fresh "signature: a quoted Windows path with a space is one path token, its tail and the user's name gone"
+same "can't open \"C:\\Users\\John Smith\\a.txt\": denied" "can't open \"C:\\Users\\Ann Lee\\b.txt\": denied" \
+  John john Smith smith Lee lee a.txt b.txt
+has "denied"
+fresh "signature: a single-quoted path with a space (Program Files) is one path token"
+same "cannot run 'C:\\Program Files\\Git\\bin\\bash.exe': not found" "cannot run 'D:\\Tools\\Git\\bin\\bash.exe': not found" \
+  program files tools bash.exe '\bin'
+has "not found"
+fresh "signature: a quoted POSIX path with a space is one path token"
+same 'cannot open "/home/john smith/x": denied' 'cannot open "/home/ann lee/y": denied' john smith lee
+has "denied"
+fresh "signature: a UNC path with a \$ share and a space is one path token"
+same 'cannot read \\srv01\builds$\a b\x.log: denied' 'cannot read \\other\share\c d\y.log: denied' \
+  srv01 builds other share x.log y.log 'b\' 'd\'
+has "denied"
+fresh "signature: an scp-style remote is one token - no account, repository or host"
+same "failed to push some refs to 'git@github.com:acme/shop.git'" "failed to push some refs to 'git@gitlab.com:x/y.git'" \
+  acme shop github.com gitlab.com shop.git y.git
+has "failed to push some refs to"
+fresh "signature: user@host:/path is one token - no user, host or folder"
+sig --source scripts/run-stats.sh --step deploy --exit 1 --error "cannot reach user@host:/srv/app now"; code 0
+hasnt user; hasnt host; hasnt srv; hasnt app; has "cannot reach"; has "now"
+fresh "signature: not over-normalized - another verb, another signature"
+sig --source scripts/run-stats.sh --step st --exit 1 --error "cannot open file"; code 0; s1="$out"
+sig --source scripts/run-stats.sh --step st --exit 1 --error "cannot read file"; code 0
+[ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two errors: [$s1] [$out]"
+fresh "signature: not over-normalized - another --source, another signature"
+sig --source scripts/a.sh --step st --exit 1 --error "cannot open file"; code 0; s1="$out"
+sig --source scripts/b.sh --step st --exit 1 --error "cannot open file"; code 0
+[ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two sources: [$s1] [$out]"
+case "$s1" in "scripts/a.sh: "*) ok ;; *) bad "the source is not kept: [$s1]" ;; esac
+fresh "signature: a negative exit code (a Windows crash) is accepted and kept as exit -1073741819"
+sig --source scripts/run-stats.sh --step st --exit -1073741819 --error "the process crashed"; code 0
+has "scripts/run-stats.sh: st: exit -1073741819: the process crashed"
+
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
