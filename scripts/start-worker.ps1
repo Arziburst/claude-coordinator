@@ -45,6 +45,10 @@
 # before anything is created (-DryRun too) - a lead's contract has `tests_first: no - the lead runs the
 # tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
+# A launch text (first line + role + brief) over 24 000 characters goes through a file instead (#291):
+# <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
+# first message one short instruction to read it in full with the Read tool; one line names the file.
+# A launch that fails names what it created and cleanup-worker, and exits 1.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
       [string]$TesterCommit = '', [string]$TesterTests = '')
@@ -246,6 +250,56 @@ if ($tFull) {
   "tester's tests: commit $($tFull.Substring(0, 7)), on $spl"
 }
 
+# The launch text (the first line, the role, the brief) and the way it goes, decided before anything is
+# created (#291): up to 24 000 characters on the command line; above it - Windows cuts a command line at
+# 32 767, after the worktree and branch exist - in a file beside the kept briefs (pruned with them), and
+# the session's first message is a short instruction to read that file
+$notice = ''
+$wtFwd = $wt.Replace('\', '/')
+$same = (Resolve-Path -LiteralPath $from).Path.Replace('\', '/').TrimEnd('/') -eq (Resolve-Path -LiteralPath $root).Path.Replace('\', '/').TrimEnd('/')
+if ($same) {
+  $first = "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wtFwd. Work only inside it; never change files outside it."
+  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
+  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
+  $protRoot = ''
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $protRoot = $cfg.env.COORD_PROTECTED_ROOT }
+  if (-not $protRoot) { $notice = "notice: COORD_PROTECTED_ROOT is not set in ${Safety}: edit tools can reach the working copy (TOOLKIT Safety)" }
+} else {
+  # launched outside the repository (its root not trusted): EnterWorktree into another repository's
+  # worktree asks for permission and the session would wait, so it works there by absolute path
+  $rootFwd = $root.Replace('\', '/')
+  $first = "YOUR WORKING COPY is $wtFwd, a worktree of $rootFwd. Work in it by absolute path (git -C $wtFwd ..., files under $wtFwd); do not use EnterWorktree; never change files outside it."
+}
+$first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions."
+# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
+# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
+$briefText = [IO.File]::ReadAllText($BriefFile)
+$roleText = ''; $roleMsg = ''
+if ($Name -cmatch '^(#\S* )?([a-z]+):') {
+  $role = $Matches[2]
+  $roleFile = Join-Path (Split-Path -Parent $PSScriptRoot) "roles/$role.md"
+  if (Test-Path -LiteralPath $roleFile -PathType Leaf) {
+    $lines = @([IO.File]::ReadAllLines($roleFile)); $body = @(); $front = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      if ($i -eq 0 -and $lines[$i] -match '^---') { $front = $true; continue }
+      if ($front -and $lines[$i] -match '^---') { $front = $false; continue }
+      if (-not $front) { $body += $lines[$i] }
+    }
+    # the body without its leading and trailing blank lines, as the shell's $(...) keeps it
+    $bodyText = ($body -join "`n").Trim("`n")
+    $key = @($body | Where-Object { $_ -ne '' })[0]
+    if ($key -and $briefText.Replace("`r", '').Contains($key)) { $roleMsg = "role ${role}: already in the brief" }
+    else { $roleText = $bodyText; $roleMsg = "role ${role}: roles/$role.md heads the brief" }
+  }
+}
+$full = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
+# characters as the .sh counts them: a surrogate pair is one
+$nChars = $full.Length - [regex]::Matches($full, '[\uDC00-\uDFFF]').Count
+$cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+$bd = (Join-Path $cfgDir 'coordinator/briefs').Replace('\', '/')
+$lFile = ''
+if ($nChars -gt 24000) { $lFile = "$bd/launch-$($Branch -replace '[^A-Za-z0-9._-]', '-')-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID.md" }
+
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
 # local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
 $wroot = if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }
@@ -325,51 +379,18 @@ if (Test-Path -LiteralPath $wt) {
   $cur = & { $ErrorActionPreference = 'Continue'; "$(git -C $wt symbolic-ref --short -q HEAD 2>$null)".Trim() }
   if ($cur -cne $Branch) { Fail "$wt has $(if ($cur) { $cur } else { 'a detached HEAD' }) checked out, not $Branch" }
   "reusing worktree $wt"
+  $made = "nothing new (the worktree $wtFwd was reused)"
 }
 else {
+  $made = if ($hasBranch) { "the worktree $wtFwd (on the existing branch $Branch)" } else { "the worktree $wtFwd and the branch $Branch" }
   # with a tester's commit, git's own "HEAD is now at <sha>" is left out: the line above names the commit
   $wq = @(if ($tFull) { '-q' })
   if ($hasBranch) { Run git (@('-C', $root, 'worktree', 'add') + $wq + @($wt, $Branch)) }
   else { Run git (@('-C', $root, 'worktree', 'add') + $wq + @('--no-track', '-b', $Branch, $wt, $start)) }
 }
 
-$wtFwd = $wt.Replace('\', '/')
-$same = (Resolve-Path -LiteralPath $from).Path.Replace('\', '/').TrimEnd('/') -eq (Resolve-Path -LiteralPath $root).Path.Replace('\', '/').TrimEnd('/')
-if ($same) {
-  $first = "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wtFwd. Work only inside it; never change files outside it."
-  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
-  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
-  $protRoot = ''
-  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $protRoot = $cfg.env.COORD_PROTECTED_ROOT }
-  if (-not $protRoot) { "notice: COORD_PROTECTED_ROOT is not set in ${Safety}: edit tools can reach the working copy (TOOLKIT Safety)" }
-} else {
-  # launched outside the repository (its root not trusted): EnterWorktree into another repository's
-  # worktree asks for permission and the session would wait, so it works there by absolute path
-  $rootFwd = $root.Replace('\', '/')
-  $first = "YOUR WORKING COPY is $wtFwd, a worktree of $rootFwd. Work in it by absolute path (git -C $wtFwd ..., files under $wtFwd); do not use EnterWorktree; never change files outside it."
-}
-$first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions."
-# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
-# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
-$briefText = [IO.File]::ReadAllText($BriefFile)
-$roleText = ''
-if ($Name -cmatch '^(#\S* )?([a-z]+):') {
-  $role = $Matches[2]
-  $roleFile = Join-Path (Split-Path -Parent $PSScriptRoot) "roles/$role.md"
-  if (Test-Path -LiteralPath $roleFile -PathType Leaf) {
-    $lines = @([IO.File]::ReadAllLines($roleFile)); $body = @(); $front = $false
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-      if ($i -eq 0 -and $lines[$i] -match '^---') { $front = $true; continue }
-      if ($front -and $lines[$i] -match '^---') { $front = $false; continue }
-      if (-not $front) { $body += $lines[$i] }
-    }
-    # the body without its leading and trailing blank lines, as the shell's $(...) keeps it
-    $bodyText = ($body -join "`n").Trim("`n")
-    $key = @($body | Where-Object { $_ -ne '' })[0]
-    if ($key -and $briefText.Replace("`r", '').Contains($key)) { "role ${role}: already in the brief" }
-    else { $roleText = $bodyText; "role ${role}: roles/$role.md heads the brief" }
-  }
-}
+if ($notice) { $notice }
+if ($roleMsg) { $roleMsg }
 # conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches` names - inline
 # `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
@@ -403,14 +424,22 @@ if ($fr -in @('worker', 'lead', '')) {
     else { "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE ${sect}4a): $(@($fo)[0])" }
   }
 }
-$brief = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
-$full = $brief   # as sent, before the escaping below: kept for after a compaction
+$brief = $full   # $full as sent, before the escaping below: kept for after a compaction
 $subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
+if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }
 if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
 if ($claude.Source -match '\.(cmd|bat)$') { Fail "claude is a $($Matches[1]) shim ($($claude.Source)): install the native claude.exe, which carries a multi-line brief intact" }
+if ($lFile) {
+  try {
+    $null = New-Item -ItemType Directory -Force -Path $bd
+    [IO.File]::WriteAllText($lFile, $full + "`n", (New-Object System.Text.UTF8Encoding $false))
+  } catch { Fail "launch not started: cannot write the brief file $lFile. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch" }
+  $brief = "Your brief is too long for the command line ($nChars characters), so it is in the file `"$lFile`". Before anything else, read that whole file with the Read tool (in parts with offset and limit if a read is cut short), then follow it as your brief: it holds your first action, your report address, your role and your task."
+  "brief through a file: $nChars characters of launch text, over 24000 - the session's first message points to $lFile"
+}
 # Windows PowerShell 5.1 (and 7.0-7.2) does not escape quotes inside native arguments: do it here,
 # for the brief and the session's name (a name with a " would reach claude without it).
 $argName = $Name
@@ -422,7 +451,11 @@ Push-Location -LiteralPath $from
 $eff = @(if ($Effort) { '--effort', $Effort })
 try { & $claude.Source --bg --name $argName --model $Model @eff --permission-mode $Mode --settings $Safety $brief }
 finally { Pop-Location }
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# a launch that fails leaves the worktree and branch: say so, and how to clean them
+if ($LASTEXITCODE -ne 0) {
+  if ($lFile) { Remove-Item -LiteralPath $lFile -Force -ErrorAction SilentlyContinue }
+  Fail "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch"
+}
 # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
 # the listing is JSON: a backslash or a double quote in the name is escaped there
 $jname = $Name.Replace('\', '\\').Replace('"', '\"')
@@ -438,8 +471,6 @@ foreach ($o in ("$(& $claude.Source agents --json 2>$null)" -replace "[`r`n]", '
   if ($o.Contains('"' + $jname + '"')) { $m = [regex]::Match($o, '"sessionId": *"([0-9a-fA-F-]+)"'); if ($m.Success) { $sid = $m.Groups[1].Value } }
 }
 if ($sid) {
-  $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
-  $bd = Join-Path $cfg 'coordinator/briefs'
   $null = New-Item -ItemType Directory -Force -Path $bd
   [IO.File]::WriteAllText((Join-Path $bd "$sid.md"), $full + "`n", (New-Object System.Text.UTF8Encoding $false))
   "brief kept for after a compaction: $((Join-Path $bd "$sid.md").Replace('\', '/'))"
