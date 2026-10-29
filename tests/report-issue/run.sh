@@ -11,9 +11,13 @@
 # The access points the script implements as written here:
 #   report-issue.sh signature --source <s> [--step <s>] [--exit <code>] --error <text>
 #   report-issue.sh file --repo <owner/name> --title <t> --body-file <f> --signature <sig> [--keywords <words>]
-#                        [--checked <n,n,...>] [--comment-file <f>] [--dry-run]
+#                        [--checked <n,n,...>] [--comment-file <f>] [--regression] [--dry-run]
 #   report-issue.ps1: the mode first, then -Source -Step -Exit -ErrorText (not -Error: $Error is PowerShell's
-#     own) -Repo -Title -BodyFile -Signature -Keywords -Checked <n,n,...> -CommentFile -DryRun
+#     own) -Repo -Title -BodyFile -Signature -Keywords -Checked <n,n,...> -CommentFile -Regression -DryRun
+#   an open issue holding the signature wins over a closed one (REPEAT, never FIXED UPSTREAM); --regression
+#     with only a closed-as-completed match #N files a new issue (FILED, the title as given) whose body holds
+#     a line `Regression of #N` and still ends with `Signature: <sig>`, nothing written on #N; its dry run
+#     prints the would-be filing naming #N; --regression with no exact match: the usual CHECK / FILED flow
 #   lines: the signature alone on one line; FIXED UPSTREAM #<n> (exit 3); REPEAT #<n> (exit 0); CHECK #<a> #<b>
 #     ... and each candidate's title (exit 4); FILED #<n> (exit 0)
 #   gh calls (the stub answers these):
@@ -106,7 +110,7 @@ case "$kind" in
           --source) a+=(-Source) ;; --step) a+=(-Step) ;; --exit) a+=(-Exit) ;; --error) a+=(-ErrorText) ;;
           --repo) a+=(-Repo) ;; --title) a+=(-Title) ;; --body-file) a+=(-BodyFile) ;; --signature) a+=(-Signature) ;;
           --keywords) a+=(-Keywords) ;; --checked) a+=(-Checked) ;; --comment-file) a+=(-CommentFile) ;;
-          --dry-run) a+=(-DryRun) ;; *) a+=("$x") ;; esac; done
+          --regression) a+=(-Regression) ;; --dry-run) a+=(-DryRun) ;; *) a+=("$x") ;; esac; done
         "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/report-issue.ps1" "${a[@]}"; } ;;
   *) echo "unknown kind: $kind" >&2; exit 2 ;;
 esac
@@ -248,6 +252,47 @@ fresh "--dry-run, a repeat with --comment-file: the issue named, no reaction or 
 printf '77\tOPEN\t\tmerge-queue: the refused update\n' > "$STUB_D/exact"
 file --keywords "merge-queue update refused" --comment-file "$COMMENT" --dry-run
 code 0; has "#77"; count create 0; count reaction 0; count comment 0; readonly_else
+
+# --- an open match first; --regression (round 2 of #338) ---
+fresh "an open issue wins over a closed one: both hold the signature -> REPEAT the open one, never FIXED UPSTREAM"
+printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n77\tOPEN\t\tmerge-queue: the refused update again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused"
+code 0; has "REPEAT #77"; hasnt "FIXED UPSTREAM"; count reaction 1; count create 0; count comment 0; readonly_else
+grep -q 'issues/77/reactions' "$STUB_D/log" && ok || { bad "no reaction on #77"; sed 's/^/    log: /' "$STUB_D/log"; }
+
+fresh "--regression, only a closed-as-completed match -> one new issue: Regression of #55, the Signature line last"
+printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression
+code 0; has "FILED #901"; hasnt "FIXED UPSTREAM"; count create 1; count reaction 0; count comment 0; readonly_else
+c="$(tr -d '\r' 2>/dev/null < "$STUB_D/created")"
+printf '%s\n' "$c" | grep -qE '^Regression of #55([^0-9]|$)' && ok || bad "no line Regression of #55 in the body"
+printf '%s\n' "$c" | grep -qF 'Steps: land 12 on a behind PR.' && ok || bad "the body file's text is not in the issue"
+[ "$(printf '%s\n' "$c" | sed '/^$/d' | tail -n 1)" = "Signature: $SIG" ] && ok || bad "the body's last line is not Signature: <sig>"
+grep -qE -- '^issue create .*--title merge-queue stops when the update is refused( --|$)' "$STUB_D/log" && ok ||
+  { bad "issue create without the title as given"; sed 's/^/    log: /' "$STUB_D/log"; }
+grep -q 'issues/55' "$STUB_D/log" && { bad "a call on #55"; sed 's/^/    log: /' "$STUB_D/log"; } || ok
+
+fresh "--regression with an open match too -> REPEAT the open one, nothing filed"
+printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n78\tOPEN\t\tRegression: merge-queue stops again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression
+code 0; has "REPEAT #78"; hasnt "FIXED UPSTREAM"; hasnt "FILED"; count reaction 1; count create 0; count comment 0; readonly_else
+
+fresh "--regression, no exact match, candidates -> CHECK as without it"
+printf '11\tOPEN\t\tmerge queue stops on a refused update\n' > "$STUB_D/keyword"
+file --keywords "merge-queue update refused" --regression
+code 4; has "CHECK"; has "#11"; count create 0; count reaction 0; readonly_else
+
+fresh "--regression, no exact match, no candidates -> FILED as without it, no Regression line"
+file --keywords "merge-queue update refused" --regression
+code 0; has "FILED #901"; count create 1; count reaction 0; readonly_else
+c="$(tr -d '\r' 2>/dev/null < "$STUB_D/created")"
+printf '%s\n' "$c" | grep -q '^Regression of' && bad "a Regression line with no closed match" || ok
+[ "$(printf '%s\n' "$c" | sed '/^$/d' | tail -n 1)" = "Signature: $SIG" ] && ok || bad "the body's last line is not Signature: <sig>"
+
+fresh "--regression --dry-run, a closed match: the would-be filing printed naming #55, no write"
+printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression --dry-run
+code 0; has "#55"; has "$SIG"; hasnt "FIXED UPSTREAM"; count create 0; count reaction 0; count comment 0; readonly_else
 
 echo "report-issue ($kind): $((pass + fail)) checks, $([ $fail = 0 ] && echo "all pass" || echo "$fail FAILED")"
 [ $fail = 0 ]
