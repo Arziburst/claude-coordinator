@@ -7,16 +7,22 @@
 #   ... -CheckPublic <file> [-Project <folder>]                           a summary body against its allowlist
 #   ... -CheckProposal <file> [-Project <folder>]                         a proposal body against its template
 #   ... -NewId                                                            a new random anonymous id (12 hex)
+#   ... <RUNS.tsv> -CoreReport -Id <anonymous id> [-Since <YYYY-MM-DD>] [-Project <folder>] [-NoInsights]
+#     [-Features <FEATURES.md>]                                           the retro report for the core (Markdown)
+#   ... -CheckCoreReport <file> [-Features <FEATURES.md>] [-Project <folder>]  a core report body against its template
 # The week: Monday to Sunday UTC holding -Week (default: the last complete week); the transcripts through
 # session-insights -Since <week> -Until <week end> -SkipTests -Project <root>|<worktree roots of PROJECT.md>|<root>/.claude/
 # worktrees; ROUTING.md's "## Kinds" map for the public kinds; logged estimates (estimate, estimate_time) else rebuilt
-# forecasts; an em dash where the data is too little.
+# forecasts; an em dash where the data is too little. The core report: the period from -Since, else the day after
+# PROJECT.md's "Last core report", else the first CHECKLIST.md line, to today (UTC); its template and its check as
+# retro.sh's top comment says.
 # Exit 1 when a file cannot be read or a check fails, 2 on a usage error.
 param([string]$RunLog, [string]$Week, [string]$Project, [string]$Journal, [string]$Escapes, [switch]$NoInsights,
-  [switch]$Public, [string]$Id, [string]$CheckPublic, [string]$CheckProposal, [switch]$NewId)
+  [switch]$Public, [string]$Id, [string]$CheckPublic, [string]$CheckProposal, [switch]$NewId,
+  [switch]$CoreReport, [string]$Since, [string]$Features, [string]$CheckCoreReport)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 20 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 $ErrorActionPreference = 'Stop'
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 $ORD = [StringComparison]::Ordinal
@@ -48,6 +54,101 @@ $GUARD = ('unreadable-call owner-copy-edit mirror-push push-all-branches push-ma
   'project-rule deny-rule other').Split(' ')
 $REFUSAL = 'guard-error other-hook classifier safety-check user other'.Split(' ')
 $FIELDS = 'project:week of:previous week of:format:signature:axis:measure:week:previous:risk:core file:low:medium:high'.Split(':')
+# the retro report for the core: its template, a line per line - a cell {<type>} filled by the script or, where it
+# has no value, by the coordinator (<fill>); {axes}, {guard}, {refusal}, {features}, {proposals} the rows of a group
+$CSPEC = @'
+<!-- core retro report, format 1 -->
+**Retro report for the core.** How one project used the core since its last report: numbers made by the core's retro script and short anonymous lines; no names, paths, links, code, file names or task text leave the project.
+
+## Report
+| Field | Value |
+|---|---|
+| project | {id} |
+| period | {period} |
+| core commits | {commits} |
+| format | 1 |
+
+## Profile
+| Field | Value |
+|---|---|
+| stack class | {stack} |
+| solo or team | {solo} |
+| strictness | {strict} |
+| spend level | {spend} |
+| work mode | {mode} |
+| os | {os} |
+
+## Five axes
+| Axis | Measure | Period |
+|---|---|---|
+{axes}
+
+@DASH@ too little data: under 3 tasks, merged tasks or forecasts, under 100 tool calls, or no transcripts, journal or escapes file.
+
+## Runs by role
+| Role | Runs |
+|---|---|
+| coordinator | {num} |
+| lead | {num} |
+| worker | {num} |
+| tester | {num} |
+| verifier | {num} |
+| scout | {num} |
+| researcher | {num} |
+| other | {num} |
+
+## Guard and refusals
+| Guard reason | Blocks | Retried | Around | Changed | Stopped |
+|---|---|---|---|---|---|
+{guard}
+
+| Refusal | Count | Retried | Around | Changed | Stopped |
+|---|---|---|---|---|---|
+{refusal}
+
+## Core findings
+| Status | Findings |
+|---|---|
+| new | {val} |
+| sent | {val} |
+| discussed | {val} |
+| fixed | {val} |
+| dropped | {val} |
+| not core | {val} |
+| local core edits | {val} |
+
+## Features
+| Feature | Used | How often | Trusted | Decision changed | Friction |
+|---|---|---|---|---|---|
+{features}
+
+## Helped and hindered
+| Rank | Helped most | Got in the way most |
+|---|---|---|
+| 1 | {text} | {text} |
+| 2 | {text} | {text} |
+| 3 | {text} | {text} |
+
+## Proposals
+| Proposal |
+|---|
+{proposals}
+
+Data for the core's retro, not a bug report: the maintainer acts on it only after the owner's discussion and yes.
+'@
+$CSPEC = $CSPEC.Replace('@DASH@', $DASH) -split '\r?\n'
+$ROLES = 'coordinator lead worker tester verifier scout researcher other'.Split(' ')
+# the Profile's vocabularies, per cell type: the only words a Profile cell holds
+$VOCAB = New-Object 'System.Collections.Generic.Dictionary[string,string[]]' ([StringComparer]::Ordinal)
+foreach ($v0 in 'strict=swarm:standard:strict;spend=lean:balanced:thorough;mode=by task:batch;os=windows:macos:linux;solo=solo:team;stack=game engine:web:mobile:CLI:library:data:other'.Split(';')) {
+  $VOCAB[$v0.Substring(0, $v0.IndexOf('='))] = $v0.Substring($v0.IndexOf('=') + 1).Split(':')
+}
+# the vocabulary word a Settings Value starts with (any case; a letter, digit, _ or - right after it is no end), else ''
+function VLead([string]$k, [string]$v) {
+  $v = Lower $v
+  foreach ($w in $VOCAB[$k]) { if ($v.StartsWith($w, $ORD) -and ($v.Length -eq $w.Length -or [string]$v[$w.Length] -cnotmatch '[a-z0-9_-]')) { return $w } }
+  ''
+}
 function NewSet { New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal) }
 $VOC = NewSet; $FIX = NewSet
 foreach ($w in $AXES + $KINDS + $GUARD + $REFUSAL + $FIELDS) { [void]$VOC.Add($w) }
@@ -144,22 +245,157 @@ function Check([string]$kind, [string[]]$lines, [string]$p) {
   $true
 }
 
+# the feature ids of a FEATURES.md, in the order of its "## Summary" table
+function FeatureIds([string]$f) {
+  $on = $false; $ids = New-Object 'System.Collections.Generic.List[string]'
+  foreach ($line in (Read-Lines $f)) {
+    if ($line.StartsWith('## ', $ORD)) { $on = $line -cmatch '^## +Summary[ \t]*\z'; continue }
+    if ($on -and $line -cmatch '^[|] *(F-[A-Z]+-[0-9]+) *[|]') { $ids.Add($Matches[1]) }
+  }
+  , [string[]]$ids.ToArray()
+}
+# a table row's cells (none for an empty row, as awk's split)
+function RowCells([string]$s) { $in = $s.Substring(2, $s.Length - 4); if ($in -ceq '') { , [string[]]@() } else { , [string[]][regex]::Split($in, ' [|] ') } }
+# a cell of a {type} other than text: '' when it is one
+function VType([string]$p, [string]$c) {
+  switch -CaseSensitive ($p) {
+    '{id}' { if ($c -cmatch '^[0-9a-f]{12}\z') { return '' } else { return 'a project id that is not 12 hex digits' } }
+    '{period}' { if ($c -cmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}[.][.][0-9]{4}-[0-9]{2}-[0-9]{2}\z') { return '' } else { return 'a period that is not <from>..<to>' } }
+    '{commits}' { if ($c -cmatch '^[0-9a-f]{7,40}(, [0-9a-f]{7,40})*\z') { return '' } else { return 'core commits that are not commit ids, split by a comma' } }
+    '{num}' { if ($c -cmatch '^[0-9]+\z') { return '' } else { return 'a count that is not a number' } }
+    '{val}' { if (IsVal $c) { return '' } else { return "a value that is not a number or $DASH" } }
+    '{yn}' { if ($c -ceq 'yes' -or $c -ceq 'no' -or $c -ceq 'unknown') { return '' } else { return 'a Used or Trusted cell other than yes, no or unknown' } }
+    '{gkey}' { if ($GUARD -ccontains $c) { return '' } else { return 'a guard reason outside the template' } }
+    '{rkey}' { if ($REFUSAL -ccontains $c) { return '' } else { return 'a refusal source outside the template' } }
+  }
+  $x = $p.Substring(1, $p.Length - 2)
+  if ($VOCAB.ContainsKey($x)) { if ($VOCAB[$x] -ccontains $c) { return '' } else { return "a Profile cell outside its vocabulary ($($VOCAB[$x] -join ', '))" } }
+  ''
+}
+# a free-text cell: short, and nothing that could name a project or a person
+$reCoreTrim = [regex]'^[(`"'']+|[)`"''.,;:!?]+\z'
+function Text([string]$c, $CF, $CB, [string]$name) {
+  if ($c -cmatch '^[ \t]*\z') { return 'an empty cell' }
+  if ($c.Length - [regex]::Matches($c, '[\uDC00-\uDFFF]').Count -gt 160) { return 'a free-text cell over 160 characters' }
+  if ($c.Contains('://') -or (Lower $c).Contains('www.') -or $c.Contains('](')) { return 'a link' }
+  if ($c -cmatch '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]' -or (Lower $c) -cmatch '[a-z0-9._%+-] *(\[at\]|\(at\)) *[a-z0-9]') { return 'an e-mail address' }
+  if ($c.Contains('@')) { return 'an @handle' }
+  if ($c.Contains('\')) { return 'a path' }
+  if ($c -cmatch '[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+') { return 'an IP address' }
+  foreach ($w in $c.Split([char[]]@(' ', "`t"), [StringSplitOptions]::RemoveEmptyEntries)) {
+    $w = $reCoreTrim.Replace($w, '')
+    if ($CF.Contains($w)) { continue }
+    if ($w.Contains('/')) { return "a path that is not the core's" }
+  }
+  # a dotted name anywhere in a word (a host, a file), its last part starting with a letter: only a core file's
+  foreach ($mt in [regex]::Matches($c, '[A-Za-z0-9_-]+(?:[.][A-Za-z0-9_-]+)+')) {
+    $w = $mt.Value; $x = $w.Substring($w.LastIndexOf('.') + 1)
+    if ($x -cmatch '^[A-Za-z]' -and -not $CB.Contains($w)) { return "a host or a file name that is not one of the core's" }
+  }
+  # a commit id: a hex token of 7 or more digits (any case) with a decimal digit, no letter, digit or _ around it
+  foreach ($mt in [regex]::Matches($c, '(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,}(?![A-Za-z0-9_])')) { if ($mt.Value -cmatch '[0-9]') { return 'a commit id' } }
+  if ($name -and (Word (Lower $c) $name)) { return "the project folder's name" }
+  ''
+}
+# a table row against a template row: 'S' when it is not that row (its cells, their fixed text and, for a group row,
+# its typed cells), '' when it passes, else the reason
+$reTyped = '^[{][a-z]+[}]\z'
+function MatchRow([string]$l, [string]$p, [bool]$grp, $CF, $CB, [string]$name) {
+  if ($l -cnotmatch '^[|] .* [|]\z') { return 'S' }
+  $lc = RowCells $l; $pc = RowCells $p; if ($lc.Count -ne $pc.Count) { return 'S' }
+  for ($i = 0; $i -lt $pc.Count; $i++) { if ($pc[$i] -cnotmatch $reTyped -and $pc[$i] -cne $lc[$i]) { return 'S' } }
+  for ($i = 0; $i -lt $pc.Count; $i++) {
+    if ($pc[$i] -cmatch $reTyped -and $pc[$i] -cne '{text}') { $r = VType $pc[$i] $lc[$i]; if ($r) { if ($grp) { return 'S' } else { return $r } } }
+  }
+  for ($i = 0; $i -lt $pc.Count; $i++) { if ($pc[$i] -ceq '{text}') { $r = Text $lc[$i] $CF $CB $name; if ($r) { return $r } } }
+  ''
+}
+# a retro report for the core (its lines) against its template ($CSPEC) and the rules of its free-text cells; $true
+# when it passes, else the first refusal with its line on stderr
+function CheckCore([string[]]$lines, [string[]]$feat, [string]$proj) {
+  $CF = NewSet; $CB = NewSet
+  CoreFiles (Split-Path -Parent $PSScriptRoot) '' $CF
+  foreach ($x in $CF) { $i = $x.LastIndexOf('/'); [void]$CB.Add($(if ($i -ge 0) { $x.Substring($i + 1) } else { $x })) }
+  $FT = NewSet; foreach ($x in $feat) { [void]$FT.Add($x) }
+  $name = if ($proj) { BaseName $proj } else { '' }; if ($name -cnotmatch '[a-z]') { $name = '' }
+  $steps = New-Object 'System.Collections.Generic.List[object]'
+  foreach ($t0 in $CSPEC) {
+    if ($t0 -ceq '') { continue }
+    if ($t0 -ceq '{axes}') { foreach ($mm in $MEAS) { $steps.Add(@("| $($mm.Substring(0, $mm.IndexOf(':'))) | $($mm.Substring($mm.IndexOf(':') + 1)) | {val} |", '1', $false)) } }
+    elseif ($t0 -ceq '{features}') { foreach ($x in $feat) { $steps.Add(@("| $x | {yn} | {text} | {yn} | {text} | {text} |", '1', $true)) } }
+    elseif ($t0 -ceq '{guard}') { $steps.Add(@('| {gkey} | {num} | {num} | {num} | {num} | {num} |', '*', $false)) }
+    elseif ($t0 -ceq '{refusal}') { $steps.Add(@('| {rkey} | {num} | {num} | {num} | {num} | {num} |', '*', $false)) }
+    elseif ($t0 -ceq '{proposals}') { $steps.Add(@('| {text} |', '+', $false, 3)) }
+    else { $steps.Add(@($t0, '1', $false)) }
+  }
+  $si = 0; $got = @{}; $why = $null; $ln = 0
+  foreach ($L in $lines) {
+    $ln++
+    if ($L -cmatch '^[ \t]*\z') { continue }
+    if ($L.Contains('<fill>')) { $why = 'a <fill> left'; break }
+    if ($ln -gt 1 -and $L.Contains('<!--')) { $why = 'an HTML comment'; break }
+    while ($true) {
+      if ($si -ge $steps.Count) { $why = "a line after the template's end"; break }
+      $p = $steps[$si][0]; $rep = $steps[$si][1]
+      if (-not $p.Contains('{')) { if ($L -ceq $p) { $si++ } else { $why = "where the template has `"$p`"" }; break }
+      if ($rep -ceq '1') {
+        $r = MatchRow $L $p $false $CF $CB $name
+        if ($r -ceq 'S') {
+          $x = ($L -creplace '^[|] ', '') -creplace ' [|].*', ''
+          if ($steps[$si][2] -and $x -cmatch '^F-[A-Z]+-[0-9]+\z' -and -not $FT.Contains($x)) { $why = 'a feature row not in FEATURES.md' }
+          else { $why = "where the template has `"$p`"" }
+        } elseif ($r) { $why = $r } else { $si++ }
+        break
+      }
+      $r = MatchRow $L $p $true $CF $CB $name
+      if ($r -ceq '') {
+        $got[$si] = 1 + $(if ($got.ContainsKey($si)) { $got[$si] } else { 0 })
+        if ($steps[$si].Count -gt 3 -and $got[$si] -gt $steps[$si][3]) { $why = "more rows than the template allows ($($steps[$si][3]))" }
+        break
+      }
+      if ($r -cne 'S') { $why = $r; break }
+      if ($rep -ceq '+' -and -not $got[$si]) { $why = "where the template has `"$p`""; break }
+      $si++
+    }
+    if ($why) { break }
+  }
+  if (-not $why) {
+    while ($si -lt $steps.Count -and ($steps[$si][1] -ceq '*' -or ($steps[$si][1] -ceq '+' -and $got[$si]))) { $si++ }
+    if ($si -lt $steps.Count) { $ln = $lines.Count + 1; $why = "the body ends where the template has `"$($steps[$si][0])`"" }
+  }
+  if ($why) { [Console]::Error.WriteLine("retro: the core report fails its check: line ${ln}: $why"); return $false }
+  $true
+}
+
+if ($CheckCoreReport) {
+  if ($RunLog -or $Week -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal -or $NewId -or $CoreReport -or $Since) { Show-Usage }
+  $fe = if ($PSBoundParameters.ContainsKey('Features')) { $Features } else { Join-Path (Split-Path -Parent $PSScriptRoot) 'FEATURES.md' }
+  if (-not $fe) { Show-Usage }
+  $body = Read-Lines $CheckCoreReport
+  if (CheckCore $body (FeatureIds $fe) $Project) { exit 0 } else { exit 1 }
+}
 if ($NewId) {
-  if ($RunLog -or $Week -or $Project -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal) { Show-Usage }
+  if ($RunLog -or $Week -or $Project -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal -or $CoreReport -or $Since -or $Features) { Show-Usage }
   $b = New-Object byte[] 6; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
   ($b | ForEach-Object { $_.ToString('x2') }) -join ''
   exit 0
 }
 if ($CheckPublic -or $CheckProposal) {
-  if (($CheckPublic -and $CheckProposal) -or $RunLog -or $Week -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id) { Show-Usage }
+  if (($CheckPublic -and $CheckProposal) -or $RunLog -or $Week -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CoreReport -or $Since -or $Features) { Show-Usage }
   $k = if ($CheckPublic) { 'summary' } else { 'proposal' }
   $f = if ($CheckPublic) { $CheckPublic } else { $CheckProposal }
   if (Check $k (Read-Lines $f) $Project) { exit 0 } else { exit 1 }
 }
 if (-not $RunLog -or $RunLog.StartsWith('-')) { Show-Usage }
-if ([bool]$Public -ne [bool]$Id) { Show-Usage }
+if ($Public -and -not $Id) { Show-Usage }
+if ($Id -and -not $Public -and -not $CoreReport) { Show-Usage }
+# the core report: an id, no week and no summary; -Since and -Features only with it
+if ($CoreReport -and (-not $Id -or $Public -or $Week)) { Show-Usage }
+if (-not $CoreReport -and ($Since -or $PSBoundParameters.ContainsKey('Features'))) { Show-Usage }
+if ($CoreReport -and $PSBoundParameters.ContainsKey('Features') -and -not $Features) { Show-Usage }
 if ($Id -and $Id -cnotmatch '^[0-9a-f]{12}\z') { Show-Usage }
 if ($Week -and $Week -cnotmatch '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\z') { Show-Usage }
+if ($Since -and $Since -cnotmatch '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\z') { Show-Usage }
 # (PowerShell's variable names ignore case: every name below is distinct from the others in any case)
 $RunLines = Read-Lines $RunLog
 $dir = Split-Path -Parent (Resolve-Path -LiteralPath $RunLog).Path
@@ -191,6 +427,94 @@ $n0 = Days ([long]$day.Substring(0, 4)) ([long]$day.Substring(5, 2)) ([long]$day
 if (-not $Week) { $n0 -= 7 }
 $s0 = $n0 - (($n0 + 3) % 7)
 $WS = Civil $s0; $WE = Civil ($s0 + 6); $PS0 = Civil ($s0 - 7); $PE = Civil ($s0 - 1); $WN = Civil ($s0 + 7)
+# the core report: the period, the core commits, the profile and the core findings from PROJECT.md, CHECKLIST.md and
+# CORE-FINDINGS.md next to the run log (in $Meta); the period stands for the week, and no date falls in the previous one
+$Meta = @{}; $FeatIds = @(); $OsName = ''
+function Cell($c, [int]$i) { if ($i -ge 0 -and $i -lt $c.Count) { ([string]$c[$i]).Trim(' ', "`t") } else { '' } }
+function IsCommit([string]$s) { $s -cmatch '^[0-9a-f]{7,40}\z' }
+if ($CoreReport) {
+  $FeatIds = FeatureIds $(if ($Features) { $Features } else { Join-Path (Split-Path -Parent $PSScriptRoot) 'FEATURES.md' })
+  $OsName = if ($PSVersionTable.PSEdition -ceq 'Core' -and $IsMacOS) { 'macos' } elseif ($PSVersionTable.PSEdition -ceq 'Core' -and $IsLinux) { 'linux' } else { 'windows' }
+  $reDates = '[0-9]{4}-[0-9]{2}-[0-9]{2}[.][.]([0-9]{4}-[0-9]{2}-[0-9]{2})'
+  $last = ''; $ccommit = ''; $edits = $null; $prof = @{}
+  # PROJECT.md: the Settings rows by their name (before a "(", without ** and `); of a Profile setting only the
+  # vocabulary word its Value starts with, never the rest of it
+  $ptype = @{ 'strictness' = 'strict'; 'spend level' = 'spend'; 'work mode' = 'mode' }
+  $f1 = Join-Path $dir 'PROJECT.md'
+  if (Test-Path -LiteralPath $f1 -PathType Leaf) {
+    foreach ($line in (Read-Lines $f1)) {
+      $c = $line.Split('|'); if ($c.Count -lt 4) { continue }
+      $k = Lower ((($c[1] -creplace '[*`]', '') -creplace '[ \t]*[(].*', '').Trim(' ', "`t"))
+      $v = ($c[2] -creplace '[*`]', '').Trim(' ', "`t")
+      if ($k -ceq 'strictness' -or $k -ceq 'spend level' -or $k -ceq 'work mode') { $v = VLead $ptype[$k] $v; if ($v) { $prof[$k] = $v } }
+      elseif ($k -ceq 'last core report') { $mt = [regex]::Match($v, $reDates); if ($mt.Success) { $last = $mt.Groups[1].Value } }
+      elseif ($k -ceq 'core') {
+        $mt = [regex]::Match($v, 'commit ([0-9a-f]+)'); if ($mt.Success -and (IsCommit $mt.Groups[1].Value)) { $ccommit = $mt.Groups[1].Value }
+        $i = $v.IndexOf('local edits:', $ORD)
+        if ($i -ge 0) {
+          $edits = 0
+          foreach ($e in $v.Substring($i + 12).Split([char[]]@(',', ';'))) {
+            $x = $e.Trim(' ', "`t"); if ($x -and $x -cne '-' -and (Lower $x) -cnotmatch '^none' -and $x -cnotmatch '^<.*>\z') { $edits++ }
+          }
+        }
+      }
+    }
+  }
+  # CHECKLIST.md and CORE-FINDINGS.md: columns by the header (date, core; date, status)
+  $KD = New-Object 'System.Collections.Generic.List[string]'; $KC = New-Object 'System.Collections.Generic.List[string]'
+  $f1 = Join-Path $dir 'CHECKLIST.md'
+  if (Test-Path -LiteralPath $f1 -PathType Leaf) {
+    $colD = -1; $colC = -1
+    foreach ($line in (Read-Lines $f1)) {
+      $c = $line.Split('|'); if ($c.Count -lt 4) { continue }
+      $hd = -1; $hc = -1; for ($i = 1; $i -lt $c.Count - 1; $i++) { $x = Lower (Cell $c $i); if ($x -ceq 'date') { $hd = $i }; if ($x -ceq 'core') { $hc = $i } }
+      if ($hd -ge 0 -and $hc -ge 0) { $colD = $hd; $colC = $hc; continue }
+      $d = Cell $c $(if ($colD -ge 0) { $colD } else { 2 }); $x = Cell $c $(if ($colC -ge 0) { $colC } else { 3 })
+      if ($d -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}\z') { continue }
+      $KD.Add($d); $KC.Add($(if (IsCommit $x) { $x } else { '' }))
+    }
+  }
+  $FD = New-Object 'System.Collections.Generic.List[string]'; $FST = New-Object 'System.Collections.Generic.List[string]'
+  $f2 = Join-Path $dir 'CORE-FINDINGS.md'; $hasF = Test-Path -LiteralPath $f2 -PathType Leaf
+  if ($hasF) {
+    $colFD = -1; $colFS = -1
+    foreach ($line in (Read-Lines $f2)) {
+      $c = $line.Split('|'); if ($c.Count -lt 4) { continue }
+      $hd = -1; $hs = -1; for ($i = 1; $i -lt $c.Count - 1; $i++) { $x = Lower (Cell $c $i); if ($x -ceq 'date') { $hd = $i }; if ($x -ceq 'status') { $hs = $i } }
+      if ($hd -ge 0 -and $hs -ge 0) { $colFD = $hd; $colFS = $hs; continue }
+      $d = Cell $c $(if ($colFD -ge 0) { $colFD } else { 2 }); if ($d -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}\z') { continue }
+      $j = if ($colFS -ge 0) { $colFS } elseif ((Cell $c ($c.Count - 1)) -ceq '') { $c.Count - 2 } else { $c.Count - 1 }
+      $FD.Add($d); $FST.Add((Lower (Cell $c $j)))
+    }
+  }
+  $to = [DateTime]::UtcNow.ToString('yyyy-MM-dd')
+  if ($Since) { $from = $Since }
+  elseif ($last) { $from = Civil ((Days ([long]$last.Substring(0, 4)) ([long]$last.Substring(5, 2)) ([long]$last.Substring(8, 2))) + 1) }
+  elseif ($KD.Count) { $from = $KD[0] }
+  else { [Console]::Error.WriteLine('retro: no start of the period (no Last core report in PROJECT.md, no CHECKLIST.md line): give -Since'); exit 1 }
+  # the commit in use on the first day (the last line on or before it), then those of the lines in the period
+  $ud = ''; $uc = ''
+  for ($i = 0; $i -lt $KD.Count; $i++) { if ($KC[$i] -and [string]::CompareOrdinal($KD[$i], $from) -le 0 -and [string]::CompareOrdinal($KD[$i], $ud) -ge 0) { $ud = $KD[$i]; $uc = $KC[$i] } }
+  $cl = New-Object 'System.Collections.Generic.List[string]'; if ($uc) { $cl.Add($uc) }
+  for ($i = 0; $i -lt $KD.Count; $i++) {
+    if ($KC[$i] -and [string]::CompareOrdinal($KD[$i], $from) -ge 0 -and [string]::CompareOrdinal($KD[$i], $to) -le 0 -and -not $cl.Contains($KC[$i])) { $cl.Add($KC[$i]) }
+  }
+  if (-not $cl.Count -and $ccommit) { $cl.Add($ccommit) }
+  $Meta['period'] = "$from..$to"
+  if ($cl.Count) { $Meta['core commits'] = $cl -join ', ' }
+  foreach ($k in $prof.Keys) { $Meta[$k] = $prof[$k] }
+  if ($null -ne $edits) { $Meta['local core edits'] = "$edits" }
+  if ($hasF) {
+    $nf = @{ 'new' = 0; 'sent' = 0; 'discussed' = 0; 'fixed' = 0; 'dropped' = 0; 'not core' = 0 }
+    for ($i = 0; $i -lt $FD.Count; $i++) {
+      if ([string]::CompareOrdinal($FD[$i], $from) -lt 0 -or [string]::CompareOrdinal($FD[$i], $to) -gt 0) { continue }
+      $w = $FST[$i] -creplace '[^a-z].*', ''; if ($w -ceq 'not') { $w = 'not core' }
+      if ($nf.ContainsKey($w)) { $nf[$w] += 1 }
+    }
+    foreach ($k in $nf.Keys) { $Meta[$k] = "$($nf[$k])" }
+  }
+  $WS = $from; $WE = $to; $PS0 = '9999-99-99'; $PE = '0000-00-00'
+}
 function InWeek([string]$d) {
   if (-not $d) { return '' }
   if ([string]::CompareOrdinal($d, $WS) -ge 0 -and [string]::CompareOrdinal($d, $WE) -le 0) { return 'W' }
@@ -240,7 +564,12 @@ if (Test-Path -LiteralPath $pmd -PathType Leaf) {
 $Roots += "|$base/.claude/worktrees"
 # the transcripts of each week: session-insights in its own process, as the .sh runs it; none when it fails
 $Ins = @{}
-if (-not $NoInsights) {
+if (-not $NoInsights -and $CoreReport) {
+  # the core report: its period, to now
+  $exe = (Get-Process -Id $PID).Path; $si = Join-Path $PSScriptRoot 'session-insights.ps1'
+  $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "${WS}T00:00:00Z" -SkipTests -Project $Roots 2>$null })
+  if ($LASTEXITCODE -eq 0) { $Ins['W'] = $got }
+} elseif (-not $NoInsights) {
   $exe = (Get-Process -Id $PID).Path; $si = Join-Path $PSScriptRoot 'session-insights.ps1'
   foreach ($span in @(@('W', $WS, $WN), @('P', $PS0, $WS))) {
     $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "$($span[1])T00:00:00Z" -Until "$($span[2])T00:00:00Z" -SkipTests -Project $Roots 2>$null })
@@ -356,6 +685,7 @@ $cd = 0; $ct = 1; $cr = 2; $ck = 3; $cm = 4; $ce = 6; $cc = 8; $cs = 9; $cw = 11
 $Order = New-Object 'System.Collections.Generic.List[string]'; $Tasks = NewMap   # the tasks in order; per task its record
 $Unk = NewMap   # the results no first word explains, this week
 $coord = @{ W = [long]0; P = [long]0 }; $frun = @{ W = [long]0; P = [long]0 }
+$RN = NewMap   # the runs by role in the week (the core report: its period)
 $row = 0
 foreach ($line in $RunLines) {
   if ($line -cmatch '^[ \t]*\z' -or $line.StartsWith('#')) { continue }
@@ -374,6 +704,7 @@ foreach ($line in $RunLines) {
   if ($lt -cmatch '^#?st[0-9]' -or $lt -ceq '0' -or $lt -ceq '#0' -or (Lower "$kind $role") -cmatch 'probe|selftest|self-test') { continue }   # a probe or a self-test
   $d = & $col $cd; if ($d.Length -gt 10) { $d = $d.Substring(0, 10) }; if ($d -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}\z') { $d = '' }
   $cv = & $col $cc; $cost = Units $cv '$'; $wk = InWeek $d
+  if ($wk -eq 'W' -and $role -cne 'task') { Inc $RN $(if ($role -and $ROLES -ccontains $role) { $role } else { 'other' }) 1 }   # the runs by role
   if ($tid -eq '' -or $tid -eq '-') { if ($wk -and $cost -ge 0) { $coord[$wk] += $cost }; continue }   # the coordinator's own line
   if (-not $Tasks.ContainsKey($tid)) {
     $Tasks[$tid] = @{ fa = $row; md = ''; tr = -1; lr = -1; nrun = 0; hc = $false; tc = [long]0; ha = $false; ta = [long]0; p = 0; tk = ''; tm = ''
@@ -501,6 +832,33 @@ foreach ($wk in 'W', 'P') {
 }
 function Rates($q) { if ($q.n -ge 3) { @((Pct $q.r $q.n), (Pct $q.e $q.n), (Pct $q.f $q.n)) } else { @($DASH, $DASH, $DASH) } }
 $out = New-Object 'System.Collections.Generic.List[string]'
+if ($CoreReport) {
+  # the retro report for the core: the template ($CSPEC), its cells from the period's numbers and $Meta; a cell the
+  # script has no value for is <fill> (a count: the em dash)
+  $G = NewMap
+  foreach ($k in $Meta.Keys) { $G[$k] = $Meta[$k] }
+  foreach ($k in $ROLES) { $G[$k] = "$(Get0 $RN $k)" }
+  $G['os'] = $OsName
+  foreach ($t0 in $CSPEC) {
+    if ($t0 -ceq '{axes}') { foreach ($mm in $MEAS) { $ax = $mm.Substring(0, $mm.IndexOf(':')); $nm = $mm.Substring($mm.IndexOf(':') + 1); $out.Add("| $ax | $nm | $($Val.W[$nm]) |") } }
+    elseif ($t0 -ceq '{guard}') { foreach ($kk in $GUARD) { if ($GK.ContainsKey($kk)) { $e = $GK[$kk]; $out.Add("| $kk | $($e.c) | $($e.r) | $($e.a) | $($e.h) | $($e.s) |") } } }
+    elseif ($t0 -ceq '{refusal}') { foreach ($kk in $REFUSAL) { if ($QK.ContainsKey($kk)) { $e = $QK[$kk]; $out.Add("| $kk | $($e.c) | $($e.r) | $($e.a) | $($e.h) | $($e.s) |") } } }
+    elseif ($t0 -ceq '{features}') { foreach ($kk in $FeatIds) { $out.Add("| $kk | <fill> | <fill> | <fill> | <fill> | <fill> |") } }
+    elseif ($t0 -ceq '{proposals}') { $out.Add('| <fill> |') }
+    elseif ($t0.Contains('{')) {
+      $tc = RowCells $t0; $o1 = '|'
+      foreach ($p1 in $tc) {
+        if ($p1 -ceq '{id}') { $p1 = $Id }
+        elseif ($p1 -cmatch $reTyped) { $p1 = if ($G.ContainsKey($tc[0])) { $G[$tc[0]] } elseif ($p1 -ceq '{num}' -or $p1 -ceq '{val}') { $DASH } else { '<fill>' } }
+        $o1 += " $p1 |"
+      }
+      $out.Add($o1)
+    }
+    else { $out.Add($t0) }
+  }
+  $out
+  exit 0
+}
 if (-not $Public) {
   $out.Add("retro`tweek of $WS`tprevious week of $PS0"); $out.Add("axis`tmeasure`tweek`tprevious")
   foreach ($mm in $MEAS) { $ax = $mm.Substring(0, $mm.IndexOf(':')); $nm = $mm.Substring($mm.IndexOf(':') + 1); $out.Add("$ax`t$nm`t$($Val.W[$nm])`t$($Val.P[$nm])") }

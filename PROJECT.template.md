@@ -37,6 +37,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Worktree roots | `<fill>` | `<fill>` | `<date>` | none — the workers' worktrees are under `.claude/worktrees`; else every `--worktree-root` the project gives start-worker, relative to the project root where it can be (`../<project>-wt`), split by `,` — the retro counts sessions started there |
 | Protected branches (CORE §1.9, TOOLKIT *Safety*) | `<fill>` | `<fill>` | `<date>` | `main` and `master` always, plus the repository's default branch and the branches protected on the code host (INIT 3.1, question 14) — exact names, no patterns, added to main and master, never replacing them; the added ones written to the worker safety file's `env` `COORD_PROTECTED_BRANCHES` and its push deny rules; none: main and master only |
 | Last retro (week of) | `<fill>` | `<fill>` | `<date>` | none yet — the retro sets it (procedures/RETRO.md) |
+| Last core report | `<fill>` | `<fill>` | `<date>` | none yet — the retro report for the core sets it to its period `<from>..<to>` once filed; the next report starts the day after (procedures/RETRO.md §8) |
 
 ## Project
 | Question | This project | Default to offer |
