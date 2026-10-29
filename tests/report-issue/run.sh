@@ -283,6 +283,57 @@ sig --source scripts/run-stats.sh --step st --exit 1 --error 'push rejected for 
 sig --source scripts/run-stats.sh --step st --exit 1 --error 'fetch rejected for jo@acme.com'; code 0
 [ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two errors: [$s1] [$out]"
 
+# --- signature, round 5 of #338: any word with a / or \ is a token, core paths kept, versions and ports ---
+# A word holding / or \ (a repository, a branch, a relative path, an env-variable or home path, a drive
+# without a slash) is one token, unless it is a core path; the message words around it stay.
+# word <error> <words around...> -- <names...>: one signature; the words around kept, none of the names
+word() {
+  local e="$1" x; shift
+  sig --source scripts/run-stats.sh --step st --exit 1 --error "$e"; code 0
+  while [ $# -gt 0 ] && [ "$1" != -- ]; do has "$1"; shift; done
+  [ $# -gt 0 ] && shift
+  for x in "$@"; do hasnt "$x"; done; }
+fresh "signature: a repository owner/name in a git remote message is a token"
+word 'remote: Permission to acme/shop.git denied' "permission to" -- acme shop
+word "fatal: repository 'acme/shop' not found" "repository" "not found" -- acme shop
+fresh "signature: a branch name with a slash is a token, the words after it stay"
+word 'REMOVE FAILED: git branch -d feature/acme-login - left as is' "remove failed" "left as is" -- acme login
+word "error: pathspec 'feature/acme-login' did not match" "pathspec" "did not match" -- acme login
+fresh "signature: a relative path is a token"
+word 'error: open src/acme/config.json' "error: open" -- acme config
+fresh "signature: a Windows path without a drive, an env-variable path, a drive with no slash, ~user - tokens"
+word 'cannot read Users\jo\acme\x' "cannot read" -- acme jo users
+word 'cannot read %USERPROFILE%\acme\x' "cannot read" -- acme userprofile
+word 'cannot read $HOME/acme/x' "cannot read" -- acme home
+word 'cannot read D:acme\x' "cannot read" -- acme
+word 'cannot read ~jo/acme/x' "cannot read" -- acme jo
+fresh "signature: a word with a slash is a token in the middle of a line, the words after it stay"
+word 'branch feature/acme-login is not merged' "branch" "is not merged" -- acme login
+fresh "signature: core paths stay as written, lower-cased (guard)"
+word 'cannot run scripts/start-worker.sh now' "cannot run scripts/start-worker.sh now" -- PATH HOST
+word 'see procedures/CORE-FINDINGS.md first' "see procedures/core-findings.md first" -- PATH HOST
+word 'see roles/worker.md first' "see roles/worker.md first" -- PATH HOST
+word 'see skills/coord-retro/SKILL.md first' "see skills/coord-retro/skill.md first" -- PATH HOST
+word 'tests/retro/run.sh failed' "tests/retro/run.sh failed" -- PATH HOST
+fresh "signature: the coordinator's own files stay as written, lower-cased (guard)"
+word 'cannot read PROJECT.md' "cannot read project.md" -- PATH HOST
+word 'cannot read BINDINGS.md' "cannot read bindings.md" -- PATH HOST
+word 'cannot append LOG.md' "cannot append log.md" -- PATH HOST
+word 'cannot append RUNS.tsv' "cannot append runs.tsv" -- PATH HOST
+word 'cannot read CHECKLIST.md' "cannot read checklist.md" -- PATH HOST
+fresh "signature: cannot read PROJECT.md and cannot read BINDINGS.md - two signatures"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot read PROJECT.md'; code 0; s1="$out"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot read BINDINGS.md'; code 0
+[ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two files: [$s1] [$out]"
+fresh "signature: v2.1.310 and 2.1.310 - one token"
+same 'needs core v2.1.310 or later' 'needs core 2.1.310 or later' 310
+has "needs core"; has "or later"
+fresh "signature: e.g. stays e.g. - no host"
+word 'set the model, e.g. opus' "set the model, e.g. opus" -- HOST
+fresh "signature: an IP address with a port - one token, whatever the port"
+same 'cannot connect to 10.1.2.3:8443 now' 'cannot connect to 10.9.9.9:22 now' 8443 '10.'
+has "cannot connect to"; has "now"
+
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
