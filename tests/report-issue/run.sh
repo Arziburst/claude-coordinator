@@ -174,7 +174,8 @@ fi
 
 # --- signature, round 3 of #338: quoted paths with spaces, scp remotes, negative exit codes ---
 # (the signature goes to a public issue: a path's tail and the names in it never reach it). Unquoted paths
-# with spaces cannot be told from words in general and are not tested.
+# with spaces cannot be told from words: round 4 drops the rest of the line after any unquoted path start,
+# UNC and user@host:/path included (below).
 # sig <args>: run signature; under ps also .sh with the same arguments - the two lines byte for byte
 sig() {
   run signature "$@"
@@ -205,15 +206,15 @@ same 'cannot open "/home/john smith/x": denied' 'cannot open "/home/ann lee/y": 
 has "denied"
 fresh "signature: a UNC path with a \$ share and a space is one path token"
 same 'cannot read \\srv01\builds$\a b\x.log: denied' 'cannot read \\other\share\c d\y.log: denied' \
-  srv01 builds other share x.log y.log 'b\' 'd\'
-has "denied"
+  srv01 builds other share x.log y.log 'b\' 'd\' denied
+has "cannot read"
 fresh "signature: an scp-style remote is one token - no account, repository or host"
 same "failed to push some refs to 'git@github.com:acme/shop.git'" "failed to push some refs to 'git@gitlab.com:x/y.git'" \
   acme shop github.com gitlab.com shop.git y.git
 has "failed to push some refs to"
 fresh "signature: user@host:/path is one token - no user, host or folder"
 sig --source scripts/run-stats.sh --step deploy --exit 1 --error "cannot reach user@host:/srv/app now"; code 0
-hasnt user; hasnt host; hasnt srv; hasnt app; has "cannot reach"; has "now"
+hasnt user; hasnt host; hasnt srv; hasnt app; has "cannot reach"; hasnt "now"
 fresh "signature: not over-normalized - another verb, another signature"
 sig --source scripts/run-stats.sh --step st --exit 1 --error "cannot open file"; code 0; s1="$out"
 sig --source scripts/run-stats.sh --step st --exit 1 --error "cannot read file"; code 0
