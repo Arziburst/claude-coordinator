@@ -79,7 +79,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    start-worker dry run on a real task (CORE §12a): an update can break a project wrapper that nothing
    runs until the next worker is due. Then the **full self-test** at the new commit
    ([SELFTEST.md](SELFTEST.md)), after every update (a `declined` CHECKLIST line: offered, never run silently): its branches in the state repository are the
-   evidence that this commit works here; its CHECKLIST line names the commit. Then
+   evidence that this commit works here; its CHECKLIST line names the commit. A declined full self-test
+   still runs `selftest probes` when they are due (the same due-rule as SELFTEST step 2a), so they never
+   stay due (#331). Then
    install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) and refresh the core's skills — every
    `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
    removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.

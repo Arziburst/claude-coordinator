@@ -38,6 +38,9 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
+# --contract only checks a contract; the session reads the brief alone (#331): a --contract whose text is
+# not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
+# WARN line, and the start goes on (--dry-run too); the brief is never changed.
 # The tests_first gate (CORE §4 step 3, #276): a worker whose contract says `tests_first: yes` starts only
 # with the tester's tests - --tester-commit <sha>, a commit that is the worker's start point or an ancestor
 # of it (a reused worktree's HEAD, else the branch, else the base), or --tester-tests <path>, an existing
@@ -177,6 +180,15 @@ if [ -n "$cfile" ]; then
   printf '%s\n' "$cout" | F="$cfile" L="$clabel" awk 'BEGIN { F = ENVIRON["F"] ": "; L = ENVIRON["L"] ": " }
     index($0, F) == 1 { $0 = L substr($0, length(F) + 1) } { print }'
   [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
+fi
+if [ -n "$contract" ]; then
+  # the contract's first `id:` and `title:` lines against the brief's lines, all trimmed
+  cin="$(B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"] } FNR == 1 { f++; if (index($0, B) == 1) $0 = substr($0, length(B) + 1) }
+    { sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, "") }
+    f == 1 && /^(id|title):/ { k = substr($0, 1, index($0, ":")); if (!(k in want)) want[k] = $0; next }
+    f == 2 { have[$0] = 1 }
+    END { n = 0; for (k in want) { n++; if (want[k] in have) { print "yes"; exit } } print (n ? "no" : "yes") }' "$contract" "$brief")"
+  [ "$cin" = yes ] || echo "WARN: --contract only checks the contract - the session will not see it: its text (its id: and title: lines) is not in the brief; put the contract into the brief file (#331)"
 fi
 # the tests_first gate (CORE §4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them

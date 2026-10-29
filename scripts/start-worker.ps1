@@ -35,6 +35,9 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
+# -Contract only checks a contract; the session reads the brief alone (#331): a -Contract whose text is
+# not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
+# WARN line, and the start goes on (-DryRun too); the brief is never changed.
 # The tests_first gate (CORE section 4 step 3, #276): a worker whose contract says `tests_first: yes` starts
 # only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
 # ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
@@ -191,6 +194,15 @@ if ($cFile) {
   if ($cRc -ne 0) { Fail "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE ${sect}4)" }
   if ($tfRc -ne 0) { $tfOut | ForEach-Object { [Console]::Error.WriteLine($_) }; Fail "refused: check-contract could not read tests_first (CORE ${sect}4 step 3)" }
   $tfYes = ((@($tfOut) -join "`n").Trim().ToLower()) -cmatch '^yes([ \t,:;(]|$)'
+}
+if ($Contract) {
+  # the contract's first `id:` and `title:` lines against the brief's lines, all trimmed
+  $trimmed = { param($f) [IO.File]::ReadAllText($f).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n" | ForEach-Object { $_.Trim(" `t") } }
+  $want = @{}; foreach ($l in (& $trimmed $Contract)) { if ($l -cmatch '^(id|title):' -and -not $want.ContainsKey($Matches[1])) { $want[$Matches[1]] = $l } }
+  $have = @(& $trimmed $BriefFile)
+  if ($want.Count -and -not @($want.Values | Where-Object { $have -ccontains $_ }).Count) {
+    'WARN: -Contract only checks the contract - the session will not see it: its text (its id: and title: lines) is not in the brief; put the contract into the brief file (#331)'
+  }
 }
 if ($crole -eq 'lead' -and ($TesterCommit -or $TesterTests)) {
   Fail "refused: a lead's task gets no task-level tester - start the lead without -TesterCommit / -TesterTests; its contract has ``tests_first: no - the lead runs the tester per sub-contract`` (roles/lead.md step 3)"
