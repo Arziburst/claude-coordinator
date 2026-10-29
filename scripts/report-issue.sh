@@ -62,7 +62,8 @@ if [ "$mode" = signature ]; then
   # a quoted path is one PATH with its spaces (the quotes still there to bound it), then the quotes go;
   # an unquoted Windows or UNC path takes the next words that hold a backslash (`\\srv\a b\x.log`); an
   # scp-style remote (`git@host:owner/repo`, `user@host:/path`) is one URL - no account, host or folder
-  rules="$(cat <<'EOF'
+  # read, not $(cat <<EOF): bash 3.2 misparses a here-document with lone quotes inside $(...)
+  IFS= read -r -d '' rules <<'EOF'
     s#[a-z][a-z0-9+.-]*://[^ ]*#URL#g
     s#(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ]*#\1URL#g
     s#[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?#DATE#g
@@ -79,7 +80,6 @@ if [ "$mode" = signature ]; then
     s#(^|[^a-z0-9])[0-9]+#\1N#g
     s/ +/ /g; s/^ //; s/ $//
 EOF
-)"
   w="$(oneline "$error" | tr 'A-Z' 'a-z' | sed -E "$rules")"
   line="$(oneline "$source" | tr '\\' '/')"
   [ -n "$step" ] && line="$line: $(oneline "$step")"
