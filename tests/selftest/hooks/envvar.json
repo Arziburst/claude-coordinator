@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -File \"$env:CLAUDE_PROJECT_DIR/core/scripts/hooks/safety-guard.ps1\"",
-            "timeout": 10,
+            "timeout": 30,
             "onFailure": "block"
           }
         ]
