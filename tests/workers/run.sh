@@ -1359,6 +1359,31 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
   ngone 59-lead "a trailing backslash" ;;
 esac
 
+# --- --contract only checks a contract: the session reads the brief alone (#331) ---
+# given --contract <file> whose text is not in the brief (its `id:` line and its `title:` line both absent
+# from the brief file): one line holding WARN and --contract (-Contract in the .ps1) says so, and the start
+# goes on - a real start calls claude, a dry run prints the line and creates nothing. With the contract's
+# text in the brief, or without --contract, no such line
+tfno "$cc/budget-time-ok.md" > "$tmp/c331.md"
+{ printf 'Do it.\n\n'; cat "$tmp/c331.md"; } > "$tmp/brief-c331.md"
+grep -qx 'id: t8' "$tmp/c331.md" && ! grep -q '^id:\|^title:' "$tmp/brief.md" || { echo "FAIL: could not write the #331 contract and briefs"; fail=1; }
+cwarn() { printf '%s\n' "$LAST" | tr -d '\r' | grep -F WARN | grep -ci -- '-contract'; }
+K=(--repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to x --contract "$tmp/c331.md")
+: > "$STUB_LOG"
+check 0 "start: --contract, its text not in the brief" -- start --name "#331 worker: W" "${K[@]}" --branch 331-warn --brief-file "$tmp/brief.md"
+[ "$(cwarn)" = 1 ] || { echo "FAIL (--contract, its text not in the brief): not exactly one line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+grep -q -- '--bg' "$STUB_LOG" || { echo "FAIL (--contract, its text not in the brief): claude was not started"; fail=1; }
+: > "$STUB_LOG"
+check 0 "start: --contract, its text not in the brief, dry run" -- start --name "#331 worker: W" "${K[@]}" --branch 331-dry --brief-file "$tmp/brief.md" --dry-run
+[ "$(cwarn)" = 1 ] || { echo "FAIL (--contract, its text not in the brief, dry run): not exactly one line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -d "$tmp/repo/.claude/worktrees/331-dry" ] && { echo "FAIL (dry run): a worktree was created"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/331-dry && { echo "FAIL (dry run): a branch was created"; fail=1; }
+grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL (dry run): claude was started"; fail=1; }
+check 0 "start: --contract, its text in the brief" -- start --name "#331 worker: W" "${K[@]}" --branch 331-dry --brief-file "$tmp/brief-c331.md" --dry-run
+[ "$(cwarn)" = 0 ] || { echo "FAIL (--contract, its text in the brief): a line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+check 0 "start: no --contract" -- start --name "#331 worker: W" --repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to x --branch 331-dry --brief-file "$tmp/brief.md" --dry-run
+[ "$(cwarn)" = 0 ] || { echo "FAIL (no --contract): a line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+
 # --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
 ac() { local role="$1"; shift
   if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/hooks/after-compact.ps1" "$role"

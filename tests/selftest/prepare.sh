@@ -9,12 +9,13 @@
 #   - the worktrees in the project's .claude/worktrees, not the state repository's (#260): prepare makes
 #     the base's worktree there, out of the project's git; verify removes an older run's at the old place;
 #   - the self-test sessions still listed by `claude agents` (a stub claude: the real one is never called),
-#     each with its cwd: only the run's own folders count; another folder's session is a SKIP line (#158).
+#     each with its cwd: only the run's own folders count; another folder's session is a SKIP line (#158);
+#   - verify --state-repo against a stub gh: a PR from a mini-block worker branch is a FAIL line (#331).
 #   tests/selftest/prepare.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/prepare.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -31,7 +32,24 @@ EOF
 cat > "$tmp/bin/claude.ps1" <<'EOF'
 if ($args -contains '--all' -and $env:STUB_AGENTS_ALL) { $env:STUB_AGENTS_ALL } elseif ($env:STUB_AGENTS) { $env:STUB_AGENTS } else { '[]' }
 EOF
-chmod +x "$tmp/bin/claude"; export PATH="$tmp/bin:$PATH"
+# a stub gh (#331), for verify --state-repo: `gh pr list ... --state merged ...` (the merged task-1 PR)
+# prints 7; `gh pr list ... --state all ...` prints $STUB_PRS, one `<number> <head> <state>` line per PR
+# (state OPEN, MERGED or CLOSED). Access point: verify lists the state repository's PRs for its stray
+# check with `gh pr list -R <repo> --state all --json number,headRefName,state --jq '.[] | "\(.number)
+# \(.headRefName) \(.state)"'` (any -L / --limit), whose output these lines stand for
+cat > "$tmp/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in
+  *" pr list "*" --state merged "*) echo 7 ;;
+  *" pr list "*" --state all "*) [ -z "${STUB_PRS:-}" ] || printf '%s\n' "$STUB_PRS" ;;
+  *) exit 1 ;;
+esac
+EOF
+cat > "$tmp/bin/gh.ps1" <<'EOF'
+& bash (Join-Path $PSScriptRoot 'gh') @args
+exit $LASTEXITCODE
+EOF
+chmod +x "$tmp/bin/claude" "$tmp/bin/gh"; export PATH="$tmp/bin:$PATH"
 
 # st <step> <selftest.sh arguments>: one run of this kind, its output in $LAST, its exit code in $RC
 st() {
@@ -201,6 +219,24 @@ if [ -z "$win" ]; then
   expect "the project through a symlink, the session's folder on disk" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st1 lead: selftest c7 (a1)"
 fi
 unset STUB_AGENTS STUB_AGENTS_ALL
+
+# a PR from a mini-block worker branch (selftest/<c>/st1.<n>) in the state repository: the worker opened a
+# PR its contract does not name (#331) - a FAIL line naming the PR, exit 1; open or merged alike. No such
+# PR: no such line (the PR flow passes as before)
+stray() {   # stray <case> <PR number>: one FAIL line names #<number> and its head selftest/c7/st1.1
+  n=$((n + 1))
+  { [ "$RC" = 1 ] && printf '%s\n' "$LAST" | grep '^FAIL' | grep -F "#$2" | grep -qF 'selftest/c7/st1.1'; } ||
+    { echo "FAIL ($1): expected exit 1 and a FAIL line naming #$2 and selftest/c7/st1.1, got exit $RC:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+export STUB_PRS="$(printf '7 selftest/c7/task-1 MERGED\n12 selftest/c7/st1.1 OPEN')"
+st verify --project "$p2" --state "$s2" --core c7 --state-repo o/r; stray "a stray open PR from st1.1" 12
+export STUB_PRS="$(printf '7 selftest/c7/task-1 MERGED\n13 selftest/c7/st1.1 MERGED')"
+st verify --project "$p2" --state "$s2" --core c7 --state-repo o/r; stray "a stray merged PR from st1.1" 13
+export STUB_PRS='7 selftest/c7/task-1 MERGED'
+st verify --project "$p2" --state "$s2" --core c7 --state-repo o/r
+expect "no stray PR" 0 "PASS verify: PR #7 merged into selftest/c7/base"
+n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q 'st1\.' || { echo "FAIL (no stray PR): a line names a st1.<n> branch"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+unset STUB_PRS
 
 echo "selftest prepare ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
