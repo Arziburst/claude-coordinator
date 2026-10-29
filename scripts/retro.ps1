@@ -9,7 +9,7 @@
 #   ... -NewId                                                            a new random anonymous id (12 hex)
 #   ... <RUNS.tsv> -CoreReport -Id <anonymous id> [-Since <YYYY-MM-DD>] [-Project <folder>] [-NoInsights]
 #     [-Features <FEATURES.md>]                                           the retro report for the core (Markdown)
-#   ... -CheckCoreReport <file> [-Features <FEATURES.md>]                 a core report body against its template
+#   ... -CheckCoreReport <file> [-Features <FEATURES.md>] [-Project <folder>]  a core report body against its template
 # The week: Monday to Sunday UTC holding -Week (default: the last complete week); the transcripts through
 # session-insights -Since <week> -Until <week end> -SkipTests -Project <root>|<worktree roots of PROJECT.md>|<root>/.claude/
 # worktrees; ROUTING.md's "## Kinds" map for the public kinds; logged estimates (estimate, estimate_time) else rebuilt
@@ -71,12 +71,12 @@ $CSPEC = @'
 ## Profile
 | Field | Value |
 |---|---|
-| stack class | {text} |
-| solo or team | {text} |
-| strictness | {text} |
-| spend level | {text} |
-| work mode | {text} |
-| os | {text} |
+| stack class | {stack} |
+| solo or team | {solo} |
+| strictness | {strict} |
+| spend level | {spend} |
+| work mode | {mode} |
+| os | {os} |
 
 ## Five axes
 | Axis | Measure | Period |
@@ -138,6 +138,17 @@ Data for the core's retro, not a bug report: the maintainer acts on it only afte
 '@
 $CSPEC = $CSPEC.Replace('@DASH@', $DASH) -split '\r?\n'
 $ROLES = 'coordinator lead worker tester verifier scout researcher other'.Split(' ')
+# the Profile's vocabularies, per cell type: the only words a Profile cell holds
+$VOCAB = New-Object 'System.Collections.Generic.Dictionary[string,string[]]' ([StringComparer]::Ordinal)
+foreach ($v0 in 'strict=swarm:standard:strict;spend=lean:balanced:thorough;mode=by task:batch;os=windows:macos:linux;solo=solo:team;stack=game engine:web:mobile:CLI:library:data:other'.Split(';')) {
+  $VOCAB[$v0.Substring(0, $v0.IndexOf('='))] = $v0.Substring($v0.IndexOf('=') + 1).Split(':')
+}
+# the vocabulary word a Settings Value starts with (any case; a letter, digit, _ or - right after it is no end), else ''
+function VLead([string]$k, [string]$v) {
+  $v = Lower $v
+  foreach ($w in $VOCAB[$k]) { if ($v.StartsWith($w, $ORD) -and ($v.Length -eq $w.Length -or [string]$v[$w.Length] -cnotmatch '[a-z0-9_-]')) { return $w } }
+  ''
+}
 function NewSet { New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal) }
 $VOC = NewSet; $FIX = NewSet
 foreach ($w in $AXES + $KINDS + $GUARD + $REFUSAL + $FIELDS) { [void]$VOC.Add($w) }
@@ -257,45 +268,56 @@ function VType([string]$p, [string]$c) {
     '{gkey}' { if ($GUARD -ccontains $c) { return '' } else { return 'a guard reason outside the template' } }
     '{rkey}' { if ($REFUSAL -ccontains $c) { return '' } else { return 'a refusal source outside the template' } }
   }
+  $x = $p.Substring(1, $p.Length - 2)
+  if ($VOCAB.ContainsKey($x)) { if ($VOCAB[$x] -ccontains $c) { return '' } else { return "a Profile cell outside its vocabulary ($($VOCAB[$x] -join ', '))" } }
   ''
 }
 # a free-text cell: short, and nothing that could name a project or a person
 $reCoreTrim = [regex]'^[(`"'']+|[)`"''.,;:!?]+\z'
-function Text([string]$c, $CF, $CB) {
+function Text([string]$c, $CF, $CB, [string]$name) {
   if ($c -cmatch '^[ \t]*\z') { return 'an empty cell' }
   if ($c.Length - [regex]::Matches($c, '[\uDC00-\uDFFF]').Count -gt 160) { return 'a free-text cell over 160 characters' }
-  if ($c.Contains('://') -or (Lower $c).Contains('www.')) { return 'a link' }
-  if ($c -cmatch '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]') { return 'an e-mail address' }
+  if ($c.Contains('://') -or (Lower $c).Contains('www.') -or $c.Contains('](')) { return 'a link' }
+  if ($c -cmatch '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]' -or (Lower $c) -cmatch '[a-z0-9._%+-] *(\[at\]|\(at\)) *[a-z0-9]') { return 'an e-mail address' }
   if ($c.Contains('@')) { return 'an @handle' }
   if ($c.Contains('\')) { return 'a path' }
+  if ($c -cmatch '[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+') { return 'an IP address' }
   foreach ($w in $c.Split([char[]]@(' ', "`t"), [StringSplitOptions]::RemoveEmptyEntries)) {
     $w = $reCoreTrim.Replace($w, '')
     if ($CF.Contains($w)) { continue }
     if ($w.Contains('/')) { return "a path that is not the core's" }
-    if ($w -cmatch '^[A-Za-z0-9_-][A-Za-z0-9_.-]*[.][A-Za-z][A-Za-z0-9]*\z' -and -not $CB.Contains($w)) { return "a file name that is not one of the core's" }
   }
+  # a dotted name anywhere in a word (a host, a file), its last part starting with a letter: only a core file's
+  foreach ($mt in [regex]::Matches($c, '[A-Za-z0-9_-]+(?:[.][A-Za-z0-9_-]+)+')) {
+    $w = $mt.Value; $x = $w.Substring($w.LastIndexOf('.') + 1)
+    if ($x -cmatch '^[A-Za-z]' -and -not $CB.Contains($w)) { return "a host or a file name that is not one of the core's" }
+  }
+  # a commit id: a hex token of 7 or more digits (any case) with a decimal digit, no letter, digit or _ around it
+  foreach ($mt in [regex]::Matches($c, '(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,}(?![A-Za-z0-9_])')) { if ($mt.Value -cmatch '[0-9]') { return 'a commit id' } }
+  if ($name -and (Word (Lower $c) $name)) { return "the project folder's name" }
   ''
 }
 # a table row against a template row: 'S' when it is not that row (its cells, their fixed text and, for a group row,
 # its typed cells), '' when it passes, else the reason
 $reTyped = '^[{][a-z]+[}]\z'
-function MatchRow([string]$l, [string]$p, [bool]$grp, $CF, $CB) {
+function MatchRow([string]$l, [string]$p, [bool]$grp, $CF, $CB, [string]$name) {
   if ($l -cnotmatch '^[|] .* [|]\z') { return 'S' }
   $lc = RowCells $l; $pc = RowCells $p; if ($lc.Count -ne $pc.Count) { return 'S' }
   for ($i = 0; $i -lt $pc.Count; $i++) { if ($pc[$i] -cnotmatch $reTyped -and $pc[$i] -cne $lc[$i]) { return 'S' } }
   for ($i = 0; $i -lt $pc.Count; $i++) {
     if ($pc[$i] -cmatch $reTyped -and $pc[$i] -cne '{text}') { $r = VType $pc[$i] $lc[$i]; if ($r) { if ($grp) { return 'S' } else { return $r } } }
   }
-  for ($i = 0; $i -lt $pc.Count; $i++) { if ($pc[$i] -ceq '{text}') { $r = Text $lc[$i] $CF $CB; if ($r) { return $r } } }
+  for ($i = 0; $i -lt $pc.Count; $i++) { if ($pc[$i] -ceq '{text}') { $r = Text $lc[$i] $CF $CB $name; if ($r) { return $r } } }
   ''
 }
 # a retro report for the core (its lines) against its template ($CSPEC) and the rules of its free-text cells; $true
 # when it passes, else the first refusal with its line on stderr
-function CheckCore([string[]]$lines, [string[]]$feat) {
+function CheckCore([string[]]$lines, [string[]]$feat, [string]$proj) {
   $CF = NewSet; $CB = NewSet
   CoreFiles (Split-Path -Parent $PSScriptRoot) '' $CF
   foreach ($x in $CF) { $i = $x.LastIndexOf('/'); [void]$CB.Add($(if ($i -ge 0) { $x.Substring($i + 1) } else { $x })) }
   $FT = NewSet; foreach ($x in $feat) { [void]$FT.Add($x) }
+  $name = if ($proj) { BaseName $proj } else { '' }; if ($name -cnotmatch '[a-z]') { $name = '' }
   $steps = New-Object 'System.Collections.Generic.List[object]'
   foreach ($t0 in $CSPEC) {
     if ($t0 -ceq '') { continue }
@@ -303,7 +325,7 @@ function CheckCore([string[]]$lines, [string[]]$feat) {
     elseif ($t0 -ceq '{features}') { foreach ($x in $feat) { $steps.Add(@("| $x | {yn} | {text} | {yn} | {text} | {text} |", '1', $true)) } }
     elseif ($t0 -ceq '{guard}') { $steps.Add(@('| {gkey} | {num} | {num} | {num} | {num} | {num} |', '*', $false)) }
     elseif ($t0 -ceq '{refusal}') { $steps.Add(@('| {rkey} | {num} | {num} | {num} | {num} | {num} |', '*', $false)) }
-    elseif ($t0 -ceq '{proposals}') { $steps.Add(@('| {text} |', '+', $false)) }
+    elseif ($t0 -ceq '{proposals}') { $steps.Add(@('| {text} |', '+', $false, 3)) }
     else { $steps.Add(@($t0, '1', $false)) }
   }
   $si = 0; $got = @{}; $why = $null; $ln = 0
@@ -311,12 +333,13 @@ function CheckCore([string[]]$lines, [string[]]$feat) {
     $ln++
     if ($L -cmatch '^[ \t]*\z') { continue }
     if ($L.Contains('<fill>')) { $why = 'a <fill> left'; break }
+    if ($ln -gt 1 -and $L.Contains('<!--')) { $why = 'an HTML comment'; break }
     while ($true) {
       if ($si -ge $steps.Count) { $why = "a line after the template's end"; break }
       $p = $steps[$si][0]; $rep = $steps[$si][1]
       if (-not $p.Contains('{')) { if ($L -ceq $p) { $si++ } else { $why = "where the template has `"$p`"" }; break }
       if ($rep -ceq '1') {
-        $r = MatchRow $L $p $false $CF $CB
+        $r = MatchRow $L $p $false $CF $CB $name
         if ($r -ceq 'S') {
           $x = ($L -creplace '^[|] ', '') -creplace ' [|].*', ''
           if ($steps[$si][2] -and $x -cmatch '^F-[A-Z]+-[0-9]+\z' -and -not $FT.Contains($x)) { $why = 'a feature row not in FEATURES.md' }
@@ -324,8 +347,12 @@ function CheckCore([string[]]$lines, [string[]]$feat) {
         } elseif ($r) { $why = $r } else { $si++ }
         break
       }
-      $r = MatchRow $L $p $true $CF $CB
-      if ($r -ceq '') { $got[$si] = $true; break }
+      $r = MatchRow $L $p $true $CF $CB $name
+      if ($r -ceq '') {
+        $got[$si] = 1 + $(if ($got.ContainsKey($si)) { $got[$si] } else { 0 })
+        if ($steps[$si].Count -gt 3 -and $got[$si] -gt $steps[$si][3]) { $why = "more rows than the template allows ($($steps[$si][3]))" }
+        break
+      }
       if ($r -cne 'S') { $why = $r; break }
       if ($rep -ceq '+' -and -not $got[$si]) { $why = "where the template has `"$p`""; break }
       $si++
@@ -341,11 +368,11 @@ function CheckCore([string[]]$lines, [string[]]$feat) {
 }
 
 if ($CheckCoreReport) {
-  if ($RunLog -or $Week -or $Project -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal -or $NewId -or $CoreReport -or $Since) { Show-Usage }
+  if ($RunLog -or $Week -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal -or $NewId -or $CoreReport -or $Since) { Show-Usage }
   $fe = if ($PSBoundParameters.ContainsKey('Features')) { $Features } else { Join-Path (Split-Path -Parent $PSScriptRoot) 'FEATURES.md' }
   if (-not $fe) { Show-Usage }
   $body = Read-Lines $CheckCoreReport
-  if (CheckCore $body (FeatureIds $fe)) { exit 0 } else { exit 1 }
+  if (CheckCore $body (FeatureIds $fe) $Project) { exit 0 } else { exit 1 }
 }
 if ($NewId) {
   if ($RunLog -or $Week -or $Project -or $Journal -or $Escapes -or $NoInsights -or $Public -or $Id -or $CheckPublic -or $CheckProposal -or $CoreReport -or $Since -or $Features) { Show-Usage }
@@ -410,14 +437,16 @@ if ($CoreReport) {
   $OsName = if ($PSVersionTable.PSEdition -ceq 'Core' -and $IsMacOS) { 'macos' } elseif ($PSVersionTable.PSEdition -ceq 'Core' -and $IsLinux) { 'linux' } else { 'windows' }
   $reDates = '[0-9]{4}-[0-9]{2}-[0-9]{2}[.][.]([0-9]{4}-[0-9]{2}-[0-9]{2})'
   $last = ''; $ccommit = ''; $edits = $null; $prof = @{}
-  # PROJECT.md: the Settings rows by their name (before a "(", without ** and `)
+  # PROJECT.md: the Settings rows by their name (before a "(", without ** and `); of a Profile setting only the
+  # vocabulary word its Value starts with, never the rest of it
+  $ptype = @{ 'strictness' = 'strict'; 'spend level' = 'spend'; 'work mode' = 'mode' }
   $f1 = Join-Path $dir 'PROJECT.md'
   if (Test-Path -LiteralPath $f1 -PathType Leaf) {
     foreach ($line in (Read-Lines $f1)) {
       $c = $line.Split('|'); if ($c.Count -lt 4) { continue }
       $k = Lower ((($c[1] -creplace '[*`]', '') -creplace '[ \t]*[(].*', '').Trim(' ', "`t"))
       $v = ($c[2] -creplace '[*`]', '').Trim(' ', "`t")
-      if ($k -ceq 'strictness' -or $k -ceq 'spend level' -or $k -ceq 'work mode') { if ($v) { $prof[$k] = $v } }
+      if ($k -ceq 'strictness' -or $k -ceq 'spend level' -or $k -ceq 'work mode') { $v = VLead $ptype[$k] $v; if ($v) { $prof[$k] = $v } }
       elseif ($k -ceq 'last core report') { $mt = [regex]::Match($v, $reDates); if ($mt.Success) { $last = $mt.Groups[1].Value } }
       elseif ($k -ceq 'core') {
         $mt = [regex]::Match($v, 'commit ([0-9a-f]+)'); if ($mt.Success -and (IsCommit $mt.Groups[1].Value)) { $ccommit = $mt.Groups[1].Value }

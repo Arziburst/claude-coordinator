@@ -173,7 +173,7 @@ data, not a bug report.
 
 **The steps:**
 
-1. **Generate** `scripts/retro.sh coordinator/RUNS.tsv --core-report --id <id>` from the core copy
+1. **Generate** `coordinator/core/scripts/retro.sh coordinator/RUNS.tsv --core-report --id <id>`
    (Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File coordinator/core/scripts/retro.ps1
    coordinator/RUNS.tsv -CoreReport -Id <id>`), into a file outside the project's git. `<id>` is the
    *Settings* row **Self-improvement id** (none yet: `retro.sh --new-id`, recorded there). The period runs
@@ -181,7 +181,9 @@ data, not a bug report.
    end of the *Settings* row **Last core report**, else from the first line of `coordinator/CHECKLIST.md`.
    The script fills: the core commits of the period (the CHECKLIST commit in use on its first day, then
    those of its lines in the period; else the commit in the *Settings* row **Core**), the period and the
-   id; the profile it can read (strictness, spend level and work mode from *Settings*, the machine's OS);
+   id; the profile it can read (strictness, spend level and work mode from *Settings* — only the
+   vocabulary word the Value starts with, `swarm` / `standard` / `strict`, `lean` / `balanced` /
+   `thorough`, `by task` / `batch`, never the rest of the Value; none: `<fill>` —, and the machine's OS);
    the five axes over the period, computed as the weekly report computes them (§2); the run log's rows of
    the period by role (no task rows, probes or self-tests); the guard's reasons and the refusal sources of
    the period's transcripts (blocks, retried, worked around, changed, stopped — through session-insights,
@@ -191,23 +193,30 @@ data, not a bug report.
    `<fill>`.
 2. **Fill** each `<fill>` with a short anonymous line from the journal, the run log and the coordinator's
    own knowledge of the period:
-   - *stack class* — a class, not a product: game engine, web, mobile, CLI, library, data, other; *solo
-     or team* — `solo` or `team`;
+   - *stack class* — a class, not a product, exactly one of `game engine`, `web`, `mobile`, `CLI`,
+     `library`, `data`, `other`; *solo or team* — `solo` or `team`; a strictness, spend level or work mode
+     left `<fill>` gets its vocabulary word (as above); every Profile cell holds only a word of its
+     vocabulary (the OS: `windows`, `macos` or `linux`);
    - per feature: **Used** and **Trusted** (its numbers or its result were relied on) — **only** `yes`,
      `no` or `unknown`, never `n.a.` or `n/a` (the path and the file-name rules below would refuse them);
      **How often** (`every task`, `every session`, `weekly`, `once`, `never`); **Decision changed** — one
      short line, or `none`; **Friction** — one short line, or `none`;
    - the top three that helped most and got in the way most (`none` where there are fewer), and the
-     proposals, one per row (`none` when there is none).
+     proposals, one per row, at most three (`none` when there is none).
    A line never names a project, product, client or person, a path, a file other than the core's own, a
-   branch, code, a task number or task text; it holds no link, e-mail or `@handle`, and at most 160
-   characters. A dotted word such as `e.g.` reads as a file name — write "for example".
-3. **Check** `retro.sh --check-core-report <file>` (Windows `-CheckCoreReport <file>`) until it passes:
-   exit 0 and nothing printed. It refuses a body that is not the template (a missing, renamed or extra
-   line or section, a feature row not in `FEATURES.md`, a `<fill>` left) and anything that could identify
-   a project or a person — a URL, an e-mail, an `@handle`, a path (a drive letter, `/x/y`, `x\y`), a file
-   name with an extension that is not one of the core's own file names, a free-text cell over 160
-   characters; each refusal names its line. The line is rewritten, never the rule.
+   branch, code, a commit, a task number of the project or task text (an issue `#<n>` of claude-coordinator
+   may be named); it holds no link, e-mail or `@handle`, and at most 160 characters. A dotted word such as
+   `e.g.` reads as a file name — write "for example".
+3. **Check** `coordinator/core/scripts/retro.sh --check-core-report <file> --project <the project root>`
+   (Windows `-CheckCoreReport <file> -Project <the project root>`) until it passes: exit 0 and nothing
+   printed. It refuses a body that is not the template (a missing, renamed or extra line or section, a
+   feature row not in `FEATURES.md`, more than three proposals, a `<fill>` left, an HTML comment `<!--`
+   after the first line, a Profile cell outside its vocabulary) and anything that could identify a
+   project or a person — a URL or a Markdown link, an e-mail (also written with `[at]` or `(at)`), an
+   `@handle`, an IP address, a path (a drive letter, `/x/y`, `x\y`), a dotted name anywhere in a word — a
+   host (`name.com's`, `name.com:8080`) or a file name — that is not one of the core's own file names, a
+   commit id (a hex token of 7 or more digits, any case, holding a decimal digit), the project folder's name as a whole word in any case, a
+   free-text cell over 160 characters; each refusal names its line. The line is rewritten, never the rule.
 4. **Show the owner** the whole body; **the owner's yes files it** — nothing is filed without it. A body
    the owner edits passes the check again before it is filed.
 5. **Title** `[retro-report] <id> <from>..<to>`. **One per project-period:** first `gh issue list -R
