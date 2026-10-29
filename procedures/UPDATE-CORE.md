@@ -20,7 +20,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - **Settings the new core's checks fail:** `selftest hooks --settings` of the scratch clone on the worker
      safety file and on each of the coordinator's own settings files that holds the guard (one without it
      is "no guard: the owner's choice", CORE §1.16, never a FAIL; #223), before anything is merged — each FAIL is a change
-     the project makes with the update, and each SKIP on the worker safety file a protection it does not
+     the project makes with the update (e.g. the guard hook's `timeout` under 30 s or missing, as the old
+     10 s: a guard that runs out of time on a loaded machine blocks the call and loses a SendMessage — the
+     file's guard entry gets `"timeout": 30`, as in the current settings example, #290), and each SKIP on the worker safety file a protection it does not
      use yet, offered to the owner (e.g. `COORD_PROTECTED_ROOT` not set: the working copy is not kept from
      workers' edit tools — the file gains the env value and the edit tools in the guard's matcher,
      TOOLKIT *Safety*). **Each SKIP on the coordinator's own settings files** is offered the same way,

@@ -60,6 +60,29 @@ case "$(uname -s)" in
     osroot gitbashroot 1 'FAIL hooks: COORD_PROTECTED_ROOT is not a folder on this machine: /c/Windows' ;;
 esac
 
+# the guard hook's "timeout" (#290): under a loaded CPU a guard that runs out of time blocks the call
+# (onFailure "block") - a lost SendMessage - so 30 s or more passes and a shorter or missing one fails.
+# tests/selftest/hooks/timeout/: good.json with timeout 10, 30, 60 and none; then both settings examples
+# (their /ABSOLUTE/PATH and /ABSOLUTE/PROJECT, or C:/..., as this core's folder) pass it, with exit 0.
+# The key words only: a PASS or FAIL line that names the timeout (a FAIL line also names 30)
+tmo() {   # tmo <settings file> <label> <PASS|FAIL>: exit 0 / 1 and that line; never the other one
+  n=$((n + 1))
+  st hooks --settings "$1" > "$tmp/one" 2>&1; rc=$?
+  tr -d '\r' < "$tmp/one" > "$tmp/lines"
+  local want=0 other=FAIL; [ "$3" = FAIL ] && { want=1; other=PASS; }
+  { [ "$rc" = "$want" ] && grep -i "^$3 hooks:.*timeout" "$tmp/lines" | { [ "$3" = PASS ] && cat || grep '30'; } | grep -q . &&
+    ! grep -qi "^$other hooks:.*timeout" "$tmp/lines"; } ||
+    { echo "FAIL (hooks $2): expected exit $want and a $3 line about the guard's timeout (>= 30 s), got exit $rc:"; sed 's/^/    /' "$tmp/one"; fail=1; }
+}
+tmo tests/selftest/hooks/timeout/t10.json timeout/t10.json FAIL
+tmo tests/selftest/hooks/timeout/none.json timeout/none.json FAIL
+tmo tests/selftest/hooks/timeout/t30.json timeout/t30.json PASS
+tmo tests/selftest/hooks/timeout/t60.json timeout/t60.json PASS
+for f in settings.example.json settings.example.windows.json; do
+  sed "s#C:/ABSOLUTE/PATH#$core#g; s#C:/ABSOLUTE/PROJECT#$core#g; s#/ABSOLUTE/PATH#$core#g; s#/ABSOLUTE/PROJECT#$core#g" "$f" > "$fx/$f"
+  tmo "$fx/$f" "$f" PASS
+done
+
 usage() {   # usage <selftest.sh arguments>: exit 2 and no PASS / FAIL line
   n=$((n + 1))
   st "$@" > "$tmp/one" 2>&1; rc=$?

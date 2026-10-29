@@ -65,7 +65,9 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    after each wakeup. Gone `done` anyway: the worker's report falls back to the coordinator
    (roles/worker.md step 5), which resumes you by your full id with that report (TOOLKIT *Pause and
    resume*). Your own report goes to the address your brief names, with the same fallback
-   (roles/worker.md step 5). Told to pause: your workers finish their step, push and go idle; one you
+   (roles/worker.md step 5). Any SendMessage of yours refused by a hook error or a hook timeout is sent
+   again once; refused again, it goes to the coordinator (a report: the fallback of roles/worker.md step
+   5), and your report says so — never dropped silently (#290). Told to pause: your workers finish their step, push and go idle; one you
    must stop, you stop by its short id and later resume by its **full** session id, recorded before
    the stop (TOOLKIT *Pause and resume*).
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker

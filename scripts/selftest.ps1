@@ -529,6 +529,15 @@ switch ($Step) {
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if ($h.onFailure -is [string] -and $h.onFailure -ceq 'block') { Pass 'onFailure "block": a guard that fails to run blocks' }
   else { Fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)' }
+  # its "timeout" (#290): on a loaded machine a guard that runs out of time blocks the call (onFailure
+  # "block") - a lost SendMessage - so 30 s or more; a shorter or missing one fails (a number, not a string)
+  $to = $h.timeout
+  if ($to -is [ValueType] -and $to -isnot [bool]) { $to = [double]$to } else { $to = $null }
+  if ($null -ne $to -and $to -ge 30) { Pass 'its timeout gives a loaded machine time (>= 30 s)' }
+  else {
+    $tos = if ($null -eq $to) { 'none' } else { $to.ToString([Globalization.CultureInfo]::InvariantCulture) }
+    Fail "its timeout is not 30 s or more (${tos}): on a loaded machine the guard runs out of time and blocks the call - a lost SendMessage (#290)"
+  }
   # SendMessage (CORE section 1.17): the guard reads its `to` only when the matcher takes that tool in
   $hitS = $true
   if (-not ($matcher -ceq '' -or $matcher -ceq '*' -or $matcher -ceq '.*')) { try { $hitS = 'SendMessage' -cmatch "^(?:$matcher)$" } catch { $hitS = $false } }

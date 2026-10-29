@@ -191,6 +191,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   roles fall back to the project's Coordinator and never drop a report silently. A session the
   coordinator starts any other way (a raw `claude --bg`) has no such net: after a rename, tell every
   running session the new name (CORE §4, *Control*).
+- **A SendMessage a hook refused** (the guard's hook error or timeout — on a loaded machine it can run out
+  of time, and with `onFailure: "block"` the message is not sent): send it again once; refused again, the
+  role uses its fallback address (the project's Coordinator, roles/worker.md step 5) and says so in its
+  report — never drops a message silently. The guard's `timeout` is 30 s for this; `selftest hooks`
+  fails a shorter or missing one (#290).
 - **Subscribing right after a start can race:** the new session may not be listed yet ("No agent named
   … is reachable"). start-worker waits until `claude agents --json` lists it; if a subscribe still
   fails, retry once a few seconds later. One subscription per expected report — every re-subscription

@@ -93,4 +93,5 @@ only (the `git diff` it names).
 
 **Delivery.** As a subagent: the verdict is your final answer to the session that started you. As a
 session: deliver it with SendMessage to the session your brief names as the report address, with the
-fallback of roles/worker.md step 5 — never leave it undelivered.
+fallback of roles/worker.md step 5 — never leave it undelivered. A SendMessage refused by a hook error
+or a hook timeout is sent again once; refused again, the verdict goes to that fallback, and says so (#290).

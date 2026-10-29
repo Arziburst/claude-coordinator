@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [ { "hooks": [ { "type": "command", "command": "bash /core/scripts/hooks/safety-guard.sh --self-test" } ] } ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/core/scripts/hooks/safety-guard.ps1",
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
