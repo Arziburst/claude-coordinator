@@ -112,7 +112,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   session working there) and never `claude resume <id>` (no such command — the id becomes a new
   session's prompt). After a pause over an hour the prompt cache is gone and the resumed session pays its
   whole history again: for a long session a fresh worker on the pushed branch with a short note may cost
-  less. A lead pauses and resumes its own workers the same way; a lead gone `done` while its workers
+  less. The same holds without a pause: a fix round may go to a fresh worker on the pushed branch with a
+  short note when a session's context has grown long, since each turn re-reads it (CORE §4 step 5, #292). A lead pauses and resumes its own workers the same way; a lead gone `done` while its workers
   run is resumed by the coordinator the same way, with the worker's report that fell back to it as the
   message. A resume under a new job deletes the old job folder (`$CLAUDE_JOB_DIR/tmp`), so nothing
   durable lives there: a lead's notes go in `<its worktree>/.lead/`, the coordinator's contracts and

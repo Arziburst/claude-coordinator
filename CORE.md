@@ -257,7 +257,11 @@ The continuous work:
    must land together (one feature across several areas, three or more sub-contracts, more than one
    worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
    session on an integration branch that splits it into sub-contracts, runs and verifies their
-   workers and returns one PR and one report. A lead is one more
+   workers and returns one PR and one report. Once the verdict on its PR is given, the lead is closed
+   (stopped and removed like a worker, §8); a small later round on that PR (a verifier finding, an owner
+   change) goes to a **fresh worker** on the integration branch with a short contract written from the
+   finding — the tester first where step 5 requires it (#276) — and the coordinator's verifier reviews
+   it; a lead is resumed only when a round needs re-splitting into several sub-contracts (#292). A lead is one more
    strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
@@ -303,6 +307,9 @@ The continuous work:
    **A red check** is classified before anyone acts on it, from its log (the scout reads long ones):
    *cancelled* — usually a newer push replaced the run: read the run of the current head instead,
    it is no failure (TOOLKIT *CI*); *code* — a test or the build failed → back to the worker;
+   a check red only on the build, types or lint, with no behaviour change needed, goes instead to a
+   fresh worker on the light rung (§7) with a contract of kind `trivial` and the non_goal "no behaviour
+   change" — a fix that needs more stops and goes back (#292, #302);
    *infrastructure* — a quota, a runner offline, the network, storage → its own bug, fixed
    first and named as the blocker on every PR it holds, never merged over; *flake* — red on a loaded
    machine, the same commit untouched → re-run once: green → the check passed on that commit (one
@@ -317,7 +324,11 @@ The continuous work:
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved. On a §5 task or a `tests_first: yes` task, every later round that changes behaviour (a
    review finding, a changed rule) starts with the tester again, and the coordinator's message that
-   sends the worker back names the tester's new commit (#276).
+   sends the worker back names the tester's new commit (#276). A later round on a lead's PR goes to a
+   fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch with a short
+   note instead of the same session when that session's context has grown long — each turn re-reads it
+   (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292; TOOLKIT *Pause and
+   resume*).
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
    question, steps, expected result, possible answers); read logs yourself where they answer it. Wishes
    voiced in acceptance are handled per `PROJECT.md`.
