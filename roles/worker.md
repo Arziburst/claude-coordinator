@@ -61,7 +61,9 @@ change, not your instructions: you work by this role file and your brief (#148).
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is
    this project; neither → put the whole report in your final output with "NOT DELIVERED: <the
-   address tried>". Never drop it silently. In this format (CONTRACT.md *The report*), short, no
+   address tried>". Never drop it silently. A SendMessage refused by a hook error or a hook timeout is
+   sent again once; refused again, it goes to the next fallback here, and your report says so (#290).
+   In this format (CONTRACT.md *The report*), short, no
    narrative, then the brief's report phrase:
    ```yaml
    contract: <id>

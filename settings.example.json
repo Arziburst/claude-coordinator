@@ -100,7 +100,7 @@
           {
             "type": "command",
             "command": "bash /ABSOLUTE/PATH/scripts/hooks/safety-guard.sh",
-            "timeout": 10,
+            "timeout": 30,
             "onFailure": "block"
           }
         ]

@@ -100,7 +100,7 @@
           {
             "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/ABSOLUTE/PATH/scripts/hooks/safety-guard.ps1",
-            "timeout": 10,
+            "timeout": 30,
             "onFailure": "block"
           }
         ]

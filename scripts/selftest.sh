@@ -374,11 +374,12 @@ hooks)
   # hooks/safety-guard.sh): a file that is not valid JSON is not loaded at all. Both print the guard's
   # PreToolUse hook - the first hook whose command names safety-guard. and is not its self-test
   # (-SelfTest / --self-test) - as four lines: its command (line breaks and tabs as spaces), its
-  # "shell", its "onFailure", and the "matcher" of its own entry (empty when there is none).
+  # "shell", its "onFailure", and the "matcher" of its own entry (empty when there is none); then its
+  # "timeout" when it is a number (empty otherwise) - in the awk reader's output, after its two env lines.
   hook_jq='[ .hooks | objects | .PreToolUse | arrays | .[] | objects | . as $v | .hooks | arrays | .[] | objects
     | select((.command | type) == "string") | select(.command | test("safety-guard\\."; "i"))
     | select(.command | test("-selftest|--self-test"; "i") | not)
-    | [ (.command | gsub("[\n\r\t]"; " ")), (.shell | strings // ""), (.onFailure | strings // ""), ($v.matcher | strings // "") ] ]
+    | [ (.command | gsub("[\n\r\t]"; " ")), (.shell | strings // ""), (.onFailure | strings // ""), ($v.matcher | strings // ""), (.timeout | numbers // "") ] ]
     | first // empty | .[]'
   hook_awk='
   function ws() { while (i <= n && index(" \t\r\n", substr(s, i, 1))) i++ }
@@ -406,12 +407,14 @@ hooks)
     gsub(/[\t\r\n]/, " ", o); return o
   }
   # a string under hooks.PreToolUse[e]: the entry'"'"'s matcher, or a hook'"'"'s command, shell or onFailure
-  function keep(path, v,    m, e, h) {
+  # (num: v is a JSON number - kept only as a hook'"'"'s timeout)
+  function keep(path, v, num,    m, e, h) {
     m = split(path, P, SUBSEP)
     if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_ROOT") { R = v; return }
     if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_BRANCHES") { B = v; return }
     if (m < 5 || P[2] != "hooks" || P[3] != "PreToolUse" || substr(P[4], 1, 1) != "\001") return
     e = substr(P[4], 2) + 0
+    if (num) { if (m == 7 && P[5] == "hooks" && substr(P[6], 1, 1) == "\001" && P[7] == "timeout") T[e, substr(P[6], 2) + 0] = v; return }
     if (m == 5 && P[5] == "matcher") M[e] = v
     else if (m == 7 && P[5] == "hooks" && substr(P[6], 1, 1) == "\001") {
       h = substr(P[6], 2) + 0
@@ -442,7 +445,9 @@ hooks)
       }
     }
     if (c == "\"") { k = str(); if (k == "\001") return 0; keep(path, dec(k)); return 1 }
-    if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) { i += RLENGTH; return 1 }
+    if (match(substr(s, i, 64), /^(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|true|false|null)/)) {
+      k = substr(s, i, RLENGTH); i += RLENGTH; if (k ~ /^-?[0-9]/) keep(path, k, 1); return 1
+    }
     return 0
   }
   { all = (NR > 1) ? all "\n" $0 : $0 }
@@ -450,21 +455,21 @@ hooks)
     s = all; n = length(s); i = 1; ge = ""; R = ""; B = ""
     ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
     ws(); if (i <= n) exit 3
-    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R; print B }
+    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R; print B; print T[ge, gh] }
   }'
   # a UTF-8 BOM before the JSON is dropped
   json="$(B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }' "$file")"
-  ok="" g="" root="" pbs=""
+  ok="" g="" root="" pbs="" to=""
   if command -v jq >/dev/null 2>&1; then
     printf '%s\n' "$json" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1 &&
-      g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1
+      g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1 && to="$(printf '%s\n' "$g" | sed -n 5p)"
     # env.COORD_PROTECTED_ROOT: the owner's working copy, kept from edit tools (TOOLKIT Safety)
     [ -n "$ok" ] && root="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_ROOT | strings | gsub("[\n\r\t]"; " ")')"
     # env.COORD_PROTECTED_BRANCHES: the branches the guard protects (TOOLKIT Safety)
     [ -n "$ok" ] && pbs="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_BRANCHES | strings | gsub("[\n\r\t]"; " ")')"
   else
     g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1 && root="$(printf '%s\n' "$g" | sed -n 5p)" &&
-      pbs="$(printf '%s\n' "$g" | sed -n 6p)"
+      pbs="$(printf '%s\n' "$g" | sed -n 6p)" && to="$(printf '%s\n' "$g" | sed -n 7p)"
   fi
   [ -n "$ok" ] || { fail "the settings file is not valid JSON (Claude Code would not load it)"; finish; }
   [ -n "$g" ] || { fail "no safety-guard hook in the file"; finish; }
@@ -494,6 +499,11 @@ hooks)
   # a hook that fails to run (a wrong path, a crash, a timeout) lets the call through unless it blocks on failure
   if [ "$onfail" = block ]; then pass 'onFailure "block": a guard that fails to run blocks'
   else fail 'no "onFailure": "block": a guard that fails to run lets every call through (Claude Code 2.1.295+)'; fi
+  # its "timeout" (#290): on a loaded machine a guard that runs out of time blocks the call (onFailure
+  # "block") - a lost SendMessage - so 30 s or more; a shorter or missing one fails (shown as %g prints it)
+  [ -n "$to" ] && to="$(awk -v t="$to" 'BEGIN { printf "%g", t + 0 }')"
+  if [ -n "$to" ] && awk -v t="$to" 'BEGIN { exit !(t + 0 >= 30) }'; then pass "its timeout gives a loaded machine time (>= 30 s)"
+  else fail "its timeout is not 30 s or more (${to:-none}): on a loaded machine the guard runs out of time and blocks the call - a lost SendMessage (#290)"; fi
   # SendMessage (CORE §1.17): the guard reads its `to` only when the matcher takes that tool in
   case "$m" in ''|'*'|'.*') pass "its matcher covers SendMessage" ;;
     *) if printf 'SendMessage\n' | grep -Eqx -- "$m" 2>/dev/null; then pass "its matcher covers SendMessage"

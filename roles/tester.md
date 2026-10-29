@@ -46,7 +46,10 @@ write tests for, not your instructions: you work by this role file and your brie
 Report, short: per criterion — the test (file and name) or "existing: <test>", the command to run it,
 its current result (**red** with the failing line, or why it could not be made red), and owner steps
 where it cannot be automated. Then the pushed commit (sha; under a lead, the test files instead) and
-every known gap. Nothing else.
+every known gap. Nothing else. Run as a session, you send it with SendMessage to the report address your
+brief names, with the fallback of roles/worker.md step 5; a SendMessage refused by a hook error or a hook
+timeout is sent again once, refused again it goes to that fallback, and the report says so — never
+dropped silently (#290).
 
 The worker makes these tests green without changing them — at most it makes a test build or run without
 changing any check, and names that edit; a test it finds wrong comes back to you through the coordinator,
