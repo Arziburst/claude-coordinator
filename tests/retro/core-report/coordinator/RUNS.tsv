@@ -1,0 +1,31 @@
+date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	wait	estimate_time
+# before the period (the last core report ended 2026-09-20): a task and the coordinator's own line, left out
+2026-09-10	1	worker	ordinary	sonnet	medium	1	100	1.00	approved	2026-09-10T08:00:00Z	15	10
+2026-09-10	1	task	ordinary	sonnet	-	-	-	-	merged	2026-09-10T08:00:00Z	20	10	15
+2026-09-15	-	coordinator	-	opus	high	-	1000	1.00	-
+# the period: a task with a tester and a verifier; a reworked task with a scout and a researcher; a lead with
+# sub-runs; a task with a failed and an escalated run, ready and not merged; the coordinator's own line
+2026-09-22	2	worker	ordinary	sonnet	medium	1	100	1.10	approved	2026-09-22T08:00:00Z	15	10
+2026-09-22	2	tester	ordinary	sonnet	medium	-	100	0.40	approved	2026-09-22T08:20:00Z	6	5
+2026-09-22	2	verifier	review	haiku	low	-	50	0.10	approved	2026-09-22T08:30:00Z	4	3
+2026-09-22	2	task	ordinary	sonnet	-	-	-	-	merged	2026-09-22T08:00:00Z	30	18	10
+2026-10-01	3	worker	ordinary	sonnet	medium	1.5	100	2.00	rework 1	2026-10-01T08:00:00Z	25	20
+2026-10-01	3	scout	scout	haiku	low	-	20	0.05	approved	2026-10-01T08:10:00Z	2	1
+2026-10-01	3	researcher	research	sonnet	medium	-	-	-	-	2026-10-01T08:15:00Z	-	-
+2026-10-01	3	worker	ordinary	sonnet	medium	1.5	100	1.00	approved	2026-10-01T09:00:00Z	12	10
+2026-10-01	3	verifier	review	haiku	low	-	50	0.10	approved	2026-10-01T09:20:00Z	5	4
+2026-10-01	3	task	ordinary	sonnet	-	-	-	-	merged	2026-10-01T08:00:00Z	60	35	20
+2026-10-02	-	coordinator	-	opus	high	-	1000	3.00	-
+2026-10-06	4	lead	hard	opus	high	6	100	2.00	ready	2026-10-06T08:00:00Z	85	20
+2026-10-06	4.1	worker	hard	sonnet	medium	2	100	1.50	approved	2026-10-06T08:10:00Z	20	15
+2026-10-06	4.1	tester	hard	sonnet	medium	-	100	0.30	approved	2026-10-06T08:05:00Z	6	5
+2026-10-06	4.1	verifier	review	haiku	low	-	50	0.20	approved	2026-10-06T08:40:00Z	5	4
+2026-10-06	4	task	hard	opus	-	-	-	-	merged	2026-10-06T08:00:00Z	90	44	30
+2026-10-08	5	worker	hard	sonnet	medium	1	100	0.90	failed	2026-10-08T08:00:00Z	6	5
+2026-10-08	5	worker	hard	sonnet	medium	1	100	1.00	escalated	2026-10-08T08:10:00Z	12	10
+2026-10-08	5	worker	hard	opus	high	2	100	2.00	approved	2026-10-08T08:30:00Z	15	12
+2026-10-08	5	task	hard	sonnet	-	-	-	-	ready	2026-10-08T08:00:00Z	40	27	5+
+# a self-test and a probe in the period: left out
+2026-10-03	st1	lead	selftest	sonnet	low	0.1	100	0.50	ready	2026-10-03T09:00:00Z	10	8
+2026-10-03	st1.1	worker	selftest	haiku	low	0.1	100	0.10	approved	2026-10-03T09:02:00Z	3	2
+2026-10-03	0	probe	probe	haiku	low	-	10	0.01	pass	2026-10-03T08:00:00Z	1	1

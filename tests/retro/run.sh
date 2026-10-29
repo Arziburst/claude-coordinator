@@ -28,6 +28,8 @@ run() {
     for x in "$@"; do case "$x" in --week) a+=(-Week) ;; --project) a+=(-Project) ;; --journal) a+=(-Journal) ;;
       --escapes) a+=(-Escapes) ;; --no-insights) a+=(-NoInsights) ;; --public) a+=(-Public) ;; --id) a+=(-Id) ;;
       --check-public) a+=(-CheckPublic) ;; --check-proposal) a+=(-CheckProposal) ;; --new-id) a+=(-NewId) ;;
+      --core-report) a+=(-CoreReport) ;; --check-core-report) a+=(-CheckCoreReport) ;; --since) a+=(-Since) ;;
+      --features) a+=(-Features) ;;
       *) a+=("$x") ;; esac; done
     CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/retro.ps1")" ${a[@]+"${a[@]}"} > "$tmp/out.raw" 2> "$tmp/err.raw"
   else
@@ -128,5 +130,72 @@ expect "--public without --id" 2 any - -- "$runs" --public
 expect "--id without --public" 2 any - -- "$runs" --id "$ID"
 expect "an id that is not 12 hex digits" 2 any - -- "$runs" --public --id ACME
 expect "a week that is no date" 2 any - -- "$runs" --week 2026-13-01
+# the retro report for the core (#303): <RUNS.tsv> --core-report --id <id> [--since <date>] over the fixture project
+# core-report/ (a run log over the weeks around its period, its journal and escapes, CHECKLIST.md, PROJECT.md,
+# CORE-FINDINGS.md) and a small FEATURES.md. The test hook both modes take: --features <FEATURES.md> (PS: -Features;
+# default the core's own FEATURES.md). The period runs to today (UTC): from --since, else the day after the end of
+# PROJECT.md's Settings row "Last core report" (<from>..<to>), else the first CHECKLIST line's date; the core
+# commits: the CHECKLIST commit in use on the period's first day, then those of its lines in the period; os from
+# the machine (windows, macos, linux).
+cr="$(winpath "$here/core-report/coordinator/RUNS.tsv")"; cf="$(winpath "$here/core-report/FEATURES.md")"
+today="$(date -u +%Y-%m-%d)"
+case "$(uname -s)" in Darwin) os=macos ;; Linux) os=linux ;; *) os=windows ;; esac
+sed -e "s/@TODAY@/$today/" -e "s/@OS@/$os/" "$here/expected-core-report.md" > "$tmp/expected-core-report.md"
+expect "--core-report: the template, the period from Last core report, the five axes, runs, findings, a row per feature" 0 "$tmp/expected-core-report.md" - -- "$cr" --core-report --id "$ID" --features "$cf" --no-insights
+cp "$tmp/out" "$tmp/core.md"
+expect "--core-report --since: the period and the core commit from that day" 0 any - -- "$cr" --core-report --id "$ID" --since 2026-10-05 --features "$cf" --no-insights
+{ grep -qxF "| period | 2026-10-05..$today |" "$tmp/out" && grep -qxF '| core commits | 7c2d4a9 |' "$tmp/out" && grep -qxF '| cost | tasks | 2 |' "$tmp/out"; } ||
+  bad "--since 2026-10-05: the period, the core commit 7c2d4a9 or the 2 tasks of the period"
+mkdir -p "$tmp/first/coordinator" && cp "$here/core-report/coordinator/"* "$tmp/first/coordinator/"
+grep -v '^| Last core report |' "$here/core-report/coordinator/PROJECT.md" > "$tmp/first/coordinator/PROJECT.md"
+expect "--core-report, no Last core report: the period from the first CHECKLIST line" 0 any - -- "$(winpath "$tmp/first/coordinator/RUNS.tsv")" --core-report --id "$ID" --features "$cf" --no-insights
+{ grep -qxF "| period | 2026-09-01..$today |" "$tmp/out" && grep -qxF '| core commits | 1ebe968, 7c2d4a9 |' "$tmp/out" && grep -qxF '| cost | tasks | 5 |' "$tmp/out"; } ||
+  bad "no Last core report: the period from 2026-09-01, both core commits or the 5 tasks"
+# the guard numbers from the transcripts over the period, as session-insights gives them for the project's folders
+ins="$(CLAUDE_CONFIG_DIR="$cfg" bash "$core/scripts/session-insights.sh" --since 2026-09-28T00:00:00Z --skip-tests --project "$P|$P/.claude/worktrees" 2>/dev/null)"
+gsum() { printf '%s\n' "$ins" | awk -F '\t' -v k="$1" -v d="$2" '$1 == "block" && (d == "all" || $2 != "deny rule") { if (match($3, "(^| )" k "=[0-9]+")) { x = substr($3, RSTART, RLENGTH); sub(/.*=/, "", x); s += x } } END { print s + 0 }'; }
+gb="$(gsum count guard)"; ga="$(gsum around guard)"; gall="$(gsum count all)"
+expect "--core-report with transcripts: the guard's blocks over the period" 0 any - -- "$cr" --core-report --id "$ID" --since 2026-09-28 --project "$P" --features "$cf"
+gt="$(awk -F ' [|] ' '/^[|] Guard reason [|]/ { on = 1; next } on && !/^[|]/ { on = 0 } on && $2 ~ /^[0-9]+$/ { s += $2 } END { print s + 0 }' "$tmp/out")"
+{ [ "$gb" -gt 0 ] && grep -qxF "| stability | guard_blocks | $gb |" "$tmp/out" && grep -qxF "| stability | guard_around | $ga |" "$tmp/out" && [ "$gt" = "$gall" ]; } ||
+  bad "the guard over the period: guard_blocks $gb, guard_around $ga, the reasons' blocks $gall (got $gt)"
+# the checker: the generated body is refused at its first <fill>; a filled body passes; one refusal each
+expect "--check-core-report refuses the generated body: a <fill> left (line 15)" 1 - "~line 15:" -- --check-core-report "$(winpath "$tmp/core.md")" --features "$cf"
+filled="$here/core-report-filled.md"
+expect "--check-core-report passes a filled body (start-worker.sh and CORE.md in a cell, a cell of 160 characters)" 0 - - -- --check-core-report "$(winpath "$filled")" --features "$cf"
+# repl <line> <text> <file>: the filled body with that line replaced; row <text>: F-WORKERS-01's row (line 105)
+# with <text> as its "Decision changed" cell
+repl() { R="$2" awk -v n="$1" 'NR == n { $0 = ENVIRON["R"] } { print }' "$filled" > "$tmp/$3"; }
+row() { printf '| F-WORKERS-01 | yes | every task | yes | %s | none |' "$1"; }
+repl 105 "$(row 'kept merge-queue.ps1 and ONE-TIME.md as they are')" cr-core.md
+expect "--check-core-report passes core file names (merge-queue.ps1, ONE-TIME.md)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-core.md")" --features "$cf"
+awk 'NR < 70 || NR > 81' "$filled" > "$tmp/cr-missing.md"
+expect "--check-core-report refuses a missing section" 1 - "~Runs by role" -- --check-core-report "$(winpath "$tmp/cr-missing.md")" --features "$cf"
+repl 70 '## Runs per role' cr-renamed.md
+expect "--check-core-report refuses a renamed section" 1 - "~line 70:" -- --check-core-report "$(winpath "$tmp/cr-renamed.md")" --features "$cf"
+repl 105 '| F-WORKERS-99 | yes | every task | yes | none | none |' cr-feature.md
+expect "--check-core-report refuses a feature row not in FEATURES.md" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-feature.md")" --features "$cf"
+repl 105 "$(row '<fill>')" cr-fill.md
+expect "--check-core-report refuses a <fill> left" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-fill.md")" --features "$cf"
+repl 105 "$(row 'see https://example.com/notes for it')" cr-url.md
+expect "--check-core-report refuses a URL" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-url.md")" --features "$cf"
+repl 105 "$(row 'asked dev@example.org first')" cr-mail.md
+expect "--check-core-report refuses an e-mail" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-mail.md")" --features "$cf"
+repl 105 "$(row 'asked @someone first')" cr-handle.md
+expect "--check-core-report refuses an @handle" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-handle.md")" --features "$cf"
+repl 105 "$(row 'kept in D:\dev\app for a week')" cr-win.md
+expect "--check-core-report refuses a Windows path" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-win.md")" --features "$cf"
+repl 105 "$(row 'moved under src\cart first')" cr-back.md
+expect "--check-core-report refuses a path with a backslash" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-back.md")" --features "$cf"
+repl 105 "$(row 'moved under /srv/app/cart first')" cr-posix.md
+expect "--check-core-report refuses a POSIX path" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-posix.md")" --features "$cf"
+repl 105 "$(row 'the cart.ts check broke twice')" cr-file.md
+expect "--check-core-report refuses a file name that is not the core's" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-file.md")" --features "$cf"
+sed '104s/hard tasks |/hard tasks! |/' "$filled" > "$tmp/cr-long.md"
+expect "--check-core-report refuses a free-text cell over 160 characters" 1 - "~line 104:" -- --check-core-report "$(winpath "$tmp/cr-long.md")" --features "$cf"
+# errors
+expect "--core-report without --id" 2 any - -- "$cr" --core-report --features "$cf"
+expect "--core-report with a --since that is no date" 2 any - -- "$cr" --core-report --id "$ID" --since 2026-13-01 --features "$cf"
+expect "--check-core-report of a missing file" 1 - "~retro: cannot read" -- --check-core-report "$(winpath "$tmp/none.md")" --features "$cf"
 [ "$fail" = 0 ] && echo "retro: $n cases passed" || echo "retro: failures above ($n cases)"
 exit "$fail"
