@@ -262,10 +262,10 @@ The continuous work:
    stays until §8's cleanup after the merge, and the fresh worker reuses it. A small later round on
    that PR (a verifier finding, an owner change) goes to a **fresh worker** on the integration branch
    with a short contract written from the finding — the tester first where step 5 requires it (#276) —
-   and the coordinator's verifier reviews it; so do the merge queue's `CONFLICT` / `HEAD MOVED` /
-   `NOT APPROVED` and an `AFFECTED` merge of main for that PR (§4a). A lead is resumed only when a
-   round needs re-splitting into several sub-contracts (#292). A lead is one more
-   strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
+   and the coordinator's verifier reviews it; so do, for that PR, the merge queue's `CONFLICT`, its
+   `HEAD MOVED` / `NOT APPROVED` (or the verifier, for a new commit), a `FAILED` classified as *code*
+   (step 4) and an `AFFECTED` merge of main (§4a). A lead is resumed only when a round needs
+   re-splitting into several sub-contracts (#292). A lead is one more strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
    (an ERROR blocks delegation; a WARN is explained in the brief); start-worker runs it on the brief's
@@ -327,11 +327,11 @@ The continuous work:
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved. On a §5 task or a `tests_first: yes` task, every later round that changes behaviour (a
    review finding, a changed rule) starts with the tester again, and the coordinator's message that
-   sends the worker back names the tester's new commit (#276). A small later round on a lead's PR goes
-   to a fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch with a short
-   note instead of the same session when that session's context has grown long — each turn re-reads it
-   (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292; TOOLKIT *Pause and
-   resume*).
+   sends the worker back names the tester's new commit (#276). A small later round on a lead's PR
+   goes to a fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch
+   with a short note instead of the same session when that session's context has grown long — each
+   turn re-reads it (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292;
+   TOOLKIT *Pause and resume*).
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
    question, steps, expected result, possible answers); read logs yourself where they answer it. Wishes
    voiced in acceptance are handled per `PROJECT.md`.

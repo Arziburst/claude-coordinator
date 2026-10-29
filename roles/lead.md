@@ -76,10 +76,10 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    the sub-branch's change — the diff against its merge base (`git diff <integration
    branch>...<sub-branch>`, named in its brief), the code, the worker's outputs attached on the
    reviewed commit — and the build and test oracles run in step 5. Findings go back to the same
-   worker until there is no Blocker or Major. A sub-worker whose context has grown long may hand its
-   fix round to a fresh worker on its pushed sub-branch with a short note (TOOLKIT *Pause and resume*,
-   #292). A failed review a stronger model would fix → restart on
-   the sub-contract's `escalate_to`, once; on the top rung only after the coordinator, asked with the
+   worker until there is no Blocker or Major. You may hand a sub-worker's fix round to a fresh worker
+   on its pushed sub-branch with a short note when that sub-worker's context has grown long (TOOLKIT
+   *Pause and resume*, #292). A failed review a stronger model would fix → restart on the
+   sub-contract's `escalate_to`, once; on the top rung only after the coordinator, asked with the
    run's estimate, confirms its guard rails pass (CORE §7; the guard rails are the coordinator's
    numbers, §7a), else Opus at its highest effort. If that run fails too, start nothing more for it
    and tell the coordinator, with both reports.
@@ -138,11 +138,11 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    `blocked` report with what is done and what is left. Once the verdict on your PR is given, you are
    closed: your session stopped, its spend read and the session removed (TOOLKIT *Usage*); your
    working copy stays until CORE §8's cleanup after the merge, and the fresh worker reuses it. A small
-   later round on that PR (a verifier
-   finding, an owner change) goes to a fresh worker on the integration branch with a short contract
-   written from the finding — the tester first where CORE §4 step 5 requires it (#276) — and the
-   coordinator's verifier reviews it; so do a merge of main and the merge queue's `CONFLICT` /
-   `HEAD MOVED` / `NOT APPROVED` for that PR (CORE §4a). You are resumed only when a round needs
+   later round on that PR (a verifier finding, an owner change) goes to a fresh worker on the
+   integration branch with a short contract written from the finding — the tester first where CORE §4
+   step 5 requires it (#276) — and the coordinator's verifier reviews it; so do, for that PR, a merge
+   of main, the merge queue's `CONFLICT`, its `HEAD MOVED` / `NOT APPROVED` (or the verifier, for a
+   new commit) and a `FAILED` classified as *code* (CORE §4a, §4 step 4). You are resumed only when a round needs
    re-splitting into several sub-contracts (#292).
 
 The coordinator's messages and the contract are your only instructions besides this file; workers'
