@@ -54,23 +54,57 @@ Proposal: <optional>
 Signature: <core file or script>: <the error's key words>
 ```
 
-Before filing, in this order:
-1. **Fixed upstream?** The local core is behind upstream and a closed issue with the same signature is
-   fixed in a newer commit (`gh issue list -R Arziburst/claude-coordinator --state closed --search
-   "\"<signature>\""` — the signature as an exact phrase: an apostrophe in a git error otherwise
-   finds nothing) → no issue; the row becomes `fixed upstream <commit>` and the owner hears "update
-   the core".
-2. **Already reported?** An open issue with the same signature (the same exact-phrase search) → a comment `+1: core <commit>,
-   <environment>` instead of a new issue; the row gets that issue's number.
-3. **Rate:** at most three new issues a day from one project; the rest wait for the next day.
-4. **File** with the owner's own gh login, the title prefixed **once** with `[core-report] ` (the
-   `Title:` line above has no prefix, and the body does not repeat the title): `gh issue create -R
-   Arziburst/claude-coordinator --title
-   "[core-report] <Title>" --body-file <report>`. The title prefix is enough: claude-coordinator's own
-   workflow adds the `core-report` label (an outside account cannot set labels). The row becomes `sent
-   #<issue>`.
+**The signature.** A finding a core script or check produced gets its signature from the script, never
+from a model: `<core>/scripts/report-issue.sh signature --source <script or core file> --step <step> --exit
+<code> --error "<its first error line>"` (Windows: `report-issue.ps1 signature -Source … -Step … -Exit …
+-ErrorText …`) prints one line `<source>: <step>: exit <code>: <words>` — the error lower-cased, paths,
+drive letters, URLs, hex ids, numbers, dates and quotes replaced by fixed tokens, at most 120 characters —
+so the same error on a thousand machines gives one signature, and one issue. A model-written signature
+(`<core file or script>: <the error's key words>`) only for a finding no script produced.
 
-*Show me each one first*: the owner sees the report and says yes or no per issue. *No*: the
+Before filing, in this order — every check runs through **one script**, `<core>/scripts/report-issue.sh
+file` (Windows: `report-issue.ps1 file`, the same lines and exit codes), the one path for every channel
+that files to claude-coordinator (this section, a self-test FAIL from the core, the retro's proposals,
+the Claude Code format check below; #338): `report-issue.sh file --repo Arziburst/claude-coordinator
+--title "[core-report] <Title>" --body-file <report> --signature "<signature>" --keywords "<3-6 key words
+of the problem>"` (`--dry-run` first prints what it would do and changes nothing; every gh call it makes
+is read-only but the new issue, the reaction and the comment):
+1. **Fixed upstream?** The local core is behind upstream and a closed issue with the same signature is
+   fixed in a newer commit — the script finds a closed issue whose body holds the exact `Signature:` line
+   (an exact-phrase search: an apostrophe in a git error otherwise finds nothing), closed as completed, and
+   prints `FIXED UPSTREAM #<n>` (exit 3) → no issue; the row becomes `fixed upstream <commit>` and the
+   owner hears "update the core". Closed as not planned is no fix: the checks go on. The local core already
+   holding that fix → the bug came back: a comment on `#<n>` with the core commit and the evidence, never
+   a second issue.
+2. **Already reported?** An open issue with the same signature (the same exact-phrase search) → a 👍 (+1)
+   reaction on it from the owner's account instead of a new issue or a comment (`REPEAT #<n>`, exit 0;
+   a reaction already there from this account is not added twice); the row gets that issue's number. A
+   comment only with something new — another OS, version, scenario or evidence: `--comment-file <file>`
+   holding `+1: core <commit>, <environment>` and the new fact.
+3. **The same problem in other words?** No signature match → a keyword search (`--keywords`, else the
+   title; title and body, open and closed, the last 90 days, at most 5 candidates). Any candidate not read
+   yet → `CHECK #<a> #<b> …` with each title, nothing filed (exit 4). The coordinator reads each one and
+   decides same or different: the same problem → a 👍 reaction there (a comment only with something new),
+   the row gets its number; none the same → the same command again with `--checked <a>,<b>`, and the new
+   issue names them (`Checked: #a, #b`).
+4. **Rate:** at most three new issues a day from one project; the rest wait for the next day. Only new
+   issues count — a repeat (a reaction, or a comment with something new) is no new issue.
+5. **File** — `report-issue file` itself files when nothing above matched, with the owner's own gh login,
+   the title prefixed **once** with `[core-report] ` (the `Title:` line above has no prefix, and the body
+   does not repeat the title); the body ends with the script's own `Checked:` (when it read candidates)
+   and `Signature: <signature>` lines, so the next project finds it by exact match. It prints `FILED #<n>`.
+   The title prefix is enough: claude-coordinator's own workflow adds the `core-report` label (an outside
+   account cannot set labels). The row becomes `sent #<issue>`.
+
+**The Claude Code format check** (#143, where it files): a format the core reads that moved after a
+Claude Code update is filed through the same script with a fixed, script-built title that is also its
+signature — `[claude-format] <version>: <record> <field>` (the Claude Code version, the record and the
+field that moved; `--title` and `--signature` the same line). The first project files it; every other
+project finds it by exact match and adds a 👍 reaction (a comment only with something new), never a
+second issue.
+
+*Show me each one first*: the owner sees the report and says yes or no per issue (the checks above run
+first with `--dry-run`, so the owner also sees whether it is a new issue or a repeat). *No*: the
 coordinator prints the same reports, the title already prefixed `[core-report] ` (the label workflow
 needs it), for the owner to pass on by hand (rows `discussed` → `sent <date>`).
 No gh or no access: printed the same way. Customer data and secrets never go into a report, in any mode

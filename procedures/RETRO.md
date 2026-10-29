@@ -123,10 +123,17 @@ A proposal, not a bug report: the maintainer acts on it only after the owner's d
 ```
 
 - **Title:** `[self-improvement] proposal: <axis> <measure> (<core file name>)`.
-- **Already proposed?** `gh issue list -R Arziburst/claude-coordinator --state open --search
-  "\"<signature>\" in:body"` — one found → a comment `+1: project <id>, week of <date>, <measure> <week
-  value> (previous <value>)` instead of a new issue.
-- **Rate:** at most three proposal issues per project-week (the top three), plus the one summary.
+- **Already proposed?** The same path as a core finding (CORE-FINDINGS.md §2, #338): `<core>/scripts/report-issue.sh
+  file --repo Arziburst/claude-coordinator --title "<the title>" --body-file <file> --signature
+  "<signature>" --keywords "<axis> <measure> <core file name>"` (Windows: `report-issue.ps1 file`), the
+  signature the table's `<axis>:<measure>:<core file name>`; it searches open and closed issues for it
+  as an exact phrase (`"\"<signature>\" in:body"`) and adds the body's last line `Signature: <signature>`
+  to a new one. One found open → a 👍 (+1) reaction from the owner's account instead of a new issue
+  (`REPEAT #<n>`); the comment `+1: project <id>, week of <date>, <measure> <week value> (previous
+  <value>)` only when it adds something new (`--comment-file`). Closed as completed (`FIXED UPSTREAM`) →
+  no new proposal. `CHECK` → the candidates read and decided as there, then `--checked`.
+- **Rate:** at most three proposal issues per project-week (the top three), plus the one summary; a repeat
+  (a reaction) is no new issue and does not count.
 
 ## 5. Guard false positives
 
