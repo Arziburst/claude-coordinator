@@ -213,10 +213,17 @@ data, not a bug report.
    feature row not in `FEATURES.md`, more than three proposals, a `<fill>` left, an HTML comment `<!--`
    after the first line, a Profile cell outside its vocabulary) and anything that could identify a
    project or a person — a URL or a Markdown link, an e-mail (also written with `[at]` or `(at)`), an
-   `@handle`, an IP address, a path (a drive letter, `/x/y`, `x\y`), a dotted name anywhere in a word — a
-   host (`name.com's`, `name.com:8080`) or a file name — that is not one of the core's own file names, a
-   commit id (a hex token of 7 or more digits, any case, holding a decimal digit), the project folder's name as a whole word in any case, a
-   free-text cell over 160 characters; each refusal names its line. The line is rewritten, never the rule.
+   `@handle`, an IP address, an IPv6 address (a `::` next to a hex group — `fe80::1ff:fe23:4567:890a`,
+   `::1` — or 6 or more colon-separated groups of 1–4 hex digits; a time `12:30:45` or a ratio `1:2:3`
+   passes), an HTML character reference (`&#<digits>;`, `&#x<hex>;` or `&<letters>;` — GitHub renders
+   `&#64;` as `@` and `&period;` as `.`; a lone `&` and `R&D` pass), a path (a drive letter, `/x/y`,
+   `x\y`), a dotted name anywhere in a word — a host (`name.com's`, `name.com:8080`) or a file name — that
+   is not one of the core's own file names, a commit id (a hex token of 7 or more digits, any case,
+   holding a decimal digit; one of decimal digits only is named "a long number or a commit id"), the
+   project folder's name as a whole word in any case, a free-text cell over 160 characters; each refusal
+   names its line. The line is rewritten, never the rule. Not refused (they rest on the owner's review of
+   every body): an address in plain words (`user [ at ] host`, "at … dot"), a full-width `＠` or `。`, an
+   IDN host, the project folder's name written with `_` or a space.
 4. **Show the owner** the whole body; **the owner's yes files it** — nothing is filed without it. A body
    the owner edits passes the check again before it is filed.
 5. **Title** `[retro-report] <id> <from>..<to>`. **One per project-period:** first `gh issue list -R
