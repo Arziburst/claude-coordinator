@@ -131,7 +131,10 @@ A proposal, not a bug report: the maintainer acts on it only after the owner's d
   to a new one. One found open → a 👍 (+1) reaction from the owner's account instead of a new issue
   (`REPEAT #<n>`); the comment `+1: project <id>, week of <date>, <measure> <week value> (previous
   <value>)` only when it adds something new (`--comment-file`). Closed as completed (`FIXED UPSTREAM`) →
-  no new proposal. `CHECK` → the candidates read and decided as there, then `--checked`.
+  no new proposal while the project's core lacks that change ("update the core"); the core already holds
+  it and the measure is still bad → the same command again with `--regression`, as for a finding (one new
+  issue naming the closed one). Closed as not planned goes on to the check. `CHECK` → the candidates read
+  and decided as there, then `--checked`.
 - **Rate:** at most three proposal issues per project-week (the top three), plus the one summary; a repeat
   (a reaction) is no new issue and does not count.
 

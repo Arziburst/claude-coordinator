@@ -5,9 +5,10 @@
 #   scripts/report-issue.sh file --repo <owner/name> --title <title> --body-file <file> --signature <sig>
 #                                [--keywords <words>] [--checked <n,n,...>] [--comment-file <file>] [--regression]
 #                                [--dry-run]
-# signature: one line `<source>: <step>: exit <code>: <words>` - the error text lower-cased (ASCII), URLs,
-# dates and times, paths (absolute, with a drive letter, UNC, ~ or ./), hex ids (0x..., or 7+ characters)
-# and numbers replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
+# signature: one line `<source>: <step>: exit <code>: <words>` (a negative code kept as it is) - the error
+# text lower-cased (ASCII), URLs and scp-style remotes, dates and times, paths (absolute, with a drive
+# letter, UNC, ~ or ./; a quoted one with its spaces), hex ids (0x..., or 7+ characters) and numbers
+# replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
 # a +1 reaction from this account (none added when it is already there), with --comment-file that comment
@@ -54,21 +55,32 @@ oneline() { printf '%s' "$1" | tr '\r\n\t\f\v' '     ' | sed -E 's/ +/ /g; s/^ /
 
 if [ "$mode" = signature ]; then
   [ -n "$source" ] && [ "$have_error" = 1 ] || { echo "signature needs --source and --error; $usage" >&2; exit 1; }
-  case "$code" in *[!0-9]*) echo "--exit takes a whole number; $usage" >&2; exit 1 ;; esac
-  # the words: lower-cased, quotes dropped, then each kind replaced by its token; a rule that needs the
+  case "${code#-}" in *[!0-9]*) echo "--exit takes a whole number; $usage" >&2; exit 1 ;; esac
+  [ "$code" != - ] || { echo "--exit takes a whole number; $usage" >&2; exit 1; }
+  # the words: lower-cased, then each kind replaced by its token, quotes dropped; a rule that needs the
   # character after a match runs twice, so two matches one character apart are both replaced
-  w="$(oneline "$error" | tr 'A-Z' 'a-z' | tr -d "\"'\`" | sed -E '
+  # a quoted path is one PATH with its spaces (the quotes still there to bound it), then the quotes go;
+  # an unquoted Windows or UNC path takes the next words that hold a backslash (`\\srv\a b\x.log`); an
+  # scp-style remote (`git@host:owner/repo`, `user@host:/path`) is one URL - no account, host or folder
+  rules="$(cat <<'EOF'
     s#[a-z][a-z0-9+.-]*://[^ ]*#URL#g
+    s#(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ]*#\1URL#g
     s#[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?#DATE#g
     s#(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?#\1DATE#g
-    s#(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*#\1PATH#g
-    s#(^|[^a-z0-9_.\\-])\\\\[^ ]+#\1PATH#g
+    s#"([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^"]*"#PATH#g
+    s#'([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^']*'#PATH#g
+    s#["'`]##g
+    s#(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*( [^ ]*\\[^ ]*)*#\1PATH#g
+    s#(^|[^a-z0-9_.\\-])\\\\[^ ]+( [^ ]*\\[^ ]*)*#\1PATH#g
     s#(^|[^a-z0-9_.~/\\-])(~|\.{1,2})?/[^ ]+#\1PATH#g
     s#(^|[^a-z0-9])0x[0-9a-f]+#\1ID#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9]+#\1N#g
-    s/ +/ /g; s/^ //; s/ $//')"
+    s/ +/ /g; s/^ //; s/ $//
+EOF
+)"
+  w="$(oneline "$error" | tr 'A-Z' 'a-z' | sed -E "$rules")"
   line="$(oneline "$source" | tr '\\' '/')"
   [ -n "$step" ] && line="$line: $(oneline "$step")"
   [ -n "$code" ] && line="$line: exit $code"

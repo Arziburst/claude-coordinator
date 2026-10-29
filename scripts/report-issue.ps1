@@ -6,9 +6,10 @@
 #   powershell -File scripts\report-issue.ps1 file -Repo <owner/name> -Title <title> -BodyFile <file>
 #                    -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <file>] [-Regression]
 #                    [-DryRun]
-# signature: one line `<source>: <step>: exit <code>: <words>` - the error text lower-cased (ASCII), URLs,
-# dates and times, paths (absolute, with a drive letter, UNC, ~ or ./), hex ids (0x..., or 7+ characters)
-# and numbers replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
+# signature: one line `<source>: <step>: exit <code>: <words>` (a negative code kept as it is) - the error
+# text lower-cased (ASCII), URLs and scp-style remotes, dates and times, paths (absolute, with a drive
+# letter, UNC, ~ or ./; a quoted one with its spaces), hex ids (0x..., or 7+ characters) and numbers
+# replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
 # a +1 reaction from this account (none added when it is already there), with -CommentFile that comment
@@ -40,16 +41,22 @@ function Lower([string]$s) { -join @($s.ToCharArray() | ForEach-Object { if ($_ 
 
 if ($Mode -ceq 'signature') {
   if (-not $Source -or -not $PSBoundParameters.ContainsKey('ErrorText')) { Usage 'signature needs -Source and -ErrorText' }
-  if ($Exit -cnotmatch '^[0-9]*$') { Usage '-Exit takes a whole number' }
-  # the words: lower-cased, quotes dropped, then each kind replaced by its token; a rule that needs the
-  # character after a match runs twice, as in report-issue.sh
-  $w = (Lower (OneLine $ErrorText)) -creplace '["''`]', ''
+  if ($Exit -cnotmatch '^(-?[0-9]+)?$') { Usage '-Exit takes a whole number' }
+  # the words: lower-cased, then each kind replaced by its token, quotes dropped; a rule that needs the
+  # character after a match runs twice, as in report-issue.sh. A quoted path is one PATH with its spaces
+  # (the quotes still there to bound it), then the quotes go; an unquoted Windows or UNC path takes the next
+  # words that hold a backslash; an scp-style remote (`git@host:owner/repo`, `user@host:/path`) is one URL
+  $w = Lower (OneLine $ErrorText)
   foreach ($r in @(
       @('[a-z][a-z0-9+.-]*://[^ ]*', 'URL'),
+      @('(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ]*', '${1}URL'),
       @('[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?', 'DATE'),
       @('(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?', '${1}DATE'),
-      @('(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*', '${1}PATH'),
-      @('(^|[^a-z0-9_.\\-])\\\\[^ ]+', '${1}PATH'),
+      @('"([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^"]*"', 'PATH'),
+      @('''([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^'']*''', 'PATH'),
+      @('["''`]', ''),
+      @('(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*( [^ ]*\\[^ ]*)*', '${1}PATH'),
+      @('(^|[^a-z0-9_.\\-])\\\\[^ ]+( [^ ]*\\[^ ]*)*', '${1}PATH'),
       @('(^|[^a-z0-9_.~/\\-])(~|\.{1,2})?/[^ ]+', '${1}PATH'),
       @('(^|[^a-z0-9])0x[0-9a-f]+', '${1}ID'),
       @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
@@ -91,8 +98,9 @@ $v = $PSVersionTable.PSVersion
 $legacy = $gh.CommandType -eq 'Application' -and ($v.Major -lt 7 -or ($v.Major -eq 7 -and $v.Minor -lt 3) -or
   "$(Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue)" -eq 'Legacy')
 function Arg([string]$s) {
-  if (-not $legacy -or -not $s.Contains('"')) { return $s }
-  $s = $s -creplace '(\\*)"', '$1$1\"'
+  if (-not $legacy) { return $s }
+  if ($s.Contains('"')) { $s = $s -creplace '(\\*)"', '$1$1\"' }
+  # an argument with a space is put in quotes: a backslash at its end would escape the closing one
   if ($s -match '\s') { $s = $s -creplace '(\\+)$', '$1$1' }
   $s
 }
@@ -159,7 +167,7 @@ if (-not $reg) {
     $all = @($nums) + @($new | ForEach-Object { $_.TrimStart('#') })
     "CHECK $($new -join ' ')"
     $lines
-    "read each: the same problem -> a +1 reaction there (gh api --method POST repos/$Repo/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with --checked $($all -join ',')"
+    "read each: the same problem -> a +1 reaction there (gh api --method POST repos/$Repo/issues/<n>/reactions -f content=+1), a comment only with something new; none -> run again with -Checked $($all -join ',')"
     exit 4
   }
 }
