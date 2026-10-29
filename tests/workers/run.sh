@@ -564,7 +564,7 @@ expect_in "$offs"
 grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL: claude was started with a --tester-commit off the worktree's HEAD"; fail=1; }
 # unchanged starts, no new flag: tests_first no - <reason> (brief, --contract), a lead, a tester
 # (a brief with no contract: "start: a brief without a contract" above)
-for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contract|$tmp/c276-no.md" "#81 lead: G|--brief-file|$tmp/brief-tfyes.md" "#81 tester: G|--brief-file|$tmp/brief-tfyes.md"; do
+for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contract|$tmp/c276-no.md" "#81 lead: G|--brief-file|$tmp/brief-tfno.md" "#81 tester: G|--brief-file|$tmp/brief-tfyes.md"; do
   vn="${v%%|*}"; vr="${v#*|}"; vf="${vr%%|*}"; vp="${vr#*|}"
   if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
   check 0 "start: unchanged, $vn $vf $(basename "$vp")" -- start --name "$vn" "${F[@]}" --branch 81-gate "${va[@]}" --dry-run
@@ -625,6 +625,40 @@ check 1 "start: both --tester-commit and --tester-tests, dry run" -- start --nam
 both_named; nothing_made 85-gate
 check 1 "start: both --tester-commit and --tester-tests" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276"
 both_named; nothing_made 85-gate
+# a lead's task gets no task-level tester (#289): the lead runs the tester per sub-contract, its tests on
+# the sub-branches (roles/lead.md step 3), so a lead whose contract (in the brief, or --contract) says
+# `tests_first: yes`, or a lead given --tester-commit / --tester-tests, is refused before anything is
+# created (--dry-run too); the refusal says a lead's contract has `tests_first: no - the lead runs the
+# tester per sub-contract`. A lead with `tests_first: no - <reason>` starts as before (the loop above)
+expect_lead() {   # expect_lead [<contract label>]: one line says lead and sub-contract (and names the contract)
+  printf '%s\n' "$LAST" | grep -F -- "${1:-lead}" | grep -i lead | grep -q sub-contract ||
+    { echo "FAIL: no line${1:+ names the contract ($1),} says lead and sub-contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+: > "$STUB_LOG"
+check 1 "start: a lead, tests_first yes in the brief, dry run" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief-tfyes.md" --dry-run
+expect_lead "contract in the brief"; expect_in tests_first; nothing_made 86-lead
+check 1 "start: a lead, tests_first yes in the brief" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief-tfyes.md"
+expect_lead "contract in the brief"; expect_in tests_first; nothing_made 86-lead
+check 1 "start: a lead, tests_first yes by --contract, dry run" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --dry-run
+expect_lead "c276-yes.md"; expect_in tests_first; nothing_made 86-lead
+check 1 "start: a lead, tests_first yes by --contract" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
+expect_lead "c276-yes.md"; expect_in tests_first; nothing_made 86-lead
+check 1 "start: a lead, tests_first yes in a contract: block" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md"
+expect_lead "c276-cblock-yes.md"; nothing_made 86-lead
+# a lead given the tester's flags: refused the same way, whatever its contract says (each value valid)
+for v in "--tester-commit|$bc|$tmp/brief-tfno.md" "--tester-tests|$tmp/lead276/.lead/tt276|$tmp/brief-tfno.md" "--tester-commit|$bc|$tmp/brief-tfyes.md" "--tester-tests|$tmp/lead276/.lead/tt276|$tmp/brief-tfyes.md"; do
+  vf="${v%%|*}"; vr="${v#*|}"; vv="${vr%%|*}"; vb="${vr#*|}"
+  for d in --dry-run ""; do
+    check 1 "start: a lead given $vf, $(basename "$vb")${d:+, dry run}" -- start --name "#87 lead: G" "${F[@]}" --branch 87-lead --brief-file "$vb" "$vf" "$vv" $d
+    expect_lead; nothing_made 87-lead
+  done
+done
+# a lead with tests_first no starts as before, past the dry run too: a worktree and claude
+check 0 "start: a lead, tests_first no by --contract" -- start --name "#88 lead: G" "${F[@]}" --branch 88-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-no.md"
+[ -d "$tmp/repo/.claude/worktrees/88-lead" ] || { echo "FAIL: no worktree for a lead with tests_first no"; fail=1; }
+grep -qF -- "--bg --name #88 lead: G" "$STUB_LOG" || { echo "FAIL: the lead with tests_first no was not started"; fail=1; }
+case "$LAST" in *sub-contract*) echo "FAIL: a lead with tests_first no got the lead refusal's text"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/88-lead" 2>/dev/null; git -C "$tmp/repo" branch -q -D 88-lead 2>/dev/null
 # round 3 (#276, the re-review of 2fe293c): one parser - start-worker takes tests_first from check-contract
 # itself, so the two cannot disagree. Access point: check-contract's read-only option that prints the value
 # of a key as its own extraction reads it (the key's text with its continuation lines, comment and quotes
