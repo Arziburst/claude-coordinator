@@ -257,11 +257,14 @@ The continuous work:
    must land together (one feature across several areas, three or more sub-contracts, more than one
    worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
    session on an integration branch that splits it into sub-contracts, runs and verifies their
-   workers and returns one PR and one report. Once the verdict on its PR is given, the lead is closed
-   (stopped and removed like a worker, §8); a small later round on that PR (a verifier finding, an owner
-   change) goes to a **fresh worker** on the integration branch with a short contract written from the
-   finding — the tester first where step 5 requires it (#276) — and the coordinator's verifier reviews
-   it; a lead is resumed only when a round needs re-splitting into several sub-contracts (#292). A lead is one more
+   workers and returns one PR and one report. Once the verdict on its PR is given, the lead is closed:
+   its session stopped, its spend read and the session removed (TOOLKIT *Usage*); its working copy
+   stays until §8's cleanup after the merge, and the fresh worker reuses it. A small later round on
+   that PR (a verifier finding, an owner change) goes to a **fresh worker** on the integration branch
+   with a short contract written from the finding — the tester first where step 5 requires it (#276) —
+   and the coordinator's verifier reviews it; so do the merge queue's `CONFLICT` / `HEAD MOVED` /
+   `NOT APPROVED` and an `AFFECTED` merge of main for that PR (§4a). A lead is resumed only when a
+   round needs re-splitting into several sub-contracts (#292). A lead is one more
    strong-model context, so ordinary tasks go to a worker directly; leads and their workers count
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
@@ -324,8 +327,8 @@ The continuous work:
 5. **Review** (§6) when a worker reports ready with green checks; findings go back; repeat until
    approved. On a §5 task or a `tests_first: yes` task, every later round that changes behaviour (a
    review finding, a changed rule) starts with the tester again, and the coordinator's message that
-   sends the worker back names the tester's new commit (#276). A later round on a lead's PR goes to a
-   fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch with a short
+   sends the worker back names the tester's new commit (#276). A small later round on a lead's PR goes
+   to a fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch with a short
    note instead of the same session when that session's context has grown long — each turn re-reads it
    (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292; TOOLKIT *Pause and
    resume*).
@@ -356,13 +359,15 @@ what their brief and the coordinator tell them and report a surprise to their re
   another), with `scripts/merge-queue land <pr>@<approved commit> …` run in
   the background: each PR merges main once, at its turn, never after every other merge. Its lines:
   `CONFLICT` / `HEAD MOVED` / `NOT APPROVED` → back to that worker (or the verifier for a new commit);
+  for a closed lead's PR, a fresh worker on its integration branch (§4 step 2);
   `REVIEW` → the verifier re-reviews only the merge it names, then queue it again with that head;
   `FAILED` → the red-check rule above; `AFTER MERGE` → the merge row of the event table (§4), printed
   so its duties have a trigger (#242). A main merged in by the queue without touching the PR's files
   needs no re-review: its CI on the new head is the check. The queue cancels CI runs of a PR's older heads.
 - **After every merge,** tell exactly the sessions behind the `AFFECTED` PRs to merge main now, with
   the files it names; a lead merges it into its integration branch and tells only its workers whose
-  sub-branches change those files. Nobody else is messaged.
+  sub-branches change those files. For a closed lead's PR a fresh worker on its integration branch
+  merges it (§4 step 2). Nobody else is messaged.
 - A PR blocked by conflicts is a planning miss: record why (§10).
 
 ## 4b. Initiative and research
