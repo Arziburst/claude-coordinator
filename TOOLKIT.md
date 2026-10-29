@@ -117,7 +117,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   #292). A lead pauses and resumes its own workers the same way; a lead gone `done` while its workers
   run is resumed by the coordinator the same way, with the worker's report that fell back to it as the
   message. A resume under a new job deletes the old job folder (`$CLAUDE_JOB_DIR/tmp`), so nothing
-  durable lives there: a lead's notes go in `<its worktree>/.lead/`, the coordinator's contracts and
+  durable lives there: a lead's notes go in its notes folder beside its worktree (`<its worktree>.lead/`), the coordinator's contracts and
   briefs in the state repository (`coordinator/`). `claude respawn` is not a resume: it
   restarts a running session on a new Claude binary (and a usage-limit block, *Usage*).
 
@@ -126,7 +126,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   (branch `<issue>-<type>-<slug>`) and starts the session for it (from the repository root, *Directory and
   trust*) with `worktree.bgIsolation: "none"`, so
   Claude Code does not add a second copy; the worktrees' folder is kept out of the project's git by a
-  local `.git/info/exclude` line (INIT 3.4), and a lead's notes in `<worktree>/.lead/` by another.
+  local `.git/info/exclude` line (INIT 3.4), and an older lead's notes in `<worktree>/.lead/` by another;
+  a lead's notes now live beside its worktree, in `<worktree>.lead/` inside that excluded folder
+  (start-worker makes it and names it in the lead's brief, cleanup-worker removes it with the worktree).
   The coordinator's own session needs the same setting when it runs in the background in the isolating
   mode (reported on 2.1.310: two coordinators on the same version were never refused, and one's
   system prompt says it works in place — so it seems to depend on how the session was started, not

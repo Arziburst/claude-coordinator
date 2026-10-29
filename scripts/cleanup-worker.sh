@@ -5,7 +5,8 @@
 # branch that holds nothing to lose (#257): no commits beyond its base (origin's default branch; with no
 # origin the local main or master), never pushed (no upstream, no remote branch of its name) and the
 # worktree clean - `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
-# Otherwise report and change nothing.
+# Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
+# is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   scripts/cleanup-worker.sh --worktree <path> [--session <id>] [--dry-run]
 # --session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with --dry-run); 1 usage error or a failed removal;
@@ -229,4 +230,13 @@ if [ -n "$empty" ]; then
   if [ "$dry" = 1 ]; then echo "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed"
   else echo "EMPTY: $branch has no commits beyond $base and was never pushed - removed"; fi
 else run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"; fi
+# a lead's notes folder beside its worktree (#310) goes with the worktree, never before it
+nd="$wt"; while :; do case "$nd" in ?*/) nd="${nd%/}" ;; *) break ;; esac; done; nd="$nd.lead"
+if [ -d "$nd" ]; then
+  if [ "$dry" = 1 ]; then echo "[dry-run] remove the notes folder $nd"
+  else
+    rm -r -- "$nd" || { echo "REMOVE FAILED: the notes folder $nd - the worktree is removed, the notes folder left as is" >&2; exit 1; }
+    echo "removed the notes folder $nd"
+  fi
+fi
 echo "cleaned: ${id:-no session} ${wt}"

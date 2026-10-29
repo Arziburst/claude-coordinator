@@ -5,7 +5,8 @@
 # lose (#257): no commits beyond its base (origin's default branch; with no origin the local main or
 # master), never pushed (no upstream, no remote branch of its name) and the worktree clean -
 # `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
-# Otherwise report and change nothing.
+# Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
+# is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
 # -Session: the short job id (`id` in claude agents --json) or the full sessionId (mapped to its job id).
 # Exit codes: 0 cleaned (or would be, with -DryRun); 1 usage error or a failed removal;
@@ -306,6 +307,16 @@ if ($empty) {
 } else {
   Run git @('-C', $root, 'branch', '-d', $branch)
   if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
+}
+# a lead's notes folder beside its worktree (#310) goes with the worktree, never before it
+$nd = $Worktree.TrimEnd('/', '\') + '.lead'
+if (Test-Path -LiteralPath $nd -PathType Container) {
+  if ($DryRun) { "[dry-run] remove the notes folder $nd" }
+  else {
+    try { Remove-Item -LiteralPath $nd -Recurse -Force -ErrorAction Stop }
+    catch { [Console]::Error.WriteLine("REMOVE FAILED: the notes folder $nd - the worktree is removed, the notes folder left as is"); exit 1 }
+    "removed the notes folder $nd"
+  }
 }
 "cleaned: $(if ($id) { $id } else { 'no session' }) $Worktree"
 exit 0

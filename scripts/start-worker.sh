@@ -26,6 +26,8 @@
 # backslashes, and a hook that fails to run blocks nothing.
 # The worktrees' folder, a coordinator/ state repository at the root and a lead's .lead/ notes in any
 # worktree are kept out of the project's git: one line each in its .git/info/exclude, never .gitignore.
+# A lead gets a notes folder beside its worktree, <worktree>.lead/ (made, or an existing one kept), named
+# in its launch text (#310); a dry run says it would make it.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
 # (names change on a restart). It heads the brief; at the end the script prints the line that
 # subscribes to the new session's idle notice (CORE section 4, Control).
@@ -39,7 +41,7 @@
 # The tests_first gate (CORE §4 step 3, #276): a worker whose contract says `tests_first: yes` starts only
 # with the tester's tests - --tester-commit <sha>, a commit that is the worker's start point or an ancestor
 # of it (a reused worktree's HEAD, else the branch, else the base), or --tester-tests <path>, an existing
-# file or folder (a lead's case: the tests its tester subagent returned, kept in .lead/); else it is
+# file or folder (a lead's case: the tests its tester subagent returned, kept in its notes folder); else it is
 # refused (exit 1) before anything is created (--dry-run too). `tests_first` comes from check-contract
 # itself (`check-contract.sh --field tests_first`, one parser): its contract block (the front matter, or a
 # top-level `contract:`), never the rest of the file. A start with either flag prints one line naming the tester's tests; both flags together are
@@ -268,6 +270,14 @@ if [ -n "$role" ] && [ -f "$rolef" ]; then
   if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then rolemsg="role $role: already in the brief"
   else roletext="$body"; rolemsg="role $role: roles/$role.md heads the brief"; fi
 fi
+# a lead's notes (sub-contracts, briefs, run notes, the tester's test copies, evidence) live beside its
+# worktree, in <worktree>.lead/, where the project's own checks (test runners, linters) never read them (#310)
+notes=""
+if [ "$role" = lead ]; then
+  notes="$wt.lead"
+  first="$first
+Your notes folder: $notes - beside your worktree, never inside it: your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)."
+fi
 full="$first
 
 ${roletext:+$roletext
@@ -310,8 +320,8 @@ if [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinat
       echo "added /coordinator/ to the repository's .git/info/exclude"
   fi
 fi
-# A lead keeps its sub-contracts, briefs and run notes in <its worktree>/.lead/ (roles/lead.md), never
-# committed: one line, which info/exclude applies to every worktree of the repository
+# An older lead kept its sub-contracts, briefs and run notes in <its worktree>/.lead/ (now beside it, #310),
+# never committed: one line, which info/exclude applies to every worktree of the repository
 if ! git -C "$root" check-ignore -q .lead/x; then
   if [ "$dry" = 1 ]; then echo "[dry-run] add /.lead/ to the repository's .git/info/exclude"
   else
@@ -343,6 +353,16 @@ else
   else run git -C "$root" worktree add ${wq[@]+"${wq[@]}"} --no-track -b "$branch" "$wt" "$start"; fi
 fi
 
+# the lead's notes folder beside its worktree: made once, an existing one kept as it is
+if [ -n "$notes" ]; then
+  if [ "$dry" = 1 ]; then echo "[dry-run] create the notes folder $notes"
+  elif [ -d "$notes" ]; then echo "notes folder: $notes (kept)"
+  else
+    mkdir -p "$notes" ||
+      { echo "cannot create the notes folder $notes. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
+    echo "notes folder: $notes"
+  fi
+fi
 [ -z "$notice" ] || echo "$notice"
 [ -z "$rolemsg" ] || echo "$rolemsg"
 # conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names - inline
