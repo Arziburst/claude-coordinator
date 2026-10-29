@@ -275,8 +275,27 @@ fi
 notes=""
 if [ "$role" = lead ]; then
   notes="$wt.lead"
-  first="$first
-Your notes folder: $notes - beside your worktree, never inside it: your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)."
+  # never a git working copy (a registered worktree, or a folder holding a .git entry): its files would be
+  # mixed with the notes and lost at the cleanup - refused before anything is created
+  nwc=""
+  [ -e "$notes/.git" ] && nwc=1
+  nc="$(fold "$notes")" np=""
+  [ -d "$notes" ] && np="$(cd -P -- "$notes" 2>/dev/null && pwd -P)"
+  command -v cygpath >/dev/null 2>&1 && { nc="$(fold "$(cygpath -m "$notes")")"; [ -z "$np" ] || np="$(cygpath -m "$np")"; }
+  [ -z "$np" ] || np="$(fold "$np")"
+  while IFS= read -r l; do
+    case "$l" in "worktree "*) x="$(fold "${l#worktree }")"
+      { [ "$x" = "$nc" ] || { [ -n "$np" ] && [ "$x" = "$np" ]; }; } && nwc=1 ;; esac
+  done <<EOF
+$(git -C "$root" worktree list --porcelain 2>/dev/null | tr -d '\r')
+EOF
+  [ -z "$nwc" ] || { echo "refused: the lead's notes path $notes is a git working copy (a worktree or a folder holding .git) - a notes folder never is one; move that worktree away or start the lead on another branch" >&2; exit 1; }
+  # the one exception to "never change files outside it", right after the first line
+  nl='
+'
+  first="${first%%"$nl"*}
+Your notes folder: $notes - the one exception to \"never change files outside it\": beside your worktree, never inside it; your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md).
+${first#*"$nl"}"
 fi
 full="$first
 

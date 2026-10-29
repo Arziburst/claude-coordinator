@@ -309,12 +309,21 @@ if ($empty) {
   if ($LASTEXITCODE -ne 0) { "branch $branch kept (not fully merged locally)" }
 }
 # a lead's notes folder beside its worktree (#310) goes with the worktree, never before it
+# (a trailing / or \ dropped); a git working copy there (a registered worktree, or a folder holding a .git
+# entry) is never removed
 $nd = $Worktree.TrimEnd('/', '\') + '.lead'
 if (Test-Path -LiteralPath $nd -PathType Container) {
-  if ($DryRun) { "[dry-run] remove the notes folder $nd" }
+  $nwc = Test-Path -LiteralPath (Join-Path $nd '.git')
+  $nc = Canon $nd; $np = Canon (Resolve-Path -LiteralPath $nd).Path
+  $wl = & { $ErrorActionPreference = 'Continue'; git -C $root worktree list --porcelain 2>$null }
+  foreach ($l in @($wl)) {
+    if ("$l" -cmatch '^worktree (.+)$') { $x = Canon $Matches[1].Trim(); if ($x -ceq $nc -or $x -ceq $np) { $nwc = $true } }
+  }
+  if ($nwc) { "notes path $nd left as is: it is a git working copy (a worktree or a folder holding .git), never a notes folder to remove" }
+  elseif ($DryRun) { "[dry-run] remove the notes folder $nd" }
   else {
     try { Remove-Item -LiteralPath $nd -Recurse -Force -ErrorAction Stop }
-    catch { [Console]::Error.WriteLine("REMOVE FAILED: the notes folder $nd - the worktree is removed, the notes folder left as is"); exit 1 }
+    catch { [Console]::Error.WriteLine("REMOVE FAILED: the notes folder $nd - the worktree is removed, but part of the notes folder may be left: remove it by hand (a re-run stops at NO WORKTREE)"); exit 1 }
     "removed the notes folder $nd"
   }
 }

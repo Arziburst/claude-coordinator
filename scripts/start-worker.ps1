@@ -299,7 +299,21 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):') {
 $notes = ''
 if ($Name -cmatch '^(#\S* )?([a-z]+):' -and $Matches[2] -ceq 'lead') {
   $notes = "$wtFwd.lead"
-  $first += "`nYour notes folder: $notes - beside your worktree, never inside it: your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)."
+  # never a git working copy (a registered worktree, or a folder holding a .git entry): its files would be
+  # mixed with the notes and lost at the cleanup - refused before anything is created
+  $nFold = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS
+  $nForm = { param([string]$x) $x = $x.Replace('\', '/').TrimEnd('/'); if ($nFold) { $x.ToLowerInvariant() } else { $x } }
+  $nwc = Test-Path -LiteralPath (Join-Path $notes '.git')
+  $nc = & $nForm $notes
+  $np = ''; if (Test-Path -LiteralPath $notes -PathType Container) { $np = & $nForm (Resolve-Path -LiteralPath $notes).Path }
+  $wl = & { $ErrorActionPreference = 'Continue'; git -C $root worktree list --porcelain 2>$null }
+  foreach ($l in @($wl)) {
+    if ("$l" -cmatch '^worktree (.+)$') { $x = & $nForm $Matches[1].Trim(); if ($x -ceq $nc -or ($np -and $x -ceq $np)) { $nwc = $true } }
+  }
+  if ($nwc) { Fail "refused: the lead's notes path $notes is a git working copy (a worktree or a folder holding .git) - a notes folder never is one; move that worktree away or start the lead on another branch" }
+  # the one exception to "never change files outside it", right after the first line
+  $i = $first.IndexOf("`n")
+  $first = $first.Substring(0, $i) + "`nYour notes folder: $notes - the one exception to `"never change files outside it`": beside your worktree, never inside it; your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)." + $first.Substring($i)
 }
 $full = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
 # characters as the .sh counts them: a surrogate pair is one

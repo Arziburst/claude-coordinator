@@ -231,11 +231,23 @@ if [ -n "$empty" ]; then
   else echo "EMPTY: $branch has no commits beyond $base and was never pushed - removed"; fi
 else run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"; fi
 # a lead's notes folder beside its worktree (#310) goes with the worktree, never before it
-nd="$wt"; while :; do case "$nd" in ?*/) nd="${nd%/}" ;; *) break ;; esac; done; nd="$nd.lead"
+# (a trailing / or \ dropped, as the .ps1 does); a git working copy there (a registered worktree, or a
+# folder holding a .git entry) is never removed
+nd="$wt"; while :; do case "$nd" in ?*/|?*\\) nd="${nd%?}" ;; *) break ;; esac; done; nd="$nd.lead"
 if [ -d "$nd" ]; then
-  if [ "$dry" = 1 ]; then echo "[dry-run] remove the notes folder $nd"
+  nwc=""; [ -e "$nd/.git" ] && nwc=1
+  pw=-P; [ "$os" = win ] && pw=-W
+  nc="$(canon "$nd")" np="$(canon "$( (cd -P -- "$nd" 2>/dev/null && pwd $pw) || true)")"
+  while IFS= read -r l; do
+    case "$l" in "worktree "*) x="$(canon "${l#worktree }")"
+      { [ "$x" = "$nc" ] || { [ -n "$np" ] && [ "$x" = "$np" ]; }; } && nwc=1 ;; esac
+  done <<EOF
+$(git -C "$root" worktree list --porcelain 2>/dev/null | tr -d '\r')
+EOF
+  if [ -n "$nwc" ]; then echo "notes path $nd left as is: it is a git working copy (a worktree or a folder holding .git), never a notes folder to remove"
+  elif [ "$dry" = 1 ]; then echo "[dry-run] remove the notes folder $nd"
   else
-    rm -r -- "$nd" || { echo "REMOVE FAILED: the notes folder $nd - the worktree is removed, the notes folder left as is" >&2; exit 1; }
+    rm -r -- "$nd" || { echo "REMOVE FAILED: the notes folder $nd - the worktree is removed, but part of the notes folder may be left: remove it by hand (a re-run stops at NO WORKTREE)" >&2; exit 1; }
     echo "removed the notes folder $nd"
   fi
 fi
