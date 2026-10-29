@@ -227,6 +227,61 @@ fresh "signature: a negative exit code (a Windows crash) is accepted and kept as
 sig --source scripts/run-stats.sh --step st --exit -1073741819 --error "the process crashed"; code 0
 has "scripts/run-stats.sh: st: exit -1073741819: the process crashed"
 
+# --- signature, round 4 of #338: safe by default - it goes to a public issue ---
+# An unquoted path takes the rest of the line (a space in it cannot be told from words; nothing after its
+# start reaches the issue); Windows relative and home paths; a backtick-quoted path and a quoted file:// URL
+# with a space; e-mails and user@host; bare host names. The words before them stay.
+fresh "signature: after an unquoted Windows path start the rest of the line is gone (OneDrive - Acme Corp)"
+same 'run-stats: cannot read C:\Users\jo\OneDrive - Acme Corp\Documents\dev\shop\runs.tsv' 'run-stats: cannot read D:\work\runs.tsv' \
+  acme corp shop documents
+has "cannot read"
+fresh "signature: after an unquoted POSIX path start the rest of the line is gone (Mobile Documents)"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read /Users/jo/Library/Mobile Documents/com~apple~CloudDocs/acme-shop/runs.tsv'; code 0
+for x in acme mobile documents clouddocs; do hasnt "$x"; done; has "cannot read"
+fresh "signature: after an unquoted POSIX path start the rest of the line is gone (GoogleDrive-jo@acme.com/My Drive)"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read /Users/jo/GoogleDrive-jo@acme.com/My Drive/acme-shop/runs.tsv'; code 0
+for x in acme drive; do hasnt "$x"; done; has "cannot read"
+fresh "signature: a path in parentheses with a space - the rest of the line is gone"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read the log (/home/jo smith/acme/x)'; code 0
+for x in acme smith; do hasnt "$x"; done; has "cannot read the log"
+fresh "signature: Windows relative and home paths - ..\\, .\\ and ~\\ are paths"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot run ..\acme-shop\build.ps1'; code 0
+hasnt acme; hasnt build.ps1; has "cannot run"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open .\acme-shop\x'; code 0
+hasnt acme; has "cannot open"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open ~\Documents\Acme Corp\x.txt'; code 0
+hasnt acme; hasnt corp; hasnt documents; has "cannot open"
+fresh "signature: a backtick-quoted path with a space is one path token"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open `/home/jo smith/x`'; code 0
+hasnt smith; has "cannot open"
+fresh "signature: a quoted file:// URL with a space is one URL token"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open "file:///C:/Users/Jo Smith/acme/x"'; code 0
+hasnt smith; hasnt acme; has "cannot open"
+fresh "signature: an e-mail in git's auto-detect message - no user, host or machine name"
+sig --source scripts/run-stats.sh --step commit --exit 128 --error "fatal: unable to auto-detect email address (got 'jo@DESKTOP-ACME7.(none)')"; code 0
+for x in jo acme desktop; do hasnt "$x"; done; has "unable to auto-detect email address"
+fresh "signature: a bare e-mail address - no name or domain"
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'committer jo.smith@acme.com not allowed'; code 0
+for x in jo smith acme; do hasnt "$x"; done; has "committer"; has "not allowed"
+fresh "signature: Name <e-mail> - no name or domain"
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'Author: Jo Smith <jo@acme.com>'; code 0
+for x in jo smith acme; do hasnt "$x"; done
+fresh "signature: bare host names are a token - no company or service name"
+sig --source scripts/run-stats.sh --step fetch --exit 128 --error 'ssh: Could not resolve hostname git.acme.internal: unknown'; code 0
+hasnt acme; has "could not resolve hostname"; has "unknown"
+sig --source scripts/run-stats.sh --step fetch --exit 255 --error 'ssh: connect to host gitlab.acme.com port 22: timed out'; code 0
+hasnt acme; hasnt gitlab; has "connect to host"; has "timed out"
+fresh "signature: a core file name with a dot and a version are no host (guard)"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'start-worker.sh needs CORE.md from core 2.1.310'; code 0
+has "start-worker.sh"; has "core.md"; has "N.N.N"
+fresh "signature: not over-normalized - two messages from the same source and step still differ"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot read C:\Users\jo\a.txt'; code 0; s1="$out"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot write C:\Users\jo\a.txt'; code 0
+[ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two errors: [$s1] [$out]"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'push rejected for jo@acme.com'; code 0; s1="$out"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'fetch rejected for jo@acme.com'; code 0
+[ -n "$s1" ] && [ "$s1" != "$out" ] && ok || bad "one signature for two errors: [$s1] [$out]"
+
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
@@ -348,6 +403,19 @@ fresh "--regression --dry-run, a closed match: the would-be filing printed namin
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
 file --keywords "merge-queue update refused" --regression --dry-run
 code 0; has "#55"; has "$SIG"; hasnt "FIXED UPSTREAM"; count create 0; count reaction 0; count comment 0; readonly_else
+
+# --- the newest fix (round 4 of #338) ---
+fresh "FIXED UPSTREAM: two closed-as-completed matches #12 and #80 -> the newest fix, #80"
+printf '12\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n80\tCLOSED\tCOMPLETED\tmerge-queue: the refused update again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused"
+code 3; has "FIXED UPSTREAM #80"; hasnt "#12"; count create 0; count reaction 0; count comment 0; readonly_else
+
+fresh "--regression, two closed-as-completed matches #12 and #80 -> Regression of #80"
+printf '12\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n80\tCLOSED\tCOMPLETED\tmerge-queue: the refused update again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression
+code 0; has "FILED #901"; count create 1; count reaction 0; count comment 0; readonly_else
+c="$(tr -d '\r' 2>/dev/null < "$STUB_D/created")"
+printf '%s\n' "$c" | grep -qE '^Regression of #80([^0-9]|$)' && ok || bad "no line Regression of #80 in the body: $(printf '%s\n' "$c" | grep '^Regression' )"
 
 echo "report-issue ($kind): $((pass + fail)) checks, $([ $fail = 0 ] && echo "all pass" || echo "$fail FAILED")"
 [ $fail = 0 ]
