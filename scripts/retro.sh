@@ -68,8 +68,10 @@
 # --check-core-report checks a filled body: the template's lines in their order (a blank line anywhere), a feature
 # row per id of --features in its order, at most 3 proposals, no <fill> left, no <!-- after line 1, every Profile
 # cell a word of its vocabulary (VOCAB), Used and Trusted yes, no or unknown, and in a free-text cell no link (also
-# a Markdown ](), e-mail (also [at] / (at)), @handle, \, IP address, word with a / that is not a path of the core,
-# dotted name anywhere in a word (a host, a file) that is not a core file's name, hex token of 7 or more digits,
+# a Markdown ](), e-mail (also [at] / (at)), @handle, \, IP address, IPv6 address (:: next to a hex group, or 6 or
+# more colon-separated groups of 1-4 hex digits), HTML character reference (&#<digits>;, &#x<hex>;, &<letters>;),
+# word with a / that is not a path of the core, dotted name anywhere in a word (a host, a file) that is not a core
+# file's name, hex token of 7 or more digits (all decimal: named a long number or a commit id),
 # the --project folder's name as a whole word (any case), and at most 160 characters; it prints nothing on a pass,
 # the line on a refusal.
 # Exit 1 when a file cannot be read or a check fails, 2 on a usage error.
@@ -302,6 +304,11 @@ checkcore() {
       if (index(c, "@")) return "an @handle"
       if (index(c, "\\")) return "a path"
       if (c ~ /[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+/) return "an IP address"
+      # an IPv6 address: :: next to a hex group of 1-4 digits, or 6 or more colon-separated such groups
+      t = " " c " "; x = "[0-9A-Fa-f][0-9A-Fa-f]?[0-9A-Fa-f]?[0-9A-Fa-f]?"
+      if (t ~ ("[^A-Za-z0-9_]" x "::") || t ~ ("::" x "[^A-Za-z0-9_]") || t ~ ("[^A-Za-z0-9_]" x ":" x ":" x ":" x ":" x ":" x "[^A-Za-z0-9_]")) return "an IPv6 address"
+      # an HTML character reference: GitHub renders &#64; as @ and &period; as .
+      if (c ~ /&#[0-9]+;|&#[xX][0-9A-Fa-f]+;|&[A-Za-z]+;/) return "an HTML character reference"
       n = split(c, W, " ")
       for (i = 1; i <= n; i++) { w = W[i]; gsub(/^[(`"'"'"']+|[)`"'"'"'.,;:!?]+$/, "", w)
         if (w in CF) continue
@@ -313,7 +320,7 @@ checkcore() {
       # a commit id: a hex token of 7 or more digits (any case) with a decimal digit, no letter, digit or _ around it
       t = " " c " "
       while (match(t, /[^A-Za-z0-9_][0-9A-Fa-f]+[^A-Za-z0-9_]/)) { w = substr(t, RSTART + 1, RLENGTH - 2); t = substr(t, RSTART + RLENGTH - 1)
-        if (length(w) >= 7 && w ~ /[0-9]/) return "a commit id" }
+        if (length(w) >= 7 && w ~ /[0-9]/) return w ~ /^[0-9]+$/ ? "a long number or a commit id" : "a commit id" }
       if (name != "" && word(tolower(c), name)) return "the project folder'"'"'s name"
       return "" }
     # a table row against a template row: "S" when it is not that row (its cells, their fixed text and, for a group

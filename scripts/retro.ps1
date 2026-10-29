@@ -282,6 +282,10 @@ function Text([string]$c, $CF, $CB, [string]$name) {
   if ($c.Contains('@')) { return 'an @handle' }
   if ($c.Contains('\')) { return 'a path' }
   if ($c -cmatch '[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+') { return 'an IP address' }
+  # an IPv6 address: :: next to a hex group of 1-4 digits, or 6 or more colon-separated such groups
+  if ($c -cmatch '(?<![A-Za-z0-9_])[0-9A-Fa-f]{1,4}::|::[0-9A-Fa-f]{1,4}(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){5}(?![A-Za-z0-9_])') { return 'an IPv6 address' }
+  # an HTML character reference: GitHub renders &#64; as @ and &period; as .
+  if ($c -cmatch '&#[0-9]+;|&#[xX][0-9A-Fa-f]+;|&[A-Za-z]+;') { return 'an HTML character reference' }
   foreach ($w in $c.Split([char[]]@(' ', "`t"), [StringSplitOptions]::RemoveEmptyEntries)) {
     $w = $reCoreTrim.Replace($w, '')
     if ($CF.Contains($w)) { continue }
@@ -293,7 +297,7 @@ function Text([string]$c, $CF, $CB, [string]$name) {
     if ($x -cmatch '^[A-Za-z]' -and -not $CB.Contains($w)) { return "a host or a file name that is not one of the core's" }
   }
   # a commit id: a hex token of 7 or more digits (any case) with a decimal digit, no letter, digit or _ around it
-  foreach ($mt in [regex]::Matches($c, '(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,}(?![A-Za-z0-9_])')) { if ($mt.Value -cmatch '[0-9]') { return 'a commit id' } }
+  foreach ($mt in [regex]::Matches($c, '(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,}(?![A-Za-z0-9_])')) { if ($mt.Value -cmatch '^[0-9]+\z') { return 'a long number or a commit id' } elseif ($mt.Value -cmatch '[0-9]') { return 'a commit id' } }
   if ($name -and (Word (Lower $c) $name)) { return "the project folder's name" }
   ''
 }
