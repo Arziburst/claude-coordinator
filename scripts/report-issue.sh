@@ -67,9 +67,11 @@ if [ "$mode" = signature ]; then
   # a quoted ("", '' or ``) URL, scp-style remote or path is one URL or PATH with its spaces, then the
   # quotes go; after an unquoted path start (a drive, UNC, / ~/ ./ ../ .\ ..\ ~\, a file: URL, an scp-style
   # remote `git@host:owner/repo` or `user@host:/path`) the rest of the line is that one token - a space in
-  # a path cannot be told from words; `Name <a@b>` from the last : (or the line start) is one EMAIL, any
-  # other word with an @ too; then a word.word[.word...] that is no core file name (scripts/, its folders
-  # and the core's root) and no number or version is a HOST
+  # a path cannot be told from words; an IPv4 address with its port is one HOST; `Name <a@b>` from the
+  # last : (or the line start) is one EMAIL, any other word with an @ too; then any other word holding a /
+  # or \ (a repository, a branch, a relative path) is a PATH unless it is a core path; a word.word[.word...]
+  # that is no core or coordinator file name, no number or version and no abbreviation (e.g.) is a HOST;
+  # a v before a version goes
   # read, not $(cat <<EOF): bash 3.2 misparses a here-document with lone quotes inside $(...)
   IFS= read -r -d '' rules <<'EOF'
     s#"([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^"]*"#URL#g
@@ -81,35 +83,53 @@ if [ "$mode" = signature ]; then
     s#["'`]##g
     s#(^|[^a-z0-9+.-])file:/.*#\1URL#
     s#[a-z][a-z0-9+.-]*://[^ ]*#URL#g
+    s#(^|[^a-z0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?#\1HOST#g
     s#[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?#DATE#g
     s#(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?#\1DATE#g
     s#(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ].*#\1URL#
     s#(^|[^a-z0-9_.\\-])([a-z]:[\\/]|\\\\[^ ]).*#\1PATH#
-    s#(^|[^a-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*#\1PATH#
+    s#(^|[^A-Za-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*#\1PATH#
     s#(^|:)[^:<>]*<[^<> ]*@[^<> ]*>#\1 EMAIL#g
     s#[^ ]*@[^ ]*#EMAIL#g
 EOF
   IFS= read -r -d '' rules2 <<'EOF'
+    s#(^|[^a-z0-9])v([0-9]+\.[0-9])#\1\2#g
     s#(^|[^a-z0-9])0x[0-9a-f]+#\1ID#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9]+#\1N#g
     s/ +/ /g; s/^ //; s/ $//
 EOF
-  # the core's own file names stay words: they name the core, nothing of the machine
-  here="$(cd "$(dirname "$0")" && pwd)"; keep=""
-  for f in "$here"/* "$here"/*/* "$here"/../*; do [ -f "$f" ] && keep="$keep ${f##*/}"; done
-  keep="$(printf '%s' "$keep" | tr 'A-Z' 'a-z')"
-  # hosts: each word.word[.word...] (a character before it that is no part of it; a non-ASCII byte is a
-  # letter: it is found in a copy where each is an `a`, and cut from the line itself) -> HOST, unless a
-  # core file name or a number or version (its first two parts start with digits, a leading v allowed)
+  # the core's own paths and names stay words: they name the core, nothing of the machine - the core's
+  # root files and every path under scripts/ procedures/ roles/ skills/ tests/ (none under a dot folder),
+  # read at run time, lower-cased; the kept names are their file names, a template's name without
+  # .template, and the coordinator's own files that have no template
+  root="$(cd "$(dirname "$0")/.." && pwd)"
+  paths="$(cd "$root" && { for f in *; do [ -f "$f" ] && printf '%s\n' "$f"; done
+    find scripts procedures roles skills tests -name '.*' -prune -o -print 2>/dev/null; } | tr 'A-Z' 'a-z')"
+  # words and hosts (a non-ASCII byte is a letter: it is found in a copy where each is an `a`, and cut
+  # from the line itself): a word holding / or \ -> PATH (brackets before it and punctuation after it
+  # kept) unless a core path; then each word.word[.word...] (a character before it that is no part of
+  # it) -> HOST, unless a kept name, a number or version (its first two parts start with digits, a
+  # leading v allowed) or one letter a part (e.g)
   hosts() { local l; l="$(cat)"
-    printf '%s\n' "$l" | tr '\200-\377' a | K="$keep" O="$l" awk '
-      BEGIN { n = split(ENVIRON["K"], a, " "); for (i = 1; i <= n; i++) k[a[i]] = 1 }
-      { s = " " $0; t = " " ENVIRON["O"]; o = ""
+    printf '%s\n' "$l" | tr '\200-\377' a | P="$paths" O="$l" awk '
+      BEGIN { n = split(ENVIRON["P"], a, "\n")
+        for (i = 1; i <= n; i++) { if (a[i] == "") continue; p[a[i]] = 1; b = a[i]; sub(/.*\//, "", b); k[b] = 1
+          if (sub(/\.template\./, ".", b)) k[b] = 1 }
+        n = split("log.md runs.tsv checklist.md escapes.tsv routing.md", a, " "); for (i = 1; i <= n; i++) k[a[i]] = 1 }
+      { n = split($0, cw, " "); split(ENVIRON["O"], ow, " "); s = ""; t = ""
+        for (i = 1; i <= n; i++) { c = cw[i]; x = ow[i]
+          if (x ~ /[\/\\]/) { pre = ""; suf = ""; m = x
+            if (match(m, /^[([{<]+/)) { pre = substr(m, 1, RLENGTH); m = substr(m, RLENGTH + 1) }
+            if (match(m, /[]),.;:!?}>]+$/)) { suf = substr(m, RSTART); m = substr(m, 1, RSTART - 1) }
+            gsub(/\\/, "/", m); sub(/\/$/, "", m)
+            if (!(m in p)) { x = pre "PATH" suf; c = x } }
+          s = s (i > 1 ? " " : "") c; t = t (i > 1 ? " " : "") x }
+        s = " " s; t = " " t; o = ""
         while (match(s, /[^a-z0-9_.-][a-z0-9_-]+(\.[a-z0-9_-]+)+/)) {
           h = substr(t, RSTART + 1, RLENGTH - 1)
-          o = o substr(t, 1, RSTART) (((h in k) || h ~ /^v?[0-9]+\.[0-9]/) ? h : "HOST")
+          o = o substr(t, 1, RSTART) (((h in k) || h ~ /^v?[0-9]+\.[0-9]/ || h ~ /^[a-z0-9_-](\.[a-z0-9_-])+$/) ? h : "HOST")
           s = substr(s, RSTART + RLENGTH); t = substr(t, RSTART + RLENGTH) }
         print substr(o t, 2) }'; }
   w="$(oneline "$error" | tr 'A-Z' 'a-z' | sed -E "$rules" | hosts | sed -E "$rules2")"

@@ -51,9 +51,11 @@ if ($Mode -ceq 'signature') {
   # issue: a quoted ("", '' or ``) URL, scp-style remote or path is one URL or PATH with its spaces, then
   # the quotes go; after an unquoted path start (a drive, UNC, / ~/ ./ ../ .\ ..\ ~\, a file: URL, an
   # scp-style remote `git@host:owner/repo` or `user@host:/path`) the rest of the line is that one token - a
-  # space in a path cannot be told from words; `Name <a@b>` from the last : (or the line start) is one
-  # EMAIL, any other word with an @ too; then a word.word[.word...] that is no core file name (scripts\, its
-  # folders and the core's root) and no number or version is a HOST
+  # space in a path cannot be told from words; an IPv4 address with its port is one HOST; `Name <a@b>` from
+  # the last : (or the line start) is one EMAIL, any other word with an @ too; then any other word holding a
+  # / or \ (a repository, a branch, a relative path) is a PATH unless it is a core path; a
+  # word.word[.word...] that is no core or coordinator file name, no number or version and no abbreviation
+  # (e.g.) is a HOST; a v before a version goes
   $w = Lower (OneLine $ErrorText)
   foreach ($r in @(
       @('"([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^"]*"', 'URL'),
@@ -65,26 +67,49 @@ if ($Mode -ceq 'signature') {
       @('["''`]', ''),
       @('(^|[^a-z0-9+.-])file:/.*', '${1}URL'),
       @('[a-z][a-z0-9+.-]*://[^ ]*', 'URL'),
+      @('(^|[^a-z0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?', '${1}HOST'),
       @('[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?', 'DATE'),
       @('(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?', '${1}DATE'),
       @('(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ].*', '${1}URL'),
       @('(^|[^a-z0-9_.\\-])([a-z]:[\\/]|\\\\[^ ]).*', '${1}PATH'),
-      @('(^|[^a-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*', '${1}PATH'),
+      @('(^|[^A-Za-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*', '${1}PATH'),
       @('(^|:)[^:<>]*<[^<> ]*@[^<> ]*>', '${1} EMAIL'),
       @('[^ ]*@[^ ]*', 'EMAIL'))) { $w = $w -creplace $r[0], $r[1] }
-  # the core's own file names stay words: they name the core, nothing of the machine
+  # the core's own paths and names stay words: they name the core, nothing of the machine - the core's
+  # root files and every path under scripts/ procedures/ roles/ skills/ tests/ (none under a dot folder),
+  # read at run time, lower-cased; the kept names are their file names, a template's name without
+  # .template, and the coordinator's own files that have no template
+  $root = (Get-Item -LiteralPath (Split-Path -Parent $PSScriptRoot)).FullName.TrimEnd('\', '/')
+  $paths = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
   $keep = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-  $dirs = @($PSScriptRoot) + @(Get-ChildItem -LiteralPath $PSScriptRoot -Directory | Where-Object { -not $_.Name.StartsWith('.') } | ForEach-Object { $_.FullName })
-  foreach ($d in $dirs + @(Split-Path -Parent $PSScriptRoot)) {
-    foreach ($f in @(Get-ChildItem -LiteralPath $d -File | Where-Object { -not $_.Name.StartsWith('.') })) { $null = $keep.Add((Lower $f.Name)) }
+  function LowerPath([string]$s) { if ($s -cmatch '\P{IsBasicLatin}') { Lower $s } else { $s.ToLowerInvariant() } }
+  foreach ($f in @(Get-ChildItem -LiteralPath $root -File -Force | Where-Object { -not $_.Name.StartsWith('.') })) { $null = $paths.Add((LowerPath $f.Name)) }
+  foreach ($d in 'scripts', 'procedures', 'roles', 'skills', 'tests') {
+    $dp = Join-Path $root $d
+    if (-not (Test-Path -LiteralPath $dp -PathType Container)) { continue }
+    $null = $paths.Add($d)
+    foreach ($f in @(Get-ChildItem -LiteralPath $dp -Recurse -Force)) {
+      $rel = $f.FullName.Substring($root.Length + 1) -creplace '\\', '/'
+      if ($rel -cnotmatch '(^|/)\.') { $null = $paths.Add((LowerPath $rel)) }
+    }
   }
+  foreach ($p in $paths) { $b = $p -creplace '.*/', ''; $null = $keep.Add($b); if ($b -cmatch '\.template\.') { $null = $keep.Add(($b -creplace '\.template\.', '.')) } }
+  foreach ($b in 'log.md', 'runs.tsv', 'checklist.md', 'escapes.tsv', 'routing.md') { $null = $keep.Add($b) }
+  # words: a word holding / or \ -> PATH (brackets before it and punctuation after it kept) unless a core
+  # path
+  $w = (@($w.Split(' ') | Where-Object { $_ -ne '' } | ForEach-Object {
+      if ($_ -cnotmatch '[/\\]') { return $_ }
+      $m = [regex]::Match($_, '^([(\[{<]*)(.*?)([\]),.;:!?}>]*)$')
+      $q = ($m.Groups[2].Value -creplace '\\', '/') -creplace '/$', ''
+      if ($paths.Contains($q)) { $_ } else { $m.Groups[1].Value + 'PATH' + $m.Groups[3].Value } }) -join ' ')
   # hosts: each word.word[.word...] (a character before it that is no part of it; a non-ASCII character is
-  # a letter) -> HOST, unless a core file name or a number or version (its first two parts start with
-  # digits, a leading v allowed)
+  # a letter) -> HOST, unless a kept name, a number or version (its first two parts start with digits, a
+  # leading v allowed) or one letter a part (e.g)
   $w = [regex]::Replace(" $w", '[^a-z0-9_.\P{IsBasicLatin}-]([a-z0-9_\P{IsBasicLatin}-]+(\.[a-z0-9_\P{IsBasicLatin}-]+)+)', [Text.RegularExpressions.MatchEvaluator] {
       param($m) $h = $m.Groups[1].Value
-      if ($keep.Contains($h) -or $h -cmatch '^v?[0-9]+\.[0-9]') { $m.Value } else { $m.Value.Substring(0, 1) + 'HOST' } }).Substring(1)
+      if ($keep.Contains($h) -or $h -cmatch '^v?[0-9]+\.[0-9]' -or $h -cmatch '^[a-z0-9_-](\.[a-z0-9_-])+$') { $m.Value } else { $m.Value.Substring(0, 1) + 'HOST' } }).Substring(1)
   foreach ($r in @(
+      @('(^|[^a-z0-9])v([0-9]+\.[0-9])', '${1}${2}'),
       @('(^|[^a-z0-9])0x[0-9a-f]+', '${1}ID'),
       @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
       @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),

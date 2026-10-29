@@ -62,11 +62,16 @@ drive letters, URLs, hex ids, numbers, dates and quotes replaced by fixed tokens
 so the same error on a thousand machines gives one signature, and one issue. The line goes into a public
 issue, so it is safe by default: after an unquoted path start (a drive, UNC, `/`, `~/`, `./`, `../`,
 `.\`, `..\`, `~\`, a `file:` URL, an scp-style remote) the rest of the line is that one token, since a
-space in a path cannot be told from words; any word with an `@` and a `Name <a@b>` pair are an e-mail
-token; a `word.word` that is no core file name, number or version is a host token. A name in plain words
-(no dot, no `@`) is not found — the coordinator still reads the line as it reads the whole report
-(nothing from the project goes into a public issue). A model-written
-signature (`<core file or script>: <the error's key words>`) only for a finding no script produced.
+space in a path cannot be told from words; any other word holding a `/` or `\` (a repository, a branch, a
+relative path) is a path token, unless it is a core path (under the core's scripts/, procedures/, roles/,
+skills/, tests/, or a core root file); any word with an `@` and a `Name <a@b>` pair are an e-mail token;
+an IP address with its port and a `word.word` that is no core or coordinator file name (`PROJECT.md`,
+`BINDINGS.md`, `RUNS.tsv` stay), number, version or abbreviation (`e.g.`) are a host token. **Not
+detected:** a name written as a plain word — a login after "denied to", a one-word host, a company or
+project name. So the coordinator reads the printed signature before filing and never files one that
+holds such a name (as with the whole report: nothing from the project goes into a public issue). A
+model-written signature (`<core file or script>: <the error's key words>`) only for a finding no script
+produced.
 
 Before filing, in this order — every check runs through **one script**, `<core>/scripts/report-issue.sh
 file` (Windows: `report-issue.ps1 file`, the same lines and exit codes), the one path for every channel
