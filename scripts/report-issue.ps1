@@ -7,14 +7,18 @@
 #                    -Signature <sig> [-Keywords <words>] [-Checked <n,n,...>] [-CommentFile <file>] [-Regression]
 #                    [-DryRun]
 # signature: one line `<source>: <step>: exit <code>: <words>` (a negative code kept as it is) - the error
-# text lower-cased (ASCII), URLs and scp-style remotes, dates and times, paths (absolute, with a drive
-# letter, UNC, ~ or ./; a quoted one with its spaces), hex ids (0x..., or 7+ characters) and numbers
-# replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
-# collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
+# text lower-cased (ASCII), safe by default for a public issue: URLs and scp-style remotes, dates and
+# times, paths (a quoted one with its spaces; after an unquoted path start - a drive, UNC, / ~/ ./ ../ .\
+# ..\ ~\, a file: URL, an scp-style remote - the rest of the line), e-mails (any word with an @; `Name
+# <a@b>` from the last : whole), host names (a word.word that is no core file name, number or version),
+# hex ids (0x..., or 7+ characters) and numbers replaced by the tokens URL, DATE, PATH, EMAIL, HOST, ID
+# and N, quotes dropped, whitespace (CR, LF, tabs) collapsed, at most 120 characters (bytes): the same
+# error from two machines gives the same line. A name in plain words (no dot, no @) stays.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
 # a +1 reaction from this account (none added when it is already there), with -CommentFile that comment
 # too, `REPEAT #<n>` - an open issue wins over a closed one; (2) only on a closed issue closed as completed
-# -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes on); with -Regression
+# -> nothing filed, `FIXED UPSTREAM #<n>`, of several the newest (the highest number; closed as not
+# planned is no fix: it goes on); with -Regression
 # (this core already holds that fix) one new issue instead, its body holding `Regression of #<n>`, nothing
 # written on #<n>; (3) the keyword search (-Keywords, else the title; title
 # and body, open and closed, updated in the last 90 days, at most 5): a candidate not in -Checked ->
@@ -43,21 +47,44 @@ if ($Mode -ceq 'signature') {
   if (-not $Source -or -not $PSBoundParameters.ContainsKey('ErrorText')) { Usage 'signature needs -Source and -ErrorText' }
   if ($Exit -cnotmatch '^(-?[0-9]+)?$') { Usage '-Exit takes a whole number' }
   # the words: lower-cased, then each kind replaced by its token, quotes dropped; a rule that needs the
-  # character after a match runs twice, as in report-issue.sh. A quoted path is one PATH with its spaces
-  # (the quotes still there to bound it), then the quotes go; an unquoted Windows or UNC path takes the next
-  # words that hold a backslash; an scp-style remote (`git@host:owner/repo`, `user@host:/path`) is one URL
+  # character after a match runs twice, as in report-issue.sh. Safe by default - the line goes to a public
+  # issue: a quoted ("", '' or ``) URL, scp-style remote or path is one URL or PATH with its spaces, then
+  # the quotes go; after an unquoted path start (a drive, UNC, / ~/ ./ ../ .\ ..\ ~\, a file: URL, an
+  # scp-style remote `git@host:owner/repo` or `user@host:/path`) the rest of the line is that one token - a
+  # space in a path cannot be told from words; `Name <a@b>` from the last : (or the line start) is one
+  # EMAIL, any other word with an @ too; then a word.word[.word...] that is no core file name (scripts\, its
+  # folders and the core's root) and no number or version is a HOST
   $w = Lower (OneLine $ErrorText)
   foreach ($r in @(
+      @('"([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^"]*"', 'URL'),
+      @('''([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^'']*''', 'URL'),
+      @('`([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^`]*`', 'URL'),
+      @('"([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^"]*"', 'PATH'),
+      @('''([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^'']*''', 'PATH'),
+      @('`([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^`]*`', 'PATH'),
+      @('["''`]', ''),
+      @('(^|[^a-z0-9+.-])file:/.*', '${1}URL'),
       @('[a-z][a-z0-9+.-]*://[^ ]*', 'URL'),
-      @('(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ]*', '${1}URL'),
       @('[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?', 'DATE'),
       @('(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?', '${1}DATE'),
-      @('"([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^"]*"', 'PATH'),
-      @('''([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^'']*''', 'PATH'),
-      @('["''`]', ''),
-      @('(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*( [^ ]*\\[^ ]*)*', '${1}PATH'),
-      @('(^|[^a-z0-9_.\\-])\\\\[^ ]+( [^ ]*\\[^ ]*)*', '${1}PATH'),
-      @('(^|[^a-z0-9_.~/\\-])(~|\.{1,2})?/[^ ]+', '${1}PATH'),
+      @('(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ].*', '${1}URL'),
+      @('(^|[^a-z0-9_.\\-])([a-z]:[\\/]|\\\\[^ ]).*', '${1}PATH'),
+      @('(^|[^a-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*', '${1}PATH'),
+      @('(^|:)[^:<>]*<[^<> ]*@[^<> ]*>', '${1} EMAIL'),
+      @('[^ ]*@[^ ]*', 'EMAIL'))) { $w = $w -creplace $r[0], $r[1] }
+  # the core's own file names stay words: they name the core, nothing of the machine
+  $keep = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  $dirs = @($PSScriptRoot) + @(Get-ChildItem -LiteralPath $PSScriptRoot -Directory | Where-Object { -not $_.Name.StartsWith('.') } | ForEach-Object { $_.FullName })
+  foreach ($d in $dirs + @(Split-Path -Parent $PSScriptRoot)) {
+    foreach ($f in @(Get-ChildItem -LiteralPath $d -File | Where-Object { -not $_.Name.StartsWith('.') })) { $null = $keep.Add((Lower $f.Name)) }
+  }
+  # hosts: each word.word[.word...] (a character before it that is no part of it; a non-ASCII character is
+  # a letter) -> HOST, unless a core file name or a number or version (its first two parts start with
+  # digits, a leading v allowed)
+  $w = [regex]::Replace(" $w", '[^a-z0-9_.\P{IsBasicLatin}-]([a-z0-9_\P{IsBasicLatin}-]+(\.[a-z0-9_\P{IsBasicLatin}-]+)+)', [Text.RegularExpressions.MatchEvaluator] {
+      param($m) $h = $m.Groups[1].Value
+      if ($keep.Contains($h) -or $h -cmatch '^v?[0-9]+\.[0-9]') { $m.Value } else { $m.Value.Substring(0, 1) + 'HOST' } }).Substring(1)
+  foreach ($r in @(
       @('(^|[^a-z0-9])0x[0-9a-f]+', '${1}ID'),
       @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
       @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
@@ -124,7 +151,7 @@ $open = $null; $fixed = $null
 foreach ($l in @(Q @('issue', 'list', '--repo', $Repo, '--state', 'all', '--search', "`"$phrase`" in:body", '--json', 'number,state,stateReason,title,body', '--limit', '20', '--jq', $jq))) {
   $f = $l -split "`t", 4; if ($f.Count -lt 4) { continue }
   if ($f[1] -ceq 'OPEN' -and -not $open) { $open = $f }
-  elseif ($f[1] -ceq 'CLOSED' -and $f[2] -ceq 'COMPLETED' -and -not $fixed) { $fixed = $f }
+  elseif ($f[1] -ceq 'CLOSED' -and $f[2] -ceq 'COMPLETED' -and (-not $fixed -or [long]$f[0] -gt [long]$fixed[0])) { $fixed = $f }   # the newest fix
 }
 
 if ($open) {

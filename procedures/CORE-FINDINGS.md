@@ -59,8 +59,14 @@ from a model: `<core>/scripts/report-issue.sh signature --source <script or core
 <code> --error "<its first error line>"` (Windows: `report-issue.ps1 signature -Source … -Step … -Exit …
 -ErrorText …`) prints one line `<source>: <step>: exit <code>: <words>` — the error lower-cased, paths,
 drive letters, URLs, hex ids, numbers, dates and quotes replaced by fixed tokens, at most 120 characters —
-so the same error on a thousand machines gives one signature, and one issue. A model-written signature
-(`<core file or script>: <the error's key words>`) only for a finding no script produced.
+so the same error on a thousand machines gives one signature, and one issue. The line goes into a public
+issue, so it is safe by default: after an unquoted path start (a drive, UNC, `/`, `~/`, `./`, `../`,
+`.\`, `..\`, `~\`, a `file:` URL, an scp-style remote) the rest of the line is that one token, since a
+space in a path cannot be told from words; any word with an `@` and a `Name <a@b>` pair are an e-mail
+token; a `word.word` that is no core file name, number or version is a host token. A name in plain words
+(no dot, no `@`) is not found — the coordinator still reads the line as it reads the whole report
+(nothing from the project goes into a public issue). A model-written
+signature (`<core file or script>: <the error's key words>`) only for a finding no script produced.
 
 Before filing, in this order — every check runs through **one script**, `<core>/scripts/report-issue.sh
 file` (Windows: `report-issue.ps1 file`, the same lines and exit codes), the one path for every channel
@@ -69,22 +75,24 @@ the Claude Code format check below; #338): `report-issue.sh file --repo Arziburs
 --title "[core-report] <Title>" --body-file <report> --signature "<signature>" --keywords "<3-6 key words
 of the problem>"` (`--dry-run` first prints what it would do and changes nothing; every gh call it makes
 is read-only but the new issue, the reaction and the comment):
-1. **Fixed upstream?** The local core is behind upstream and a closed issue with the same signature is
-   fixed in a newer commit — the script finds a closed issue whose body holds the exact `Signature:` line
-   (an exact-phrase search: an apostrophe in a git error otherwise finds nothing), closed as completed, and
-   prints `FIXED UPSTREAM #<n>` (exit 3) → no issue; the row becomes `fixed upstream <commit>` and the
-   owner hears "update the core". Closed as not planned is no fix: the checks go on. On `FIXED UPSTREAM`
-   the coordinator compares the fix's commit with the project's core commit: the core lacks it → "update
-   the core"; the core already holds it → the bug came back: the same command again with `--regression`
-   (Windows `-Regression`), which files one new issue, the title as given, its body holding `Regression of
-   #<n>` and still ending with the `Signature:` line; nothing is written on `#<n>`. One issue per
-   regression: every other project finds it open and reacts (2).
-2. **Already reported?** An open issue with the same signature (the same exact-phrase search; an open one
-   wins over a closed one, so a reported regression is a repeat, never `FIXED UPSTREAM`) → a 👍 (+1)
-   reaction on it from the owner's account instead of a new issue or a comment (`REPEAT #<n>`, exit 0;
-   a reaction already there from this account is not added twice); the row gets that issue's number. A
-   comment only with something new — another OS, version, scenario or evidence: `--comment-file <file>`
-   holding `+1: core <commit>, <environment>` and the new fact.
+1. **Already reported?** An open issue with the same signature (the script finds an issue whose body holds
+   the exact `Signature:` line — an exact-phrase search: an apostrophe in a git error otherwise finds
+   nothing; an open one is checked first and wins over a closed one, so a reported regression is a repeat,
+   never `FIXED UPSTREAM`) → a 👍 (+1) reaction on it from the owner's account instead of a new issue or a
+   comment (`REPEAT #<n>`, exit 0; a reaction already there from this account is not added twice); the row
+   gets that issue's number. A comment only with something new — another OS, version, scenario or
+   evidence: `--comment-file <file>` holding `+1: core <commit>, <environment>` and the new fact.
+2. **Fixed upstream?** The local core is behind upstream and a closed issue with the same signature is
+   fixed in a newer commit — no open match, and a closed issue holding the exact `Signature:` line (the
+   same exact-phrase search), closed as completed: the script prints `FIXED UPSTREAM #<n>` (exit 3; of
+   several such issues the newest, the highest number) → no issue; the row becomes `fixed upstream
+   <commit>` and the owner hears "update the core". Closed as not planned is no fix: the checks go on. On
+   `FIXED UPSTREAM` the coordinator compares the fix's commit with the project's core commit: the core
+   lacks it → "update the core"; the core already holds it → the bug came back: the same command again
+   with `--regression` (Windows `-Regression`), which files one new issue, the title as given, its body
+   holding `Regression of #<n>` (the same newest `#<n>`) and still ending with the `Signature:` line;
+   nothing is written on `#<n>`. One issue per regression: every other project finds it open and reacts
+   (1).
 3. **The same problem in other words?** No signature match → a keyword search (`--keywords`, else the
    title; title and body, open and closed, the last 90 days, at most 5 candidates). Any candidate not read
    yet → `CHECK #<a> #<b> …` with each title, nothing filed (exit 4). The coordinator reads each one and

@@ -6,14 +6,18 @@
 #                                [--keywords <words>] [--checked <n,n,...>] [--comment-file <file>] [--regression]
 #                                [--dry-run]
 # signature: one line `<source>: <step>: exit <code>: <words>` (a negative code kept as it is) - the error
-# text lower-cased (ASCII), URLs and scp-style remotes, dates and times, paths (absolute, with a drive
-# letter, UNC, ~ or ./; a quoted one with its spaces), hex ids (0x..., or 7+ characters) and numbers
-# replaced by the tokens URL, DATE, PATH, ID and N, quotes dropped, whitespace (CR, LF, tabs)
-# collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
+# text lower-cased (ASCII), safe by default for a public issue: URLs and scp-style remotes, dates and
+# times, paths (a quoted one with its spaces; after an unquoted path start - a drive, UNC, / ~/ ./ ../ .\
+# ..\ ~\, a file: URL, an scp-style remote - the rest of the line), e-mails (any word with an @; `Name
+# <a@b>` from the last : whole), host names (a word.word that is no core file name, number or version),
+# hex ids (0x..., or 7+ characters) and numbers replaced by the tokens URL, DATE, PATH, EMAIL, HOST, ID
+# and N, quotes dropped, whitespace (CR, LF, tabs) collapsed, at most 120 characters (bytes): the same
+# error from two machines gives the same line. A name in plain words (no dot, no @) stays.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
 # a +1 reaction from this account (none added when it is already there), with --comment-file that comment
 # too, `REPEAT #<n>` - an open issue wins over a closed one; (2) only on a closed issue closed as completed
-# -> nothing filed, `FIXED UPSTREAM #<n>` (closed as not planned is no fix: it goes on); with --regression
+# -> nothing filed, `FIXED UPSTREAM #<n>`, of several the newest (the highest number; closed as not
+# planned is no fix: it goes on); with --regression
 # (this core already holds that fix) one new issue instead, its body holding `Regression of #<n>`, nothing
 # written on #<n>; (3) the keyword search (--keywords, else the title; title
 # and body, open and closed, updated in the last 90 days, at most 5): a candidate not in --checked ->
@@ -58,29 +62,57 @@ if [ "$mode" = signature ]; then
   case "${code#-}" in *[!0-9]*) echo "--exit takes a whole number; $usage" >&2; exit 1 ;; esac
   [ "$code" != - ] || { echo "--exit takes a whole number; $usage" >&2; exit 1; }
   # the words: lower-cased, then each kind replaced by its token, quotes dropped; a rule that needs the
-  # character after a match runs twice, so two matches one character apart are both replaced
-  # a quoted path is one PATH with its spaces (the quotes still there to bound it), then the quotes go;
-  # an unquoted Windows or UNC path takes the next words that hold a backslash (`\\srv\a b\x.log`); an
-  # scp-style remote (`git@host:owner/repo`, `user@host:/path`) is one URL - no account, host or folder
+  # character after a match runs twice, so two matches one character apart are both replaced. Safe by
+  # default - the line goes to a public issue:
+  # a quoted ("", '' or ``) URL, scp-style remote or path is one URL or PATH with its spaces, then the
+  # quotes go; after an unquoted path start (a drive, UNC, / ~/ ./ ../ .\ ..\ ~\, a file: URL, an scp-style
+  # remote `git@host:owner/repo` or `user@host:/path`) the rest of the line is that one token - a space in
+  # a path cannot be told from words; `Name <a@b>` from the last : (or the line start) is one EMAIL, any
+  # other word with an @ too; then a word.word[.word...] that is no core file name (scripts/, its folders
+  # and the core's root) and no number or version is a HOST
   # read, not $(cat <<EOF): bash 3.2 misparses a here-document with lone quotes inside $(...)
   IFS= read -r -d '' rules <<'EOF'
+    s#"([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^"]*"#URL#g
+    s#'([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^']*'#URL#g
+    s#`([a-z][a-z0-9+.-]*://|[a-z0-9_.-]+@[a-z0-9_.-]+:)[^`]*`#URL#g
+    s#"([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^"]*"#PATH#g
+    s#'([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^']*'#PATH#g
+    s#`([a-z]:[\\/]|\\\\|~[\\/]|\.{1,2}[\\/]|/)[^`]*`#PATH#g
+    s#["'`]##g
+    s#(^|[^a-z0-9+.-])file:/.*#\1URL#
     s#[a-z][a-z0-9+.-]*://[^ ]*#URL#g
-    s#(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ]*#\1URL#g
     s#[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}([t ][0-9]{2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?)?(z|[+-][0-9]{2}:?[0-9]{2})?#DATE#g
     s#(^|[^a-z0-9])[0-9]{1,2}:[0-9]{2}(:[0-9]{2}([.,][0-9]+)?)?#\1DATE#g
-    s#"([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^"]*"#PATH#g
-    s#'([a-z]:[\\/]|\\\\|~/|\.{1,2}/|/)[^']*'#PATH#g
-    s#["'`]##g
-    s#(^|[^a-z0-9_.\\-])[a-z]:[\\/][^ ]*( [^ ]*\\[^ ]*)*#\1PATH#g
-    s#(^|[^a-z0-9_.\\-])\\\\[^ ]+( [^ ]*\\[^ ]*)*#\1PATH#g
-    s#(^|[^a-z0-9_.~/\\-])(~|\.{1,2})?/[^ ]+#\1PATH#g
+    s#(^|[^a-z0-9_.-])[a-z0-9_.-]+@[a-z0-9_.-]+:[^ ].*#\1URL#
+    s#(^|[^a-z0-9_.\\-])([a-z]:[\\/]|\\\\[^ ]).*#\1PATH#
+    s#(^|[^a-z0-9_.~/\\-])((~|\.{1,2})[\\/]|/)[^ ].*#\1PATH#
+    s#(^|:)[^:<>]*<[^<> ]*@[^<> ]*>#\1 EMAIL#g
+    s#[^ ]*@[^ ]*#EMAIL#g
+EOF
+  IFS= read -r -d '' rules2 <<'EOF'
     s#(^|[^a-z0-9])0x[0-9a-f]+#\1ID#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9]+#\1N#g
     s/ +/ /g; s/^ //; s/ $//
 EOF
-  w="$(oneline "$error" | tr 'A-Z' 'a-z' | sed -E "$rules")"
+  # the core's own file names stay words: they name the core, nothing of the machine
+  here="$(cd "$(dirname "$0")" && pwd)"; keep=""
+  for f in "$here"/* "$here"/*/* "$here"/../*; do [ -f "$f" ] && keep="$keep ${f##*/}"; done
+  keep="$(printf '%s' "$keep" | tr 'A-Z' 'a-z')"
+  # hosts: each word.word[.word...] (a character before it that is no part of it; a non-ASCII byte is a
+  # letter: it is found in a copy where each is an `a`, and cut from the line itself) -> HOST, unless a
+  # core file name or a number or version (its first two parts start with digits, a leading v allowed)
+  hosts() { local l; l="$(cat)"
+    printf '%s\n' "$l" | tr '\200-\377' a | K="$keep" O="$l" awk '
+      BEGIN { n = split(ENVIRON["K"], a, " "); for (i = 1; i <= n; i++) k[a[i]] = 1 }
+      { s = " " $0; t = " " ENVIRON["O"]; o = ""
+        while (match(s, /[^a-z0-9_.-][a-z0-9_-]+(\.[a-z0-9_-]+)+/)) {
+          h = substr(t, RSTART + 1, RLENGTH - 1)
+          o = o substr(t, 1, RSTART) (((h in k) || h ~ /^v?[0-9]+\.[0-9]/) ? h : "HOST")
+          s = substr(s, RSTART + RLENGTH); t = substr(t, RSTART + RLENGTH) }
+        print substr(o t, 2) }'; }
+  w="$(oneline "$error" | tr 'A-Z' 'a-z' | sed -E "$rules" | hosts | sed -E "$rules2")"
   line="$(oneline "$source" | tr '\\' '/')"
   [ -n "$step" ] && line="$line: $(oneline "$step")"
   [ -n "$code" ] && line="$line: exit $code"
@@ -123,7 +155,7 @@ while IFS="$TAB" read -r n st why t; do
   [ -n "$n" ] || continue
   case "$st" in
     OPEN) [ -n "$open" ] || open="$n$TAB$t" ;;
-    CLOSED) [ "$why" = COMPLETED ] && [ -z "$fixed" ] && fixed="$n$TAB$t" ;;
+    CLOSED) [ "$why" = COMPLETED ] && { [ -z "$fixed" ] || [ "$n" -gt "${fixed%%"$TAB"*}" ]; } && fixed="$n$TAB$t" ;;   # the newest fix
   esac
 done <<EOF
 $exact
