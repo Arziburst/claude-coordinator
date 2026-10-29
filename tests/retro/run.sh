@@ -193,6 +193,70 @@ repl 105 "$(row 'the cart.ts check broke twice')" cr-file.md
 expect "--check-core-report refuses a file name that is not the core's" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-file.md")" --features "$cf"
 sed '104s/hard tasks |/hard tasks! |/' "$filled" > "$tmp/cr-long.md"
 expect "--check-core-report refuses a free-text cell over 160 characters" 1 - "~line 104:" -- --check-core-report "$(winpath "$tmp/cr-long.md")" --features "$cf"
+# round 2 (#303): the Profile holds only vocabulary words - strictness swarm/standard/strict, spend level
+# lean/balanced/thorough, work mode by task/batch, os windows/macos/linux, solo or team solo/team, stack class
+# RETRO.md §8's list (game engine, web, mobile, CLI, library, data, other); the generator prints a Settings Value's
+# leading vocabulary word, else <fill>, and nothing else of it
+mkdir -p "$tmp/names/coordinator" && cp "$here/core-report/coordinator/"* "$tmp/names/coordinator/"
+sed -e 's/^\(| \*\*Strictness\*\* (CORE §3) | \)standard |/\1strict for Contoso Ltd client work |/' \
+    -e 's/^\(| \*\*Spend level\*\* (CORE §7) | \)balanced |/\1balanced, ask Ivan |/' \
+    -e 's/^\(| \*\*Work mode\*\* (CORE §4) | \)by task |/\1batch over the ACME-JIRA board |/' \
+    "$here/core-report/coordinator/PROJECT.md" > "$tmp/names/coordinator/PROJECT.md"
+expect "--core-report: Settings Values with names give only their vocabulary word" 0 any - -- "$(winpath "$tmp/names/coordinator/RUNS.tsv")" --core-report --id "$ID" --features "$cf" --no-insights
+{ grep -qxF '| strictness | strict |' "$tmp/out" && grep -qxF '| spend level | balanced |' "$tmp/out" && grep -qxF '| work mode | batch |' "$tmp/out"; } ||
+  { bad "the Profile: strict, balanced and batch only"; grep '^| \(strictness\|spend level\|work mode\) |' "$tmp/out" | sed 's/^/  got: /'; }
+n=$((n + 1)); if grep -qE 'Contoso|Ivan|ACME' "$tmp/out"; then bad "a name from the Settings Values in the body"; grep -nE 'Contoso|Ivan|ACME' "$tmp/out" | sed 's/^/  got: /'; else echo "ok   no name from the Settings Values in the body"; fi
+sed -e 's/^\(| \*\*Strictness\*\* (CORE §3) | \)standard |/\1as Contoso wants |/' \
+    -e 's/^\(| \*\*Spend level\*\* (CORE §7) | \)balanced |/\1ask Ivan first |/' \
+    -e 's/^\(| \*\*Work mode\*\* (CORE §4) | \)by task |/\1per ACME sprint |/' \
+    "$here/core-report/coordinator/PROJECT.md" > "$tmp/names/coordinator/PROJECT.md"
+expect "--core-report: a Settings Value with no vocabulary word gives <fill>" 0 any - -- "$(winpath "$tmp/names/coordinator/RUNS.tsv")" --core-report --id "$ID" --features "$cf" --no-insights
+{ grep -qxF '| strictness | <fill> |' "$tmp/out" && grep -qxF '| spend level | <fill> |' "$tmp/out" && grep -qxF '| work mode | <fill> |' "$tmp/out" && ! grep -qE 'Contoso|Ivan|ACME' "$tmp/out"; } ||
+  { bad "the Profile: <fill> for a Value with no vocabulary word"; grep '^| \(strictness\|spend level\|work mode\) |' "$tmp/out" | sed 's/^/  got: /'; }
+# the checker holds the Profile cells (lines 15-20 of the filled body) to the same vocabularies
+repl 19 '| work mode | batch over the ACME board |' cr-mode.md
+expect "--check-core-report refuses a work mode outside its vocabulary" 1 - "~line 19:" -- --check-core-report "$(winpath "$tmp/cr-mode.md")" --features "$cf"
+repl 17 '| strictness | strict for Contoso |' cr-strict.md
+expect "--check-core-report refuses a strictness outside its vocabulary" 1 - "~line 17:" -- --check-core-report "$(winpath "$tmp/cr-strict.md")" --features "$cf"
+repl 18 '| spend level | balanced, ask Ivan |' cr-spend.md
+expect "--check-core-report refuses a spend level outside its vocabulary" 1 - "~line 18:" -- --check-core-report "$(winpath "$tmp/cr-spend.md")" --features "$cf"
+repl 15 '| stack class | the Contoso shop |' cr-stack.md
+expect "--check-core-report refuses a stack class outside its vocabulary" 1 - "~line 15:" -- --check-core-report "$(winpath "$tmp/cr-stack.md")" --features "$cf"
+repl 16 '| solo or team | team of Ivan |' cr-team.md
+expect "--check-core-report refuses a solo or team outside its vocabulary" 1 - "~line 16:" -- --check-core-report "$(winpath "$tmp/cr-team.md")" --features "$cf"
+repl 20 '| os | windows on the Contoso laptop |' cr-os.md
+expect "--check-core-report refuses an os outside its vocabulary" 1 - "~line 20:" -- --check-core-report "$(winpath "$tmp/cr-os.md")" --features "$cf"
+repl 15 '| stack class | game engine |' cr-stack-ok.md
+expect "--check-core-report passes a stack class from the list (game engine)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-stack-ok.md")" --features "$cf"
+# host names and addresses with ordinary punctuation around them, each refused naming its line
+i=0
+for x in "acme.com's API" 'outage at acme.com—twice' 'see(acme.com) for it' 'acme.com:8080 timed out' 'see [docs](acme.com) first' \
+         'server 203.0.113.7 timed out' 'dev[at]example.org asked' 'dev(at)example.org'; do
+  i=$((i + 1)); repl 105 "$(row "$x")" "cr-host$i.md"
+  expect "--check-core-report refuses a host or an address: $x" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-host$i.md")" --features "$cf"
+done
+repl 105 "$(row "the start-worker.sh's output and CORE.md—§4 were clear")" cr-core-punct.md
+expect "--check-core-report passes core file names with punctuation (start-worker.sh's, CORE.md—§4)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-core-punct.md")" --features "$cf"
+# --check-core-report <file> [--features <file>] --project <folder> (PS -Project): the folder's name as a whole
+# word, in any case; without --project the name is not checked
+repl 105 "$(row 'the Acme-Shop board was slow')" cr-proj.md
+expect "--check-core-report --project refuses the project folder's name" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-proj.md")" --features "$cf" --project "$P"
+expect "--check-core-report without --project does not check the name" 0 - - -- --check-core-report "$(winpath "$tmp/cr-proj.md")" --features "$cf"
+repl 105 "$(row 'the acme-shopping board was slow')" cr-proj-part.md
+expect "--check-core-report --project passes the name inside a longer word" 0 - - -- --check-core-report "$(winpath "$tmp/cr-proj-part.md")" --features "$cf" --project "$P"
+expect "--check-core-report --project passes a filled body without the name" 0 - - -- --check-core-report "$(winpath "$filled")" --features "$cf" --project "$P"
+# a commit id (a hex token of 7 or more digits) in free text; an HTML comment after line 1
+repl 105 "$(row 'reverted 1ebe968 and moved on')" cr-hex.md
+expect "--check-core-report refuses a commit id in free text" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-hex.md")" --features "$cf"
+repl 105 "$(row 'a big brief <!-- the cart --> went through a file')" cr-comment.md
+expect "--check-core-report refuses an HTML comment in a cell" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-comment.md")" --features "$cf"
+repl 118 '| <!-- let the guard name the branch |' cr-comment2.md
+expect "--check-core-report refuses <!-- in a proposal" 1 - "~line 118:" -- --check-core-report "$(winpath "$tmp/cr-comment2.md")" --features "$cf"
+# at most 3 proposals
+awk 'NR == 118 { print; print "| a shorter brief |"; print "| a quieter guard |"; next } { print }' "$filled" > "$tmp/cr-prop3.md"
+expect "--check-core-report passes 3 proposals" 0 - - -- --check-core-report "$(winpath "$tmp/cr-prop3.md")" --features "$cf"
+awk 'NR == 118 { print; print "| a shorter brief |"; print "| a quieter guard |"; print "| a fourth idea |"; next } { print }' "$filled" > "$tmp/cr-prop4.md"
+expect "--check-core-report refuses a fourth proposal" 1 - "~line 121:" -- --check-core-report "$(winpath "$tmp/cr-prop4.md")" --features "$cf"
 # errors
 expect "--core-report without --id" 2 any - -- "$cr" --core-report --features "$cf"
 expect "--core-report with a --since that is no date" 2 any - -- "$cr" --core-report --id "$ID" --since 2026-13-01 --features "$cf"
