@@ -8,6 +8,9 @@
 #   scripts/retro.sh --check-public <file> [--project <folder>]           a summary body against its allowlist
 #   scripts/retro.sh --check-proposal <file> [--project <folder>]         a proposal body against its template
 #   scripts/retro.sh --new-id                                             a new random anonymous id (12 hex)
+#   scripts/retro.sh <RUNS.tsv> --core-report --id <anonymous id> [--since <YYYY-MM-DD>] [--project <folder>]
+#                    [--no-insights] [--features <FEATURES.md>]          the retro report for the core (Markdown)
+#   scripts/retro.sh --check-core-report <file> [--features <FEATURES.md>] a core report body against its template
 # The week: Monday 00:00 to Sunday 24:00 UTC, the one holding --week (default: the last complete week, the one
 # holding today minus 7 days); the previous week is the 7 days before it. --project: the project root (default:
 # the folder above the run log's folder); --journal / --escapes: default LOG.md / ESCAPES.tsv next to the run log.
@@ -50,9 +53,23 @@
 # fixed keys, the anonymous id and the dates; it is checked before it is printed (as --check-public): any line
 # outside the template, a cell outside the allowlist, a / or \, or the project folder's name fails it (exit 1,
 # nothing printed).
+# --core-report prints instead the retro report for the core (procedures/RETRO.md), a fixed Markdown template over a
+# period: from --since, else the day after the end of PROJECT.md's Settings row "Last core report" (<from>..<to>),
+# else the first CHECKLIST.md line's date; to today (UTC). It holds the core commits (CHECKLIST.md's commit in use
+# on the period's first day, then those of its lines in the period; none: PROJECT.md's Core row), the profile
+# (PROJECT.md's Strictness, Spend level and Work mode; the machine's os), the five axes over the period computed as
+# the week's, the run log's rows of the period by role (no task rows, probes or self-tests), the guard reasons and
+# refusal sources of the period's transcripts, CORE-FINDINGS.md's rows dated in the period by their status's first
+# word ("fixed upstream" counts as fixed), the count after "local edits:" in PROJECT.md's Core row, and a row per
+# feature id of the "## Summary" table of --features (default: the core's FEATURES.md). Every cell the coordinator
+# writes is <fill>. CHECKLIST.md, PROJECT.md and CORE-FINDINGS.md are read next to the run log.
+# --check-core-report checks a filled body: the template's lines in their order (a blank line anywhere), a feature
+# row per id of --features in its order, no <fill> left, Used and Trusted yes, no or unknown, and in a free-text
+# cell no link, e-mail, @handle, \, word with a / that is not a path of the core, file name with an extension that
+# is not a core file's name, and at most 160 characters; it prints nothing on a pass, the line on a refusal.
 # Exit 1 when a file cannot be read or a check fails, 2 on a usage error.
 set -u
-usage() { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,/^# Exit 1/s/^# \{0,1\}//p' "$0"; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"
 B="$(printf '\357\273\277')"           # a UTF-8 BOM, read as nothing
 DASH="$(printf '\342\200\224')"        # the em dash: too little data
@@ -79,8 +96,97 @@ KINDS="trivial ordinary hard hardest other"
 GUARD="unreadable-call owner-copy-edit mirror-push push-all-branches push-matching push-protected push-while-on-protected delete-protected worktree-force worktree-by-hand remove-root remove-project project-rules-unreadable project-rule-unreadable project-rule deny-rule other"
 REFUSAL="guard-error other-hook classifier safety-check user other"
 FIELDS="project:week of:previous week of:format:signature:axis:measure:week:previous:risk:core file:low:medium:high"
-# the shared awk functions: whole words, a path's folder name, a value cell, the vocabulary
+# the retro report for the core: its template, a line per line - a cell {<type>} filled by the script or, where it
+# has no value, by the coordinator (<fill>); {axes}, {guard}, {refusal}, {features}, {proposals} the rows of a group
+CSPEC="<!-- core retro report, format 1 -->
+**Retro report for the core.** How one project used the core since its last report: numbers made by the core's retro script and short anonymous lines; no names, paths, links, code, file names or task text leave the project.
+
+## Report
+| Field | Value |
+|---|---|
+| project | {id} |
+| period | {period} |
+| core commits | {commits} |
+| format | 1 |
+
+## Profile
+| Field | Value |
+|---|---|
+| stack class | {text} |
+| solo or team | {text} |
+| strictness | {text} |
+| spend level | {text} |
+| work mode | {text} |
+| os | {text} |
+
+## Five axes
+| Axis | Measure | Period |
+|---|---|---|
+{axes}
+
+$DASH too little data: under 3 tasks, merged tasks or forecasts, under 100 tool calls, or no transcripts, journal or escapes file.
+
+## Runs by role
+| Role | Runs |
+|---|---|
+| coordinator | {num} |
+| lead | {num} |
+| worker | {num} |
+| tester | {num} |
+| verifier | {num} |
+| scout | {num} |
+| researcher | {num} |
+| other | {num} |
+
+## Guard and refusals
+| Guard reason | Blocks | Retried | Around | Changed | Stopped |
+|---|---|---|---|---|---|
+{guard}
+
+| Refusal | Count | Retried | Around | Changed | Stopped |
+|---|---|---|---|---|---|
+{refusal}
+
+## Core findings
+| Status | Findings |
+|---|---|
+| new | {val} |
+| sent | {val} |
+| discussed | {val} |
+| fixed | {val} |
+| dropped | {val} |
+| not core | {val} |
+| local core edits | {val} |
+
+## Features
+| Feature | Used | How often | Trusted | Decision changed | Friction |
+|---|---|---|---|---|---|
+{features}
+
+## Helped and hindered
+| Rank | Helped most | Got in the way most |
+|---|---|---|
+| 1 | {text} | {text} |
+| 2 | {text} | {text} |
+| 3 | {text} | {text} |
+
+## Proposals
+| Proposal |
+|---|
+{proposals}
+
+Data for the core's retro, not a bug report: the maintainer acts on it only after the owner's discussion and yes."
+ROLES="coordinator lead worker tester verifier scout researcher other"
+# the shared awk functions: whole words, a path's folder name, a value cell, the vocabulary, days and dates
 common='function idiv(a, b) { return (a - a % b) / b }
+  function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = idiv(y, 400); yoe = y - e * 400
+    doy = idiv(153 * (m > 2 ? m - 3 : m + 9) + 2, 5) + d - 1
+    return e * 146097 + yoe * 365 + idiv(yoe, 4) - idiv(yoe, 100) + doy - 719468 }
+  function civil(n,   z, e, doe, yoe, doy, mp, d, m, y) { z = n + 719468; e = idiv(z, 146097); doe = z - e * 146097
+    yoe = idiv(doe - idiv(doe, 1460) + idiv(doe, 36524) - idiv(doe, 146096), 365)
+    doy = doe - (365 * yoe + idiv(yoe, 4) - idiv(yoe, 100)); mp = idiv(5 * doy + 2, 153)
+    d = doy - idiv(153 * mp + 2, 5) + 1; m = mp < 10 ? mp + 3 : mp - 9; y = yoe + e * 400 + (m <= 2)
+    return sprintf("%04d-%02d-%02d", y, m, d) }
   function word(s, w,   i, p, b, a) { p = 0
     while ((i = index(substr(s, p + 1), w)) > 0) { p += i
       b = p > 1 ? substr(s, p - 1, 1) : ""; a = substr(s, p + length(w), 1)
@@ -94,15 +200,24 @@ common='function idiv(a, b) { return (a - a % b) / b }
     n = split(ENVIRON["MEAS"], A, " "); for (i = 1; i <= n; i++) VOC[substr(A[i], index(A[i], ":") + 1)] = 1
     n = split(ENVIRON["FIELDS"], A, ":"); for (i = 1; i <= n; i++) VOC[A[i]] = 1
     n = split(ENVIRON["FIXED"], A, "\n"); for (i = 1; i <= n; i++) { FIX[A[i]] = 1; FL[i] = A[i] } }'
-export DASH FIXED AXES MEAS KINDS GUARD REFUSAL FIELDS B
+export DASH FIXED AXES MEAS KINDS GUARD REFUSAL FIELDS B CSPEC ROLES
+
+# the core's own files and folders (not .git, not .claude), as paths relative to the core
+corefiles() { (cd "$here/.." && find . \( -name .git -o -name .claude \) -prune -o -print | sed 's|^\./||' | grep -v '^\.$') }
+# the feature ids of a FEATURES.md, in the order of its "## Summary" table
+features() {
+  { [ -f "$1" ] && [ -r "$1" ]; } || { echo "retro: cannot read $1" >&2; return 1; }
+  LC_ALL=C awk '{ sub(/\r$/, "") }
+    /^## / { on = $0 ~ /^## +Summary[ \t]*$/; next }
+    on && /^[|] *F-[A-Z]+-[0-9]+ *[|]/ { s = $0; sub(/^[|] */, "", s); sub(/ *[|].*$/, "", s); print s }' "$1"
+}
 
 # check <summary|proposal> <file> <project folder>: the body against its template and allowlist
 check() {
-  local kind="$1" f="$2" p="$3" core
+  local kind="$1" f="$2" p="$3"
   { [ -f "$f" ] && [ -r "$f" ]; } || { echo "retro: cannot read $f" >&2; return 1; }
-  core="$(cd "$here/.." && pwd)"
   # the core's own files and folders, for a proposal's core file and the paths its text names
-  CORE="$( [ "$kind" = proposal ] && cd "$core" && find . \( -name .git -o -name .claude \) -prune -o -print | sed 's|^\./||' | grep -v '^\.$')" \
+  CORE="$( [ "$kind" = proposal ] && corefiles)" \
   KIND="$kind" PROJ="$p" LC_ALL=C awk "$common"'
     function fail(m) { if (!bad) print "retro: the " ENVIRON["KIND"] " body fails its check: line " FNR ": " m > "/dev/stderr"; bad = 1 }
     # free text (a proposal): no \, no URL, no absolute or home path, no #<n>, no @, and a word with a / only
@@ -138,8 +253,98 @@ check() {
       exit bad }' "$f"
 }
 
+# checkcore <file> <FEATURES.md>: a retro report for the core against its template (CSPEC) and the rules of its
+# free-text cells; the first refusal names its line
+checkcore() {
+  local f="$1" feat
+  { [ -f "$f" ] && [ -r "$f" ]; } || { echo "retro: cannot read $f" >&2; return 1; }
+  feat="$(features "$2")" || return 1
+  CORE="$(corefiles)" FEAT="$feat" LC_ALL=C awk "$common"'
+    function fail(m) { if (!bad) print "retro: the core report fails its check: line " ln ": " m > "/dev/stderr"; bad = 1 }
+    function step(l, r, f) { S[++ns] = l; REP[ns] = r; FE[ns] = f }
+    function row(s, A) { return split(substr(s, 3, length(s) - 4), A, / [|] /) }
+    # characters, not bytes: a UTF-8 continuation byte is no character of its own
+    function chars(s,   x) { x = s; return length(s) - gsub(/[\200-\277]/, "", x) }
+    # a cell of a {type} other than text: "" when it is one
+    function vtype(p, c,   n, i, K) {
+      if (p == "{id}") return (length(c) == 12 && c ~ /^[0-9a-f]+$/) ? "" : "a project id that is not 12 hex digits"
+      if (p == "{period}") return c ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][.][.][0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ ? "" : "a period that is not <from>..<to>"
+      if (p == "{commits}") { n = split(c, K, ", ")
+        for (i = 1; i <= n; i++) if (K[i] !~ /^[0-9a-f]+$/ || length(K[i]) < 7 || length(K[i]) > 40) n = 0
+        return n ? "" : "core commits that are not commit ids, split by a comma" }
+      if (p == "{num}") return c ~ /^[0-9]+$/ ? "" : "a count that is not a number"
+      if (p == "{val}") return isval(c) ? "" : "a value that is not a number or " ENVIRON["DASH"]
+      if (p == "{yn}") return (c == "yes" || c == "no" || c == "unknown") ? "" : "a Used or Trusted cell other than yes, no or unknown"
+      if (p == "{gkey}") return (c in GKS) ? "" : "a guard reason outside the template"
+      if (p == "{rkey}") return (c in RKS) ? "" : "a refusal source outside the template"
+      return "" }
+    # a free-text cell: short, and nothing that could name a project or a person
+    function text(c,   n, i, W, w) {
+      if (c ~ /^[ \t]*$/) return "an empty cell"
+      if (chars(c) > 160) return "a free-text cell over 160 characters"
+      if (index(c, "://") || index(tolower(c), "www.")) return "a link"
+      if (c ~ /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]/) return "an e-mail address"
+      if (index(c, "@")) return "an @handle"
+      if (index(c, "\\")) return "a path"
+      n = split(c, W, " ")
+      for (i = 1; i <= n; i++) { w = W[i]; gsub(/^[(`"'"'"']+|[)`"'"'"'.,;:!?]+$/, "", w)
+        if (w in CF) continue
+        if (index(w, "/")) return "a path that is not the core'"'"'s"
+        if (w ~ /^[A-Za-z0-9_-][A-Za-z0-9_.-]*[.][A-Za-z][A-Za-z0-9]*$/ && !(w in CB)) return "a file name that is not one of the core'"'"'s" }
+      return "" }
+    # a table row against a template row: "S" when it is not that row (its cells, their fixed text and, for a group
+    # row, its typed cells), "" when it passes, else the reason
+    function match_row(l, p, grp,   n, m, i, C, P, r) {
+      if (l !~ /^[|] .* [|]$/) return "S"
+      n = row(l, C); m = row(p, P); if (n != m) return "S"
+      for (i = 1; i <= m; i++) if (P[i] !~ /^[{][a-z]+[}]$/ && P[i] != C[i]) return "S"
+      for (i = 1; i <= m; i++) if (P[i] ~ /^[{][a-z]+[}]$/ && P[i] != "{text}" && (r = vtype(P[i], C[i])) != "") return grp ? "S" : r
+      for (i = 1; i <= m; i++) if (P[i] == "{text}" && (r = text(C[i])) != "") return r
+      return "" }
+    BEGIN { n = split(ENVIRON["CORE"], A, "\n"); for (i = 1; i <= n; i++) { CF[A[i]] = 1; x = A[i]; sub(/.*\//, "", x); CB[x] = 1 }
+      nf = split(ENVIRON["FEAT"], F, "\n"); for (i = 1; i <= nf; i++) FT[F[i]] = 1
+      n = split(ENVIRON["GUARD"], A, " "); for (i = 1; i <= n; i++) GKS[A[i]] = 1
+      n = split(ENVIRON["REFUSAL"], A, " "); for (i = 1; i <= n; i++) RKS[A[i]] = 1
+      nm = split(ENVIRON["MEAS"], M, " "); n = split(ENVIRON["CSPEC"], A, "\n")
+      for (i = 1; i <= n; i++) { l = A[i]
+        if (l == "") continue
+        if (l == "{axes}") { for (j = 1; j <= nm; j++) step("| " substr(M[j], 1, index(M[j], ":") - 1) " | " substr(M[j], index(M[j], ":") + 1) " | {val} |", "1", 0) }
+        else if (l == "{features}") { for (j = 1; j <= nf; j++) if (F[j] != "") step("| " F[j] " | {yn} | {text} | {yn} | {text} | {text} |", "1", 1) }
+        else if (l == "{guard}") step("| {gkey} | {num} | {num} | {num} | {num} | {num} |", "*", 0)
+        else if (l == "{refusal}") step("| {rkey} | {num} | {num} | {num} | {num} | {num} |", "*", 0)
+        else if (l == "{proposals}") step("| {text} |", "+", 0)
+        else step(l, "1", 0) }
+      s = 1 }
+    { sub(/\r$/, ""); if (FNR == 1 && index($0, ENVIRON["B"]) == 1) $0 = substr($0, length(ENVIRON["B"]) + 1); ln = FNR }
+    bad || /^[ \t]*$/ { next }
+    index($0, "<fill>") { fail("a <fill> left"); next }
+    { while (1) {
+        if (s > ns) { fail("a line after the template'"'"'s end"); break }
+        p = S[s]
+        if (!index(p, "{")) { if ($0 == p) s++; else fail("where the template has \"" p "\""); break }
+        if (REP[s] == "1") { r = match_row($0, p, 0)
+          if (r == "S") { x = $0; sub(/^[|] /, "", x); sub(/ [|].*$/, "", x)
+            if (FE[s] && x ~ /^F-[A-Z]+-[0-9]+$/ && !(x in FT)) fail("a feature row not in FEATURES.md")
+            else fail("where the template has \"" p "\"") }
+          else if (r != "") fail(r)
+          else s++
+          break }
+        r = match_row($0, p, 1)
+        if (r == "") { GOT[s] = 1; break }
+        if (r != "S") { fail(r); break }
+        if (REP[s] == "+" && !GOT[s]) { fail("where the template has \"" p "\""); break }
+        s++ } }
+    END { if (!bad) { while (s <= ns && (REP[s] == "*" || (REP[s] == "+" && GOT[s]))) s++
+        if (s <= ns) { ln++; fail("the body ends where the template has \"" S[s] "\"") } }
+      exit bad }' "$f"
+}
+
 case "${1:-}" in
   --new-id) [ $# = 1 ] || usage; od -An -N6 -tx1 /dev/urandom | tr -d ' \n'; echo; exit 0 ;;
+  --check-core-report)
+    case $# in 2) fe="$here/../FEATURES.md" ;; 4) [ "$3" = --features ] && [ -n "$4" ] || usage; fe="$4" ;; *) usage ;; esac
+    [ -n "$2" ] || usage
+    checkcore "$2" "$fe"; exit $? ;;
   --check-public | --check-proposal)
     k=summary; [ "$1" = --check-proposal ] && k=proposal
     case $# in 2) p="" ;; 4) [ "$3" = --project ] && [ -n "$4" ] || usage; p="$4" ;; *) usage ;; esac
@@ -149,22 +354,28 @@ case "${1:-}" in
 esac
 runs="$1"; shift
 week=""; proj=""; journal=""; escapes=""; noins=0; public=0; id=""; jset=0; eset=0
+core=0; since=""; feats="$here/../FEATURES.md"; fset=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-insights) noins=1; shift; continue ;;
     --public) public=1; shift; continue ;;
+    --core-report) core=1; shift; continue ;;
   esac
   [ $# -ge 2 ] && [ -n "$2" ] || usage
   case "$1" in
     --week) week="$2" ;; --project) proj="$2" ;; --journal) journal="$2"; jset=1 ;; --escapes) escapes="$2"; eset=1 ;;
-    --id) id="$2" ;; *) usage ;;
+    --id) id="$2" ;; --since) since="$2" ;; --features) feats="$2"; fset=1 ;; *) usage ;;
   esac
   shift 2
 done
 [ "$public" = 1 ] && { [ -n "$id" ] || usage; }
-[ "$public" = 0 ] && { [ -z "$id" ] || usage; }
+[ "$public" = 0 ] && [ "$core" = 0 ] && { [ -z "$id" ] || usage; }
+# the core report: an id, no week and no summary; --since and --features only with it
+[ "$core" = 1 ] && { { [ -n "$id" ] && [ "$public" = 0 ] && [ -z "$week" ]; } || usage; }
+[ "$core" = 0 ] && { { [ -z "$since" ] && [ "$fset" = 0 ]; } || usage; }
 re='^[0-9a-f]{12}$'; [ -z "$id" ] || [[ $id =~ $re ]] || usage
 re='^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'; [ -z "$week" ] || [[ $week =~ $re ]] || usage
+[ -z "$since" ] || [[ $since =~ $re ]] || usage
 { [ -f "$runs" ] && [ -r "$runs" ]; } || { echo "retro: cannot read $runs" >&2; exit 1; }
 dir="$(cd "$(dirname "$runs")" && pwd)"
 [ -n "$proj" ] || proj="$(dirname "$dir")"
@@ -211,21 +422,74 @@ fi
 roots="$roots|$base/.claude/worktrees"
 # the weeks: this one's Monday and Sunday, the previous one's, and the next Monday (the --until of this one)
 set -- $(D="${week:-$(date -u +%Y-%m-%d)}" DEF="$([ -z "$week" ] && echo 1)" LC_ALL=C awk "$common"'
-  function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = idiv(y, 400); yoe = y - e * 400
-    doy = idiv(153 * (m > 2 ? m - 3 : m + 9) + 2, 5) + d - 1
-    return e * 146097 + yoe * 365 + idiv(yoe, 4) - idiv(yoe, 100) + doy - 719468 }
-  function civil(n,   z, e, doe, yoe, doy, mp, d, m, y) { z = n + 719468; e = idiv(z, 146097); doe = z - e * 146097
-    yoe = idiv(doe - idiv(doe, 1460) + idiv(doe, 36524) - idiv(doe, 146096), 365)
-    doy = doe - (365 * yoe + idiv(yoe, 4) - idiv(yoe, 100)); mp = idiv(5 * doy + 2, 153)
-    d = doy - idiv(153 * mp + 2, 5) + 1; m = mp < 10 ? mp + 3 : mp - 9; y = yoe + e * 400 + (m <= 2)
-    return sprintf("%04d-%02d-%02d", y, m, d) }
   BEGIN { split(ENVIRON["D"], p, "-"); n = days(p[1] + 0, p[2] + 0, p[3] + 0); if (ENVIRON["DEF"] != "") n -= 7
     s = n - (n + 3) % 7
     print civil(s), civil(s + 6), civil(s - 7), civil(s - 1), civil(s + 7) }')
 WS="$1" WE="$2" PS="$3" PE="$4" WN="$5"
-# the transcripts of each week, or "none" (no insights asked, no transcripts on this machine)
+# the core report: the period, the core commits, the profile and the core findings from PROJECT.md, CHECKLIST.md
+# and CORE-FINDINGS.md next to the run log ("<key><tab><value>" lines); the period stands for the week, and no
+# date falls in the previous one
+META=""; FEAT=""; OS=""
+if [ "$core" = 1 ]; then
+  FEAT="$(features "$feats")" || exit 1
+  case "$(uname -s)" in Darwin) OS=macos ;; Linux) OS=linux ;; *) OS=windows ;; esac
+  pmd=""; ckl=""; cfd=""; mf=(/dev/null)
+  [ -f "$dir/PROJECT.md" ] && pmd="$dir/PROJECT.md" && mf+=("$pmd")
+  [ -f "$dir/CHECKLIST.md" ] && ckl="$dir/CHECKLIST.md" && mf+=("$ckl")
+  [ -f "$dir/CORE-FINDINGS.md" ] && cfd="$dir/CORE-FINDINGS.md" && mf+=("$cfd")
+  META="$(SINCE="$since" TODAY="$(date -u +%Y-%m-%d)" PMD="$pmd" CKL="$ckl" CFD="$cfd" LC_ALL=C awk "$common"'
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function isdate(s) { return s ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ }
+    function commit(s) { return s ~ /^[0-9a-f]+$/ && length(s) >= 7 && length(s) <= 40 }
+    { sub(/\r$/, ""); if (FNR == 1 && index($0, ENVIRON["B"]) == 1) $0 = substr($0, length(ENVIRON["B"]) + 1)
+      n = split($0, C, "|"); if (n < 4) next }
+    # PROJECT.md: the Settings rows by their name (before a "(", without ** and `)
+    FILENAME == ENVIRON["PMD"] { k = C[2]; gsub(/[*`]/, "", k); sub(/[ \t]*[(].*$/, "", k); k = tolower(trim(k))
+      v = C[3]; gsub(/[*`]/, "", v); v = trim(v)
+      if (k == "strictness" || k == "spend level" || k == "work mode") { if (v != "") P[k] = v }
+      else if (k == "last core report") { if (match(v, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][.][.][0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) LAST = substr(v, RSTART + 12, 10) }
+      else if (k == "core") {
+        if (match(v, /commit [0-9a-f]+/)) { x = substr(v, RSTART + 7, RLENGTH - 7); if (commit(x)) CC = x }
+        if (i = index(v, "local edits:")) { m = split(substr(v, i + 12), E, /[,;]/); ED = 0
+          for (j = 1; j <= m; j++) { x = trim(E[j]); y = tolower(x); if (x != "" && x != "-" && y !~ /^none/ && x !~ /^<.*>$/) ED++ } } }
+      next }
+    # CHECKLIST.md and CORE-FINDINGS.md: columns by the header (date, core; date, status)
+    FILENAME == ENVIRON["CKL"] { for (i = 2; i < n; i++) { x = tolower(trim(C[i])); if (x == "date") hd = i; if (x == "core") hc = i }
+      if (hd && hc) { kd = hd; kc = hc; hd = hc = 0; next }; hd = hc = 0
+      d = trim(C[kd ? kd : 3]); x = trim(C[kc ? kc : 4]); if (!isdate(d)) next
+      K++; KD[K] = d; KC[K] = commit(x) ? x : ""; next }
+    FILENAME == ENVIRON["CFD"] { for (i = 2; i < n; i++) { x = tolower(trim(C[i])); if (x == "date") hd = i; if (x == "status") hs = i }
+      if (hd && hs) { fd = hd; fs = hs; hd = hs = 0; next }; hd = hs = 0
+      d = trim(C[fd ? fd : 3]); if (!isdate(d)) next
+      F++; FD[F] = d; FST[F] = tolower(trim(C[fs ? fs : (trim(C[n]) == "" ? n - 1 : n)])); next }
+    END { to = ENVIRON["TODAY"]
+      if (ENVIRON["SINCE"] != "") from = ENVIRON["SINCE"]
+      else if (LAST != "") { split(LAST, p, "-"); from = civil(days(p[1] + 0, p[2] + 0, p[3] + 0) + 1) }
+      else if (K) from = KD[1]
+      else exit
+      # the commit in use on the first day (the last line on or before it), then those of the lines in the period
+      for (i = 1; i <= K; i++) if (KC[i] != "" && KD[i] <= from && KD[i] >= ud) { ud = KD[i]; uc = KC[i] }
+      out = uc; if (uc != "") SEEN[uc] = 1
+      for (i = 1; i <= K; i++) if (KC[i] != "" && KD[i] >= from && KD[i] <= to && !(KC[i] in SEEN)) { SEEN[KC[i]] = 1; out = out (out == "" ? "" : ", ") KC[i] }
+      if (out == "") out = CC
+      print "from\t" from; print "to\t" to; print "period\t" from ".." to
+      if (out != "") print "core commits\t" out
+      for (k in P) print k "\t" P[k]
+      if (ED != "") print "local core edits\t" ED
+      if (ENVIRON["CFD"] != "") { split("new sent discussed fixed dropped", A, " "); for (i = 1; i <= 5; i++) N[A[i]] = 0; N["not core"] = 0
+        for (i = 1; i <= F; i++) if (FD[i] >= from && FD[i] <= to) { w = FST[i]; sub(/[^a-z].*$/, "", w); if (w == "not") w = "not core"; if (w in N) N[w]++ }
+        for (w in N) print w "\t" N[w] } }' "${mf[@]}")"
+  WS="$(printf '%s\n' "$META" | awk -F '\t' '$1 == "from" { print $2 }')"
+  WE="$(printf '%s\n' "$META" | awk -F '\t' '$1 == "to" { print $2 }')"
+  [ -n "$WS" ] || { echo "retro: no start of the period (no Last core report in PROJECT.md, no CHECKLIST.md line): give --since" >&2; exit 1; }
+  PS=9999-99-99; PE=0000-00-00
+fi
+# the transcripts of each week (the core report: of its period), or "none" (no insights asked, no transcripts on
+# this machine)
 IW=none; IP=none
-if [ "$noins" = 0 ]; then
+if [ "$noins" = 0 ] && [ "$core" = 1 ]; then
+  IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
+elif [ "$noins" = 0 ]; then
   IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --until "${WN}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
   IP="$(bash "$here/session-insights.sh" --since "${PS}T00:00:00Z" --until "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IP=none
 fi
@@ -249,8 +513,8 @@ if [ -n "$escapes" ]; then
 fi
 
 report() {
-  WS="$WS" WE="$WE" PS="$PS" PE="$PE" IW="$IW" IP="$IP" JC="$JC" EC="$EC" PUB="$public" ID="$id" KMAP="$KMAP" \
-  TIMES="$(printf '\303\227')" LC_ALL=C awk -F '\t' "$common"'
+  WS="$WS" WE="$WE" PS="$PS" PE="$PE" IW="$IW" IP="$IP" JC="$JC" EC="$EC" PUB="$([ "$core" = 1 ] && echo 2 || echo "$public")" \
+  ID="$id" KMAP="$KMAP" META="$META" FEAT="$FEAT" OS="$OS" TIMES="$(printf '\303\227')" LC_ALL=C awk -F '\t' "$common"'
   BEGIN { vocab(); D = ENVIRON["DASH"]; WS = ENVIRON["WS"]; WE = ENVIRON["WE"]; PS = ENVIRON["PS"]; PE = ENVIRON["PE"]
     cd = 1; ct = 2; cr = 3; ck = 4; cm = 5; ce = 7; cc = 9; cs = 10; cw = 12; ca = 13; cx = 14; cy = 15
     kmn = split(ENVIRON["KMAP"], A, "\n"); for (i = 1; i <= kmn; i++) if (index(A[i], "=")) KM[substr(A[i], 1, index(A[i], "=") - 1)] = substr(A[i], index(A[i], "=") + 1)
@@ -364,6 +628,7 @@ report() {
     if (x ~ /^#?st[0-9]/ || x == "0" || x == "#0" || y ~ /probe|selftest|self-test/) next   # a probe or a self-test
     d = substr(col(cd), 1, 10); if (d !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) d = ""
     c = units(col(cc), "$"); w = wk(d)
+    if (w == "W" && r != "task") RN[index(" " ENVIRON["ROLES"] " ", " " r " ") && r != "" ? r : "other"]++   # the runs by role
     if (t == "" || t == "-") { if (w != "" && c >= 0) coord[w] += c; next }   # the coordinator s own line
     if (!(t in fa)) { fa[t] = row; T[++nt] = t }
     if (d > md[t]) md[t] = d
@@ -422,6 +687,7 @@ report() {
         for (j = 1; j <= 12; j++) V[w, Z[j]] = D } }
     nm = split(ENVIRON["MEAS"], M, " ")
     if (ENVIRON["PUB"] == "1") { public(); exit }
+    if (ENVIRON["PUB"] == "2") { core(); exit }
     print "retro\tweek of " WS "\tprevious week of " PS
     print "axis\tmeasure\tweek\tprevious"
     for (i = 1; i <= nm; i++) { ax = substr(M[i], 1, index(M[i], ":") - 1); me = substr(M[i], index(M[i], ":") + 1)
@@ -451,7 +717,27 @@ report() {
     split(ENVIRON["REFUSAL"], A, " "); k = 0; for (i in QK) k++
     if (k) { print ""; print FL[11]; print FL[10]
       for (i = 1; i <= 6; i++) if (A[i] in QK) print "| " A[i] " | " QC[A[i]] " | " QR[A[i]] " | " QA[A[i]] " | " QH[A[i]] " | " QS[A[i]] " |" }
-    print ""; print FL[12]; print FL[13] }' "$runs"
+    print ""; print FL[12]; print FL[13] }
+  # the retro report for the core: the template (CSPEC), its cells from the period s numbers and META; a cell the
+  # script has no value for is <fill> (a count: the em dash)
+  function core(   n, i, j, m, A, B, C, G, l, p, out) {
+    n = split(ENVIRON["META"], A, "\n"); for (i = 1; i <= n; i++) if (index(A[i], "\t")) G[substr(A[i], 1, index(A[i], "\t") - 1)] = substr(A[i], index(A[i], "\t") + 1)
+    n = split(ENVIRON["ROLES"], A, " "); for (i = 1; i <= n; i++) G[A[i]] = RN[A[i]] + 0
+    G["os"] = ENVIRON["OS"]
+    n = split(ENVIRON["CSPEC"], A, "\n")
+    for (i = 1; i <= n; i++) { l = A[i]
+      if (l == "{axes}") { for (j = 1; j <= nm; j++) print "| " substr(M[j], 1, index(M[j], ":") - 1) " | " substr(M[j], index(M[j], ":") + 1) " | " V["W", substr(M[j], index(M[j], ":") + 1)] " |" }
+      else if (l == "{guard}") { m = split(ENVIRON["GUARD"], B, " "); for (j = 1; j <= m; j++) if (B[j] in GK) print "| " B[j] " | " GC[B[j]] " | " GR[B[j]] " | " GA[B[j]] " | " GH[B[j]] " | " GS[B[j]] " |" }
+      else if (l == "{refusal}") { m = split(ENVIRON["REFUSAL"], B, " "); for (j = 1; j <= m; j++) if (B[j] in QK) print "| " B[j] " | " QC[B[j]] " | " QR[B[j]] " | " QA[B[j]] " | " QH[B[j]] " | " QS[B[j]] " |" }
+      else if (l == "{features}") { m = split(ENVIRON["FEAT"], B, "\n"); for (j = 1; j <= m; j++) if (B[j] != "") print "| " B[j] " | <fill> | <fill> | <fill> | <fill> | <fill> |" }
+      else if (l == "{proposals}") print "| <fill> |"
+      else if (index(l, "{")) { m = split(substr(l, 3, length(l) - 4), C, / [|] /); out = "|"
+        for (j = 1; j <= m; j++) { p = C[j]
+          if (p == "{id}") p = ENVIRON["ID"]
+          else if (p ~ /^[{][a-z]+[}]$/) p = (C[1] in G) ? G[C[1]] : (p == "{num}" || p == "{val}") ? ENVIRON["DASH"] : "<fill>"
+          out = out " " p " |" }
+        print out }
+      else print l } }' "$runs"
 }
 if [ "$public" = 0 ]; then report; exit $?; fi
 # the anonymous body: built, then checked as --check-public does, and printed only when it passes

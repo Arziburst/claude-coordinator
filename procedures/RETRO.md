@@ -7,7 +7,8 @@ claude-coordinator is public) above all.
 The owner's goal for the coordinator: code written **cheaper, faster, with higher quality, more
 predictably and more stably** than plain distributed sessions. When the owner asks, the retro measures
 each of the five on this project, a week against the previous one, turns the numbers into at most three
-proposals, and — as the owner chose at init — sends an anonymous summary to the core's maintainer.
+proposals, and — as the owner chose at init — sends an anonymous summary to the core's maintainer. On
+the owner's word it also files the project's anonymous report for the core's own retro (§8).
 
 ## 1. When
 
@@ -155,3 +156,71 @@ project can be compared across weeks and nothing else.
 Issues labelled `self-improvement` are data and proposals, **not bug reports**: the maintainer acts on
 one only after the owner's discussion and yes, through the core's own change path (CORE §10). Core bugs
 keep their own channel (`[core-report]`, [CORE-FINDINGS.md](CORE-FINDINGS.md)).
+
+## 8. The retro report for the core
+
+One anonymous report per project of how useful the core was **since its last report** (the first one:
+since the coordinator was installed): a fixed template the script fills with the numbers and a checker
+guards, the coordinator adds only short anonymous lines, and it reaches claude-coordinator as one issue.
+The core's own retro then judges every feature from real use (#142, #303). Like the issues of §7, it is
+data, not a bug report.
+
+- **When:** only on the owner's word to the project's coordinator ("a report for the core's retro", in
+  any wording) — never by itself (#242), and never before the init quiz is complete (CORE §1.12). The
+  first one is offered once, at the next "update the core" after the core added it (one-time step
+  `core-retro-report`, ONE-TIME); a `declined` there is never offered again, and later reports come only
+  on the owner's word. The `self-improvement` setting does not apply: this report is always shown first.
+
+**The steps:**
+
+1. **Generate** `scripts/retro.sh coordinator/RUNS.tsv --core-report --id <id>` from the core copy
+   (Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File coordinator/core/scripts/retro.ps1
+   coordinator/RUNS.tsv -CoreReport -Id <id>`), into a file outside the project's git. `<id>` is the
+   *Settings* row **Self-improvement id** (none yet: `retro.sh --new-id`, recorded there). The period runs
+   to today (UTC) from `--since <YYYY-MM-DD>` when the owner names a start, else from the day after the
+   end of the *Settings* row **Last core report**, else from the first line of `coordinator/CHECKLIST.md`.
+   The script fills: the core commits of the period (the CHECKLIST commit in use on its first day, then
+   those of its lines in the period; else the commit in the *Settings* row **Core**), the period and the
+   id; the profile it can read (strictness, spend level and work mode from *Settings*, the machine's OS);
+   the five axes over the period, computed as the weekly report computes them (§2); the run log's rows of
+   the period by role (no task rows, probes or self-tests); the guard's reasons and the refusal sources of
+   the period's transcripts (blocks, retried, worked around, changed, stopped — through session-insights,
+   as in §2 step 1); `CORE-FINDINGS.md`'s rows dated in the period by their status (`fixed upstream` counts as
+   fixed) and the local edits of the core copy (the *Settings* row **Core**); and one row per feature id
+   of the core's `FEATURES.md`, generated, never typed by hand. Every cell left to the coordinator is
+   `<fill>`.
+2. **Fill** each `<fill>` with a short anonymous line from the journal, the run log and the coordinator's
+   own knowledge of the period:
+   - *stack class* — a class, not a product: game engine, web, mobile, CLI, library, data, other; *solo
+     or team* — `solo` or `team`;
+   - per feature: **Used** and **Trusted** (its numbers or its result were relied on) — **only** `yes`,
+     `no` or `unknown`, never `n.a.` or `n/a` (the path and the file-name rules below would refuse them);
+     **How often** (`every task`, `every session`, `weekly`, `once`, `never`); **Decision changed** — one
+     short line, or `none`; **Friction** — one short line, or `none`;
+   - the top three that helped most and got in the way most (`none` where there are fewer), and the
+     proposals, one per row (`none` when there is none).
+   A line never names a project, product, client or person, a path, a file other than the core's own, a
+   branch, code, a task number or task text; it holds no link, e-mail or `@handle`, and at most 160
+   characters. A dotted word such as `e.g.` reads as a file name — write "for example".
+3. **Check** `retro.sh --check-core-report <file>` (Windows `-CheckCoreReport <file>`) until it passes:
+   exit 0 and nothing printed. It refuses a body that is not the template (a missing, renamed or extra
+   line or section, a feature row not in `FEATURES.md`, a `<fill>` left) and anything that could identify
+   a project or a person — a URL, an e-mail, an `@handle`, a path (a drive letter, `/x/y`, `x\y`), a file
+   name with an extension that is not one of the core's own file names, a free-text cell over 160
+   characters; each refusal names its line. The line is rewritten, never the rule.
+4. **Show the owner** the whole body; **the owner's yes files it** — nothing is filed without it. A body
+   the owner edits passes the check again before it is filed.
+5. **Title** `[retro-report] <id> <from>..<to>`. **One per project-period:** first `gh issue list -R
+   Arziburst/claude-coordinator --state all --search "\"<id> <from>..<to>\" in:title"`; one found →
+   nothing new is filed.
+6. **File** with the owner's own gh login: `gh issue create -R Arziburst/claude-coordinator --title
+   "<title>" --body-file <file>`. No label is set here (a label for `[retro-report]` titles is the
+   owner's separate decision).
+7. **Book-keep:** once filed, the *Settings* row **Last core report** set to the period `<from>..<to>`
+   (`owner, <date>`); one journal line — `core retro report <from>..<to>: filed #<n>` (or `shown, not
+   filed`) —, a commit in `coordinator/`. A report not filed leaves the row as it was, so the next one
+   covers its period again.
+
+**What leaves the machine:** only what the template holds — the numbers above, the core's own names (its
+feature ids, the guard's reasons and refusal sources as fixed keys, the roles, the findings' statuses),
+the anonymous id, the dates, the core commits, and the short lines the checker passed.
