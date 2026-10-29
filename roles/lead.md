@@ -37,7 +37,9 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    task. Sub-contracts, briefs and run notes live in `<your worktree>/.lead/` (start-worker keeps it
    out of git), never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed under a
    new job.
-3. **Delegate.** Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
+3. **Delegate.** Your own task gets no task-level tester: its contract says `tests_first: no - the lead
+   runs the tester per sub-contract`, `yes` belongs only in your sub-contracts, and start-worker refuses
+   a lead started with `tests_first: yes` or with `--tester-commit` / `--tester-tests` (#289). Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
    tests, you keep a copy in `.lead/` for the sub-contract's verifier (roles/verifier.md step 2, #237), you
    pass them in the sub-worker's brief and the sub-worker commits them on its own branch
    (your subagents work in your worktree and cannot commit in a sub-worker's) — on the sub-branch that

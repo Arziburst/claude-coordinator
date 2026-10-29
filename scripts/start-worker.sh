@@ -43,7 +43,10 @@
 # refused (exit 1) before anything is created (--dry-run too). `tests_first` comes from check-contract
 # itself (`check-contract.sh --field tests_first`, one parser): its contract block (the front matter, or a
 # top-level `contract:`), never the rest of the file. A start with either flag prints one line naming the tester's tests; both flags together are
-# refused. A lead or a tester start is not gated.
+# refused. A tester start is not gated. A lead's task gets no task-level tester (#289): a lead whose
+# contract says `tests_first: yes`, or a lead given --tester-commit / --tester-tests, is refused (exit 1)
+# before anything is created (--dry-run too) - a lead's contract has `tests_first: no - the lead runs the
+# tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
@@ -172,13 +175,21 @@ fi
 # the tests_first gate (CORE §4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
 # - its value as check-contract itself reads it (its --field option: one parser, so the two never
-# disagree), asked once the contract has passed it
+# disagree), asked once the contract has passed it. A lead's task gets no task-level tester (#289): the
+# lead runs the tester per sub-contract (roles/lead.md step 3), so a lead whose contract says yes, or a
+# lead given --tester-commit / --tester-tests, is refused
 tfyes=0
-if [ -n "$cfile" ]; then case "$crole" in worker|"")
+if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
   tfv="$(bash "$(dirname "$0")/check-contract.sh" --field tests_first "$cfile" 2>&1)" ||
     { printf '%s\n' "$tfv" >&2; echo "refused: check-contract could not read tests_first (CORE §4 step 3)" >&2; exit 1; }
   printf '%s\n' "$tfv" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | grep -Eq '^yes([[:space:],:;(]|$)' && tfyes=1 ;; esac; fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
+if [ "$crole" = lead ] && { [ -n "$tcommit" ] || [ -n "$ttests" ]; }; then
+  echo "refused: a lead's task gets no task-level tester - start the lead without --tester-commit / --tester-tests; its contract has \`tests_first: no - the lead runs the tester per sub-contract\` (roles/lead.md step 3)" >&2; exit 1
+fi
+if [ "$crole" = lead ] && [ "$tfyes" = 1 ]; then
+  echo "refused: $clabel has tests_first: yes, but a lead's task gets no task-level tester - a lead's contract has \`tests_first: no - the lead runs the tester per sub-contract\`, yes belongs only in its sub-contracts (roles/lead.md step 3)" >&2; exit 1
+fi
 if [ "$tfyes" = 1 ] && [ -z "$tcommit" ] && [ -z "$ttests" ]; then
   echo "refused: $clabel has tests_first: yes - start the worker with the tester's tests: --tester-commit <sha> or --tester-tests <path> (CORE §4 step 3)" >&2; exit 1
 fi

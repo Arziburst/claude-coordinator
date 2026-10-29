@@ -12,14 +12,19 @@
 #   -Field <key> <contract>: read-only - the same checks, and when the contract passes only the key's
 #   value as they read it (its text with continuation lines, comment and quotes removed) on one line,
 #   exit 0; else the usual ERROR and FAIL lines and exit 1 (start-worker's tests_first gate, #276).
-param([string]$Field = '', [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$Files)
+# the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
+# usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
+$Field = ''; $Files = @($args | ForEach-Object { "$_" }); $usage = -not $Files
+if ($Files.Count -gt 0 -and $Files[0] -match '^-field:?$') {
+  if ($Files.Count -lt 3 -or -not $Files[1]) { $usage = $true } else { $Field = $Files[1]; $Files = @($Files[2..($Files.Count - 1)]) }
+}
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if (-not $Files) { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
