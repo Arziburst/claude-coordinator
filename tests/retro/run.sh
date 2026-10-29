@@ -193,6 +193,24 @@ repl 105 "$(row 'the cart.ts check broke twice')" cr-file.md
 expect "--check-core-report refuses a file name that is not the core's" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-file.md")" --features "$cf"
 sed '104s/hard tasks |/hard tasks! |/' "$filled" > "$tmp/cr-long.md"
 expect "--check-core-report refuses a free-text cell over 160 characters" 1 - "~line 104:" -- --check-core-report "$(winpath "$tmp/cr-long.md")" --features "$cf"
+# #320: an IPv6 address (:: next to a hex group, or 6 or more colon-separated groups of 1-4 hex digits) and an HTML
+# character reference (&#<digits>;, &#x<hex>;, &<letters>;) refused naming the line; a time, a ratio, a:b, a lone &
+# and R&D pass; a plain number of 7 or more digits is named as a long number
+i=0
+for x in 'fe80::1ff:fe23:4567:890a timed out' '2001:db8::7334 down' 'bound to ::1 only' \
+         'the 2001:0db8:85a3:0000:0000:8a2e:0370:7334 host' 'asked dev&#64;acme&#46;org first' 'ping &#64;handle' \
+         'outage at acme&#x2E;com' 'outage at acme&period;com'; do
+  i=$((i + 1)); repl 105 "$(row "$x")" "cr-ref$i.md"
+  expect "--check-core-report refuses an IPv6 address or an HTML character reference: $x" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-ref$i.md")" --features "$cf"
+done
+i=0
+for x in 'at 12:30:45 it stopped' 'a 1:2:3 split' 'a:b' 'cost & time' 'R&D work'; do
+  i=$((i + 1)); repl 105 "$(row "$x")" "cr-colon$i.md"
+  expect "--check-core-report passes a time, a ratio, a lone & or R&D: $x" 0 - - -- --check-core-report "$(winpath "$tmp/cr-colon$i.md")" --features "$cf"
+done
+repl 105 "$(row 'used 2000000 tokens')" cr-num.md
+expect "--check-core-report refuses a long number naming it" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-num.md")" --features "$cf" &&
+  { grep -qF 'long number' "$tmp/err" || { bad "--check-core-report refuses a long number naming it: stderr lacks long number"; sed 's/^/  got: /' "$tmp/err"; }; }
 # round 2 (#303): the Profile holds only vocabulary words - strictness swarm/standard/strict, spend level
 # lean/balanced/thorough, work mode by task/batch, os windows/macos/linux, solo or team solo/team, stack class
 # RETRO.md §8's list (game engine, web, mobile, CLI, library, data, other); the generator prints a Settings Value's
