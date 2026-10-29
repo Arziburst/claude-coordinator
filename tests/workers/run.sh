@@ -21,7 +21,11 @@ printf '%s\n' "$*" >> "$STUB_LOG"
 # real listing; a `done` one with --all only), each with the working folder $STUB_LOG.sessions.cwd gives
 # it (`<id><tab><cwd>` per line; none: no cwd field)
 S="$STUB_LOG.sessions"
-if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"; fi
+if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; printf '%s\n' "$3" >> "$STUB_LOG.names"
+  # the session's first message (the last argument) as received, alone; $STUB_BG_RC: the launch fails (#291)
+  printf '%s' "${!#}" > "$STUB_LOG.arg"
+  [ "${STUB_BG_RC:-0}" = 0 ] || { echo "stub claude: launch failed" >&2; exit "$STUB_BG_RC"; }
+fi
 if [ "${1:-}" = agents ]; then
   all=""; case " $* " in *" --all "*) all=1 ;; esac
   a="$(sed 's/\\/\\\\/g; s/"/\\"/g' "$STUB_LOG.names" 2>/dev/null | awk '{ printf "{\"name\":\"%s\",\"sessionId\":\"5e550000-0000-4000-8000-%012d\"}\n", $0, NR }' | paste -sd, -)"
@@ -787,6 +791,78 @@ check 0 "start: --effort passed to claude" -- start --repo "$tmp/repo" --name "#
 grep -q -- "--bg --name #54 worker: e --model opus --effort low --permission-mode auto" "$STUB_LOG" ||
   { echo "FAIL: claude did not get --effort low:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/54-effort" 2>/dev/null
+
+# --- a big brief through a file (#291): above 24 000 characters of full launch text (first line + role +
+# brief) start-worker writes that text to a file under <config>/coordinator/briefs/ and the session's first
+# message is one short instruction naming the file's absolute path (read it in full with the Read tool);
+# one output line says the brief goes through a file and names it (the words "brief" and "file", and the
+# path); a dry run says so too and creates nothing; at or below the threshold nothing changes. A launch
+# that fails: a non-zero exit and a line naming what was created and cleanup-worker.
+awk 'BEGIN { for (i = 1; i <= 800; i++) printf "Строка %04d брифа: проверка — ü ✓ \"quoted\" and plain ASCII text\n", i }' > "$tmp/brief-big.md"
+# the role's body as start-worker puts it in front of the brief (CRs dropped for the comparison)
+# (its leading blank lines are not compared: the .sh keeps them, the .ps1 drops them)
+wbody="$(awk 'NR == 1 && /^---/ { f = 1; next } f && /^---/ { f = 0; next } !f' "$core/roles/worker.md" | tr -d '\r' | awk 'length || s { s = 1; print }')"
+big0=(--repo "$tmp/repo" --name "#91 worker: Big" --model opus --safety "$tmp/safety.json" --report-to "Core lead"); big=("${big0[@]}" --brief-file "$tmp/brief-big.md")
+bd291="$tmp/cfg/coordinator/briefs"
+# the file a first message names: absolute, under <config>/coordinator/briefs/
+argfile() { local p
+  p="$(printf '%s' "$1" | grep -oE "[^ \"'<>()]*coordinator[/\\\\]briefs[/\\\\][^ \"'<>()]*" | head -n 1 | sed 's/[.,;:]*$//')"
+  case "$p" in /*|[A-Za-z]:[/\\]*) ;; *) return 1 ;; esac
+  command -v cygpath >/dev/null 2>&1 && p="$(cygpath -u "$p")"
+  printf '%s' "$p"; }
+# the full launch text: the first line, the report line, a blank, the role, a blank, the brief
+is_launch_text() {   # is_launch_text <file> <branch> <brief file>
+  local f="$1"
+  [ -f "$f" ] || { echo "FAIL: no launch text file $f"; fail=1; return; }
+  tr -d '\r' < "$f" | sed -n 1p | grep -q "^FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/$2\." ||
+    { echo "FAIL: $f does not start with the first line"; fail=1; }
+  [ "$(tr -d '\r' < "$f" | sed -n 2p)" = 'Report to: the session named "Core lead" (SendMessage) - your report and your questions.' ] &&
+    [ -z "$(tr -d '\r' < "$f" | sed -n 3p)" ] || { echo "FAIL: $f lacks the report line and a blank after it"; fail=1; }
+  [ "$(tr -d '\r' < "$f" | sed -n '4,$p' | awk 'length || s { s = 1; print }')" = "$(printf '%s\n\n%s' "$wbody" "$(cat "$3")")" ] ||
+    { echo "FAIL: $f is not the role and the brief exactly (line 4 on, leading blanks aside)"; tr -d '\r' < "$f" | sed -n '4,$p' | awk 'length || s { s = 1; print }' | diff - <(printf '%s\n\n%s\n' "$wbody" "$(cat "$3")") | head -n 5 | sed 's/^/    /'; fail=1; }
+}
+# the dry run: says it would go through a file, creates nothing
+ls "$bd291" > "$tmp/briefs-before" 2>/dev/null; : > "$STUB_LOG"
+check 0 "start: a big brief, dry run" -- start "${big[@]}" --branch 91-big --dry-run
+printf '%s\n' "$LAST" | grep -i 'brief' | grep -v -e 'then the brief>' -e '^role ' -e '^contract: ' | grep -iq 'file' || { echo "FAIL: the dry run does not say a big brief would go through a file"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -e "$tmp/repo/.claude/worktrees/91-big" ] && { echo "FAIL: the dry run of a big brief created the worktree"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/91-big && { echo "FAIL: the dry run of a big brief created the branch"; fail=1; }
+[ "$(ls "$bd291" 2>/dev/null)" = "$(cat "$tmp/briefs-before")" ] || { echo "FAIL: the dry run of a big brief wrote under $bd291"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: the dry run of a big brief called claude"; fail=1; }
+# the real start: a short first message naming the file, the file the full launch text, one output line
+: > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
+check 0 "start: a big brief through a file" -- start "${big[@]}" --branch 91-big
+a291="$(cat "$STUB_LOG.arg" 2>/dev/null)"
+[ -n "$a291" ] && [ "${#a291}" -lt 2000 ] || { echo "FAIL: the first message of a big brief is not short (${#a291} characters)"; fail=1; }
+case "$a291" in *"Read tool"*) ;; *) echo "FAIL: the first message does not say to read the file with the Read tool"; fail=1 ;; esac
+case "$a291" in *"Строка 0001"*) echo "FAIL: the big brief went on the command line"; fail=1 ;; esac
+if f291="$(argfile "$a291")"; then
+  case "$f291" in "$bd291"/*|"$(cd "$bd291" 2>/dev/null && pwd -P)"/*) ;; *) echo "FAIL: the brief file $f291 is not under <config>/coordinator/briefs/"; fail=1 ;; esac
+  is_launch_text "$f291" 91-big "$tmp/brief-big.md"
+  [ "$(printf '%s\n' "$LAST" | grep -v 'kept for after a compaction' | grep -i 'brief' | grep -i 'file' | grep -cF "$(basename "$f291")")" = 1 ] ||
+    { echo "FAIL: no one output line saying the brief goes through the file $(basename "$f291")"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+else echo "FAIL: the first message names no absolute file under coordinator/briefs/: $(printf '%s' "$a291" | head -c 200)"; fail=1; fi
+# the kept brief for after a compaction is the full launch text too
+s291="$(grep -nxF "#91 worker: Big" "$STUB_LOG.names" | tail -n 1 | cut -d: -f1)"
+k291="$bd291/5e550000-0000-4000-8000-$(printf '%012d' "${s291:-0}").md"
+is_launch_text "$k291" 91-big "$tmp/brief-big.md"
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/91-big" 2>/dev/null
+# a small brief: on the command line as today, no line about a file
+: > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
+check 0 "start: a small brief on the command line" -- start "${big0[@]}" --branch 91-small --brief-file "$tmp/brief.md"
+is_launch_text "$STUB_LOG.arg" 91-small "$tmp/brief.md"
+printf '%s\n' "$LAST" | grep -v 'kept for after a compaction' | grep -q 'coordinator[/\\]briefs' &&
+  { echo "FAIL: a small brief got a line about a brief file"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+check 0 "start: a small brief, dry run" -- start "${big0[@]}" --branch 91-small --brief-file "$tmp/brief.md" --dry-run
+printf '%s\n' "$LAST" | grep -i 'brief' | grep -v -e 'then the brief>' -e '^role ' -e '^contract: ' | grep -iq 'file' &&
+  { echo "FAIL: the dry run of a small brief speaks of a brief file"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/91-small" 2>/dev/null
+# a launch that fails: non-zero, the worktree and branch it made named, and how to clean them
+: > "$STUB_LOG"
+n=$((n + 1)); LAST="$(STUB_BG_RC=3 start "${big0[@]}" --branch 91-fail --brief-file "$tmp/brief.md" 2>&1)"; LRC=$?
+[ "$LRC" = 0 ] && { echo "FAIL (start: the launch fails): exited 0"; fail=1; }
+case "$LAST" in *91-fail*cleanup-worker*|*cleanup-worker*91-fail*) ;; *) echo "FAIL: a failed launch does not name what it created and cleanup-worker"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac
+git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/91-fail" 2>/dev/null
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"

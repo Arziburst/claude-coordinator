@@ -146,6 +146,17 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
   (one-time step `worktree-roots`), so the retro counts the sessions started there.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
+- **A big brief through a file** (#291): Windows cuts a command line at 32 767 characters, and a brief
+  that long once failed a start after the worktree and branch existed. start-worker decides by the size
+  of the full launch text (the first line, the report line, the role, the brief) before anything is
+  created (`--dry-run` too, which says which way it would go): up to **24 000 characters** it goes on the
+  command line as before; above it, start-worker writes that text to
+  `<config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md` (beside the kept briefs, pruned with them
+  after 14 days; `<config>` = `CLAUDE_CONFIG_DIR`, else `~/.claude`), prints one `brief through a file:`
+  line naming it, and the session's first message is one short instruction: read that file in full with
+  the Read tool before anything else, then follow it as the brief. The kept brief for after a compaction
+  still holds the full launch text. A launch that fails anyway (claude `--bg` exits non-zero) exits 1 with
+  a line naming what was created (the worktree, the branch) and cleanup-worker to clean it.
 - After merge: remove the worktree only if clean and fully pushed (CORE §8) — `scripts/cleanup-worker.sh`;
   with `--session`, first `claude stop <id>`, read its spend (session-tokens: the stop wrote its totals)
   and delete its status file (*Usage*) — cleanup-worker then stops (a no-op) and removes it.

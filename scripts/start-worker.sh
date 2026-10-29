@@ -48,6 +48,10 @@
 # before anything is created (--dry-run too) - a lead's contract has `tests_first: no - the lead runs the
 # tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
+# A launch text (first line + role + brief) over 24 000 characters goes through a file instead (#291):
+# <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
+# first message one short instruction to read it in full with the Read tool; one line names the file.
+# A launch that fails names what it created and cleanup-worker, and exits 1.
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
@@ -236,6 +240,47 @@ if [ -n "$tfull" ]; then
   echo "tester's tests: commit $tshort, on $spl"
 fi
 
+# The launch text (the first line, the role, the brief) and the way it goes, decided before anything is
+# created (#291): up to 24 000 characters on the command line; above it - Windows cuts a command line at
+# 32 767, after the worktree and branch exist - in a file beside the kept briefs (pruned with them), and
+# the session's first message is a short instruction to read that file
+notice=""
+if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
+  first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
+  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
+  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
+  grep -Eq '"COORD_PROTECTED_ROOT"[[:space:]]*:[[:space:]]*"[^"]' "$safety" ||
+    notice="notice: COORD_PROTECTED_ROOT is not set in $safety: edit tools can reach the working copy (TOOLKIT Safety)"
+else
+  # launched outside the repository (its root not trusted): EnterWorktree into another repository's
+  # worktree asks for permission and the session would wait, so it works there by absolute path
+  first="YOUR WORKING COPY is $wt, a worktree of $root. Work in it by absolute path (git -C $wt ..., files under $wt); do not use EnterWorktree; never change files outside it."
+fi
+first="$first
+Report to: the session named \"$report\" (SendMessage) - your report and your questions."
+# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
+# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
+role="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
+rolef="$(dirname "$0")/../roles/$role.md" roletext="" rolemsg=""
+if [ -n "$role" ] && [ -f "$rolef" ]; then
+  body="$(awk 'NR == 1 && /^---/ { f = 1; next } f && /^---/ { f = 0; next } !f' "$rolef")"
+  key="$(printf '%s\n' "$body" | grep -m 1 . || true)"
+  if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then rolemsg="role $role: already in the brief"
+  else roletext="$body"; rolemsg="role $role: roles/$role.md heads the brief"; fi
+fi
+full="$first
+
+${roletext:+$roletext
+
+}$(cat "$brief")"
+# characters, not bytes, in any locale: UTF-8 continuation bytes are not counted
+nchars="$(printf '%s' "$full" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')"
+bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
+# the session (a native program on Windows) reads the path it is given: C:/..., not /c/...
+command -v cygpath >/dev/null 2>&1 && bd="$(cygpath -m "$bd")"
+lfile=""
+[ "$nchars" -le 24000 ] || lfile="$bd/launch-$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')-$(date +%Y%m%d-%H%M%S)-$$.md"
+
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
 # local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
 wroot="${wtroot:-$root/.claude/worktrees}"
@@ -288,36 +333,18 @@ if [ -d "$wt" ]; then
   cur="$(git -C "$wt" symbolic-ref --short -q HEAD || true)"
   [ "$cur" = "$branch" ] || { echo "$wt has ${cur:-a detached HEAD} checked out, not $branch" >&2; exit 1; }
   echo "reusing worktree $wt"
+  made="nothing new (the worktree $wt was reused)"
 else
+  if [ "$has_branch" = 1 ]; then made="the worktree $wt (on the existing branch $branch)"
+  else made="the worktree $wt and the branch $branch"; fi
   # with a tester's commit, git's own "HEAD is now at <sha>" is left out: the line above names the commit
   wq=(); [ -z "$tfull" ] || wq=(-q)
   if [ "$has_branch" = 1 ]; then run git -C "$root" worktree add ${wq[@]+"${wq[@]}"} "$wt" "$branch"
   else run git -C "$root" worktree add ${wq[@]+"${wq[@]}"} --no-track -b "$branch" "$wt" "$start"; fi
 fi
 
-if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
-  first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
-  # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
-  # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
-  grep -Eq '"COORD_PROTECTED_ROOT"[[:space:]]*:[[:space:]]*"[^"]' "$safety" ||
-    echo "notice: COORD_PROTECTED_ROOT is not set in $safety: edit tools can reach the working copy (TOOLKIT Safety)"
-else
-  # launched outside the repository (its root not trusted): EnterWorktree into another repository's
-  # worktree asks for permission and the session would wait, so it works there by absolute path
-  first="YOUR WORKING COPY is $wt, a worktree of $root. Work in it by absolute path (git -C $wt ..., files under $wt); do not use EnterWorktree; never change files outside it."
-fi
-first="$first
-Report to: the session named \"$report\" (SendMessage) - your report and your questions."
-# the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
-# heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
-role="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
-rolef="$(dirname "$0")/../roles/$role.md" roletext=""
-if [ -n "$role" ] && [ -f "$rolef" ]; then
-  body="$(awk 'NR == 1 && /^---/ { f = 1; next } f && /^---/ { f = 0; next } !f' "$rolef")"
-  key="$(printf '%s\n' "$body" | grep -m 1 . || true)"
-  if [ -n "$key" ] && tr -d '\r' < "$brief" | grep -qF -- "$key"; then echo "role $role: already in the brief"
-  else roletext="$body"; echo "role $role: roles/$role.md heads the brief"; fi
-fi
+[ -z "$notice" ] || echo "$notice"
+[ -z "$rolemsg" ] || echo "$rolemsg"
 # conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names - inline
 # `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
@@ -345,14 +372,20 @@ case "$role" in worker|lead|"")
   fi ;;
 esac
 if [ "$dry" = 1 ]; then
+  [ -z "$lfile" ] || echo "[dry-run] brief through a file: $nchars characters of launch text, over 24000 - it would go to $lfile and the first message would point to it"
   echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
 else
-  full="$first
-
-${roletext:+$roletext
-
-}$(cat "$brief")"
-  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$full" )
+  msg="$full"
+  if [ -n "$lfile" ]; then
+    mkdir -p "$bd" && printf '%s\n' "$full" > "$lfile" ||
+      { echo "launch not started: cannot write the brief file $lfile. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
+    msg="Your brief is too long for the command line ($nchars characters), so it is in the file \"$lfile\". Before anything else, read that whole file with the Read tool (in parts with offset and limit if a read is cut short), then follow it as your brief: it holds your first action, your report address, your role and your task."
+    echo "brief through a file: $nchars characters of launch text, over 24000 - the session's first message points to $lfile"
+  fi
+  # a launch that fails leaves the worktree and branch: say so, and how to clean them
+  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$msg" ) ||
+    { [ -z "$lfile" ] || rm -f "$lfile"
+      echo "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
   # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
   i=0
   # the listing is JSON: a backslash or a double quote in the name is escaped there
@@ -367,7 +400,6 @@ ${roletext:+$roletext
   sid="$(claude agents --json 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -F "\"$jname\"" |
     sed -n 's/.*"sessionId": *"\([0-9a-fA-F-]*\)".*/\1/p' | tail -n 1)"
   if [ -n "$sid" ]; then
-    bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
     mkdir -p "$bd" && printf '%s\n' "$full" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
     find "$bd" -name '*.md' -type f -mtime +14 -exec rm -f {} + 2>/dev/null || true
   else echo "no sessionId in the listing: the brief is not kept for after a compaction" >&2; fi
