@@ -40,7 +40,10 @@
 # is refused (exit 1) before anything is created (-DryRun too). `tests_first` comes from check-contract
 # itself (`check-contract.ps1 -Field tests_first`, one parser): its contract block (the front matter, or a
 # top-level `contract:`), never the rest of the file. A start with either flag prints one line naming the tester's tests; both flags together are
-# refused. A lead or a tester start is not gated.
+# refused. A tester start is not gated. A lead's task gets no task-level tester (#289): a lead whose
+# contract says `tests_first: yes`, or a lead given -TesterCommit / -TesterTests, is refused (exit 1)
+# before anything is created (-DryRun too) - a lead's contract has `tests_first: no - the lead runs the
+# tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
@@ -161,13 +164,17 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
 # the tests_first gate (CORE section 4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
 # - its value as check-contract itself reads it (its -Field option: one parser, so the two never
-# disagree), asked once the contract has passed it
+# disagree), asked once the contract has passed it; its result starts as a failure, so a call that never
+# returns one refuses (fail closed, #288). A lead's task gets no task-level tester (#289): the lead runs the
+# tester per sub-contract (roles/lead.md step 3), so a lead whose contract says yes, or a lead given
+# -TesterCommit / -TesterTests, is refused
 $tfYes = $false
 if ($cFile) {
   $cOut = @(); $cRc = 1; $tfOut = @(); $tfRc = 0
   try {
     $cOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') $cFile 2>&1 } | ForEach-Object { "$_" }); $cRc = $LASTEXITCODE
-    if ($cRc -eq 0 -and $crole -in @('worker', '')) {
+    if ($cRc -eq 0 -and $crole -in @('worker', 'lead', '')) {
+      $tfRc = 1
       $tfOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Field tests_first $cFile 2>&1 } | ForEach-Object { "$_" }); $tfRc = $LASTEXITCODE
     }
   }
@@ -178,6 +185,12 @@ if ($cFile) {
   if ($cRc -ne 0) { Fail "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE ${sect}4)" }
   if ($tfRc -ne 0) { $tfOut | ForEach-Object { [Console]::Error.WriteLine($_) }; Fail "refused: check-contract could not read tests_first (CORE ${sect}4 step 3)" }
   $tfYes = ((@($tfOut) -join "`n").Trim().ToLower()) -cmatch '^yes([ \t,:;(]|$)'
+}
+if ($crole -eq 'lead' -and ($TesterCommit -or $TesterTests)) {
+  Fail "refused: a lead's task gets no task-level tester - start the lead without -TesterCommit / -TesterTests; its contract has ``tests_first: no - the lead runs the tester per sub-contract`` (roles/lead.md step 3)"
+}
+if ($crole -eq 'lead' -and $tfYes) {
+  Fail "refused: $cLabel has tests_first: yes, but a lead's task gets no task-level tester - a lead's contract has ``tests_first: no - the lead runs the tester per sub-contract``, yes belongs only in its sub-contracts (roles/lead.md step 3)"
 }
 if ($tfYes -and -not $TesterCommit -and -not $TesterTests) {
   Fail "refused: $cLabel has tests_first: yes - start the worker with the tester's tests: -TesterCommit <sha> or -TesterTests <path> (CORE ${sect}4 step 3)"

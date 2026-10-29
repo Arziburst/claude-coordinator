@@ -66,7 +66,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   A contract written before the field existed needs none while its session is only resumed; it gets
   the field when it is next written or changed, since check-contract runs before each delegation. A
   task given to a lead: its sub-contracts carry the field, and the lead runs the tester for each `yes`
-  (roles/lead.md step 3). start-worker enforces `yes`: no worker starts without `--tester-commit <sha>`
+  (roles/lead.md step 3); the task itself gets no task-level tester — its parent contract says
+  `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts,
+  and start-worker refuses a lead whose contract says `yes` or that is given the tester's flags (#289).
+  start-worker enforces `yes`: no worker starts without `--tester-commit <sha>`
   or `--tester-tests <path>` (TOOLKIT *Working copies*, #276); later rounds that change behaviour start with the
   tester again (CORE §4 step 5).
 - **`cost`**: the coordinator's estimate in dollars at API list price (CORE §7a, `scripts/run-stats`):

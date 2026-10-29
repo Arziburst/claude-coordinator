@@ -137,7 +137,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `--tester-commit <sha>` / `-TesterCommit` (a commit that is the start point or an ancestor of it — a
   reused worktree's HEAD, else the branch, else the base) or `--tester-tests <path>` / `-TesterTests`
   (an existing file or folder, a lead's case) — one of them, both together are refused; it then prints
-  one line naming them. `tests_first` comes from check-contract itself (`--field tests_first`, *Checks*):
+  one line naming them. A lead is refused there too when its contract has `tests_first: yes` or it is
+  given `--tester-commit` / `--tester-tests` (a lead's task gets no task-level tester: its contract says
+  `tests_first: no - the lead runs the tester per sub-contract`, roles/lead.md step 3, #289). `tests_first` comes from check-contract itself (`--field tests_first`, *Checks*):
   its contract block (the front matter, or a top-level `contract:`), never from the rest of the file. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
@@ -489,7 +491,8 @@ BOM, models priced apart),
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
-  and exit 1 — start-worker's tests_first gate asks it, one parser (#276). `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
+  and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,
+  the usage and exit 2 in both shells (#288). `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing

@@ -73,5 +73,15 @@ done
 cfield tf-cr.md
 [ "$FRC" = "$PRC" ] || { echo "FAIL: $fopt tests_first tf-cr.md exits $FRC, check-contract itself $PRC"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
 [ "$PRC" != 0 ] || fval tf-cr.md 'yes'
+# usage parity (#288 item 1): the option with no key, and with an empty key, prints the usage (the header's
+# first line) and exits 2 in both shells - never a binding error, never the plain check
+for a in none empty; do
+  if [ "$kind" = ps ] && [ $a = none ]; then FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" 2>&1)"; FRC=$?
+  elif [ "$kind" = ps ]; then FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" '' budget-time-ok.md 2>&1)"; FRC=$?
+  elif [ $a = none ]; then FO="$(bash "$core/scripts/check-contract.sh" "--$fopt" 2>&1)"; FRC=$?
+  else FO="$(bash "$core/scripts/check-contract.sh" "--$fopt" '' budget-time-ok.md 2>&1)"; FRC=$?; fi
+  [ "$FRC" = 2 ] && case "$FO" in *"Check a contract"*) true ;; *) false ;; esac ||
+    { echo "FAIL: $fopt with key $a: expected the usage and exit 2, got exit $FRC:"; printf '%s\n' "$FO" | tr -d '\r' | sed 's/^/    /'; fail=1; }
+done
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
