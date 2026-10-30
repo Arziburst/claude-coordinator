@@ -220,7 +220,7 @@ is lost (#242).
 
 | Event | What runs |
 |---|---|
-| A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10) |
+| A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10); each assistant's spend row read (§7) and its folder, `NOTES.md` included, committed in the state repository |
 | A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and subscribed (steps 3–4 below); its journal line (§12) |
 | A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
@@ -228,7 +228,7 @@ is lost (#242).
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
 | A mistake is corrected or found | the lesson written as a rule (§10) |
 | The conversation is compacted | CORE (§1 first, then this table), `PROJECT.md`, `BINDINGS.md` and the journal's open questions re-read from disk; any duty of this table not done since the last journal line, done now |
-| Anything in `coordinator/` changes | a commit there at once; a push per §12b |
+| Anything in `coordinator/` changes | a commit there at once; a push per §12b. Not an assistant's own writes in its folder (`coordinator/assistants/<name>/`, its `NOTES.md`): the assistant cannot commit, so they are committed at each sync and before a handoff |
 | A batch ends | the batch report (§12) |
 | The owner asks — "retro", "radar", "spend report" (any wording) | the retro ([procedures/RETRO.md](procedures/RETRO.md)): the report, at most three proposals, the summary as the owner chose; one radar reference (§4b); the analysis of forecast against actual (§7a) — none of them runs by itself |
 | The owner asks to create, change, wake or remove an assistant (any wording) | the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/coord-assistant/SKILL.md)): a persistent session beside the coordinator for work outside the project's code ([roles/assistant.md](roles/assistant.md)), set by its own `BRIEF.md`; created, changed, woken and removed only on the owner's own words (§1.14) |
@@ -561,10 +561,14 @@ never assumed (below).
   (the contract's `budget.time` as logged when the run started: minutes or a range `18-40`). The
   coordinator's own model and effort get a line per day.
   **An assistant's spend** ([roles/assistant.md](roles/assistant.md)) is never a task's or the
-  coordinator's own: rows of role and kind `assistant`, task `-`, its model and effort, the cost its session
-  spent since its previous row (the session's `scripts/session-tokens` `cost` less what its earlier rows
-  hold) — a row on each day it ran, read at the sync, and one when its session is removed or
-  replaced. `scripts/run-stats` leaves them out of every task's cost and time and shows them under kind and
+  coordinator's own: rows of role and kind `assistant`, the task column holding the assistant's name (so
+  the rows of several assistants stay apart; `scripts/run-stats` and the retro keep a row of role or kind
+  `assistant` apart whatever its task column holds), its model and effort, `start` its session's start
+  (the `time` line of `scripts/session-tokens <id>`: the rows of one session share it, a replacing
+  session's rows have another), and the cost its session spent since that assistant's previous row — the
+  session's `scripts/session-tokens <id>` `cost` less the costs of the earlier rows of the same name and
+  the same `start` (a fresh session's first row: its whole cost) — a row on each day it ran, read at the
+  sync, and one when its session is removed or replaced, read before `claude rm`. `scripts/run-stats` leaves them out of every task's cost and time and shows them under kind and
   role `assistant` with `--per-run`; the retro's local report gives them one value of their own,
   `cost assistants`, apart from the total.
   **A task row** per finished task (role `task`), appended when its PR merges — or when the block is
@@ -706,7 +710,10 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   after-merge or self-test step stops or removes an `assistant: <name>` session or its folder
   (`coordinator/assistants/<name>/`) — cleanup-worker answers `ASSISTANT KEPT`, exit 6, and the
   self-test's `verify` and `clean` leave it alone; only the owner's word naming it removes one (the
-  `coord-assistant` skill).
+  `coord-assistant` skill). The one exception: `selftest assistant` removes its own throwaway
+  `assistant: selftest-<token>` and its temporary folder at its end, also after a FAIL, a timeout or an
+  interruption (it never touches the project's `coordinator/assistants/`;
+  [procedures/SELFTEST.md](procedures/SELFTEST.md) step 4a).
 
 ## 9. Autopilot and budget
 
