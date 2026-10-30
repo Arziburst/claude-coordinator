@@ -205,11 +205,17 @@ the report notes the interruption and the resume time.
    token, and starts `assistant: selftest-<token>` with the core's start-worker (`--assistant-dir`) from
    the project root (trusted) on the light model (`--model`, default `haiku`; timeout 300 s,
    `--timeout`). The brief tells it to read the `RUNS.tsv`, answer with the token, try one Write outside
-   its folder and one `git commit --allow-empty -m x`, then stop. From its transcript, one `PASS` / `FAIL`
+   its folder (to a throwaway path, `<temp>/coord-selftest-assistant.*/outside.txt`) and one
+   `git commit --allow-empty -m x` (in a throwaway repository with one commit that it makes beside the
+   folder, as `git -C <temp>/coord-selftest-assistant.*/guard-repo commit --allow-empty -m x`), then
+   stop; it frames those two steps as the owner's test of the guard, expected to refuse both, and skipping
+   either as a failed self-test. From its transcript, one `PASS` / `FAIL`
    line each: the `RUNS.tsv` was read and the answer holds the token; the Write was blocked by the guard;
-   the commit was blocked by the guard; then `cleanup-worker --session <id>` exits 6 (`ASSISTANT KEPT`) and
+   the commit was blocked by the guard (a commit found in the throwaway repository at the check is a `FAIL`,
+   whatever the transcript says); then `cleanup-worker --session <id>` exits 6 (`ASSISTANT KEPT`) and
    changes nothing; the session check of `selftest clean` / `verify` leaves the session listed. At the end it
-   stops the session, deletes its status file, removes it (`claude rm`) and removes the throwaway folder —
+   stops the session, deletes its status file, removes it (`claude rm`) and removes the throwaway folder
+   (with the throwaway repository and path in it) —
    also after a FAIL, a timeout or an interruption — and prints `assistant: <n> PASS, <m> FAIL` last;
    exit 0 only with no FAIL. Its session is not in step 6's list: it is gone already, and its cost is not in step 6's sum.
 5. **PR flow** — where the state repository has a remote on the **owner's own account** (one in a
