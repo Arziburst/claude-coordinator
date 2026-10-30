@@ -6,6 +6,7 @@
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
+unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 acl=""   # a deny file whose read an NTFS permission denies (Git Bash): the permission is taken back first
@@ -35,6 +36,8 @@ for b in main work dev crlf blank bad bom utf16 utf16nul Üw; do
 done
 # working folders inside a worktree of work (the cases name them in the branch column)
 mkdir -p "$tmp/work/.claude/worktrees/12-fix/src"
+# assistants' folders in work (#281): a1 (the cases' COORD_ASSISTANT_DIR, with sub/), a2 and a1-old beside it
+mkdir -p "$tmp/work/coordinator/assistants/a1/sub" "$tmp/work/coordinator/assistants/a2" "$tmp/work/coordinator/assistants/a1-old"
 fail=0; n=0; cr="$(printf '\r')"
 # Links (a junction in Git Bash, which needs no admin rights; a symlink elsewhere): links/work to the
 # project work (@LINK@), and inside work out-link to a folder outside it, dangling to a folder that is not
@@ -52,6 +55,7 @@ mklinkdir "$tmp/work/out-link" "$tmp/elsewhere"
 mklinkdir "$tmp/work/dangling" "$tmp/gone"
 mklinkdir "$tmp/work/loopa" "$tmp/work/loopb"
 mklinkdir "$tmp/work/loopb" "$tmp/work/loopa"
+mklinkdir "$tmp/work/coordinator/assistants/a1/out" "$tmp/elsewhere"   # out of the assistant's folder through a link
 export SG_LINK="$(winpath m "$tmp/links/work")" SG_LINK_W="$(winpath w "$tmp/links/work")"
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath); @PROJECT@ the project's folder (C:/... in Git Bash)
@@ -100,7 +104,7 @@ native() { (cd -P -- "$1" && case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pwd -W 
 } > "$SG_AGENTS"
 # letter case in paths: ignored on Windows and macOS (the expectation "fold" is block there), kept on Linux;
 # a non-ASCII letter's case too (fold8 block, own8 allow there; fold8 allow, own8 block on Linux)
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block fold8=block own8=allow ;; *) fold=allow fold8=allow own8=block ;; esac
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=block fold8=block own8=allow own=allow ;; *) fold=allow fold8=allow own8=block own=block ;; esac
 # the cases' placeholders, replaced in the command and the COORD_PROTECTED_ROOT columns (after \n and \t
 # are read, so a \t in a Windows path stays a backslash and a t)
 SUBST_AWK='
@@ -124,14 +128,15 @@ case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
 shard() {   # shard <k> <shards>
   local ln=0 i=0
   n=0 fail=0
-while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
+while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
   i=$((i + 1)); [ $(((i - 1) % $2)) = "$1" ] || continue
   [ "$expect" = fold ] && expect=$fold
-  [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8
-  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"   # a checkout with CRLF line ends
+  [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8; [ "$expect" = own ] && expect=$own
+  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"; adir="${adir%"$cr"}"   # a checkout with CRLF line ends
   [ "$pbr" = - ] && pbr=""   # the 6th column: COORD_PROTECTED_BRANCHES; none or -: unset (main master)
+  [ "$adir" = - ] && adir=""   # the 7th column: COORD_ASSISTANT_DIR; none or -: unset
   n=$((n + 1))
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
@@ -164,11 +169,17 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr; do
       else if (tool == "SendMessage") ti = "{\"to\":\"" $0 "\",\"message\":\"x\"}"
       else ti = "{\"command\":\"" $0 "\"}"
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
-  printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
+  adir="$(printf '%s' "$adir" | awk "$SUBST_AWK"'
+    { printf "%s", subst($0) }')"
+  if [ -n "$adir" ]; then
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
+  else
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
+  fi
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
 }
@@ -321,6 +332,22 @@ ptok allow "an edit tool's call holding the token" "$tk\n" Write "$tk"
 ptok allow "no CLAUDE_PROJECT_DIR, run from another folder" "$tk\n" Bash "echo $tk" nopd
 rm -f "$tmp/probe/.claude/coordinator-probe.txt"
 
+# The assistant mode (#281): an edit refused outside COORD_ASSISTANT_DIR gives a reason that names the
+# assistant's folder - the value of COORD_ASSISTANT_DIR as set (here C:/... in Git Bash), letter case ignored.
+adm="$(winpath m "$tmp/work/coordinator/assistants/a1")"; wkm="$(winpath m "$tmp/work")"
+amsg() {   # amsg <what> <tool> <file path> [COORD_PROTECTED_ROOT]
+  local rc err js; n=$((n + 1))
+  js="{\"tool_name\":\"$2\",\"tool_input\":{\"file_path\":\"$3\",\"content\":\"x\"},\"cwd\":\"$wkm\"}"
+  err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$wkm" COORD_PROTECTED_ROOT="${4:-}" COORD_ASSISTANT_DIR="$adm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  [ "$rc" = 2 ] || { echo "FAIL (assistant) expected block, got exit $rc: $1"; fail=1; return; }
+  printf '%s' "$err" | grep -qiF -- "$adm" || { echo "FAIL (assistant) the reason does not name the assistant's folder $adm: $1: $err"; fail=1; }
+}
+amsg "a write in the project root" Write "$wkm/src/a.txt" "$wkm"
+amsg "a write in the project root, COORD_PROTECTED_ROOT unset" Write "$wkm/src/a.txt"
+amsg "a write in a worktree of the project" Write "$wkm/.claude/worktrees/12-fix/a.txt" "$wkm"
+amsg "a write outside the project" Write "$(winpath m "$tmp/elsewhere")/a.txt" "$wkm"
+amsg "an edit in another assistant's folder" Edit "$wkm/coordinator/assistants/a2/notes.md" "$wkm"
+
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
 for a in "$@"; do guard="$a"; done
 case "$guard" in *.sh) flag=--self-test; brk='fi' ;; *.ps1) flag=-SelfTest; brk='exit 2' ;; *) flag="" ;; esac
@@ -338,6 +365,16 @@ if [ -n "$flag" ]; then
   else
     out="$("${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
     [ "$out" != "safety-guard: OK" ] || { echo "FAIL (self-test) a guard that blocks every call still says OK"; fail=1; }
+  fi
+  # in an assistant's session (#281): the settings set COORD_ASSISTANT_DIR, and the session's start runs the
+  # self-test with it - still OK (exit 0) for this hook, still not OK for the copy that blocks every call
+  n=$((n + 1))
+  out="$(COORD_ASSISTANT_DIR="$adm" "$@" "$flag" 2>/dev/null)"; rc=$?; out="$(printf '%s' "$out" | tr -d '\r')"
+  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (self-test) with COORD_ASSISTANT_DIR set expected OK (exit 0), got (exit $rc): $out"; fail=1; }
+  if [ -f "$broken" ]; then
+    n=$((n + 1))
+    out="$(COORD_ASSISTANT_DIR="$adm" "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
+    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_ASSISTANT_DIR set, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
   fi
 fi
 echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"

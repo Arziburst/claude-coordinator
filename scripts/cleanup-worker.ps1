@@ -14,7 +14,10 @@
 # after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
 # session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
 # the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
-# changed (CORE section 1.17); a session the listing does not have is handled as before.
+# changed (CORE section 1.17); a session the listing does not have is handled as before; 6 ASSISTANT KEPT: the
+# listing names the session `assistant: <name>` (#281) - nothing is stopped, removed or changed, decided before
+# any other check: an assistant is removed only on the owner's word; with -Session, a listing that fails or
+# prints no JSON list is exit 3 (LISTING FAILED, nothing stopped, removed or changed) - it cannot tell an assistant.
 param([string]$Worktree, [string]$Session, [switch]$DryRun)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
@@ -96,6 +99,27 @@ if (-not $Worktree) { [Console]::Error.WriteLine('usage: -Worktree <path> [-Sess
 # a flag where a value belongs (-Session --dry-run): a usage error, never a session or path of that name
 foreach ($v in @(@('Worktree', $Worktree), @('Session', $Session))) {
   if ("$($v[1])".StartsWith('-')) { [Console]::Error.WriteLine("missing value for -$($v[0]) (got the flag $($v[1])); usage: -Worktree <path> [-Session <id>] [-DryRun]"); exit 1 }
+}
+
+# an assistant (#281: the listing names the session `assistant: <name>`) is never stopped or removed here,
+# whatever the worktree: decided before any other check
+if ($Session -and $hasClaude) {
+  $s0 = $Session; if ($s0 -cnotmatch '[^0-9A-Fa-f-]') { $s0 = $s0.ToLowerInvariant() }
+  # fail closed: a listing that fails or prints no JSON list cannot tell an assistant - nothing is touched
+  $araw = Agents
+  if ($LASTEXITCODE -ne 0 -or ($araw -replace '\s', '') -notmatch '^\[.*\]$') {
+    StopHere "LISTING FAILED: claude agents --json --all failed or printed no JSON list, so session $Session may be an assistant: nothing stopped or removed"
+  }
+  foreach ($o in (Objects $araw)) {
+    if ((Field $o 'id') -ceq $s0 -or (Field $o 'sessionId') -ceq $s0) {
+      $an = Field $o 'name'
+      if ($an.StartsWith('assistant:')) {
+        $aid = Field $o 'id'; if (-not $aid) { $aid = $s0 }
+        [Console]::Error.WriteLine("ASSISTANT KEPT: $($an.Substring(10).TrimStart(' ')) ($aid) - an assistant is removed only on the owner's word"); exit 6
+      }
+      break
+    }
+  }
 }
 
 # The main repository is found from the worktree itself, so this runs from any folder.

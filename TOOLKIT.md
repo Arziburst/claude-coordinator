@@ -91,7 +91,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   role file's body at the top of its prompt and the role's model. A role's `model:` names a model, not a rung
   (CORE §7): where the ladder lacks it, the coordinator passes the ladder's model for that rung as the Agent
   tool's `model`. Check the frontmatter fields (`name`,
-  `description`, `tools`, `model`) against the sub-agents docs in the dry run.
+  `description`, `tools`, `model`) against the sub-agents docs in the dry run. `assistant`
+  ([roles/assistant.md](roles/assistant.md)) is installed the same way but runs only as a background
+  session (`assistant: <name>`, *Assistants*), never as a subagent.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; a background session idle with nothing running may exit (`done`, unreachable by
   SendMessage; 2.1.296) — a lead or a worker that still expects a message keeps a background wait
@@ -187,6 +189,76 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   commit or change since the checks is `CHANGED: <worktree> moved since the checks - left as is`, exit 3;
   a failed removal puts the branch back at its commit (`REMOVE FAILED: …; branch <branch> put back at
   <sha>`, exit 1) — run it again later. One commit, a push or a dirty worktree takes the usual checks.
+
+## Assistants
+An assistant ([roles/assistant.md](roles/assistant.md), #281) is a persistent background session beside
+the coordinator for work outside the project's code — logging the owner's hours from the work done,
+reports, gathering information. It reads the project and the coordinator's records, keeps its own notes and
+changes nothing in the project. The coordinator creates, changes, wakes and removes one only on the owner's
+words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/coord-assistant/SKILL.md)).
+- **Its folder** is `coordinator/assistants/<name>/`, in the state repository: `BRIEF.md` (its job, from
+  the owner's context, [the template](skills/coord-assistant/BRIEF.template.md)) and `NOTES.md` (its memory:
+  what it did, the owner's corrections and standing rules). What it knows lives in these two files, so a
+  long context can be compacted, or the session restarted or replaced, without loss, and its cost need not
+  grow with its history. Its settings file lies outside the folder, never inside it (start-worker refuses
+  a `--safety` file inside it: the guard lets the assistant write there), and outside
+  `coordinator/assistants/`, so no assistant's folder can share its name:
+  `coordinator/assistant-settings/<name>.json`. The assistant cannot commit: the coordinator commits its
+  folder, `NOTES.md` included, together with every commit it makes in `coordinator/`, and at each sync and
+  before a handoff (CORE §4).
+- **Start:** `start-worker.sh --repo <root> --name "assistant: <name>" --model <model> --brief-file
+  <root>/coordinator/assistants/<name>/BRIEF.md --safety <its settings> --report-to "<the coordinator>"`
+  (Windows: `start-worker.ps1` with `-Repo`, `-Name`, `-Model`, `-BriefFile`, `-Safety`, `-ReportTo`).
+  `<name>`: letters, digits, `.`, `_`, `-`, not dots only. No worktree and no branch: the session starts
+  from the repository root, and its launch text's first line names its folder (BRIEF.md read in full,
+  NOTES.md kept as its memory, both re-read after a compaction or a restart, writes only inside the folder,
+  questions to `--report-to`), then the role, then the brief. Refused before anything is created (exit 1):
+  a brief that is not `BRIEF.md` in that folder, a safety file whose env `COORD_ASSISTANT_DIR` does not
+  name the same folder (compared as on disk — links and junctions resolved, `..` taken — `C:/...` on
+  Windows, a Git Bash `/c/` form too, no trailing `/`, in one letter case where paths ignore it; a folder
+  that does not exist compared as written; both start-worker scripts compare by the same bash code, so they
+  disagree only by refusing), a `--safety` file inside the assistant's folder, a session of that name
+  already listed (any state, `claude agents --json --all`) or a listing that fails or prints no JSON list
+  (it cannot tell), and a worker's flags (`--branch`, `--base`, `--worktree-root`, `--launch-from`,
+  `--contract`, `--tester-commit`, `--tester-tests`). Nothing is written into the folder by the script.
+  `--assistant-dir <folder>` (`-AssistantDir`), only with an `assistant:` name (refused with any other),
+  puts the folder elsewhere — it must exist, be named `<name>`, lie in a folder named `assistants`, and no
+  git working tree may see it (outside every one, or ignored there): the self-test's throwaway assistant
+  (`selftest assistant`) uses it; a real assistant keeps the default folder in the state repository.
+- **Talk and attach:** start-worker prints `attach: claude attach "assistant: <name>"` (and `claude attach
+  <id>` when the launch printed the id); the owner talks to it there, through Remote Control, or however
+  its brief says. It asks the coordinator by SendMessage only what its folder, the run log and the
+  journal do not hold.
+- **Wake after a restart** (of the machine, after a core update or a pause): record its full `sessionId`
+  at the start (the journal line). Listed and idle: a SendMessage. Listed as stopped (`done`): `claude --bg
+  --resume <full sessionId> "<re-read BRIEF.md and NOTES.md, then continue>"` from the project root
+  (*Pause and resume*: the same name, settings and history). Not listed, or a history so long that a
+  resume would pay more than a fresh start (after a pause over an hour the cache is gone): a fresh start
+  with the same brief, which reads BRIEF.md and NOTES.md — a listed old session removed first, on the
+  owner's yes (start-worker refuses a second session of the name): stopped, its spend read and logged
+  (CORE §7) and its status file deleted, then `claude rm <id>`, as when an assistant is removed.
+- **After a compaction:** the assistant settings examples run the after-compact hook's `assistant`
+  variant (`after-compact.sh assistant`, Windows `after-compact.ps1 assistant`): it tells the session to
+  read in full `<COORD_ASSISTANT_DIR>/BRIEF.md`, `NOTES.md` and the core's `roles/assistant.md`, and to
+  follow them, not the summary — whether or not start-worker's kept brief for the session is still there
+  (it is pruned after 14 days); without `COORD_ASSISTANT_DIR` it still names BRIEF.md and NOTES.md and
+  says the folder is unknown. The coordinator variant is silent in an assistant's session (env
+  `COORD_ASSISTANT_DIR` set), as in a worker's.
+- **A core update** changes neither its folder nor its settings (both outside `coordinator/core/`; the
+  guard's path in the settings stays the same). It is paused and woken like any running session
+  (UPDATE-CORE steps 4 and 6), never removed; a changed `roles/assistant.md` reaches it by a message to
+  re-read `coordinator/core/roles/assistant.md`, or by a fresh start.
+- **A machine move:** its folder travels with the state repository (CORE §12b); its sessions and
+  transcripts do not. On the new machine its settings are filled again from the example (their paths are
+  the old machine's) and it is started fresh from BRIEF.md and NOTES.md, on the owner's word.
+- **Never cleaned up** (CORE §8): cleanup-worker with its session answers `ASSISTANT KEPT: <name> (<id>)`,
+  exit 6, and changes nothing; `selftest verify` and `selftest clean` never count or name an `assistant:`
+  session. `selftest assistant` proves the frame on the machine with a throwaway assistant on the light
+  model ([procedures/SELFTEST.md](procedures/SELFTEST.md)), in the system temp, never in
+  `coordinator/assistants/`; it removes that throwaway session and folder at its end — the one exception.
+- **Its spend** goes to the run log as rows of role and kind `assistant`, the assistant's name in the task
+  column, apart from the tasks' and the coordinator's own (CORE §7: each row's cost is its session's
+  `session-tokens` cost less the earlier rows of the same name and session `start`).
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
@@ -357,6 +429,39 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   has no `COORD_PROTECTED_ROOT`. **The limit:** it guards the edit tools only — a shell command such as
   `echo x > <root>/file` or `cp` still writes there, and a symlink is not followed; it protects against
   a mistake, not intent (the worker's brief and branch protection remain the rules).
+- **The assistant mode** (#281, *Assistants*): an assistant's settings come from
+  [settings.example.assistant.json](settings.example.assistant.json) (Windows:
+  [settings.example.assistant.windows.json](settings.example.assistant.windows.json)) — the worker
+  safety file with env `COORD_ASSISTANT_DIR`, the absolute path of the assistant's folder. With it set, the
+  guard holds the session to an assistant: `Edit` / `Write` / `MultiEdit` / `NotebookEdit` only inside that
+  folder (as written or as on disk; also inside `COORD_PROTECTED_ROOT`, whose worker rule then gives way),
+  any other path, no path, or a path holding a line break refused; a value that is not absolute, or is `/`
+  or a drive, refuses every edit (a broken mode never fails open). git only to read (log, show, diff,
+  status, a branch or tag listing, a config read, fetch with no local destination …: commit, push, merge,
+  checkout, stash, add and every other write refused, in any repository), and never a read that can run a
+  command or write a file: git's own `-c`, `--config-env`, `--exec-path=`, `--git-dir`, `--work-tree`, any
+  variable set before git (`GIT_PAGER=`, `PAGER=`, `HOME=` …), a `GIT_` variable set anywhere in the command
+  (`export`, `$env:`, `Set-Item env:`), a read's `--output`, `--ext-diff`, `--upload-pack`, `--receive-pack`,
+  `--exec`, `--open-files-in-pager` (also abbreviated), grep's `-O`, ls-remote's `-u` are refused, while
+  `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
+  `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
+  graphql without a mutation). gh is an allowlist there: only these reads pass — a group's `list`, `view`,
+  `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
+  `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh api` by the read rules above (GET or
+  HEAD, graphql without a mutation), `gh auth status`, `gh --version`, `gh help`; every other gh command is
+  refused (`gh alias set` and a call of an alias, `gh extension install`, `gh auth login` / `logout` /
+  `refresh` / `setup-git`, `gh config set`, `gh codespace create`, `gh ssh-key add`, an unknown group …).
+  The examples also run the after-compact hook's `assistant` variant (*Assistants*); the guard's
+  self-test there probes the pushes with the mode off and the mode's own verdicts with it on, so it says
+  `safety-guard: OK` in an assistant's session. Unset or empty,
+  nothing changes. **The limit:** shell writes (a
+  redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
+  brief hold it to its folder there, and the write tools of a connector its brief does not name go into
+  its settings' deny list. Nor does the guard's reading of git and gh see brace expansion (#345), a
+  command run by `find -exec`, `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
+  `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
+  git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
+  more.
 - **Own sessions only (CORE §1.17):** `claude stop / rm / respawn / attach <id>`, `claude --resume <id>`
   and SendMessage reach every session on the machine; the coordinator and every role act only on those
   whose `cwd` (`claude agents --json --all`) is inside the project root, its state repository or its
@@ -436,7 +541,10 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
 - **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts and the hook's self-test) and
   `tests/workers/run.sh sh|ps <powershell>` (start-worker / cleanup-worker against temporary
-  repositories with stub `claude` and `gh`; the real `claude` is never called). The others take the same
+  repositories with stub `claude` and `gh`; the real `claude` is never called), and beside it
+  `tests/workers/assistant.sh sh|ps <powershell>` (an assistant's start and cleanup-worker with a listing
+  that fails or prints no JSON list, refused and nothing touched; one comparison of folders in both
+  start-worker scripts; `--assistant-dir`). The others take the same
   `sh|ps <powershell>`: `tests/check-contract/run.sh` (the fixture contracts against their expected
   output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
@@ -467,6 +575,8 @@ BOM, models priced apart),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/probes.sh` (`selftest probes` against a stub `claude` that feeds the token
   probe's `echo` to this core's guard and writes the transcript; `hookcheck --expect probe`),
+  `tests/selftest/assistant.sh` (`selftest assistant` against a stub `claude`: the pass, each FAIL, the
+  session and its temporary folder removed at the end),
   `tests/selftest/prepare.sh` (prepare and verify: CORE-FINDINGS.md, a base only on the remote,
   a non-ASCII folder) and `tests/selftest/core-copy.sh` (the checks on a project's cloned core copy). On
   Windows, the ones that read native output or print `§` run the `.ps1` with the console on code page 866,
@@ -532,7 +642,9 @@ BOM, models priced apart),
   none). On one machine the `.sh` and the `.ps1` give the same verdict: both use Windows PowerShell 5.1
   where it exists.
   `scripts/selftest.sh|.ps1 scripts|env|hooks|hookcheck|probes|prepare|verify` (in a project: the state repository, evidence kept;
-  `probes` starts the guard's probe sessions itself, up to about 5 minutes: a background command)
+  `probes` starts the guard's probe sessions itself, up to about 5 minutes: a background command;
+  `assistant` (#281) starts a throwaway assistant the same way, up to about 5 minutes, and ends with
+  `assistant: <n> PASS, <m> FAIL`)
   and `sandbox|clean` (the core itself: a sandbox at a fixed path, which `clean --keep` resets to its
   first commit and keeps, so the owner trusts its repo once; a full `clean` removes it) — the scripted steps of the self-test
   ([procedures/SELFTEST.md](procedures/SELFTEST.md)); `PASS` / `FAIL` / `SKIP` lines (`probes`: `BLOCKED` too), exit 1 on a FAIL (or a `BLOCKED`). The

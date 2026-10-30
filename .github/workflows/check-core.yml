@@ -7,7 +7,7 @@ name: check-core
 # test that reads another test's folder or fixture names it too. The step "Which heavy steps run" reads the
 # lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
 # without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
-#need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$  # selftest's guard settings, transcripts, probes, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template
+#need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$ ^scripts/start-worker\. ^scripts/cleanup-worker\. ^settings\.example  # selftest's guard settings, transcripts, probes, the throwaway assistant, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template, the assistant's start, cleanup and settings examples
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
 #need insights   ^scripts/session-insights\. ^tests/session-insights/ ^tests/retro/claude/  # session-insights on its fixture transcripts (and the retro's fixture transcripts)
@@ -172,6 +172,15 @@ jobs:
       - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
         if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps powershell
+      - name: selftest - the throwaway assistant against a stub claude (bash)
+        if: runner.os != 'Windows' && steps.need.outputs.selftest == 'true'
+        run: bash tests/selftest/assistant.sh sh
+      - name: selftest - the throwaway assistant against a stub claude (PowerShell 7, Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.selftest == 'true'
+        run: bash tests/selftest/assistant.sh ps pwsh
+      - name: selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
+        if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
+        run: bash tests/selftest/assistant.sh ps powershell
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
         if: runner.os == 'Windows' && steps.need.outputs.selftest == 'true'
         shell: powershell
@@ -345,6 +354,15 @@ jobs:
       - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
         if: runner.os == 'Windows' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh ps powershell
+      - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
+        if: runner.os != 'Windows' && steps.need.outputs.workers == 'true'
+        run: bash tests/workers/assistant.sh sh
+      - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (PowerShell 7, Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.workers == 'true'
+        run: bash tests/workers/assistant.sh ps pwsh
+      - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
+        if: runner.os == 'Windows' && steps.need.outputs.workers == 'true'
+        run: bash tests/workers/assistant.sh ps powershell
       - name: merge-queue against a stub gh (bash)
         if: runner.os != 'Windows' && steps.need.outputs.mergequeue == 'true'
         run: bash tests/merge-queue/run.sh sh

@@ -5,6 +5,7 @@ cost	merged	7	2
 cost	median_per_task	1.68	—
 cost	total	25.78	6.60
 cost	coordinator	4.00	3.00
+cost	assistants	0.00	0.00
 cost	per_merged_task	3.68	—
 speed	ready_median	58	—
 speed	work_median	18	—

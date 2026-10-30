@@ -1,5 +1,7 @@
 # PreToolUse safety hook for coordinator projects (Windows; macOS / Linux: safety-guard.sh - the same
 # rules, checked against the same cases: tests/safety-guard/cases.txt).
+# With COORD_ASSISTANT_DIR set (the assistant mode, #281): the edit tools only inside that folder, git and
+# gh only a known read (an allowlist).
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only - the real enforcement is branch protection on the code host (CORE section 2);
 # deliberate obfuscation (iex, cmd /c, quoting tricks ...) is out of scope (TOOLKIT.md *Safety*).
@@ -19,14 +21,26 @@ foreach ($b in @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Obje
 
 if ($SelfTest) {
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
-  # everything is not working either
+  # everything is not working either. Both with the assistant mode off (it refuses every push); in an
+  # assistant's session (#281) also its own: a commit blocks, a log passes
   $exe = (Get-Process -Id $PID).Path
+  $ad = $env:COORD_ASSISTANT_DIR; $env:COORD_ASSISTANT_DIR = $null
   '{"tool_input":{"command":"git push --force origin main"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
   $blocked = $LASTEXITCODE
   '{"tool_input":{"command":"git push origin 12-fix"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
-  if ($blocked -eq 2 -and $LASTEXITCODE -eq 0) { 'safety-guard: OK'; exit 0 }
+  $ok = $LASTEXITCODE -eq 0
+  $env:COORD_ASSISTANT_DIR = $ad
+  if ($ad) {
+    '{"tool_input":{"command":"git commit -m x"}}' |
+      & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 2) { $ok = $false }
+    '{"tool_input":{"command":"git log -1"}}' |
+      & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { $ok = $false }
+  }
+  if ($blocked -eq 2 -and $ok) { 'safety-guard: OK'; exit 0 }
   'safety-guard: NOT WORKING - STOP: do not start workers until it is fixed (TOOLKIT.md).'
   exit 0   # stdout reaches the session's context; a non-zero exit would only show it to the user
 }
@@ -266,10 +280,43 @@ function ClaudeSeg([string[]]$a) {
   }
 }
 
+# --- the assistant mode (#281): with COORD_ASSISTANT_DIR set, an assistant edits only inside that folder,
+# and writes nothing to git or GitHub (AsstGit, AsstGh below). An edit tool passes for a path that lies, as
+# it lies on disk (links resolved, #121; as written when none of it is known), in the folder or is the
+# folder, in either of the folder's forms (as written, as on disk) - also under COORD_PROTECTED_ROOT, whose
+# check below is then skipped; every other path, or none, is refused. A folder set but not absolute (or /,
+# or a drive) refuses every edit: a broken mode never fails open. Unset or empty changes nothing. ---
+$asst = [string]$env:COORD_ASSISTANT_DIR
+if ($asst -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
+  function ABlock([string]$why) { [Console]::Error.WriteLine("Blocked by safety-guard: an assistant edits only inside its own folder, COORD_ASSISTANT_DIR ($asst)$why. If this is a false positive, ask the owner."); exit 2 }
+  if ($asst -notmatch '^([/\\]|[A-Za-z]:[/\\])') { ABlock ", which is not an absolute path: every edit is refused until it names the assistant's folder" }
+  $keep = -not (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)
+  $aroots = @(Canon $asst -Keep:$keep)
+  $ph = Physical $asst -Keep:$keep; if ($null -ne $ph) { $aroots += $ph }
+  foreach ($r in $aroots) { if ($r -match '^([A-Za-z]:)?$') { ABlock ", which is / or a drive: every edit is refused until it names the assistant's folder" } }
+  $any = $false
+  foreach ($p in @($d.tool_input.file_path, $d.tool_input.notebook_path)) {
+    if ($p -isnot [string] -or -not $p) { continue }
+    $any = $true
+    # a path holding a line break or a carriage return is refused (as in safety-guard.sh, whose reader
+    # splits its fields at line breaks)
+    if ($p.IndexOfAny([char[]]@("`n", "`r")) -ge 0) { ABlock ': a path that holds a line break or a carriage return is refused' }
+    $full = $p
+    if ($full -notmatch '^([/\\]|[A-Za-z]:)') {
+      $base = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { (Get-Location).Path }
+      $full = "$base/$full"
+    }
+    $f = Physical $full -Keep:$keep; if ($null -eq $f) { $f = Canon $full -Keep:$keep }
+    $ok = $false
+    foreach ($r in $aroots) { if ("$f/".StartsWith("$r/", [StringComparison]::Ordinal)) { $ok = $true } }
+    if (-not $ok) { ABlock ", not $p" }
+  }
+  if (-not $any) { ABlock ': this call names no path' }
+}
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
-if ($env:COORD_PROTECTED_ROOT -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
+if ($env:COORD_PROTECTED_ROOT -and -not $asst -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
   $keep = -not (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows -or $IsMacOS)
   # the root and each path as written and as they lie on disk (links resolved, #121): either form of the
   # path under either form of the root blocks
@@ -632,6 +679,7 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   while ($i -lt $a.Count) {
     $t = $a[$i]
     if ($t -ceq '-C') { $v = if ($i + 1 -lt $a.Count) { $a[$i + 1] } else { '' }; $eff = Compose $eff $v; $i += 2; continue }
+    if ($asst) { AsstGopt $t }
     if ($t -match '^(--git-dir|--work-tree)$') { $redir = $true; $i += 2; continue }
     if ($t -match '^(--git-dir|--work-tree)=') { $redir = $true; $i++; continue }
     if ($t -match '^(-c|--namespace|--config-env|--super-prefix)$') { $i += 2; continue }
@@ -643,6 +691,7 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   # discarding command acts on is not known
   $deff = if ($redir) { '?' } else { $eff }
   $sub = $a[$i]; $rest = @(if ($i + 1 -lt $a.Count) { $a[($i + 1)..($a.Count - 1)] })
+  if ($asst) { AsstGit $sub $rest }
   switch ($sub.ToLowerInvariant()) {
     'push' { PushSeg $eff $rest }
     'branch' { BranchSeg $rest }
@@ -731,6 +780,173 @@ function FreeCopy([string]$dd) {
 function WorktreeSeg([string[]]$a) {
   if ($a.Count -eq 0 -or $a[0] -ne 'remove') { return }
   foreach ($t in $a) { if ($t -match '^(--force|-f|-ff)$') { Block 'removing a worktree by force (use the cleanup script)' } }
+}
+# --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
+# A git read that can run a command or write a file is refused too: git's settings and programs set on
+# its command line (AsstGopt), a variable set before git (AsstGenv) or a GIT_ variable set anywhere in the
+# command (AsstGvar), and the read options that run a program or write a file (AsstGarg).
+# AsstGopt <a global option of git>: -c, --config-env, --exec-path=, --git-dir, --work-tree (a folder with
+# git settings of its own)
+function AsstGopt([string]$t) {
+  if ($t -match '^(-c.*|--config-env(=.*)?|--exec-path=.*|--git-dir(=.*)?|--work-tree(=.*)?)$') {
+    Block "an assistant runs git with no option that sets its settings, its programs or its folder (git $t): a setting can run a command (COORD_ASSISTANT_DIR is set, #281)"
+  }
+}
+# AsstGenv <the words> <the index of git>: a VAR=value before git (also after env) - GIT_PAGER, PAGER,
+# HOME, PATH ... can make a read run a command
+function AsstGenv([string[]]$w, [int]$n) {
+  for ($k = 0; $k -lt $n; $k++) {
+    if ($w[$k] -match $ASSIGN) { Block "an assistant runs git with no variable set before it ($($w[$k].Substring(0, $w[$k].IndexOf('=')))=): one can make a read run a command (COORD_ASSISTANT_DIR is set, #281)" }
+  }
+}
+# AsstGvar <the words>: a GIT_ variable set anywhere in a command (export GIT_PAGER=..., $env:GIT_PAGER =
+# ..., Set-Item env:GIT_PAGER ...): it would reach a later git
+function AsstGvar([string[]]$w) {
+  for ($k = 0; $k -lt $w.Count; $k++) {
+    $t = $w[$k]
+    $set = $t -match '^(GIT_.+=|env:([/\\])?GIT_|\$env:GIT_.*=)'
+    if (-not $set -and $t -match '^\$env:GIT_' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('=')) { $set = $true }
+    if ($set) { Block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)" }
+  }
+}
+# AsstGarg <subcommand> <its arguments>: --output (writes a file), --ext-diff, --upload-pack,
+# --receive-pack, --exec, --open-files-in-pager (each also abbreviated, as git takes it), grep's -O and
+# ls-remote's -u (also in a cluster of short options) - before a -- that ends the options
+function AsstGarg([string]$sub, [string[]]$a) {
+  $d = ''; $v = ''
+  switch -regex ($sub) { '^grep$' { $d = 'O'; $v = 'efABCm' } '^ls-remote$' { $d = 'u'; $v = 'o' } }
+  $nx = $false
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($t -eq '--') { break }
+    if ($t.StartsWith('--')) {
+      $n = $t.Substring(2); $q = $n.IndexOf('='); if ($q -ge 0) { $n = $n.Substring(0, $q) }
+      foreach ($c in @('output', 'ext-diff', 'upload-pack', 'receive-pack', 'exec', 'open-files-in-pager')) {
+        if ($c.StartsWith($n, [StringComparison]::Ordinal)) { Block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)" }
+      }
+    } elseif ($t.Length -gt 1 -and $t.StartsWith('-') -and $d) {   # -O is not -o (grep's --only-matching)
+      for ($j = 1; $j -lt $t.Length; $j++) {
+        $h = [string]$t[$j]
+        if ($h -ceq $d) { Block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)" }
+        if ($v.Contains($h)) { if ($j -eq $t.Length - 1) { $nx = $true }; break }   # its value: the rest, or the next word
+      }
+    }
+  }
+}
+# AsstGit <subcommand> <its arguments>: passes a read - the subcommands below, a branch or tag listing, a
+# config read, remote with no subcommand / show / get-url, reflog but expire / delete / drop / write,
+# worktree list, symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec, no
+# --refmap with a :<dst>); refuses the rest (a
+# write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks.
+$ASST_GIT_READ = '^(log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version)$'
+function AsstGit([string]$sub, [string[]]$a) {
+  AsstGarg $sub $a
+  if ($sub -match $ASST_GIT_READ) { return }
+  $w = $false; $l = $false; $np = 0; $nx = $false; $rm = $false; $fst = ''
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($rm) { $rm = $false; if ($t -match ':.') { $w = $true }; continue }   # --refmap's value
+    $st = "${sub}:$t"
+    if ($st -match '^fetch:--refmap$') { $rm = $true }   # a refmap with a :<dst> updates local refs, as a <src>:<dst> refspec does
+    elseif ($st -match '^fetch:--refmap=') { if ($t.Substring($t.IndexOf('=') + 1) -match ':.') { $w = $true } }
+    elseif ($st -match '^fetch:-') { }
+    elseif ($st -match '^fetch:') { $np++; if ($np -gt 1 -and $t.Contains(':')) { $w = $true } }   # a refspec after the repository
+    elseif ($st -match '^(branch:--list|tag:--list|tag:--verify|config:--list|config:--get|config:--get-all|config:--get-regexp|config:--get-urlmatch|config:--get-color|config:--get-colorbool)$') { $l = $true }
+    elseif ($st -match '^(branch|tag):--(contains|no-contains|merged|no-merged|points-at)$') { $l = $true; $nx = $true }
+    elseif ($st -match '^(branch|tag):--(contains|no-contains|merged|no-merged|points-at)=') { $l = $true }
+    elseif ($st -match '^(branch:--sort|branch:--format|tag:--sort|tag:--format|config:--file|config:-f|config:--blob|config:--type|config:--default|config:--comment)$') { $nx = $true }
+    elseif ($st -match '^branch:(--delete|--move|--copy|--force|--set-upstream-to.*|--unset-upstream|--edit-description|--track.*|--no-track|--create-reflog|--recurse-submodules)$') { $w = $true }
+    elseif ($st -match '^tag:(--annotate|--sign|--local-user.*|--force|--delete|--message.*|--file.*|--edit|--create-reflog|--cleanup.*|--trailer.*)$') { $w = $true }
+    elseif ($st -match '^(config:--unset|config:--unset-all|config:--add|config:--replace-all|config:--rename-section|config:--remove-section|config:--edit|config:-e|symbolic-ref:-d|symbolic-ref:--delete|symbolic-ref:-m)$') { $w = $true }
+    elseif ($st -match '^config:-l$') { $l = $true }
+    elseif ($st -match '^[^:]*:--') { }
+    elseif ($st -match '^branch:-') { if ($t -match '[dmcfut]') { $w = $true }; if ($t -match 'l') { $l = $true } }
+    elseif ($st -match '^tag:-') { if ($t -match '[dfasmeu]') { $w = $true }; if ($t -match '[lvn]') { $l = $true } }
+    elseif ($t.StartsWith('-')) { }
+    else { $np++; if (-not $fst) { $fst = $t } }
+  }
+  switch -regex ($sub) {
+    '^fetch$' { if (-not $w) { return } }
+    '^(branch|tag)$' { if (-not $w -and ($np -eq 0 -or $l)) { return } }
+    '^config$' {
+      if (-not $w) {
+        if ($fst -match '^(get|list)$') { return }
+        if ($fst -notmatch '^(set|unset|rename-section|remove-section|edit)$' -and ($l -or $np -eq 1)) { return }
+      }
+    }
+    '^remote$' { if ($fst -match '^(|show|get-url)$') { return } }
+    '^reflog$' { if ($fst -notmatch '^(expire|delete|drop|write)$') { return } }   # no subcommand: reflog show
+    '^worktree$' { if ($fst -ceq 'list') { return } }
+    '^symbolic-ref$' { if (-not $w -and $np -eq 1) { return } }
+  }
+  Block "an assistant writes nothing to git (git $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+}
+# AsstGh <gh's arguments>: an allowlist (281.5) - passes a read, refuses every other gh command (an alias
+# and its call, an extension, auth, config, agent-task, an unknown group ...). gh's command line is read
+# exactly (281.6): before the group and before the subcommand only -R / --repo / --hostname with its value
+# (also --repo= / --hostname=) may stand, any other flag there refuses (gh may take the next word as its
+# value) - but gh --version alone, and gh --help / -h with only words after it (it prints help); names match
+# case-sensitively and whole, as gh matches them. Reads: no group (gh), help, version, status, browse (opens
+# a URL; these four take no subcommand), search; auth status, alias list, config get / list, org list; pr |
+# issue | release | repo | label | gist | workflow | secret | variable | run | cache | ruleset | project |
+# codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api:
+# AsstApi
+function AsstGh([string[]]$a) {
+  if ($a.Count -eq 1 -and $a[0] -ceq '--version') { return }
+  if ($a.Count -ge 1 -and ($a[0] -ceq '--help' -or $a[0] -ceq '-h') -and -not @($a | Select-Object -Skip 1 | Where-Object { $_.StartsWith('-') }).Count) { return }
+  $grp = ''; $sub = ''; $nx = $false; $i = 0
+  while ($i -lt $a.Count) {
+    $t = $a[$i]; $i++
+    if ($nx) { $nx = $false; continue }
+    if ($t -cin '-R', '--repo', '--hostname') { $nx = $true; continue }
+    if ($t -clike '--repo=*' -or $t -clike '--hostname=*') { continue }
+    if ($t.StartsWith('-')) {
+      $at = if ($grp) { 'subcommand' } else { 'command' }
+      Block "an assistant writes nothing to GitHub (gh ... $t before the $at, which gh may take as its value): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
+    }
+    if (-not $grp) { $grp = $t; if ($grp -cin 'api', 'help', 'version', 'status', 'browse') { break }; continue }
+    $sub = $t; break
+  }
+  if ($grp -ceq 'api') { AsstApi @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] }); return }
+  if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }
+  if (($grp -ceq 'auth' -and $sub -cin '', 'status') -or ($grp -cin 'alias', 'org' -and $sub -cin '', 'list') -or ($grp -ceq 'config' -and $sub -cin '', 'get', 'list')) { return }
+  if ($grp -cin 'pr', 'issue', 'release', 'repo', 'label', 'gist', 'workflow', 'secret', 'variable', 'run', 'cache', 'ruleset', 'project', 'codespace', 'ssh-key', 'gpg-key' -and $sub -cin '', 'list', 'view', 'status', 'diff', 'checks', 'watch') { return }
+  $gs = if ($sub) { "$grp $sub" } else { $grp }
+  Block "an assistant writes nothing to GitHub (gh $gs): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
+}
+# AsstApi <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
+# HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
+# implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
+# comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
+# /, an http(s)://<host>/ prefix). Flags with letter case: -h is not -H.
+function AsstApi([string[]]$a) {
+  $m = ''; $fl = $false; $ep = ''; $mu = $false; $at = $false; $i = 0
+  foreach ($t in $a) { if ($t -match 'mutation') { $mu = $true } }
+  while ($i -lt $a.Count) {
+    $t = $a[$i]; $i++; $v = ''
+    $nv = if ($i -lt $a.Count) { $a[$i] } else { '' }
+    if ($t -ceq '-X' -or $t -ceq '--method') { $m = $nv; $i++ }
+    elseif ($t.StartsWith('--method=', [StringComparison]::Ordinal)) { $m = $t.Substring(9) }
+    elseif ($t.StartsWith('-X', [StringComparison]::Ordinal)) { $m = $t.Substring(2); if ($m.StartsWith('=')) { $m = $m.Substring(1) } }
+    elseif ($t -cmatch '^(-f|-F|--field|--raw-field)$') { $fl = $true; $v = $nv; $i++ }
+    elseif ($t -cmatch '^--(field|raw-field)=') { $fl = $true; $v = $t.Substring($t.IndexOf('=') + 1) }
+    elseif ($t -cmatch '^-[fF]') { $fl = $true; $v = $t.Substring(2); if ($v.StartsWith('=')) { $v = $v.Substring(1) } }
+    elseif ($t -ceq '--input') { $fl = $true; $at = $true; $i++ }
+    elseif ($t.StartsWith('--input=', [StringComparison]::Ordinal)) { $fl = $true; $at = $true }
+    elseif ($t -cmatch '^(-H|--header|-p|--preview|-q|--jq|-t|--template|--cache|--hostname)$') { $i++ }
+    elseif ($t.StartsWith('-')) { }
+    elseif (-not $ep) { $ep = $t }
+    if ($v -like '*=@*') { $at = $true }
+  }
+  if ($ep -match '^https?://') { $ep = $ep -replace '^https?://[^/]*/?', '' }
+  $ep = $ep.TrimStart('/')   # /graphql and https://<host>/graphql are graphql
+  if ($ep -ceq 'graphql') {
+    if ($mu) { Block 'an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
+    if ($at) { Block 'an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
+    return
+  }
+  if (-not $m) { if ($fl) { Block 'an assistant writes nothing to GitHub (gh api with fields and no -X GET, which is a POST): it reads only (COORD_ASSISTANT_DIR is set, #281)' }; return }
+  if ($m -notmatch '^(get|head)$') { Block "an assistant writes nothing to GitHub (gh api -X $m): it reads only (COORD_ASSISTANT_DIR is set, #281)" }
 }
 function CdSeg([string[]]$a) {
   $x = ''
@@ -864,6 +1080,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     if ($t -match $REDIR) { if ($t -match $REDIR_OP) { $skip = $true }; continue }
     $words += $t
   }
+  if ($asst) { AsstGvar $words }
   # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
   # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments
   $i = CmdIdx $words
@@ -874,6 +1091,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^git$' {
       # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see GitSeg
       $redir = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^(GIT_DIR|GIT_WORK_TREE)=') { $redir = $true } }
+      if ($asst) { AsstGenv $words $i }
       GitSeg $rest $redir
     }
     '^(cd|pushd|chdir|set-location|sl|push-location)$' { CdSeg $rest }
@@ -884,6 +1102,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^gh$' {
       # GH_REPO= before gh (also after env): see GhSeg
       $ghEnv = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^GH_REPO=') { $ghEnv = $true } }
+      if ($asst) { AsstGh $rest }
       GhSeg $rest $ghEnv
     }
   }

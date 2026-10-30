@@ -942,6 +942,149 @@ for v in "#317 worker: N|317-w" "#317 tester: N|317-t"; do
 done
 for b in 315-lead 316-lead 317-w 317-t; do git -C "$tmp/repo" worktree remove --force "$nwt/$b" 2>/dev/null; done
 
+# --- an assistant (#281): --name "assistant: <name>" (letters, digits, . _ -) and --brief-file
+# <repo>/coordinator/assistants/<name>/BRIEF.md start a background session with no worktree and no branch, from the
+# --repo root, --settings the --safety file, whose env COORD_ASSISTANT_DIR names that folder. Access points: the
+# settings fixture is $tmp/safety.json with the line `"COORD_ASSISTANT_DIR": "<folder>"` added to its env (the
+# folder in the C:/... form on Windows, as a settings file holds it); the stub claude lists every name it started
+# (`claude agents --json`, with --all too) and a session of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>`).
+# A refusal is exit 1 before anything is created, and its line names what it refuses: the name, BRIEF.md or the
+# assistants/ folder, COORD_ASSISTANT_DIR and both folders, the flag (any spelling) with the word assistant, the
+# existing session's name and id. The launch text's lines before its first blank line (the first one naming the
+# folder, `<folder>/`) say BRIEF.md, NOTES.md, compaction, restart, SendMessage and the --report-to session ---
+ar="$tmp/arepo"; mar="$mtmp/arepo"
+git init -q -b main "$ar" && g -C "$ar" commit -q --allow-empty -m init
+mkas() {   # mkas <name> [<env folder>]: <repo>/coordinator/assistants/<name> with BRIEF.md and NOTES.md (as the
+  # coordinator's skill writes them) in $ad; a settings file whose COORD_ASSISTANT_DIR names <env folder> (default
+  # that folder) in $asf
+  ad="$ar/coordinator/assistants/$1"; mkdir -p "$ad"
+  printf 'Log the hours (the fixture brief of %s).\n' "$1" > "$ad/BRIEF.md"; printf '# Notes\n' > "$ad/NOTES.md"
+  asf="$tmp/as-$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_').json"
+  awk -v d="${2-$mar/coordinator/assistants/$1}" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' "$tmp/safety.json" > "$asf"
+  grep -q '"COORD_ASSISTANT_DIR"' "$asf" || { echo "FAIL: could not write the assistant settings $asf"; fail=1; }
+}
+asnothing() {   # asnothing <what>: no session started, no worktree, no branch but main, nothing added to the folder $ad
+  grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL ($1): claude was started"; fail=1; }
+  [ -e "$ar/.claude/worktrees" ] && { echo "FAIL ($1): a worktree folder was created"; fail=1; }
+  [ "$(git -C "$ar" for-each-ref --format='%(refname)' refs/heads)" = refs/heads/main ] || { echo "FAIL ($1): a branch was created"; fail=1; }
+  [ "$(ls -A "$ad" | tr '\n' ' ')" = "BRIEF.md NOTES.md " ] || { echo "FAIL ($1): the folder $ad changed:"; ls -A "$ad" | sed 's/^/    /'; fail=1; }
+}
+says() {   # says <what> <text>...: one output line holds every text (\ read as /)
+  local w="$1" l; shift; l="$(printf '%s\n' "$LAST" | tr -d '\r' | tr '\\' '/')"
+  while [ $# -gt 0 ]; do l="$(printf '%s\n' "$l" | grep -F -- "$1")"; shift; done
+  [ -n "$l" ] || { echo "FAIL ($w): no output line names all it should"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+A=(--repo "$ar" --model sonnet --report-to "Core lead")
+mkas timesheet; tsd="$ad"; tsf="$asf"
+exb="$(cksum < "$ar/.git/info/exclude" 2>/dev/null)"; bdb="$(ls "$tmp/cfg/coordinator/briefs" 2>/dev/null)"
+: > "$STUB_LOG"
+check 0 "start: an assistant, dry run" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf" --dry-run
+expect_in "[dry-run]"; expect_in "assistant: timesheet"
+asnothing "an assistant, dry run"
+[ -e "$ar/.claude" ] && { echo "FAIL (an assistant, dry run): $ar/.claude was created"; fail=1; }
+[ "$(cksum < "$ar/.git/info/exclude" 2>/dev/null)" = "$exb" ] || { echo "FAIL (an assistant, dry run): info/exclude changed"; fail=1; }
+[ "$(ls "$tmp/cfg/coordinator/briefs" 2>/dev/null)" = "$bdb" ] || { echo "FAIL (an assistant, dry run): a brief file was written"; fail=1; }
+: > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
+check 0 "start: an assistant" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf"
+grep -qF -- "--bg --name assistant: timesheet --model sonnet --permission-mode auto --settings " "$STUB_LOG" &&
+  grep -F -- "--bg --name assistant: timesheet" "$STUB_LOG" | grep -qF "as-timesheet.json" ||
+  { echo "FAIL (an assistant): claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+grep -qx "cwd $(cd "$ar" && pwd -P)" "$STUB_LOG" || { echo "FAIL (an assistant): not launched from the repository root:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+[ -e "$ar/.claude/worktrees" ] && { echo "FAIL (an assistant): a worktree folder was created"; fail=1; }
+[ "$(git -C "$ar" for-each-ref --format='%(refname)' refs/heads)" = refs/heads/main ] || { echo "FAIL (an assistant): a branch was created"; fail=1; }
+[ "$(ls -A "$tsd" | tr '\n' ' ')" = "BRIEF.md NOTES.md " ] || { echo "FAIL (an assistant): start-worker wrote into the folder"; fail=1; }
+ahead="$(tr -d '\r' < "$STUB_LOG.arg" 2>/dev/null | tr '\\' '/' | awk '!length { exit } { print }')"
+case "$(printf '%s\n' "$ahead" | sed -n 1p)" in *"$(basename "$tmp")/arepo/coordinator/assistants/timesheet/"*) ;;
+  *) echo "FAIL (an assistant): the launch text's first line does not name the folder .../coordinator/assistants/timesheet/"; printf '%s\n' "$ahead" | sed 's/^/    /'; fail=1 ;; esac
+for x in BRIEF.md NOTES.md SendMessage '"Core lead"' compact restart; do
+  printf '%s\n' "$ahead" | grep -qiF -- "$x" || { echo "FAIL (an assistant): the launch text's first lines do not say $x"; printf '%s\n' "$ahead" | sed 's/^/    /'; fail=1; }
+done
+grep -q EnterWorktree "$STUB_LOG.arg" 2>/dev/null && { echo "FAIL (an assistant): the launch text sends it into a worktree"; fail=1; }
+grep -qF 'Log the hours (the fixture brief of timesheet).' "$STUB_LOG.arg" 2>/dev/null || { echo "FAIL (an assistant): the brief is not in the launch text"; fail=1; }
+expect_in 'claude attach "assistant: timesheet"'
+expect_in 'subscribe: SendMessage(to: "assistant: timesheet", notify_when_idle: true)'
+# its session exists now (listed): a second start of that name is refused
+: > "$STUB_LOG"
+check 1 "start: an assistant whose session exists" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf"
+says "an assistant whose session exists" "assistant: timesheet"; ad="$tsd"; asnothing "an assistant whose session exists"
+# a stopped (done) session of that name, listed by --all only: refused, the line naming it and its id
+mkas jira
+printf '%s %s %s %s\n' ab12cd34 ab12cd34-1111-4222-8333-444455556666 done "assistant: jira" > "$STUB_LOG.sessions"
+: > "$STUB_LOG"
+check 1 "start: an assistant whose stopped session is listed" -- start "${A[@]}" --name "assistant: jira" --brief-file "$ad/BRIEF.md" --safety "$asf"
+says "an assistant whose stopped session is listed" "assistant: jira" ab12cd34; asnothing "an assistant whose stopped session is listed"
+: > "$STUB_LOG.sessions"
+# roles/assistant.md heads the brief when the core has it (a copy of the core with a fixture role), by the role
+# mechanism; without it the brief goes alone
+acore="$mtmp/acore"; ncore="$mtmp/ncore"
+mkdir -p "$acore" "$ncore" && cp -R "$core/scripts" "$core/roles" "$acore/" && cp -R "$core/scripts" "$core/roles" "$ncore/"
+rm -f "$ncore/roles/assistant.md"
+printf -- '---\nname: assistant\n---\nYou are an assistant (the fixture role of tests/workers).\n' > "$acore/roles/assistant.md"
+mkas r1; : > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
+core="$acore" check 0 "start: an assistant, roles/assistant.md there" -- start "${A[@]}" --name "assistant: r1" --brief-file "$ad/BRIEF.md" --safety "$asf"
+expect_in "role assistant: roles/assistant.md heads the brief"
+tr -d '\r' < "$STUB_LOG.arg" 2>/dev/null | awk '/^You are an assistant \(the fixture role/ { r = NR } /^Log the hours \(the fixture brief of r1\)/ { b = NR } END { exit !(r && b && r < b) }' ||
+  { echo "FAIL (an assistant, roles/assistant.md there): the role does not head the brief"; fail=1; }
+mkas r2; : > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
+core="$ncore" check 0 "start: an assistant, no roles/assistant.md" -- start "${A[@]}" --name "assistant: r2" --brief-file "$ad/BRIEF.md" --safety "$asf"
+case "$LAST" in *"role assistant"*) echo "FAIL (an assistant, no roles/assistant.md): a role line"; fail=1 ;; esac
+grep -qF 'Log the hours (the fixture brief of r2).' "$STUB_LOG.arg" 2>/dev/null || { echo "FAIL (an assistant, no roles/assistant.md): the brief is not in the launch text"; fail=1; }
+# names outside letters, digits, . _ - are refused, the line naming the name (its folder and settings there)
+for nm in "time sheet" "x!" "a/b"; do
+  mkas "$nm"; : > "$STUB_LOG"
+  check 1 "start: an assistant named '$nm'" -- start "${A[@]}" --name "assistant: $nm" --brief-file "$ad/BRIEF.md" --safety "$asf"
+  says "an assistant named '$nm'" "$nm"; asnothing "an assistant named '$nm'"
+done
+mkas ""; : > "$STUB_LOG"
+check 1 "start: an assistant with an empty name" -- start "${A[@]}" --name "assistant: " --brief-file "$ad/BRIEF.md" --safety "$asf"
+grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL (an assistant with an empty name): claude was started"; fail=1; }
+rm -f "$ad/BRIEF.md" "$ad/NOTES.md"
+# the brief: another file name, a folder outside assistants/, another assistant's folder
+ad="$tsd"; : > "$STUB_LOG"
+check 1 "start: an assistant, --brief-file NOTES.md" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/NOTES.md" --safety "$tsf"
+says "an assistant, --brief-file NOTES.md" BRIEF.md; asnothing "an assistant, --brief-file NOTES.md"
+mkdir -p "$tmp/elsewhere-as/timesheet" && printf 'Log the hours.\n' > "$tmp/elsewhere-as/timesheet/BRIEF.md"
+mkas ts-env "$mtmp/elsewhere-as/timesheet"; ad="$tsd"; : > "$STUB_LOG"
+check 1 "start: an assistant, its brief outside assistants/" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tmp/elsewhere-as/timesheet/BRIEF.md" --safety "$asf"
+says "an assistant, its brief outside assistants/" assistants; asnothing "an assistant, its brief outside assistants/"
+mkas other; od="$ad"; ofs="$asf"; ad="$tsd"; : > "$STUB_LOG"
+check 1 "start: an assistant, another assistant's folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$od/BRIEF.md" --safety "$ofs"
+says "an assistant, another assistant's folder" assistants; asnothing "an assistant, another assistant's folder"
+# COORD_ASSISTANT_DIR missing, or naming another folder: refused, naming both
+: > "$STUB_LOG"
+check 1 "start: an assistant, no COORD_ASSISTANT_DIR" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tmp/safety.json"
+says "an assistant, no COORD_ASSISTANT_DIR" COORD_ASSISTANT_DIR assistants/timesheet; asnothing "an assistant, no COORD_ASSISTANT_DIR"
+: > "$STUB_LOG"
+check 1 "start: an assistant, COORD_ASSISTANT_DIR another folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$ofs"
+says "an assistant, COORD_ASSISTANT_DIR another folder" COORD_ASSISTANT_DIR assistants/other; says "an assistant, COORD_ASSISTANT_DIR another folder" assistants/timesheet
+asnothing "an assistant, COORD_ASSISTANT_DIR another folder"
+# the same folder in another letter case is that folder where letter case in paths is ignored (Windows)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+  mkas lc "$(printf '%s' "$mar/coordinator/assistants/lc" | tr '[:lower:]' '[:upper:]')"; : > "$STUB_LOG"
+  check 0 "start: an assistant, COORD_ASSISTANT_DIR in another letter case" -- start "${A[@]}" --name "assistant: lc" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
+  asnothing "an assistant, COORD_ASSISTANT_DIR in another letter case" ;;
+esac
+# a worker's flags with an assistant are refused, the line naming the flag and the assistant
+ad="$tsd"; ash="$(git -C "$ar" rev-parse HEAD)"; mkdir -p "$tmp/as-tt"
+for v in "branch|--branch|70-as" "base|--base|main" "worktreeroot|--worktree-root|$tmp/as-wt" "contract|--contract|$tmp/c331.md" \
+  "testercommit|--tester-commit|$ash" "testertests|--tester-tests|$tmp/as-tt"; do
+  vk="${v%%|*}"; vr="${v#*|}"; vf="${vr%%|*}"; vv="${vr#*|}"
+  : > "$STUB_LOG"
+  check 1 "start: an assistant given $vf" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf" "$vf" "$vv"
+  printf '%s\n' "$LAST" | tr 'A-Z' 'a-z' | tr -d '-' | grep -F "$vk" | grep -q assistant ||
+    { echo "FAIL (an assistant given $vf): no line names the flag and the assistant"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  asnothing "an assistant given $vf"
+  [ -e "$tmp/as-wt" ] && { echo "FAIL (an assistant given $vf): a worktree root was created"; fail=1; }
+done
+# --model, --safety and --report-to are required as for the other roles
+for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
+  vf="${v%%|*}"; R=(--repo "$ar" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --model sonnet --safety "$tsf" --report-to "Core lead")
+  a=(); i=0; while [ $i -lt ${#R[@]} ]; do [ "${R[$i]}" = "$vf" ] || a+=("${R[$i]}" "${R[$((i + 1))]}"); i=$((i + 2)); done
+  : > "$STUB_LOG"
+  check 1 "start: an assistant without $vf" -- start "${a[@]}"
+  asnothing "an assistant without $vf"
+done
+
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
 check 3 "cleanup: mistyped worktree path" -- cleanup --worktree "$tmp/repo/.claude/worktrees/12-fxi" --session s1
@@ -1359,6 +1502,48 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
   ngone 59-lead "a trailing backslash" ;;
 esac
 
+# --- an assistant is never cleaned up (#281): --session naming a session the listing calls `assistant: <name>`
+# (by its short id or full sessionId, running or stopped) changes nothing and exits 6 with one line
+# `ASSISTANT KEPT: <name> (<id>) - an assistant is removed only on the owner's word`, before any stop, removal or
+# worktree check; the header documents code 6. A name that only holds `assistant:` further on is no assistant ---
+mk 60-asst
+printf '%s %s %s %s\n' a5515700 a5515700-1111-4222-8333-444455556666 running "assistant: timesheet" > "$SS"
+printf 'a5515700\t%s\n' "$(native "$tmp/repo")" > "$SS.cwd"
+akl="ASSISTANT KEPT: timesheet (a5515700) - an assistant is removed only on the owner's word"
+akept() {   # akept <what>: exit 6 checked; one line akl, nothing stopped or removed, the worktree, branch and session kept
+  [ "$(printf '%s\n' "$LAST" | tr -d '\r' | grep -cxF "$akl")" = 1 ] || { echo "FAIL ($1): not exactly one line '$akl'"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL ($1): a session was stopped or removed:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+  [ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify refs/heads/60-asst || { echo "FAIL ($1): the worktree or branch was removed"; fail=1; }
+  grep -q a5515700 "$SS" || { echo "FAIL ($1): the assistant's session is gone"; fail=1; }
+}
+for v in "a5515700|" "a5515700-1111-4222-8333-444455556666|" "a5515700|--dry-run"; do
+  vs="${v%%|*}" vd="${v#*|}"; : > "$STUB_LOG"
+  STUB_HEADS="$h" check 6 "cleanup: an assistant by $vs${vd:+ $vd}" -- cleanup --worktree "$w" --session "$vs" $vd
+  akept "an assistant by $vs${vd:+ $vd}"
+done
+printf '%s %s %s %s\n' a5515700 a5515700-1111-4222-8333-444455556666 done "assistant: timesheet" > "$SS"
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: a stopped assistant" -- cleanup --worktree "$w" --session a5515700
+akept "a stopped assistant"
+# before the worktree checks: a worktree that does not exist, one with uncommitted changes
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: an assistant, no such worktree" -- cleanup --worktree "$tmp/repo/.claude/worktrees/60-nope" --session a5515700
+akept "an assistant, no such worktree"
+echo dirt > "$w/dirt.txt"; : > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: an assistant, a worktree not clean" -- cleanup --worktree "$w" --session a5515700
+akept "an assistant, a worktree not clean"
+rm -f "$w/dirt.txt"
+# the negative control: `assistant:` later in the name is an ordinary session, cleaned as before (its own worktree)
+mk 61-asst
+printf '%s %s %s %s\n' c0ffee60 c0ffee60-1111-4222-8333-444455556666 running "#60 worker: assistant: tools" > "$SS"
+printf 'c0ffee60\t%s\n' "$(native "$tmp/repo")" > "$SS.cwd"
+STUB_HEADS="$h" check 0 "cleanup: a worker whose title holds assistant:" -- cleanup --worktree "$w" --session c0ffee60
+expect_in "cleaned: c0ffee60"
+for f in cleanup-worker.sh cleanup-worker.ps1; do
+  awk 'NR > 1 && !/^#/ { exit } { sub(/^# ?/, ""); print }' "$core/scripts/$f" | tr -d '\r' | tr '\n' ' ' | grep -q '6 ASSISTANT KEPT' ||
+    { echo "FAIL: the header of $f does not document exit code 6 (ASSISTANT KEPT)"; fail=1; }
+done
+
 # --- --contract only checks a contract: the session reads the brief alone (#331) ---
 # given --contract <file> whose text is not in the brief (its `id:` line and its `title:` line both absent
 # from the brief file): one line holding WARN and --contract (-Contract in the .ps1) says so, and the start
@@ -1410,6 +1595,43 @@ LAST="$(printf 'not json' | ac coordinator | tr -d '\r')"
 expect_in '"additionalContext":"The conversation was just compacted'
 out="$(printf '%s' "$j" | ac nobody 2>/dev/null)"; rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: after-compact with an unknown role: exit $rc, printed '$out'"; fail=1; }
+# the assistant variant (281.5): an assistant outlives its kept brief (pruned after 14 days), so with or
+# without one it names its own files - <COORD_ASSISTANT_DIR>/BRIEF.md and NOTES.md, and the core's
+# roles/assistant.md (the core the hook runs from) - to read in full with the Read tool and follow, not the
+# summary; paths in the forward-slash form the worker variant prints; never a worker's or the coordinator's
+# text. Access points: the text holds "with the Read tool", "not the summary" and the three paths; without
+# COORD_ASSISTANT_DIR it still names BRIEF.md and NOTES.md and says the folder is "unknown"; the usage line
+# names assistant.
+ad="$tmp/assist/a1"; mkdir -p "$ad"; printf 'brief\n' > "$ad/BRIEF.md"; printf 'notes\n' > "$ad/NOTES.md"
+adw="$ad"; command -v cygpath >/dev/null 2>&1 && adw="$(cygpath -m "$ad")"
+mkdir -p "$tmp/cfg/coordinator/briefs"; printf 'You implement one contract\n' > "$tmp/cfg/coordinator/briefs/a5500000-0000-4000-8000-000000000001.md"
+not_worker_or_coord() {   # <case>: the text of neither the worker nor the coordinator variant
+  case "$LAST" in *coordinator/briefs*|*"your role file and the contract"*|*CORE.md*|*BINDINGS.md*|*"git status"*)
+    echo "FAIL (after-compact assistant, $1): a worker's or the coordinator's text: $LAST"; fail=1 ;; esac; }
+for as in a5500000-0000-4000-8000-000000000001 a5500000-0000-4000-8000-0000000000ff; do   # a kept brief, none
+  w="kept brief"; [ "$as" = a5500000-0000-4000-8000-000000000001 ] || w="no kept brief"
+  LAST="$(set -o pipefail; printf '{"session_id":"%s","cwd":"/work/proj","source":"compact"}' "$as" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac assistant | tr -d '\r')"; rc=$?
+  [ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, $w): exit $rc"; fail=1; }
+  expect_in '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The conversation was just compacted'
+  expect_in "with the Read tool"; expect_in "not the summary"
+  expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"; expect_in "$core/roles/assistant.md"
+  not_worker_or_coord "$w"
+done
+# COORD_ASSISTANT_DIR with backslashes (Windows): printed in the forward-slash form
+if command -v cygpath >/dev/null 2>&1; then
+  LAST="$(printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff"}' | COORD_ASSISTANT_DIR="$(cygpath -w "$ad")" ac assistant | tr -d '\r')"
+  expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"
+fi
+LAST="$(set -o pipefail; unset COORD_ASSISTANT_DIR; printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff","cwd":"/work/proj"}' | CLAUDE_CONFIG_DIR="$cfgw" ac assistant | tr -d '\r')"; rc=$?
+[ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, no COORD_ASSISTANT_DIR): exit $rc"; fail=1; }
+expect_in '"additionalContext":"The conversation was just compacted'
+expect_in "BRIEF.md"; expect_in "NOTES.md"; expect_in "unknown"
+not_worker_or_coord "no COORD_ASSISTANT_DIR"
+# the coordinator variant is silent in an assistant's session (its settings load the project's too)
+out="$(set -o pipefail; printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac coordinator | tr -d '\r')"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: the coordinator variant spoke in an assistant's session: exit $rc, printed '$out'"; fail=1; }
+err="$(printf '%s' "$j" | ac nobody 2>&1 >/dev/null | tr -d '\r')"
+case "$err" in *usage*assistant*) ;; *) echo "FAIL: the after-compact usage line does not name assistant: '$err'"; fail=1 ;; esac
 
 echo "worker scripts ($kind): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

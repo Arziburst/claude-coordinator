@@ -5,7 +5,7 @@
 # fixture transcripts (claude/: a coordinator, a worker and a task about a self-test kept; a probe, a self-test lead
 # with its subagent, a session in a coordinator-selftest sandbox and another project left out) against the expected
 # local report and public body; the public body without the project's folder name or its kind; a week with too
-# little data, no transcripts, journal or escapes; CRLF and a BOM; the allowlist self-check failing on an injected
+# little data, no transcripts, journal or escapes; CRLF and a BOM; an assistant's rows apart (#281); the allowlist self-check failing on an injected
 # path, the folder's name, free text and a foreign label; the proposal check; --new-id; usage errors.
 #   tests/retro/run.sh sh              # scripts/retro.sh, with the bash running this file
 #   tests/retro/run.sh ps pwsh         # scripts/retro.ps1 (or: ps powershell)
@@ -87,6 +87,18 @@ for f in RUNS.tsv LOG.md ESCAPES.tsv ROUTING.md PROJECT.md; do
   { printf '\357\273\277'; awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$here/coordinator/$f"; } > "$tmp/crlf/coordinator/$f"
 done
 expect "CRLF line ends and a BOM in the run log, the journal, the escapes, ROUTING.md and PROJECT.md" 0 "$t/expected-local.txt" - -- "$(winpath "$tmp/crlf/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P"
+# an assistant's runs (#281): rows whose role and kind are `assistant` - task `-`, the assistant's name, a task's
+# number - are never a task's cost or time and never the coordinator's own spend: the local report as without
+# them but for its one value of their own, `cost assistants` (after `cost coordinator`; 0.00 with none: in
+# expected-local.txt and expected-thin.txt); the public body and the core report hold no such value - unchanged
+mkdir -p "$tmp/asst/coordinator" && cp "$here/coordinator/"* "$tmp/asst/coordinator/"
+printf '%s\n' '# an assistant beside the coordinator (#281): 4.50 in the week, 0.40 in the previous one' \
+  "$(printf '2026-10-06\t-\tassistant\tassistant\tsonnet\tmedium\t-\t1000\t1.50\t-\t2026-10-06T07:00:00Z\t600\t30')" \
+  "$(printf '2026-10-08\ttimesheet\tassistant\tassistant\tsonnet\tmedium\t-\t1000\t2.25\t-\t2026-10-08T07:00:00Z\t600\t30')" \
+  "$(printf '2026-10-09\t9\tassistant\tassistant\tsonnet\tmedium\t-\t1000\t0.75\t-\t2026-10-09T07:00:00Z\t600\t30')" \
+  "$(printf '2026-09-30\ttimesheet\tassistant\tassistant\thaiku\tlow\t-\t100\t0.40\t-')" >> "$tmp/asst/coordinator/RUNS.tsv"
+expect "an assistant's rows: their own cost value, never a task's or the coordinator's" 0 "$t/expected-assistant.txt" - -- "$(winpath "$tmp/asst/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P"
+expect "an assistant's rows: the public body unchanged" 0 "$t/expected-public.md" - -- "$(winpath "$tmp/asst/coordinator/RUNS.tsv")" --week 2026-10-07 --project "$P" --public --id "$ID"
 expect "the default week (the last complete one) and the default project" 0 any - -- "$runs"
 head -n 1 "$tmp/out" | grep -q '^retro	week of [0-9-]*	previous week of [0-9-]*$' || bad "the default week's header line"
 # the allowlist self-check on the public body, then on bodies with something injected

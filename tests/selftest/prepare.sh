@@ -10,12 +10,13 @@
 #     the base's worktree there, out of the project's git; verify removes an older run's at the old place;
 #   - the self-test sessions still listed by `claude agents` (a stub claude: the real one is never called),
 #     each with its cwd: only the run's own folders count; another folder's session is a SKIP line (#158);
+#     an assistant (`assistant: <name>`, #281) never counts and is never named, whatever its name or cwd;
 #   - verify --state-repo against a stub gh: a PR from a mini-block worker branch is a FAIL line (#331).
 #   tests/selftest/prepare.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/prepare.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -210,6 +211,25 @@ st verify --project "$p2" --state "$s2" --core c7
 expect "only foreign sessions" 0 "PASS verify: no self-test session left"
 expect "only foreign sessions" 0 "SKIP foreign self-test session f1 ($(D "$tmp/other"))"
 expect "only foreign sessions" 0 "SKIP foreign self-test session f2 ($(D "$p2-old"))"
+# an assistant (#281: a session named `assistant: <name>`, never cleaned up by the scripts) is never counted,
+# named or advised for removal, whatever else its name holds (selftest, probe) and wherever its cwd is: in the
+# project, in a worktree under it, in another folder, or none; running or done
+assistants='{"id":"as1","cwd":"'"$(J "$p2")"'","name":"assistant: timesheet","state":"running"},
+  {"id":"as2","cwd":"'"$(J "$p2")"'","name":"assistant: selftest-x","state":"done"},
+  {"id":"as3","cwd":"'"$(B "$p2/.claude/worktrees/selftest/c7/st2")"'","name":"assistant: selftest-y"},
+  {"id":"as4","cwd":"'"$(J "$tmp/other")"'","name":"assistant: probe-z"},
+  {"id":"as5","name":"assistant: st1-selftest"}'
+no_assistant() {   # no_assistant <case>: no output line names an assistant or its id
+  n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -Eq 'assistant:|\(as[1-5]\)|session as[1-5] ' ||
+    { echo "FAIL ($1): a line names an assistant:"; printf '%s\n' "$LAST" | grep -E 'assistant:|as[1-5]' | sed 's/^/    /'; fail=1; }
+}
+export STUB_AGENTS_ALL="[$assistants]"
+st verify --project "$p2" --state "$s2" --core c7
+expect "only assistants listed" 0 "PASS verify: no self-test session left"; no_assistant "only assistants listed"
+export STUB_AGENTS_ALL="[$own, $assistants]"
+st verify --project "$p2" --state "$s2" --core c7
+expect "own sessions and assistants" 1 "FAIL verify: sessions left (in step 6's order: claude stop <id>, read its cost, delete its status file, claude rm <id>): #st1 lead: selftest c7 (a1), #st2 worker: PR (w1), probe: push (r1)"
+no_assistant "own sessions and assistants"
 # the project given through a symlink (macOS: /tmp and /var are links), the session's cwd as it lies on
 # disk, as a real session lists it: still the run's own, never a SKIP and a PASS
 if [ -z "$win" ]; then

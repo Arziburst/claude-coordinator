@@ -57,13 +57,32 @@
 # <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
+# An assistant (#281): --name "assistant: <name>" (<name> letters, digits, . _ -, not dots only) and
+# --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md start a persistent session with NO worktree and NO
+# branch, launched from the repository root, --settings the --safety file, whose env COORD_ASSISTANT_DIR must
+# name that same folder. Folders are compared in one way in both start-worker scripts (the .ps1 runs this same
+# bash code): as on disk (links and junctions resolved, `..` taken), C:/... on Windows (a Git Bash /c/ form
+# too), no trailing /, in one letter case where paths ignore it; a folder that does not exist is compared as
+# written, so the two disagree only by refusing. --assistant-dir <folder> (an assistant only; the self-test's
+# throwaway assistant, `selftest assistant`) puts the folder elsewhere: it must exist, be named <name>, lie in
+# a folder named `assistants`, and no git working tree may see it (outside any, or ignored there). The
+# --safety file inside the assistant's folder is refused (the guard lets the assistant write there). Its launch
+# text's first line names the folder: BRIEF.md read in full, NOTES.md kept as its memory, both re-read after a
+# compaction or a restart, writes only inside the folder, questions to --report-to by SendMessage; then
+# roles/assistant.md (when the core has it) and the brief. A session of that name already listed (claude agents
+# --json --all, any state) is refused, and so is a start whose listing fails or prints no JSON list (it
+# cannot tell); --branch, --base, --worktree-root, --launch-from, --contract,
+# --tester-commit and --tester-tests are refused; each refusal exits 1 before anything is created. Nothing is
+# written into the folder (the coordinator's skill writes BRIEF.md and NOTES.md). After the launch: the attach
+# command (`claude attach "assistant: <name>"`, and `claude attach <id>` when the launch printed the id).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
+  case "$1" in --branch|--base|--worktree-root|--launch-from|--contract|--tester-commit|--tester-tests) given="${given:-$1}" ;; esac
   case "$1" in
     --repo) need "$@"; repo="$2"; shift 2 ;;
     --name) need "$@"; name="$2"; shift 2 ;;
@@ -80,17 +99,26 @@ while [ $# -gt 0 ]; do
     --contract) need "$@"; contract="$2"; shift 2 ;;
     --tester-commit) need "$@"; tcommit="$2"; shift 2 ;;
     --tester-tests) need "$@"; ttests="$2"; shift 2 ;;
+    --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
+# an assistant (#281): a session beside the coordinator, no worktree and no branch - a worker's flags are refused
+asst=""; case "$name" in "assistant:"*) asst=1 ;; esac
+if [ -n "$asst" ] && [ -n "$given" ]; then
+  echo "refused: $given with an assistant ($name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" >&2; exit 1
+fi
+[ -n "$asst" ] || [ -z "$adirx" ] || { echo "refused: --assistant-dir with $name - it is for an assistant (--name \"assistant: <name>\") only" >&2; exit 1; }
 # a brief that is missing, or empty / blanks only, would start a worker with no task (#226)
 if [ -n "$brief" ]; then
   [ -f "$brief" ] || { echo "--brief-file: $brief does not exist" >&2; exit 1; }
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
-[ -n "$repo" ] && [ -n "$name" ] && [ -n "$branch" ] && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2; exit 1; }
+[ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2
+  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
+  exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
@@ -105,6 +133,44 @@ case "$wtroot" in ""|/*|[A-Za-z]:[/\\]*) ;; *) wtroot="$(pwd)/$wtroot" ;; esac
 fold() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$1" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$1" ;; esac; }
 
 root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git repository: $repo" >&2; exit 1; }
+# an assistant's name and folder: <root>/coordinator/assistants/<name>/, its brief BRIEF.md there
+aname="" adir=""
+if [ -n "$asst" ]; then
+  aname="${name#assistant: }"
+  { [ "assistant: $aname" = "$name" ] && [[ "$aname" =~ ^[A-Za-z0-9._-]+$ ]] && case "$aname" in *[!.]*) true ;; *) false ;; esac; } ||
+    { echo "refused: the assistant name \"${name#assistant:}\" in --name \"$name\" - write \"assistant: <name>\", <name> letters, digits, . _ - (not dots only)" >&2; exit 1; }
+  adir="$root/coordinator/assistants/$aname"
+  # the one comparison of folders (M1): start-worker.ps1 runs this same code through bash - a folder as it lies
+  # on disk (links resolved), C:/... on Windows, no trailing /, in one letter case where paths ignore it; one
+  # that does not exist as written
+  fcanon() { local q; q="$( (cd -P -- "$1" 2>/dev/null && pwd -P) || true)"; [ -n "$q" ] || q="$1"
+    command -v cygpath >/dev/null 2>&1 && q="$(cygpath -m "$q")"
+    while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done
+    case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$q" ;; esac; }
+  # --assistant-dir: the folder elsewhere (the self-test's throwaway assistant), seen by no git working tree
+  if [ -n "$adirx" ]; then
+    adirx="$(printf '%s' "$adirx" | tr '\\' '/')"
+    [ -d "$adirx" ] || { echo "refused: --assistant-dir $adirx is not a folder" >&2; exit 1; }
+    adirx="$(cd "$adirx" && pwd)"; command -v cygpath >/dev/null 2>&1 && adirx="$(cygpath -m "$adirx")"
+    [ "$(basename "$adirx")" = "$aname" ] && [ "$(basename "$(dirname "$adirx")")" = assistants ] ||
+      { echo "refused: --assistant-dir $adirx - it must be <folder>/assistants/$aname" >&2; exit 1; }
+    if git -C "$adirx" rev-parse --show-toplevel >/dev/null 2>&1 && ! git -C "$adirx" check-ignore -q -- "$adirx/BRIEF.md" 2>/dev/null; then
+      echo "refused: --assistant-dir $adirx lies in a git working tree ($(git -C "$adirx" rev-parse --show-toplevel)) that sees it - it must be outside every one, or ignored there" >&2; exit 1
+    fi
+    adir="$adirx"
+  fi
+  [ "$(basename "$brief")" = BRIEF.md ] && [ "$(fcanon "$(dirname "$brief")")" = "$(fcanon "$adir")" ] ||
+    { echo "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $brief" >&2; exit 1; }
+  # COORD_ASSISTANT_DIR in the safety file's env: the guard keeps the assistant's writes inside that folder
+  aenv="$(sed -n 's/.*"COORD_ASSISTANT_DIR"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$safety" | head -n 1 | sed 's#\\\\#/#g' | tr '\\' '/')"
+  [ -n "$aenv" ] || { echo "refused: no COORD_ASSISTANT_DIR in the env of $safety - it must name the assistant's folder $adir" >&2; exit 1; }
+  [ "$(fcanon "$aenv")" = "$(fcanon "$adir")" ] ||
+    { echo "refused: COORD_ASSISTANT_DIR in $safety is $aenv - it must name the assistant's folder $adir" >&2; exit 1; }
+  # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
+  case "$(fcanon "$(dirname "$safety")")/" in "$(fcanon "$adir")/"*)
+    echo "refused: the --safety file $safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it outside the folder (coordinator/assistant-settings/$aname.json)" >&2; exit 1 ;; esac
+  from="$root"
+fi
 wt="${wtroot:-$root/.claude/worktrees}/$branch"
 from="${from:-$root}"
 [ -d "$from" ] || { echo "no folder to launch from: $from" >&2; exit 1; }
@@ -153,6 +219,19 @@ grep -q 'bgIsolation' "$safety" || { echo "safety settings: add \"worktree\": {\
 selftest=$(bash "$hook" --self-test || true)
 [ -n "$selftest" ] || { echo "safety settings: the hook's self-test printed nothing ($hook)" >&2; exit 1; }
 [ "$selftest" = "safety-guard: OK" ] || { echo "$selftest" >&2; exit 1; }
+# an assistant is one session per name: one already listed (running or stopped) is refused, never a second
+# (fail closed: a listing that fails or prints no JSON list cannot tell, so the start is refused)
+if [ -n "$asst" ] && command -v claude >/dev/null 2>&1; then
+  al="$(claude agents --json --all 2>/dev/null)" && printf '%s' "$al" | tr -d ' \t\r\n' | grep -q '^\[.*\]$' ||
+    { echo "refused: the listing of sessions (claude agents --json --all) failed or printed no JSON list - cannot tell whether \"$name\" exists already" >&2; exit 1; }
+  ex="$(printf '%s' "$al" | tr -d '\r\n' | tr '}' '\n' | sed 's/"name": *"/"name":"/' | grep -F "\"name\":\"$name\"" | head -n 1 || true)"
+  if [ -n "$ex" ]; then
+    xid="$(printf '%s\n' "$ex" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p')"
+    [ -n "$xid" ] || xid="$(printf '%s\n' "$ex" | sed -n 's/.*"sessionId": *"\([^"]*\)".*/\1/p')"
+    xst="$(printf '%s\n' "$ex" | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p')"
+    echo "refused: the session \"$name\" exists already (${xid:-no id}${xst:+, $xst}) - wake it (SendMessage, claude attach), or remove it on the owner's word first" >&2; exit 1
+  fi
+fi
 
 # The contract passes check-contract before it goes out (CORE §4, #267), checked before anything is
 # created: --contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
@@ -225,7 +304,8 @@ run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@" || { echo "$1 fai
 
 # no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
 # a base not on origin yet (a lead's integration branch before its first push): the local one too
-if [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
+if [ -n "$asst" ]; then start=""   # no branch, so no base
+elif [ -n "$(git -C "$root" config --get remote.origin.url)" ]; then
   # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
   # once: a transient DNS or network error should not stop a start
   lsr() { err="$(git -C "$root" ls-remote -q --exit-code --heads origin "$base" 2>&1 >/dev/null)"; }
@@ -259,7 +339,12 @@ fi
 # 32 767, after the worktree and branch exist - in a file beside the kept briefs (pruned with them), and
 # the session's first message is a short instruction to read that file
 notice=""
-if [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
+if [ -n "$asst" ]; then
+  # an assistant: its folder is its memory - it lives on across compactions and restarts from the files there
+  first="YOUR FOLDER is $adir/ - you are the assistant \"$aname\": no worktree, no branch. Read $adir/BRIEF.md in full before anything else and keep $adir/NOTES.md as your memory; re-read both after every compaction (a summary loses rules) and after a restart. Write only inside $adir/; never change, commit, push or open a PR in the project."
+  grep -Eq '"COORD_PROTECTED_ROOT"[[:space:]]*:[[:space:]]*"[^"]' "$safety" ||
+    notice="notice: COORD_PROTECTED_ROOT is not set in $safety: edit tools can reach the working copy (TOOLKIT Safety)"
+elif [ "$(fold "$(cd "$from" && pwd -P)")" = "$(fold "$(cd "$root" && pwd -P)")" ]; then
   first="FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wt. Work only inside it; never change files outside it."
   # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
   # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
@@ -270,8 +355,10 @@ else
   # worktree asks for permission and the session would wait, so it works there by absolute path
   first="YOUR WORKING COPY is $wt, a worktree of $root. Work in it by absolute path (git -C $wt ..., files under $wt); do not use EnterWorktree; never change files outside it."
 fi
-first="$first
-Report to: the session named \"$report\" (SendMessage) - your report and your questions."
+if [ -n "$asst" ]; then first="$first
+Questions to: the session named \"$report\" (SendMessage) - only what your folder, the run log and the journal do not hold."
+else first="$first
+Report to: the session named \"$report\" (SendMessage) - your report and your questions."; fi
 # the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
 # heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
 role="$(printf '%s' "$name" | sed -n 's/^\(#[^ ]* \)\{0,1\}\([a-z]*\):.*/\2/p')"
@@ -320,12 +407,13 @@ bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
 # the session (a native program on Windows) reads the path it is given: C:/..., not /c/...
 command -v cygpath >/dev/null 2>&1 && bd="$(cygpath -m "$bd")"
 lfile=""
-[ "$nchars" -le 24000 ] || lfile="$bd/launch-$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')-$(date +%Y%m%d-%H%M%S)-$$.md"
+[ "$nchars" -le 24000 ] || lfile="$bd/launch-$(printf '%s' "${branch:-assistant-$aname}" | tr -c 'A-Za-z0-9._-' '-')-$(date +%Y%m%d-%H%M%S)-$$.md"
 
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
 # local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
 wroot="${wtroot:-$root/.claude/worktrees}"
-if [ "$dry" = 1 ]; then
+if [ -n "$asst" ]; then :   # an assistant creates nothing: no worktree, no exclude line
+elif [ "$dry" = 1 ]; then
   echo "[dry-run] keep $wroot out of its repository's git (.git/info/exclude)"
 else
   mkdir -p "$wroot"
@@ -341,7 +429,7 @@ else
 fi
 # The coordinator's own state repository (<root>/coordinator, INIT 3.4) never shows in the project's git
 # either: a project that got `git init` after coordinator/ existed has no line for it yet
-if [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinator/; then
+if [ -z "$asst" ] && [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinator/; then
   if [ "$dry" = 1 ]; then echo "[dry-run] add /coordinator/ to the repository's .git/info/exclude"
   else
     common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
@@ -353,7 +441,7 @@ if [ -e "$root/coordinator/.git" ] && ! git -C "$root" check-ignore -q coordinat
 fi
 # An older lead kept its sub-contracts, briefs and run notes in <its worktree>/.lead/ (now beside it, #310),
 # never committed: one line, which info/exclude applies to every worktree of the repository
-if ! git -C "$root" check-ignore -q .lead/x; then
+if [ -z "$asst" ] && ! git -C "$root" check-ignore -q .lead/x; then
   if [ "$dry" = 1 ]; then echo "[dry-run] add /.lead/ to the repository's .git/info/exclude"
   else
     common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
@@ -364,7 +452,8 @@ if ! git -C "$root" check-ignore -q .lead/x; then
   fi
 fi
 
-if [ -d "$wt" ]; then
+if [ -n "$asst" ]; then made="nothing (an assistant has no worktree or branch)"
+elif [ -d "$wt" ]; then
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
   wtop="$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null || true)"
   [ -n "$wtop" ] && [ "$(fold "$(cd "$wtop" && pwd -P)")" = "$(fold "$(cd "$wt" && pwd -P)")" ] &&
@@ -424,7 +513,8 @@ case "$role" in worker|lead|"")
 esac
 if [ "$dry" = 1 ]; then
   [ -z "$lfile" ] || echo "[dry-run] brief through a file: $nchars characters of launch text, over 24000 - it would go to $lfile and the first message would point to it"
-  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <working copy $wt, report to \"$report\", ${roletext:+the role, }then the brief>)"
+  if [ -n "$asst" ]; then where="the folder $adir/, questions to \"$report\""; else where="working copy $wt, report to \"$report\""; fi
+  echo "[dry-run] (cd $from && claude --bg --name \"$name\" --model $model${effort:+ --effort $effort} --permission-mode $mode --settings $safety <$where, ${roletext:+the role, }then the brief>)"
 else
   msg="$full"
   if [ -n "$lfile" ]; then
@@ -434,8 +524,13 @@ else
     echo "brief through a file: $nchars characters of launch text, over 24000 - the session's first message points to $lfile"
   fi
   # a launch that fails leaves the worktree and branch: say so, and how to clean them
-  ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$msg" ) ||
+  # an assistant's launch output is read for its id (`backgrounded · <id> · <name>`), then printed as it came
+  bgo="$(mktemp "${TMPDIR:-/tmp}/start-worker-bg.XXXXXX")"
+  lrc=0; ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$msg" ) > "$bgo" || lrc=$?
+  cat "$bgo"; bgid="$(tr -d '\r' < "$bgo" | sed -n 's/.*backgrounded[^0-9A-Za-z]*\([0-9A-Za-z][0-9A-Za-z-]*\).*/\1/p' | head -n 1)"; rm -f "$bgo"
+  [ "$lrc" = 0 ] ||
     { [ -z "$lfile" ] || rm -f "$lfile"
+      if [ -n "$asst" ]; then echo "launch failed: claude --bg did not start the session. Created: $made - start again" >&2; exit 1; fi
       echo "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
   # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
   i=0
@@ -454,5 +549,9 @@ else
     mkdir -p "$bd" && printf '%s\n' "$full" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
     find "$bd" -name '*.md' -type f -mtime +14 -exec rm -f {} + 2>/dev/null || true
   else echo "no sessionId in the listing: the brief is not kept for after a compaction" >&2; fi
+  if [ -n "$asst" ]; then
+    echo "attach: claude attach \"$name\""
+    [ -z "$bgid" ] || echo "attach: claude attach $bgid"
+  fi
 fi
 echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"

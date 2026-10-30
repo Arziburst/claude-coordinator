@@ -4,7 +4,8 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 <RUNS.tsv> -PerRun             per kind, role and model, over rows
 # A task is the rows whose task number agrees before its first dot: its cost and time are the sums of the values its
 # rows have (a subagent's row, cost `in <parent>`, adds no time); its kind and model are its lead row's, else its first
-# worker row's, else its first row's; a `task` row (one per finished task, CORE 7) adds nothing to them. Per kind and
+# worker row's, else its first row's; a `task` row (one per finished task, CORE 7) adds nothing to them, nor does a row
+# whose role or kind is `assistant` (#281: -PerRun counts it under kind and role `assistant`). Per kind and
 # model and per measure, the last 10 tasks with a value count; ready: the wall of the last `task` row of each task. A
 # cost cell counts by its leading number (`0.0648 prices` is 0.0648); a verifier's `done` or `pass` is an approval.
 # Prints, tab-separated: kind model cost_n cost_median cost_low cost_high time_n time_median time_low time_high
@@ -30,7 +31,7 @@ param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [string]$Ta
   [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$BlockTop, [string]$Now)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 27 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 28 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 if ($Limits) {
   if ($File -or $Kind -or $Model -or $PerRun -or $Task -or $PrJson -or $Waits -or $Append) { Show-Usage }
 } elseif ($Task -or $PrJson -or $Waits -or $Append) {
@@ -254,7 +255,7 @@ if ($Task) {
     }
     $col = { param($i) if ($i -ge 0 -and $i -lt $f.Count) { $f[$i] } else { '' } }
     $t = (& $col $ct) -creplace '[.].*$', ''; $r = & $col $cr
-    if ($t -cne $TaskId -or $r -ceq 'task') { continue }
+    if ($t -cne $TaskId -or $r -ceq 'task' -or $r -ceq 'assistant' -or (& $col $ck) -ceq 'assistant') { continue }
     $n++; $a = Minutes (& $col $ca); $s = Epoch (& $col $cb)
     if ($a -ge 0 -and (& $col $cc) -cnotmatch '^[ \t]*in[ \t]') { $act += $a; $ha = $true }   # a subagent: in its parent
     $p = if ($r -ceq 'lead') { 3 } elseif ($r -ceq 'worker') { 2 } else { 1 }
@@ -352,6 +353,8 @@ foreach ($line in $L) {
   $col = { param($i) if ($i -ge 0 -and $i -lt $f.Count) { $f[$i] } else { '' } }
   $k = & $col $ck; $m = & $col $cm; $r = & $col $cr; $cv = & $col $cc
   $c = Units $cv '$'; $a = Units (& $col $ca) 'm'
+  # an assistant's run (#281): never a task's; -PerRun under kind and role assistant
+  if ($r -ceq 'assistant' -or $k -ceq 'assistant') { if (-not $PerRun) { continue }; $k = 'assistant'; $r = 'assistant' }
   # a task row (role task): its wall is the time to ready, the forecast only; the last one of a task counts
   if ($r -ceq 'task') {
     if ($PerRun) { continue }
