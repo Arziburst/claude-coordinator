@@ -1142,3 +1142,57 @@ allow	ps:work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# --- 281.6: gh's own command line read exactly in the assistant mode - before the group and before the
+# subcommand only -R / --repo / --hostname with their value (also --repo= / --hostname=) may stand, any other
+# flag there refuses (gh lets it take the next word); group and subcommand names match case-sensitively and whole
+block	work	gh pr -b list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr --body list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh --body search pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh -b help pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh --limit search repo list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue -b list close 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh -R o/r pr --body list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh --repo=o/r pr -b view merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh --body status pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr -b list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr --body list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh --body search pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh -b help pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh --limit search repo list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh -R o/r pr --body list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list --limit 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list --limit 5 --state open	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh -R o/r pr view 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --repo o/r issue list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --repo=o/r issue list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --hostname h pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --hostname=h pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr -R o/r list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr --repo=o/r view 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh pr list --limit 5 --state open	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh -R o/r pr view 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh --repo=o/r issue list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh --hostname h pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh pr -R o/r list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh PR list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr LIST	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh Status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh HELP	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh help:x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh status:co	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh Pr View 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh API repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh PR list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr LIST	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh Status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh HELP	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh help:x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh status:co	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh help pr	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# without the folder these gh verdicts are unchanged
+allow	work	gh PR list	-	@PROJECT@	-	-
+allow	work	gh help:x	-	@PROJECT@	-	-
+allow	work	gh pr -b list	-	@PROJECT@	-	-
+allow	ps:work	gh Status	-	@PROJECT@	-	-
+allow	ps:work	gh --limit search repo list	-	@PROJECT@	-	-
