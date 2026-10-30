@@ -11,12 +11,13 @@
 #   - sandbox refuses a kept sandbox that is not clean, and a folder that is not a sandbox;
 #   - plain clean still removes the folder; sandbox --keep is a usage error;
 #   - a relative --in is made absolute: from another folder the kept sandbox fetches, resets, is reused.
-# The sessions are checked with a stub claude (the real one is never called): only those in the sandbox count.
+# The sessions are checked with a stub claude (the real one is never called): only those in the sandbox count,
+# never an assistant's (`assistant: <name>`, #281).
 #   tests/selftest/sandbox.sh sh                  # selftest.sh, with the bash running this file
 #   tests/selftest/sandbox.sh ps pwsh             # selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -225,6 +226,19 @@ n=$((n + 1))
 st sandbox --in "$(P "$tmp/b")" --keep
 { [ "$RC" = 2 ] && ! printf '%s\n' "$LAST" | grep -q '^PASS \|^FAIL '; } ||
   { echo "FAIL (sandbox --keep): expected a usage error (exit 2), got exit $RC:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+
+# an assistant (#281: a session named `assistant: <name>`, never cleaned up by the scripts) in the sandbox is never
+# counted, named or advised for removal, whatever else its name holds: clean passes and removes the sandbox
+mkdir "$tmp/as"; ad="$tmp/as/coordinator-selftest"
+st sandbox --in "$(P "$tmp/as")"
+expect "a sandbox for the assistant case" 0 "sandbox: $(P "$ad")"
+export STUB_AGENTS_ALL='[{"id":"as1","cwd":"'"$(J "$ad/repo")"'","name":"assistant: selftest-x","state":"running"},{"id":"as2","cwd":"'"$(J "$ad/repo/.claude/worktrees/st2")"'","name":"assistant: probe-y","state":"done"},{"id":"as3","cwd":"'"$(J "$ad")"'","name":"assistant: st1"}]'
+st clean --sandbox "$(P "$ad")"
+unset STUB_AGENTS_ALL
+expect "clean, only assistants listed" 0 "PASS clean: no self-test session left"
+expect "clean, only assistants listed" 0 "PASS clean: sandbox removed"
+n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -Eq 'assistant:|\(as[1-3]\)|session as[1-3] ' ||
+  { echo "FAIL (clean, only assistants listed): a line names an assistant:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 
 echo "selftest sandbox ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
