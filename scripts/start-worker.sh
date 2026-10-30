@@ -60,18 +60,25 @@
 # An assistant (#281): --name "assistant: <name>" (<name> letters, digits, . _ -, not dots only) and
 # --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md start a persistent session with NO worktree and NO
 # branch, launched from the repository root, --settings the --safety file, whose env COORD_ASSISTANT_DIR must
-# name that same folder (folders compared as on disk, in one letter case where paths ignore it). Its launch
+# name that same folder. Folders are compared in one way in both start-worker scripts (the .ps1 runs this same
+# bash code): as on disk (links and junctions resolved, `..` taken), C:/... on Windows (a Git Bash /c/ form
+# too), no trailing /, in one letter case where paths ignore it; a folder that does not exist is compared as
+# written, so the two disagree only by refusing. --assistant-dir <folder> (an assistant only; the self-test's
+# throwaway assistant, `selftest assistant`) puts the folder elsewhere: it must exist, be named <name>, lie in
+# a folder named `assistants`, and no git working tree may see it (outside any, or ignored there). The
+# --safety file inside the assistant's folder is refused (the guard lets the assistant write there). Its launch
 # text's first line names the folder: BRIEF.md read in full, NOTES.md kept as its memory, both re-read after a
 # compaction or a restart, writes only inside the folder, questions to --report-to by SendMessage; then
 # roles/assistant.md (when the core has it) and the brief. A session of that name already listed (claude agents
-# --json --all, any state) is refused; --branch, --base, --worktree-root, --launch-from, --contract,
+# --json --all, any state) is refused, and so is a start whose listing fails or prints no JSON list (it
+# cannot tell); --branch, --base, --worktree-root, --launch-from, --contract,
 # --tester-commit and --tester-tests are refused; each refusal exits 1 before anything is created. Nothing is
 # written into the folder (the coordinator's skill writes BRIEF.md and NOTES.md). After the launch: the attach
 # command (`claude attach "assistant: <name>"`, and `claude attach <id>` when the launch printed the id).
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -92,6 +99,7 @@ while [ $# -gt 0 ]; do
     --contract) need "$@"; contract="$2"; shift 2 ;;
     --tester-commit) need "$@"; tcommit="$2"; shift 2 ;;
     --tester-tests) need "$@"; ttests="$2"; shift 2 ;;
+    --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -101,6 +109,7 @@ asst=""; case "$name" in "assistant:"*) asst=1 ;; esac
 if [ -n "$asst" ] && [ -n "$given" ]; then
   echo "refused: $given with an assistant ($name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" >&2; exit 1
 fi
+[ -n "$asst" ] || [ -z "$adirx" ] || { echo "refused: --assistant-dir with $name - it is for an assistant (--name \"assistant: <name>\") only" >&2; exit 1; }
 # a brief that is missing, or empty / blanks only, would start a worker with no task (#226)
 if [ -n "$brief" ]; then
   [ -f "$brief" ] || { echo "--brief-file: $brief does not exist" >&2; exit 1; }
@@ -108,7 +117,7 @@ if [ -n "$brief" ]; then
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2
-  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--mode auto] [--dry-run]" >&2
+  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }
@@ -131,10 +140,25 @@ if [ -n "$asst" ]; then
   { [ "assistant: $aname" = "$name" ] && [[ "$aname" =~ ^[A-Za-z0-9._-]+$ ]] && case "$aname" in *[!.]*) true ;; *) false ;; esac; } ||
     { echo "refused: the assistant name \"${name#assistant:}\" in --name \"$name\" - write \"assistant: <name>\", <name> letters, digits, . _ - (not dots only)" >&2; exit 1; }
   adir="$root/coordinator/assistants/$aname"
-  # a folder as it lies on disk (links resolved), C:/... on Windows, no trailing /, in one letter case where paths ignore it
-  fcanon() { local q; q="$( (cd "$1" 2>/dev/null && pwd -P) || true)"; [ -n "$q" ] || q="$1"
+  # the one comparison of folders (M1): start-worker.ps1 runs this same code through bash - a folder as it lies
+  # on disk (links resolved), C:/... on Windows, no trailing /, in one letter case where paths ignore it; one
+  # that does not exist as written
+  fcanon() { local q; q="$( (cd -P -- "$1" 2>/dev/null && pwd -P) || true)"; [ -n "$q" ] || q="$1"
     command -v cygpath >/dev/null 2>&1 && q="$(cygpath -m "$q")"
-    while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done; fold "$q"; }
+    while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done
+    case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$q" ;; esac; }
+  # --assistant-dir: the folder elsewhere (the self-test's throwaway assistant), seen by no git working tree
+  if [ -n "$adirx" ]; then
+    adirx="$(printf '%s' "$adirx" | tr '\\' '/')"
+    [ -d "$adirx" ] || { echo "refused: --assistant-dir $adirx is not a folder" >&2; exit 1; }
+    adirx="$(cd "$adirx" && pwd)"; command -v cygpath >/dev/null 2>&1 && adirx="$(cygpath -m "$adirx")"
+    [ "$(basename "$adirx")" = "$aname" ] && [ "$(basename "$(dirname "$adirx")")" = assistants ] ||
+      { echo "refused: --assistant-dir $adirx - it must be <folder>/assistants/$aname" >&2; exit 1; }
+    if git -C "$adirx" rev-parse --show-toplevel >/dev/null 2>&1 && ! git -C "$adirx" check-ignore -q -- "$adirx/BRIEF.md" 2>/dev/null; then
+      echo "refused: --assistant-dir $adirx lies in a git working tree ($(git -C "$adirx" rev-parse --show-toplevel)) that sees it - it must be outside every one, or ignored there" >&2; exit 1
+    fi
+    adir="$adirx"
+  fi
   [ "$(basename "$brief")" = BRIEF.md ] && [ "$(fcanon "$(dirname "$brief")")" = "$(fcanon "$adir")" ] ||
     { echo "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $brief" >&2; exit 1; }
   # COORD_ASSISTANT_DIR in the safety file's env: the guard keeps the assistant's writes inside that folder
@@ -142,6 +166,9 @@ if [ -n "$asst" ]; then
   [ -n "$aenv" ] || { echo "refused: no COORD_ASSISTANT_DIR in the env of $safety - it must name the assistant's folder $adir" >&2; exit 1; }
   [ "$(fcanon "$aenv")" = "$(fcanon "$adir")" ] ||
     { echo "refused: COORD_ASSISTANT_DIR in $safety is $aenv - it must name the assistant's folder $adir" >&2; exit 1; }
+  # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
+  case "$(fcanon "$(dirname "$safety")")/" in "$(fcanon "$adir")/"*)
+    echo "refused: the --safety file $safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it beside the folder (coordinator/assistants/$aname.settings.json)" >&2; exit 1 ;; esac
   from="$root"
 fi
 wt="${wtroot:-$root/.claude/worktrees}/$branch"
@@ -193,8 +220,11 @@ selftest=$(bash "$hook" --self-test || true)
 [ -n "$selftest" ] || { echo "safety settings: the hook's self-test printed nothing ($hook)" >&2; exit 1; }
 [ "$selftest" = "safety-guard: OK" ] || { echo "$selftest" >&2; exit 1; }
 # an assistant is one session per name: one already listed (running or stopped) is refused, never a second
+# (fail closed: a listing that fails or prints no JSON list cannot tell, so the start is refused)
 if [ -n "$asst" ] && command -v claude >/dev/null 2>&1; then
-  ex="$(claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | sed 's/"name": *"/"name":"/' | grep -F "\"name\":\"$name\"" | head -n 1 || true)"
+  al="$(claude agents --json --all 2>/dev/null)" && printf '%s' "$al" | tr -d ' \t\r\n' | grep -q '^\[.*\]$' ||
+    { echo "refused: the listing of sessions (claude agents --json --all) failed or printed no JSON list - cannot tell whether \"$name\" exists already" >&2; exit 1; }
+  ex="$(printf '%s' "$al" | tr -d '\r\n' | tr '}' '\n' | sed 's/"name": *"/"name":"/' | grep -F "\"name\":\"$name\"" | head -n 1 || true)"
   if [ -n "$ex" ]; then
     xid="$(printf '%s\n' "$ex" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p')"
     [ -n "$xid" ] || xid="$(printf '%s\n' "$ex" | sed -n 's/.*"sessionId": *"\([^"]*\)".*/\1/p')"
