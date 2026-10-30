@@ -1030,27 +1030,46 @@ asst_git() {
   block "an assistant writes nothing to git (git $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
 }
 # asst_gh <gh's arguments>: an allowlist (281.5) - passes a read, refuses every other gh command (an alias
-# and its call, an extension, auth, config, agent-task, an unknown group ...), past -R / --repo / --hostname
-# and its value anywhere before the subcommand. Reads: no group (gh, gh --version), help, version, status,
-# browse (opens a URL), search; auth status, alias list, config get / list, org list; pr | issue | release |
-# repo | label | gist | workflow | secret | variable | run | cache | ruleset | project | codespace | ssh-key
-# | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api: asst_api
+# and its call, an extension, auth, config, agent-task, an unknown group ...). gh's command line is read
+# exactly (281.6): before the group and before the subcommand only -R / --repo / --hostname with its value
+# (also --repo= / --hostname=) may stand, any other flag there refuses (gh may take the next word as its
+# value) - but gh --version alone, and gh --help / -h with only words after it (it prints help); names match
+# case-sensitively and whole, as gh matches them. Reads: no group (gh), help, version, status, browse (opens
+# a URL; these four take no subcommand), search; auth status, alias list, config get / list, org list; pr |
+# issue | release | repo | label | gist | workflow | secret | variable | run | cache | ruleset | project |
+# codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api:
+# asst_api
 asst_gh() {
-  local t grp="" sub="" nx=0
+  local t grp="" sub="" nx=0 ok=0 ci
+  ci=$(shopt -p nocasematch); shopt -u nocasematch   # PR is not pr, -r is not -R
+  if [ $# = 1 ] && [ "$1" = --version ]; then eval "$ci"; return 0; fi
+  case "${1:-}" in
+    --help|-h) ok=1; for t in "${@:2}"; do case "$t" in -*) ok=0 ;; esac; done
+               [ $ok = 1 ] && { eval "$ci"; return 0; } ;;
+  esac
   while [ $# -gt 0 ]; do
     t="$1"; shift
     if [ $nx = 1 ]; then nx=0; continue; fi
-    if [ "$t" = -R ] || [ "$t" = --repo ] || [ "$t" = --hostname ]; then nx=1; continue; fi
-    case "$t" in -*) continue ;; esac
-    if [ -z "$grp" ]; then grp="$t"; [ "$grp" = api ] && break; continue; fi
+    case "$t" in
+      -R|--repo|--hostname) nx=1; continue ;;
+      --repo=*|--hostname=*) continue ;;
+      -*) block "an assistant writes nothing to GitHub (gh ... $t before the ${grp:+sub}command, which gh may take as its value): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)" ;;
+    esac
+    if [ -z "$grp" ]; then grp="$t"; case "$grp" in api|help|version|status|browse) break ;; esac; continue; fi
     sub="$t"; break
   done
-  case "$grp:$sub" in
-    api:*) asst_api "$@"; return ;;
-    :|help:*|version:*|status:*|browse:*|search:*|auth:|auth:status|alias:|alias:list|config:|config:get|config:list|org:|org:list) return 0 ;;
-    pr:*|issue:*|release:*|repo:*|label:*|gist:*|workflow:*|secret:*|variable:*|run:*|cache:*|ruleset:*|project:*|codespace:*|ssh-key:*|gpg-key:*)
-      case "$sub" in ''|list|view|status|diff|checks|watch) return 0 ;; esac ;;
+  case "$grp" in
+    api) ok=2 ;;
+    ''|help|version|status|browse|search) ok=1 ;;
+    auth) case "$sub" in ''|status) ok=1 ;; esac ;;
+    alias|org) case "$sub" in ''|list) ok=1 ;; esac ;;
+    config) case "$sub" in ''|get|list) ok=1 ;; esac ;;
+    pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|project|codespace|ssh-key|gpg-key)
+      case "$sub" in ''|list|view|status|diff|checks|watch) ok=1 ;; esac ;;
   esac
+  eval "$ci"
+  [ $ok = 2 ] && { asst_api "$@"; return; }
+  [ $ok = 1 ] && return 0
   block "an assistant writes nothing to GitHub (gh $grp${sub:+ $sub}): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
 }
 # asst_api <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
