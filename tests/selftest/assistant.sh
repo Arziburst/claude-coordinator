@@ -303,6 +303,28 @@ n=$((n + 1)); ! lines | grep -E '^PASS assistant: ' | grep -qF -e RUNS.tsv -e Wr
 n=$((n + 1)); [ -s "$STUB_DIR/adir" ] || bad "start-worker was not reached"
 export STUB_ASST=pass
 
+# --- the worker's own case (281.3): interrupted (TERM) while it waits - the session and the folder still go.
+# selftest.sh only: a TERM to Windows PowerShell runs no handler (its finally covers Ctrl-C and errors)
+if [ "$kind" = sh ]; then
+  cur="interrupted"; export STUB_ASST=silent
+  : > "$STUB_DIR/log"; : > "$STUB_DIR/ids"; : > "$STUB_DIR/launches"; : > "$STUB_DIR/sessions"; rm -f "$STUB_DIR/adir"
+  bash scripts/selftest.sh assistant --project "$proj" --core "$core" --timeout 60 > "$tmp/one" 2>&1 & bp=$!
+  # TERM once it waits on the transcript (start-worker done: `started:`), at most 180 s on
+  i=0; while [ "$i" -lt 360 ] && ! grep -q '^started: ' "$tmp/one"; do i=$((i + 1)); sleep 0.5; done
+  n=$((n + 1)); grep -q '^started: ' "$tmp/one" || bad "not started within 180 s"
+  kill -TERM "$bp" 2>/dev/null; wait "$bp"; rc=$?
+  n=$((n + 1)); [ "$rc" != 0 ] || bad "exit 0 after a TERM"
+  i="$(head -n 1 "$STUB_DIR/ids")"
+  n=$((n + 1)); [ -n "$i" ] || bad "no session was launched before the TERM"
+  if [ -n "$i" ]; then
+    n=$((n + 1)); ! grep -q "^$i|" "$STUB_DIR/sessions" || bad "session $i is still listed after a TERM"
+    n=$((n + 1)); [ "$(grep -cx "stop $i" "$STUB_DIR/log")" = 1 ] && [ "$(grep -cx "rm $i" "$STUB_DIR/log")" = 1 ] || bad "session $i not stopped and removed once each"
+    n=$((n + 1)); [ ! -e "$tmp/cfg/coordinator/sessions/$i-0000-4000-8000-000000000001.json" ] || bad "the status file of $i is still there"
+  fi
+  n=$((n + 1)); [ -s "$STUB_DIR/adir" ] && [ ! -e "$(cat "$STUB_DIR/adir")" ] || bad "the throwaway folder is still there after a TERM"
+  export STUB_ASST=pass
+fi
+
 # --- usage errors: exit 2, no PASS / FAIL line, nothing launched ---
 usage() {
   cur="usage: $*"; n=$((n + 1)); : > "$STUB_DIR/launches"

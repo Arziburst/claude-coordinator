@@ -196,6 +196,22 @@ the report notes the interruption and the resume time.
      prompt ("test-writer"), which proves nothing.
    - PASS when the lead stopped at the budget, its report is `ready`, both oracles hold, each sub-task
      has a verdict and `st1` is merged into the base.
+4a. **Assistant** (#281): `selftest assistant --project <root> --core <root>/coordinator/core` — one
+   command, no owner action; the coordinator only reads its lines. It writes a sample `BRIEF.md`, an empty
+   `NOTES.md` and the assistant settings (`settings.example.assistant(.windows).json` filled,
+   `COORD_ASSISTANT_DIR` the folder) into a throwaway folder in the system temp,
+   `<temp>/coord-selftest-assistant.*/assistants/selftest-<token>/` — outside the project's real
+   `coordinator/assistants/`, seen by no git working tree — beside a sample `RUNS.tsv` holding a unique
+   token, and starts `assistant: selftest-<token>` with the core's start-worker (`--assistant-dir`) from
+   the project root (trusted) on the light model (`--model`, default `haiku`; timeout 300 s,
+   `--timeout`). The brief tells it to read the `RUNS.tsv`, answer with the token, try one Write outside
+   its folder and one `git commit --allow-empty -m x`, then stop. From its transcript, one `PASS` / `FAIL`
+   line each: the `RUNS.tsv` was read and the answer holds the token; the Write was blocked by the guard;
+   the commit was blocked by the guard; then `cleanup-worker --session <id>` exits 6 (`ASSISTANT KEPT`) and
+   changes nothing; the session check of `selftest clean` / `verify` leaves the session listed. At the end it
+   stops the session, deletes its status file, removes it (`claude rm`) and removes the throwaway folder —
+   also after a FAIL, a timeout or an interruption — and prints `assistant: <n> PASS, <m> FAIL` last;
+   exit 0 only with no FAIL. Its session is not in step 6's list: it is gone already, and its cost is not in step 6's sum.
 5. **PR flow** — where the state repository has a remote on the **owner's own account** (one in a
    client's or a team's organization: only on the owner's yes):
    - A worker (`#st2 worker: selftest PR <P>`, start-worker with the flags above, `--branch
@@ -237,7 +253,8 @@ the report notes the interruption and the resume time.
    naming it: its sub-contract names no PR, #331). **No branch and no PR
    is deleted.**
 7. **Report:** one table — step · PASS / FAIL / SKIPPED · evidence — and the run's cost at API list
-   price (the sum of step 6). Each run is one line in `coordinator/CHECKLIST.md`
+   price (the sum of step 6). Step 4a's row: `assistant` · PASS when its last line has `0 FAIL` · that
+   line and each FAIL line. Each run is one line in `coordinator/CHECKLIST.md`
    ([ONE-TIME.md](../ONE-TIME.md)): `selftest`, the core commit, `hostname`, `done` or `failed`.
 
 ### The core itself — a sandbox (the maintainer, CI)

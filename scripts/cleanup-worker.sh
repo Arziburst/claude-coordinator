@@ -16,8 +16,9 @@
 # the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
 # changed (CORE §1.17); a session the listing does not have is handled as before; 6 ASSISTANT KEPT: the
 # listing names the session `assistant: <name>` (#281) - nothing is stopped, removed or changed, decided before
-# any other check: an assistant is removed only on the owner's word (Windows: cleanup-worker.ps1, the same
-# checks and codes).
+# any other check: an assistant is removed only on the owner's word; with --session, a listing that fails or
+# prints no JSON list is exit 3 (LISTING FAILED, nothing stopped, removed or changed) - it cannot tell an
+# assistant (Windows: cleanup-worker.ps1, the same checks and codes).
 set -euo pipefail
 
 session="" wt="" dry=0
@@ -59,7 +60,9 @@ canon() {
 # whatever the worktree: decided before any other check
 if [ -n "$session" ] && command -v claude >/dev/null 2>&1; then
   s0="$session"; case "$s0" in *[!0-9A-Fa-f-]*) ;; *) s0="$(printf '%s' "$s0" | tr 'A-F' 'a-f')" ;; esac
-  araw="$(claude agents --json --all 2>/dev/null)" || araw=""
+  # fail closed: a listing that fails or prints no JSON list cannot tell an assistant - nothing is touched
+  araw="$(claude agents --json --all 2>/dev/null)" && printf '%s' "$araw" | tr -d ' \t\r\n' | grep -q '^\[.*\]$' ||
+    stop_here "LISTING FAILED: claude agents --json --all failed or printed no JSON list, so session $session may be an assistant: nothing stopped or removed"
   aline="$(objects "$araw" | while IFS= read -r o; do
     { [ "$(field id "$o")" = "$s0" ] || [ "$(field sessionId "$o")" = "$s0" ]; } && { printf '%s\t%s\n' "$(field id "$o")" "$(field name "$o")"; break; }
   done || true)"

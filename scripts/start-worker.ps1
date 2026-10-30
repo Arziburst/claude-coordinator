@@ -57,11 +57,14 @@
 # An assistant (#281): -Name "assistant: <name>" and -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md start
 # a persistent session with no worktree and no branch from the repository root, its -Safety env
 # COORD_ASSISTANT_DIR naming that folder; -Branch, -Base, -WorktreeRoot, -LaunchFrom, -Contract, -TesterCommit and
-# -TesterTests are refused, and so is a session of that name already listed; after the launch the attach command
-# (the rules: start-worker.sh's top comment).
+# -TesterTests are refused, and so is a session of that name already listed, or a listing that fails or prints no
+# JSON list; -AssistantDir <folder> (an assistant only, the self-test's throwaway one) puts the folder elsewhere -
+# <folder>/assistants/<name>, seen by no git working tree; a -Safety file inside the folder is refused. Folders are
+# compared by start-worker.sh's own bash code, run here through bash, so both scripts decide alike; after the
+# launch the attach command (the rules: start-worker.sh's top comment).
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
-      [string]$TesterCommit = '', [string]$TesterTests = '')
+      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -82,15 +85,16 @@ if ($asst) {
   $given = @('Branch', 'Base', 'WorktreeRoot', 'LaunchFrom', 'Contract', 'TesterCommit', 'TesterTests' | Where-Object { $PSBoundParameters.ContainsKey($_) })
   if ($given.Count) { Fail "refused: -$($given[0]) with an assistant ($Name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" }
 }
+if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - it is for an assistant (-Name `"assistant: <name>`") only" }
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-Mode auto] [-DryRun]') }
+  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
-                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests))) {
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
@@ -114,16 +118,36 @@ if ($asst) {
     Fail "refused: the assistant name `"$($Name.Substring(10))`" in -Name `"$Name`" - write `"assistant: <name>`", <name> letters, digits, . _ - (not dots only)"
   }
   $adir = "$($root.Replace('\', '/'))/coordinator/assistants/$aname"
-  # a folder as it lies on disk, / separators, no trailing /, in one letter case where paths ignore it
-  $aWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
-  $aFold = $aWin -or $IsMacOS
+  # the one comparison of folders (M1): start-worker.sh's fcanon, the same bash code (given on stdin, so no
+  # quote reaches a native argument): as on disk, C:/... on Windows, no trailing /, one letter case where paths
+  # ignore it; no answer from bash compares as nothing else does, so the start is refused
+  $fcanonSh = @'
+q="$( (cd -P -- "$1" 2>/dev/null && pwd -P) || true)"; [ -n "$q" ] || q="$1"
+command -v cygpath >/dev/null 2>&1 && q="$(cygpath -m "$q")"
+while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$q" ;; esac
+#
+'@
+  $script:fcn = 0
   function FCanon([string]$p) {
-    $q = $p.Replace('\', '/')
-    if (Test-Path -LiteralPath $q -PathType Container) {
-      if ($aWin) { $q = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $q).ProviderPath) }
-      else { $b = & { $ErrorActionPreference = 'Continue'; bash -c 'cd -P -- "$1" 2>/dev/null && pwd -P' _ $q }; if ("$b") { $q = "$b" } }
+    # Windows PowerShell 5.1 puts a UTF-8 BOM before the piped text: an empty first line takes it (an error on stderr)
+    $b = & { $ErrorActionPreference = 'Continue'; ("`n" + ($fcanonSh -replace "`r", '')) | bash -s -- $p.Replace('\', '/') 2>$null }
+    if ($LASTEXITCODE -ne 0 -or -not "$b") { $script:fcn++; return "?no answer $($script:fcn)" }
+    "$b".TrimEnd("`r", "`n")
+  }
+  # -AssistantDir: the folder elsewhere (the self-test's throwaway assistant), seen by no git working tree
+  if ($AssistantDir) {
+    if (-not (Test-Path -LiteralPath $AssistantDir -PathType Container)) { Fail "refused: -AssistantDir $AssistantDir is not a folder" }
+    $AssistantDir = (Resolve-Path -LiteralPath $AssistantDir).ProviderPath.Replace('\', '/').TrimEnd('/')
+    if ((Split-Path -Leaf $AssistantDir) -cne $aname -or (Split-Path -Leaf (Split-Path -Parent $AssistantDir)) -cne 'assistants') {
+      Fail "refused: -AssistantDir $AssistantDir - it must be <folder>/assistants/$aname"
     }
-    $q = $q.Replace('\', '/').TrimEnd('/'); if ($aFold) { $q.ToLowerInvariant() } else { $q }
+    $atop = & { $ErrorActionPreference = 'Continue'; git -C $AssistantDir rev-parse --show-toplevel 2>$null }
+    if ($LASTEXITCODE -eq 0) {
+      $null = & { $ErrorActionPreference = 'Continue'; git -C $AssistantDir check-ignore -q -- "$AssistantDir/BRIEF.md" 2>$null }
+      if ($LASTEXITCODE -ne 0) { Fail "refused: -AssistantDir $AssistantDir lies in a git working tree ($atop) that sees it - it must be outside every one, or ignored there" }
+    }
+    $adir = $AssistantDir
   }
   if ((Split-Path -Leaf $BriefFile) -cne 'BRIEF.md' -or (FCanon (Split-Path -Parent $BriefFile)) -cne (FCanon $adir)) {
     Fail "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $BriefFile"
@@ -133,6 +157,10 @@ if ($asst) {
   $aenv = ''; if ($acfg.env -is [Management.Automation.PSCustomObject] -and $acfg.env.COORD_ASSISTANT_DIR -is [string]) { $aenv = $acfg.env.COORD_ASSISTANT_DIR.Replace('\', '/') }
   if (-not $aenv) { Fail "refused: no COORD_ASSISTANT_DIR in the env of $Safety - it must name the assistant's folder $adir" }
   if ((FCanon $aenv) -cne (FCanon $adir)) { Fail "refused: COORD_ASSISTANT_DIR in $Safety is $aenv - it must name the assistant's folder $adir" }
+  # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
+  if ("$(FCanon (Split-Path -Parent $Safety))/".StartsWith("$(FCanon $adir)/", [StringComparison]::Ordinal)) {
+    Fail "refused: the -Safety file $Safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it beside the folder (coordinator/assistants/$aname.settings.json)"
+  }
 }
 $wt = if ($asst) { '' } else { Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch }
 $from = if ($LaunchFrom) { $LaunchFrom } else { $root }
@@ -185,7 +213,11 @@ if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test print
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 # an assistant is one session per name: one already listed (running or stopped) is refused, never a second
 if ($asst -and (Get-Command claude -ErrorAction SilentlyContinue)) {
+  # (fail closed: a listing that fails or prints no JSON list cannot tell, so the start is refused)
   $aj = & { $ErrorActionPreference = 'Continue'; (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", '' }
+  if ($LASTEXITCODE -ne 0 -or ($aj -replace '\s', '') -notmatch '^\[.*\]$') {
+    Fail "refused: the listing of sessions (claude agents --json --all) failed or printed no JSON list - cannot tell whether `"$Name`" exists already"
+  }
   foreach ($o in ($aj -split '}')) {
     if ($o -cnotmatch ('"name": *"' + [regex]::Escape($Name) + '"')) { continue }
     $xid = [regex]::Match($o, '"id": *"([^"]*)"').Groups[1].Value

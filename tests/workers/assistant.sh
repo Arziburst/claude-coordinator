@@ -100,6 +100,7 @@ runs() {
         --repo) a+=(-Repo "$2"); shift 2 ;; --name) a+=(-Name "$2"); shift 2 ;; --branch) a+=(-Branch "$2"); shift 2 ;;
         --model) a+=(-Model "$2"); shift 2 ;; --brief-file) a+=(-BriefFile "$2"); shift 2 ;; --safety) a+=(-Safety "$2"); shift 2 ;;
         --report-to) a+=(-ReportTo "$2"); shift 2 ;; --dry-run) a+=(-DryRun); shift ;;
+        --assistant-dir) a+=(-AssistantDir "$2"); shift 2 ;;
         --worktree) a+=(-Worktree "$2"); shift 2 ;; --session) a+=(-Session "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
@@ -144,6 +145,27 @@ done
 : > "$STUB_LOG"; : > "$STUB_LOG.names"
 check 0 "start: an assistant, the listing works" -- start "${A[@]}"
 n=$((n + 1)); grep -q -- '--bg --name assistant: fc' "$STUB_LOG" || { echo "FAIL (start: an assistant, the listing works): not launched"; fail=1; }
+: > "$STUB_LOG.names"
+# --- the worker's own cases (281.3): --assistant-dir, and the settings never inside the assistant's folder ---
+mkx() {   # mkx <folder> <name>: a folder with BRIEF.md and NOTES.md outside the repository; settings in $asf
+  mkdir -p "$1"; printf 'Log the hours.\n' > "$1/BRIEF.md"; printf '# Notes\n' > "$1/NOTES.md"
+  asf="$tmp/ax-$2-$kind.json"
+  sw "$kind" | awk -v d="$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' > "$asf"
+}
+xd() { start --repo "$ar" --name "assistant: $1" --model sonnet --brief-file "$2/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$2" --dry-run; }
+mkx "$tmp/ext/assistants/xa" xa
+check 0 "--assistant-dir: a folder outside every git working tree" -- xd xa "$tmp/ext/assistants/xa"
+mkx "$tmp/ext/assistants/other" xb
+check 1 "--assistant-dir: a folder not named as the assistant" -- xd xb "$tmp/ext/assistants/other"
+mkx "$tmp/ext/notas/xc" xc
+check 1 "--assistant-dir: a folder whose parent is not assistants" -- xd xc "$tmp/ext/notas/xc"
+mkx "$ar/inside/assistants/xd" xd
+check 1 "--assistant-dir: a folder a git working tree sees" -- xd xd "$ar/inside/assistants/xd"
+rm -rf "$ar/inside"
+check 1 "--assistant-dir with a worker's name" -- start --repo "$tmp/repo" --name "#72 worker: Fix" --branch 72-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x --assistant-dir "$tmp/ext/assistants/xa" --dry-run
+mkas inset "$mar/coordinator/assistants/inset"; cp "$asf" "$ad/settings.json"
+check 1 "the --safety file inside the assistant's folder" -- start --repo "$ar" --name "assistant: inset" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$ad/settings.json" --report-to x --dry-run
+n=$((n + 1)); printf '%s\n' "$LAST" | grep -q "lies in the assistant's folder" || { echo "FAIL (the --safety file inside the folder): not the refusal of it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 : > "$STUB_LOG.names"
 # other roles: unchanged by a failing listing
 STUB_AGENTS=fail check 0 "start: a worker, the listing fails, dry run" -- start --repo "$tmp/repo" --name "#70 worker: Fix" --branch 70-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x --dry-run
