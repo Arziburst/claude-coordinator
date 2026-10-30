@@ -785,7 +785,7 @@ allow	notebook:work	@PROJECT@/coordinator/assistants/a1/a.ipynb	@PROJECT@	@PROJE
 allow	write:work	@PROJECT@/coordinator/assistants/a1	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # the folder and the path written with backslashes, a trailing separator, the Git Bash form, . and ..
-allow	edit:work	@PROJECT_W@\coordinator\assistants\a1\notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	edit:work	@PROJECT_W@\coordinator\assistants\a1\x.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT_W@\coordinator\assistants\a1
 allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1/
 allow	edit:work	@PROJECT_U@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
