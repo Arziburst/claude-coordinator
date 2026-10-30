@@ -29,7 +29,8 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
    assistant`): right after each compaction it tells the assistant to read BRIEF.md, NOTES.md and its role
    in full.
 4. Commit the folder and its settings in the state repository (CORE §12b). The assistant cannot commit:
-   its NOTES.md changes are committed by the coordinator at each sync and before a handoff.
+   its folder, NOTES.md included, is committed by the coordinator together with every commit it makes in
+   `coordinator/`, and at each sync and before a handoff (CORE §4).
 5. Start it with `coordinator/core/scripts/start-worker.sh` (Windows: `coordinator/core/scripts/start-worker.ps1`):
    `--repo <root> --name "assistant: <name>" --model <model> --brief-file <root>/coordinator/assistants/<name>/BRIEF.md
    --safety <its settings> --report-to "<the coordinator's name>"` - the model the owner named, else the

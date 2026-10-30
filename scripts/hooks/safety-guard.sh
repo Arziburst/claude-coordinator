@@ -25,9 +25,14 @@ set +f; shopt -u nocasematch
 
 if [ "${1:-}" = "--self-test" ]; then
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
-  # everything (a syntax error also exits 2) is not working either
-  out=$(printf '%s' '{"tool_input":{"command":"git push --force origin main"}}' | bash "$0" 2>/dev/null; echo $?)
-  ok=$(printf '%s' '{"tool_input":{"command":"git push origin 12-fix"}}' | bash "$0" 2>/dev/null; echo $?)
+  # everything (a syntax error also exits 2) is not working either. Both with the assistant mode off (it
+  # refuses every push); in an assistant's session (#281) also its own: a commit blocks, a log passes
+  out=$(printf '%s' '{"tool_input":{"command":"git push --force origin main"}}' | COORD_ASSISTANT_DIR= bash "$0" 2>/dev/null; echo $?)
+  ok=$(printf '%s' '{"tool_input":{"command":"git push origin 12-fix"}}' | COORD_ASSISTANT_DIR= bash "$0" 2>/dev/null; echo $?)
+  if [ -n "${COORD_ASSISTANT_DIR:-}" ]; then
+    [ "$(printf '%s' '{"tool_input":{"command":"git commit -m x"}}' | bash "$0" 2>/dev/null; echo $?)" = 2 ] || ok=x
+    [ "$(printf '%s' '{"tool_input":{"command":"git log -1"}}' | bash "$0" 2>/dev/null; echo $?)" = 0 ] || ok=x
+  fi
   if [ "$out" = "2" ] && [ "$ok" = "0" ]; then echo "safety-guard: OK"; exit 0; fi
   echo "safety-guard: NOT WORKING — STOP: do not start workers until it is fixed (TOOLKIT.md)."
   exit 0   # stdout reaches the session's context; a non-zero exit would only show it to the user
@@ -869,6 +874,7 @@ git_seg() {
   local eff="$dir" sub deff redir="${git_redir:-0}"
   while [ $# -gt 0 ]; do
     if [ "$1" = "-C" ]; then eff=$(compose "$eff" "${2:-}"); [ $# -ge 2 ] && shift; shift; continue; fi
+    [ -n "$asst" ] && asst_gopt "$1"
     case "$1" in
       --git-dir|--work-tree) redir=1; [ $# -ge 2 ] && shift; shift ;;
       --git-dir=*|--work-tree=*) redir=1; shift ;;
@@ -984,6 +990,67 @@ worktree_seg() {
   for t in "$@"; do case "$t" in --force|-f|-ff) block "removing a worktree by force (use the cleanup script)" ;; esac; done
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
+# A git read that can run a command or write a file is refused too: git's settings and programs set on
+# its command line (asst_gopt), a variable set before git (asst_genv) or a GIT_ variable set anywhere in
+# the command (asst_gvar), and the read options that run a program or write a file (asst_garg).
+# asst_gopt <a global option of git>: -c, --config-env, --exec-path=, --git-dir, --work-tree (a folder
+# with git settings of its own)
+asst_gopt() {
+  case "$1" in
+    -c|-c?*|--config-env|--config-env=*|--exec-path=*|--git-dir|--git-dir=*|--work-tree|--work-tree=*)
+      block "an assistant runs git with no option that sets its settings, its programs or its folder (git $1): a setting can run a command (COORD_ASSISTANT_DIR is set, #281)" ;;
+  esac
+}
+# asst_genv <the index of git in A>: a VAR=value before git (also after env) - GIT_PAGER, PAGER, HOME,
+# PATH ... can make a read run a command
+asst_genv() {
+  local k=0
+  while [ $k -lt "$1" ]; do
+    [[ ${A[$k]} =~ $RE_ASSIGN ]] && block "an assistant runs git with no variable set before it (${A[$k]%%=*}=): one can make a read run a command (COORD_ASSISTANT_DIR is set, #281)"
+    k=$((k + 1))
+  done
+}
+# asst_gvar: a GIT_ variable set anywhere in a command (export GIT_PAGER=..., $env:GIT_PAGER = ...,
+# Set-Item env:GIT_PAGER ...): it would reach a later git
+asst_gvar() {
+  local k=0 t
+  while [ $k -lt ${#A[@]} ]; do
+    t="${A[$k]}"; k=$((k + 1))
+    case "$t" in
+      GIT_?*=*|env:GIT_*|env:[/\\]GIT_*|'$env:GIT_'*=*) ;;
+      '$env:GIT_'*) case "${A[$k]:-}" in =*) ;; *) continue ;; esac ;;
+      *) continue ;;
+    esac
+    block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)"
+  done
+}
+# asst_garg <subcommand> <its arguments>: --output (writes a file), --ext-diff, --upload-pack,
+# --receive-pack, --exec, --open-files-in-pager (each also abbreviated, as git takes it), grep's -O and
+# ls-remote's -u (also in a cluster of short options) - before a -- that ends the options
+asst_garg() {
+  local sub="$1" t n c h d="" v="" nx=0 ci
+  shift
+  case "$sub" in grep) d=O; v=efABCm ;; ls-remote) d=u; v=o ;; esac
+  ci=$(shopt -p nocasematch); shopt -u nocasematch   # -O is not -o (grep's --only-matching)
+  for t in "$@"; do
+    if [ $nx = 1 ]; then nx=0; continue; fi
+    case "$t" in
+      --) break ;;
+      --?*) n="${t#--}"; n="${n%%=*}"
+            for c in output ext-diff upload-pack receive-pack exec open-files-in-pager; do
+              case "$c" in "$n"*) block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)" ;; esac
+            done ;;
+      -?*) [ -n "$d" ] || continue
+           c="${t#-}"
+           while [ -n "$c" ]; do
+             h="${c%"${c#?}"}"; c="${c#?}"
+             [ "$h" = "$d" ] && block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)"
+             case "$v" in *"$h"*) [ -z "$c" ] && nx=1; break ;; esac   # its value: the rest, or the next word
+           done ;;
+    esac
+  done
+  eval "$ci"
+}
 # asst_git <subcommand> <its arguments>: passes a read - the subcommands below, a branch or tag listing,
 # a config read, remote with no subcommand / show / get-url, reflog but expire / delete / drop / write,
 # worktree list, symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec, no
@@ -992,6 +1059,7 @@ worktree_seg() {
 asst_git() {
   local sub="$1" t w=0 l=0 np=0 nx=0 fst=""
   shift
+  asst_garg "$sub" "$@"
   case "$sub" in
     log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version) return 0 ;;
   esac
@@ -1241,6 +1309,7 @@ while IFS="$tab" read -r -a T; do
     if [[ $t =~ $RE_REDIR ]]; then [[ $t =~ $RE_REDIR_OP ]] && skip=1; continue; fi
     A+=("$t")
   done
+  [ -n "$asst" ] && asst_gvar
   # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
   # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments; a wrapper given as a path
   # or with .exe (/usr/bin/env, timeout.exe) counts
@@ -1275,6 +1344,7 @@ while IFS="$tab" read -r -a T; do
   case "$w" in
     git) git_redir=0; gk=0   # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see git_seg
          while [ $gk -lt $i ]; do case "${A[$gk]}" in GIT_DIR=*|GIT_WORK_TREE=*) git_redir=1 ;; esac; gk=$((gk + 1)); done
+         [ -n "$asst" ] && asst_genv "$i"
          git_seg "${A[@]:$((i + 1))}" ;;
     cd|pushd|chdir|set-location|sl|push-location) cd_seg "${A[@]:$((i + 1))}" ;;
     rm|remove-item|ri|del|erase|rd|rmdir) rm_seg "$w" "${A[@]:$((i + 1))}" ;;

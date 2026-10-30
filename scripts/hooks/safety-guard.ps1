@@ -21,14 +21,26 @@ foreach ($b in @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Obje
 
 if ($SelfTest) {
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
-  # everything is not working either
+  # everything is not working either. Both with the assistant mode off (it refuses every push); in an
+  # assistant's session (#281) also its own: a commit blocks, a log passes
   $exe = (Get-Process -Id $PID).Path
+  $ad = $env:COORD_ASSISTANT_DIR; $env:COORD_ASSISTANT_DIR = $null
   '{"tool_input":{"command":"git push --force origin main"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
   $blocked = $LASTEXITCODE
   '{"tool_input":{"command":"git push origin 12-fix"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
-  if ($blocked -eq 2 -and $LASTEXITCODE -eq 0) { 'safety-guard: OK'; exit 0 }
+  $ok = $LASTEXITCODE -eq 0
+  $env:COORD_ASSISTANT_DIR = $ad
+  if ($ad) {
+    '{"tool_input":{"command":"git commit -m x"}}' |
+      & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 2) { $ok = $false }
+    '{"tool_input":{"command":"git log -1"}}' |
+      & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { $ok = $false }
+  }
+  if ($blocked -eq 2 -and $ok) { 'safety-guard: OK'; exit 0 }
   'safety-guard: NOT WORKING - STOP: do not start workers until it is fixed (TOOLKIT.md).'
   exit 0   # stdout reaches the session's context; a non-zero exit would only show it to the user
 }
@@ -667,6 +679,7 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   while ($i -lt $a.Count) {
     $t = $a[$i]
     if ($t -ceq '-C') { $v = if ($i + 1 -lt $a.Count) { $a[$i + 1] } else { '' }; $eff = Compose $eff $v; $i += 2; continue }
+    if ($asst) { AsstGopt $t }
     if ($t -match '^(--git-dir|--work-tree)$') { $redir = $true; $i += 2; continue }
     if ($t -match '^(--git-dir|--work-tree)=') { $redir = $true; $i++; continue }
     if ($t -match '^(-c|--namespace|--config-env|--super-prefix)$') { $i += 2; continue }
@@ -769,6 +782,57 @@ function WorktreeSeg([string[]]$a) {
   foreach ($t in $a) { if ($t -match '^(--force|-f|-ff)$') { Block 'removing a worktree by force (use the cleanup script)' } }
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
+# A git read that can run a command or write a file is refused too: git's settings and programs set on
+# its command line (AsstGopt), a variable set before git (AsstGenv) or a GIT_ variable set anywhere in the
+# command (AsstGvar), and the read options that run a program or write a file (AsstGarg).
+# AsstGopt <a global option of git>: -c, --config-env, --exec-path=, --git-dir, --work-tree (a folder with
+# git settings of its own)
+function AsstGopt([string]$t) {
+  if ($t -match '^(-c.*|--config-env(=.*)?|--exec-path=.*|--git-dir(=.*)?|--work-tree(=.*)?)$') {
+    Block "an assistant runs git with no option that sets its settings, its programs or its folder (git $t): a setting can run a command (COORD_ASSISTANT_DIR is set, #281)"
+  }
+}
+# AsstGenv <the words> <the index of git>: a VAR=value before git (also after env) - GIT_PAGER, PAGER,
+# HOME, PATH ... can make a read run a command
+function AsstGenv([string[]]$w, [int]$n) {
+  for ($k = 0; $k -lt $n; $k++) {
+    if ($w[$k] -match $ASSIGN) { Block "an assistant runs git with no variable set before it ($($w[$k].Substring(0, $w[$k].IndexOf('=')))=): one can make a read run a command (COORD_ASSISTANT_DIR is set, #281)" }
+  }
+}
+# AsstGvar <the words>: a GIT_ variable set anywhere in a command (export GIT_PAGER=..., $env:GIT_PAGER =
+# ..., Set-Item env:GIT_PAGER ...): it would reach a later git
+function AsstGvar([string[]]$w) {
+  for ($k = 0; $k -lt $w.Count; $k++) {
+    $t = $w[$k]
+    $set = $t -match '^(GIT_.+=|env:([/\\])?GIT_|\$env:GIT_.*=)'
+    if (-not $set -and $t -match '^\$env:GIT_' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('=')) { $set = $true }
+    if ($set) { Block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)" }
+  }
+}
+# AsstGarg <subcommand> <its arguments>: --output (writes a file), --ext-diff, --upload-pack,
+# --receive-pack, --exec, --open-files-in-pager (each also abbreviated, as git takes it), grep's -O and
+# ls-remote's -u (also in a cluster of short options) - before a -- that ends the options
+function AsstGarg([string]$sub, [string[]]$a) {
+  $d = ''; $v = ''
+  switch -regex ($sub) { '^grep$' { $d = 'O'; $v = 'efABCm' } '^ls-remote$' { $d = 'u'; $v = 'o' } }
+  $nx = $false
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($t -eq '--') { break }
+    if ($t.StartsWith('--')) {
+      $n = $t.Substring(2); $q = $n.IndexOf('='); if ($q -ge 0) { $n = $n.Substring(0, $q) }
+      foreach ($c in @('output', 'ext-diff', 'upload-pack', 'receive-pack', 'exec', 'open-files-in-pager')) {
+        if ($c.StartsWith($n, [StringComparison]::Ordinal)) { Block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)" }
+      }
+    } elseif ($t.Length -gt 1 -and $t.StartsWith('-') -and $d) {   # -O is not -o (grep's --only-matching)
+      for ($j = 1; $j -lt $t.Length; $j++) {
+        $h = [string]$t[$j]
+        if ($h -ceq $d) { Block "an assistant runs no git read that runs a program or writes a file (git $sub $t) (COORD_ASSISTANT_DIR is set, #281)" }
+        if ($v.Contains($h)) { if ($j -eq $t.Length - 1) { $nx = $true }; break }   # its value: the rest, or the next word
+      }
+    }
+  }
+}
 # AsstGit <subcommand> <its arguments>: passes a read - the subcommands below, a branch or tag listing, a
 # config read, remote with no subcommand / show / get-url, reflog but expire / delete / drop / write,
 # worktree list, symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec, no
@@ -776,6 +840,7 @@ function WorktreeSeg([string[]]$a) {
 # write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks.
 $ASST_GIT_READ = '^(log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version)$'
 function AsstGit([string]$sub, [string[]]$a) {
+  AsstGarg $sub $a
   if ($sub -match $ASST_GIT_READ) { return }
   $w = $false; $l = $false; $np = 0; $nx = $false; $rm = $false; $fst = ''
   foreach ($t in $a) {
@@ -1015,6 +1080,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     if ($t -match $REDIR) { if ($t -match $REDIR_OP) { $skip = $true }; continue }
     $words += $t
   }
+  if ($asst) { AsstGvar $words }
   # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
   # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments
   $i = CmdIdx $words
@@ -1025,6 +1091,7 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^git$' {
       # GIT_DIR= / GIT_WORK_TREE= before git (also after env): see GitSeg
       $redir = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^(GIT_DIR|GIT_WORK_TREE)=') { $redir = $true } }
+      if ($asst) { AsstGenv $words $i }
       GitSeg $rest $redir
     }
     '^(cd|pushd|chdir|set-location|sl|push-location)$' { CdSeg $rest }

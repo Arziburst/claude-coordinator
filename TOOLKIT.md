@@ -204,7 +204,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   a `--safety` file inside it: the guard lets the assistant write there), and outside
   `coordinator/assistants/`, so no assistant's folder can share its name:
   `coordinator/assistant-settings/<name>.json`. The assistant cannot commit: the coordinator commits its
-  folder, `NOTES.md` included, at each sync and before a handoff (CORE §4).
+  folder, `NOTES.md` included, together with every commit it makes in `coordinator/`, and at each sync and
+  before a handoff (CORE §4).
 - **Start:** `start-worker.sh --repo <root> --name "assistant: <name>" --model <model> --brief-file
   <root>/coordinator/assistants/<name>/BRIEF.md --safety <its settings> --report-to "<the coordinator>"`
   (Windows: `start-worker.ps1` with `-Repo`, `-Name`, `-Model`, `-BriefFile`, `-Safety`, `-ReportTo`).
@@ -437,7 +438,12 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   any other path, no path, or a path holding a line break refused; a value that is not absolute, or is `/`
   or a drive, refuses every edit (a broken mode never fails open). git only to read (log, show, diff,
   status, a branch or tag listing, a config read, fetch with no local destination …: commit, push, merge,
-  checkout, stash, add and every other write refused, in any repository); gh only to read (`pr` / `issue` /
+  checkout, stash, add and every other write refused, in any repository), and never a read that can run a
+  command or write a file: git's own `-c`, `--config-env`, `--exec-path=`, `--git-dir`, `--work-tree`, any
+  variable set before git (`GIT_PAGER=`, `PAGER=`, `HOME=` …), a `GIT_` variable set anywhere in the command
+  (`export`, `$env:`, `Set-Item env:`), a read's `--output`, `--ext-diff`, `--upload-pack`, `--receive-pack`,
+  `--exec`, `--open-files-in-pager` (also abbreviated), grep's `-O`, ls-remote's `-u` are refused, while
+  `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
   `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
   graphql without a mutation). gh is an allowlist there: only these reads pass — a group's `list`, `view`,
   `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
@@ -445,11 +451,16 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   HEAD, graphql without a mutation), `gh auth status`, `gh --version`, `gh help`; every other gh command is
   refused (`gh alias set` and a call of an alias, `gh extension install`, `gh auth login` / `logout` /
   `refresh` / `setup-git`, `gh config set`, `gh codespace create`, `gh ssh-key add`, an unknown group …).
-  The examples also run the after-compact hook's `assistant` variant (*Assistants*). Unset or empty,
+  The examples also run the after-compact hook's `assistant` variant (*Assistants*); the guard's
+  self-test there probes the pushes with the mode off and the mode's own verdicts with it on, so it says
+  `safety-guard: OK` in an assistant's session. Unset or empty,
   nothing changes. **The limit:** shell writes (a
   redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
   brief hold it to its folder there, and the write tools of a connector its brief does not name go into
-  its settings' deny list. This file only, never the coordinator's own settings: the coordinator edits its state repository and
+  its settings' deny list. Nor does the guard's reading of git and gh see brace expansion (#345), a
+  command run by `find -exec`, `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
+  `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
+  git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
   more.
 - **Own sessions only (CORE §1.17):** `claude stop / rm / respawn / attach <id>`, `claude --resume <id>`
   and SendMessage reach every session on the machine; the coordinator and every role act only on those
