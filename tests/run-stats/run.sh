@@ -2,7 +2,8 @@
 # The run-stats cases: the fixture run logs against their expected lines (a task's rows summed - worker,
 # tester and verifier, a lead and its sub-runs -, more than 10 tasks so only the last 10 count, old rows
 # without the time columns, `-` and other non-values, fewer than 4, even counts, a header in another
-# order, no header, a header only, a CRLF copy with a BOM), --per-run, one pair's line, a missing file
+# order, no header, a header only, a CRLF copy with a BOM), --per-run, an assistant's rows kept apart (#281:
+# assistant.tsv, never a task's cost or time, its own kind and role in --per-run), one pair's line, a missing file
 # (exit 1) and usage errors (exit 2); --limits on the fixtures in limits/ (a trusted window, a fresh one
 # with a guess and with the previous ratio, a block that fits and one that does not, its top-rung runs at
 # 2.5 times, a window that has reset and one absent, no rate_limits, a pretty-printed JSON with CRLF and a
@@ -16,9 +17,9 @@
 #   tests/run-stats/run.sh ps pwsh         # scripts/run-stats.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -77,6 +78,15 @@ t="$here"
 expect "a run log: the last 10 tasks, old rows, non-values, under 4, even counts" 0 "$t/expected-runs.txt" - -- runs.tsv
 expect "tasks summed: worker, tester and verifier; a lead and its sub-runs" 0 "$t/expected-tasks.txt" - -- tasks.tsv
 expect "--per-run: every row on its own, by kind, role and model" 0 "$t/expected-per-run.txt" - -- tasks.tsv --per-run
+# an assistant's runs apart (#281): a row whose role or kind is `assistant` (task `-`, the assistant's name, or a
+# task's number) is never part of a task's cost or time - the tasks' lines and a task's `task` row as without
+# them -, and --per-run shows each under kind `assistant`, role `assistant`
+expect "assistant rows: never part of a task's cost or time" 0 "$t/expected-tasks.txt" - -- assistant.tsv
+expect "assistant rows: --per-run under kind assistant, role assistant" 0 "$t/expected-assistant-per-run.txt" - -- assistant.tsv --per-run
+for tn in 20 21; do
+  run tasks.tsv --task "$tn"; cp out "task-$tn-plain.txt"
+  expect "assistant rows: task $tn's task row as without them" 0 "$tmp/task-$tn-plain.txt" - -- assistant.tsv --task "$tn"
+done
 expect "no header: the columns in CORE 7's order" 0 "$t/expected-noheader.txt" - -- noheader.tsv
 expect "a header in another order" 0 "$t/expected-reordered.txt" - -- reordered.tsv
 expect "a header only" 0 "$t/expected-header-only.txt" - -- header-only.tsv

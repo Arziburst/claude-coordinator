@@ -192,8 +192,8 @@ function NormPath([string]$p) {
   $p
 }
 # StSessions <folders>: the self-test sessions claude agents --json --all still lists, in any state (a
-# done one too): a name with `selftest` or `probe:`, or starting with `#st`. One whose cwd is one of the
-# folders or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project self-testing on
+# done one too): a name with `selftest` or `probe:`, or starting with `#st`, never one starting with
+# `assistant:` (an assistant, #281, whatever else its name holds). One whose cwd is one of the folders or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project self-testing on
 # this machine, #158) or without a cwd is not: `F <id> (<cwd>)`
 function StSessions([string[]]$roots) {
   $nr = @($roots | Where-Object { $_ } | ForEach-Object { NormPath $_ })
@@ -202,6 +202,7 @@ function StSessions([string[]]$roots) {
   $json = (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", ''
   foreach ($o in ($json -split '}')) {
     $nm = Field $o 'name'
+    if ($nm.StartsWith('assistant:', [StringComparison]::Ordinal)) { continue }   # an assistant (#281): never the self-test's
     if (-not ($nm.StartsWith('#st', [StringComparison]::Ordinal) -or $nm.Contains('selftest') -or $nm.Contains('probe:'))) { continue }
     $c = Field $o 'cwd'; $id = Field $o 'id'; $in = $false
     if ($c) { $n = NormPath $c; foreach ($t in $nr) { if ($n -ceq $t -or $n.StartsWith("$t/", [StringComparison]::Ordinal)) { $in = $true } } }

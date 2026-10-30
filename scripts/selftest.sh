@@ -118,8 +118,8 @@ own_roots() {
   done
 }
 # st_sessions <folders>: the self-test sessions claude agents --json --all still lists, in any state (a
-# done one too): a name with `selftest` or `probe:`, or starting with `#st`. One whose cwd is one of the
-# folders (one per line) or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project
+# done one too): a name with `selftest` or `probe:`, or starting with `#st`, never one starting with
+# `assistant:` (an assistant, #281, whatever else its name holds). One whose cwd is one of the folders (one per line) or inside it is this run's: `O <name> (<id>)`; one elsewhere (another project
 # self-testing on this machine, #158) or without a cwd is not: `F <id> (<cwd>)`. Paths are compared with
 # \ read as /, repeated / as one, in lower case, C:/x as /c/x, without a trailing /
 st_sessions() {
@@ -136,7 +136,8 @@ st_sessions() {
       for (i = 1; i <= nr; i++) if (c == R[i] || substr(c, 1, length(R[i]) + 1) == R[i] "/") return 1
       return 0 }
     BEGIN { m = split(ENVIRON["ROOTS"], A, "\n"); nr = 0; for (i = 1; i <= m; i++) if (A[i] != "") R[++nr] = norm(A[i]) }
-    { nm = field($0, "name"); if (nm !~ /^#st/ && !index(nm, "selftest") && !index(nm, "probe:")) next
+    { nm = field($0, "name"); if (nm ~ /^assistant:/) next   # an assistant (#281): never the self-test s
+      if (nm !~ /^#st/ && !index(nm, "selftest") && !index(nm, "probe:")) next
       c = field($0, "cwd"); id = field($0, "id")
       if (inside(c)) print "O " nm " (" id ")"; else print "F " id " (" (c == "" ? "no cwd" : c) ")" }'
 }
