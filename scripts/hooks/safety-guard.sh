@@ -674,8 +674,85 @@ function startproc(toks, nt,    j, b, k, lt, prog, args) {
   gsub(/,/, " ", args)   # -ArgumentList push,origin,main
   return prog args
 }
-function seg(toks, nt, depth, qm, pp,    j, t, line, k, m, inner, lt, line2) {
+# --- brace expansion as bash does it (#345): the scanner keeps the unquoted braces of a word as \002 and
+# \003 (a Bash command only: PowerShell has none) ---
+function isrange(x) { return x ~ /^(-?[0-9]+\.\.-?[0-9]+|[A-Za-z]\.\.[A-Za-z])(\.\.-?[0-9]+)?$/ }
+# bword(s, i): the { at i, at the start of a word, opens an expansion: a comma at its top level or a range,
+# closed before the word ends (else it is a group: { git push; })
+function bword(s, i,    n, j, c, dep, q, cm) {
+  n = length(s); dep = 0; q = ""; cm = 0
+  for (j = i; j <= n; j++) {
+    c = substr(s, j, 1)
+    if (q != "") { if (c == q) q = ""; else if (c == "\\" && q == "\"") j++; continue }
+    if (c == "\\") { j++; continue }
+    if (c == "\047" || c == "\"") { q = c; continue }
+    if (c ~ /[ \t\r\n;|&()<>]/) return 0
+    if (c == "{") dep++
+    else if (c == "}") { if (--dep == 0) return cm || isrange(substr(s, i + 1, j - i - 1)) }
+    else if (c == "," && dep == 1) cm = 1
+  }
+  return 0
+}
+# infind(toks, nt): the words so far are a find command (its {} and \; are words)
+function infind(toks, nt,    j) { if (nt == 0) return 0; j = cmdidx(toks, nt); return j <= nt && base(toks[j]) == "find" }
+# bexp(w): the words bash makes of w into BX[1..n], as bash does it: the first brace with a comma at its
+# top level or a range, each alternative with the text before and after it, again; returns n, or -1 for
+# more than BMAX words (or too much work)
+function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, st, k, v, wd, lt) {
+  n = 0; nw = 1; W[1] = w; it = 0
+  if (ASC == "") for (k = 32; k < 127; k++) ASC = ASC sprintf("%c", k)
+  while (nw > 0) {
+    x = W[nw--]; if (++it > 4096) return -1
+    for (a = 1; a <= length(x); a++) {
+      if (substr(x, a, 1) != "\002") continue
+      dep = 0; cm = 0
+      for (b = a; b <= length(x); b++) {
+        c = substr(x, b, 1)
+        if (c == "\002") dep++
+        else if (c == "\003") { if (--dep == 0) break }
+        else if (c == "," && dep == 1) cm = 1
+      }
+      if (b <= length(x) && (cm || isrange(substr(x, a + 1, b - a - 1)))) break
+    }
+    if (a > length(x)) { gsub("\002", "{", x); gsub("\003", "}", x); if (++n > BMAX) return -1; BX[n] = x; continue }
+    body = substr(x, a + 1, b - a - 1); na = 0
+    if (cm) {
+      AL[1] = ""; na = 1; dep = 0
+      for (k = 1; k <= length(body); k++) {
+        c = substr(body, k, 1)
+        if (c == "\002") dep++; else if (c == "\003") dep--
+        if (c == "," && dep == 0) AL[++na] = ""; else AL[na] = AL[na] c
+      }
+    } else {
+      split(body, R, /\.\./); lt = (R[1] ~ /^[A-Za-z]$/)
+      if (lt) { lo = index(ASC, R[1]); hi = index(ASC, R[2]) } else { lo = R[1] + 0; hi = R[2] + 0 }
+      st = (R[3] == "") ? 1 : R[3] + 0; if (st < 0) st = -st; if (st == 0) st = 1
+      if (((hi > lo) ? hi - lo : lo - hi) / st >= BMAX) return -1
+      wd = (R[1] ~ /^-?0[0-9]/ || R[2] ~ /^-?0[0-9]/) ? ((length(R[1]) > length(R[2])) ? length(R[1]) : length(R[2])) : 0
+      for (v = lo; (lo <= hi) ? (v <= hi) : (v >= hi); v += (lo <= hi) ? st : -st)
+        AL[++na] = lt ? substr(ASC, v, 1) : (wd ? sprintf("%0" wd "d", v) : sprintf("%d", v))
+    }
+    for (k = na; k >= 1; k--) W[++nw] = substr(x, 1, a - 1) AL[k] substr(x, b + 1)
+  }
+  return n
+}
+# the commands the guard reads (and the shells and Start-Process, which run others)
+function judged(b) { return b ~ /^(git|gh|claude|cd|pushd|chdir|set-location|sl|push-location|rm|remove-item|ri|del|erase|rd|rmdir|find|get-childitem|gci|ls|dir|get-item|gi|bash|sh|zsh|dash|ksh|pwsh|powershell|start-process|saps|start)$/ }
+function seg(toks, nt, depth, qm, pp, bx,    j, t, line, k, m, inner, lt, line2, ex, ne, r, big, fx, nf) {
   if (nt == 0) return
+  # each word with \002 \003 as the words bash makes of it (an empty one dropped); a word of more than BMAX
+  # words stays as written, and the command is refused when that word is its command word (or before it)
+  # or the command is one the guard reads
+  ne = 0; big = 0
+  for (j = 1; j <= nt; j++) {
+    if (!index(toks[j], "\002") && !index(toks[j], "\003")) { ex[++ne] = toks[j]; continue }
+    r = bexp(toks[j])
+    if (r < 0) { t = toks[j]; gsub("\002", "{", t); gsub("\003", "}", t); ex[++ne] = t; if (!big) big = ne; continue }
+    for (k = 1; k <= r; k++) if (BX[k] != "") ex[++ne] = BX[k]
+  }
+  if (big) { j = cmdidx(ex, ne); if (big <= j || judged(base(ex[j]))) { OUT = OUT "\001!\n"; return } }
+  for (j = 1; j <= ne; j++) toks[j] = ex[j]
+  nt = ne; if (nt == 0) return
   line = ""; line2 = ""
   for (j = 1; j <= nt; j++) { t = toks[j]; gsub(/[\t\r\n]/, " ", t); line = line ((j > 1) ? "\t" : "") t; line2 = line2 ((j > 1) ? "\t" : "") unesc(t) }
   OUT = OUT (pp ? "\001|\t" : "") line "\n"   # a first word \001| : this command reads the previous one through |
@@ -683,18 +760,29 @@ function seg(toks, nt, depth, qm, pp,    j, t, line, k, m, inner, lt, line2) {
   # the command as written is checked too, so this only adds a check
   # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
   if (qm && ENVIRON["SG_TOOL"] != "PowerShell" && line2 != line) OUT = OUT (pp ? "\001|\t" : "") line2 "\n"
-  inner = startproc(toks, nt); if (inner != "") scan(inner, depth + 1, qm)
+  # find -exec / -execdir / -ok / -okdir (#345): the command up to ; (\;) or {} + is a command of its own
+  j = cmdidx(toks, nt)
+  if (j <= nt && base(toks[j]) == "find") {
+    for (k = j + 1; k <= nt; k++) {
+      if (tolower(toks[k]) !~ /^-(exec|execdir|ok|okdir)$/) continue
+      nf = 0
+      for (k++; k <= nt; k++) { t = toks[k]; if (t == ";" || t == "\\;" || t == "\\" || (t == "+" && nf && fx[nf] == "{}")) break; fx[++nf] = t }
+      seg(fx, nf, depth, qm, 0, bx)
+    }
+  }
+  # Start-Process runs the program itself, with no shell to expand braces
+  inner = startproc(toks, nt); if (inner != "") scan(inner, depth + 1, qm, 0)
   if (!isshell(toks, nt)) return
   j = SHJ
   for (k = j + 1; k <= nt; k++) { lt = tolower(toks[k]); if (lt ~ /^-[a-z]*c$/ || lt ~ /^-com(m(a(n(d)?)?)?)?$/) break }
   if (k < nt && toks[k + 1] == "--") k++
   if (k >= nt) return
   inner = toks[k + 1]; for (m = k + 2; m <= nt; m++) inner = inner " " toks[m]
-  scan(inner, depth + 1, qm)
+  scan(inner, depth + 1, qm, base(toks[j]) !~ /^(pwsh|powershell)$/)
 }
-function scan(s, depth, qm,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, body, bd, pp, e) {
+function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, hbx, body, bd, bm, bk, pp, e) {
   if (depth > 8) return
-  n = length(s); q = ""; tok = ""; st = 0; nt = 0; hd = ""; bd = 0; pp = 0
+  n = length(s); q = ""; tok = ""; st = 0; nt = 0; hd = ""; bd = 0; bm = ""; pp = 0
   for (i = 1; i <= n; i++) {
     k = (q == "\047") ? runto(s, i, "\047", "") : (q == "\"") ? runto(s, i, "", "[\"\\\\$`]") : runto(s, i, "\047", "[ \t\r\n;|&()<>{}\"\\\\$`#]")
     if (k > 0) { tok = tok substr(s, i, k); i += k - 1; continue }
@@ -703,47 +791,56 @@ function scan(s, depth, qm,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, 
     if (q == "\"") {
       if (c == "\\" && (d == "\"" || d == "\\" || d == "$" || d == "`")) { tok = tok d; i++; continue }
       if (c == "\"") { q = ""; continue }
-      if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm); tok = tok "$SUBST"; i = k; continue }
-      if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm); tok = tok "$SUBST"; i = k; continue }
+      if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm, bx); tok = tok "$SUBST"; i = k; continue }
+      if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm, bx); tok = tok "$SUBST"; i = k; continue }
       tok = tok c; continue
     }
+    if (bx && c == "\\" && d == ";" && infind(toks, nt)) { tok = tok c d; st = 1; i++; continue }   # \; of find is a word
     if (qm && c == "\\" && (d == "\"" || d == "\047" || d == "\\")) { tok = tok d; st = 1; i++; continue }
     if (qm && c == "$" && d == "\047") continue   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
     if (c == "\047" || c == "\"") { if (qm) { q = c; st = 1 }; continue }
-    if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm); tok = tok "$SUBST"; st = 1; i = k; continue }
-    if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm); tok = tok "$SUBST"; st = 1; i = k; continue }
-    if (c == " " || c == "\t" || c == "\r") { if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; continue }
+    if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
+    if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
+    if (c == " " || c == "\t" || c == "\r") { if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; bm = ""; continue }
     if (c == "#" && tok == "" && !st) { while (i < n && substr(s, i + 1, 1) != "\n") i++; continue }
     if (c == "<" && d == "<" && substr(s, i + 2, 1) != "<") {
-      if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0
-      hdsh = isshell(toks, nt); hd = hdword(s, i + 2); hdd = HDDASH; i = HDJ; continue
+      if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; bm = ""
+      hdsh = isshell(toks, nt); hbx = hdsh && base(toks[SHJ]) !~ /^(pwsh|powershell)$/; hd = hdword(s, i + 2); hdd = HDDASH; i = HDJ; continue
     }
     if (c == ">" || c == "<") {
-      if (tok != "" && tok !~ /^[0-9]+$/ && tok != "&" && tok != "*" && tok !~ /[<>]$/) { toks[++nt] = tok; tok = ""; bd = 0 }
+      if (tok != "" && tok !~ /^[0-9]+$/ && tok != "&" && tok != "*" && tok !~ /[<>]$/) { toks[++nt] = tok; tok = ""; bd = 0; bm = "" }
       tok = tok c; st = 1; continue
     }
     if (c == "&" && (p == ">" || p == "<" || d == ">")) { tok = tok c; st = 1; continue }
     # { and } around words are groups and script blocks (& {git push}, % { ... }); inside a word they
-    # are data (${HOME}, @{0}, refs/heads/main^{})
+    # are data (${HOME}, @{0}, refs/heads/main^{}). In a Bash command a brace in a word, one opening an
+    # expansion ({main,} , {1..3}) and {} of a find command belong to the word; kept as \002 \003 for seg,
+    # but not ${ or an escaped one (bm: which of the open braces are kept so)
+    if (bx && c == "{" && (tok != "" || infind(toks, nt) || bword(s, i))) {
+      bd++; bk = (p == "$" || p == "\\") ? "0" : "1"; bm = bm bk; tok = tok (bk == "1" ? "\002" : c); continue
+    }
+    if (bx && c == "}" && bd > 0) {
+      bd--; bk = substr(bm, length(bm)); bm = substr(bm, 1, length(bm) - 1); tok = tok (bk == "1" && p != "\\" ? "\003" : c); continue
+    }
     if (c == "{" && tok != "") { bd++; tok = tok c; continue }
     if (c == "}" && bd > 0) { bd--; tok = tok c; continue }
     if (c == "\n" || c == ";" || c == "|" || c == "&" || c == "(" || c == ")" || c == "{" || c == "}") {
-      if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; e = (nt == 0)
-      seg(toks, nt, depth, qm, pp); nt = 0
+      if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; bm = ""; e = (nt == 0)
+      seg(toks, nt, depth, qm, pp, bx); nt = 0
       pp = (c == "|" && d != "|" && p != "|") || (e && pp)
-      if (c == "\n" && hd != "") { k = hdend(s, i + 1, hd, hdd); body = HDBODY; hd = ""; if (hdsh) scan(body, depth + 1, 0); i = k }
+      if (c == "\n" && hd != "") { k = hdend(s, i + 1, hd, hdd); body = HDBODY; hd = ""; if (hdsh) scan(body, depth + 1, 0, hbx); i = k }
       continue
     }
     tok = tok c
   }
   if (q != "") FAIL = 1
   if (tok != "") toks[++nt] = tok
-  seg(toks, nt, depth, qm, pp)
+  seg(toks, nt, depth, qm, pp, bx)
 }
 { all = (NR > 1) ? all "\n" $0 : $0 }
 END {
-  OUT = ""; FAIL = 0; scan(all, 0, 1)
-  if (FAIL) { OUT = ""; scan(all, 0, 0) }
+  OUT = ""; FAIL = 0; BMAX = 64; bx = ENVIRON["SG_TOOL"] != "PowerShell"; scan(all, 0, 1, bx)
+  if (FAIL) { OUT = ""; scan(all, 0, 0, bx) }
   printf "%s", OUT
 }'
 segments=$(printf '%s' "$cmd" | SG_TOOL="$tool" awk "$SCAN_AWK")
@@ -1297,10 +1394,11 @@ find_seg() {
   for t in "${tg[@]}"; do rm_target "$t" $all; done
 }
 
-PIPE=$'\001|'; cur_tg=()
+PIPE=$'\001|'; BIG=$'\001!'; cur_tg=()
 while IFS="$tab" read -r -a T; do
   prev_tg=("${cur_tg[@]}"); cur_tg=()
   piped=0
+  [ "${T[0]:-}" = "$BIG" ] && block "a brace expansion to more than 64 words in a command the guard reads (#345): write the words out"
   if [ "${T[0]:-}" = "$PIPE" ]; then piped=1; T=("${T[@]:1}"); fi
   # redirections (2>&1, > out.txt) are not arguments
   A=(); skip=0

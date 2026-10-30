@@ -387,6 +387,13 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
   variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
   protection on the code host is the real wall; the hook is not hardened against these on purpose.
+  Ordinary shell syntax is read as bash runs it, in both scripts (#345): a Bash command's unquoted brace
+  expansion (`{main,}`, `m{a,}in`, `{x,{main,y}}`, `ma{h..j}n`) is judged as every word it makes, and the
+  command after `find -exec` / `-execdir` / `-ok` / `-okdir` (up to `\;` or `{} +`) as a command of its
+  own; a quoted brace, `{main}`, `{}`, `${var}` and `@{u}` stay as written. A word making more than 64
+  words is not expanded, and the command is refused when the guard reads it (git, gh, rm, find, cd …)
+  or the word is its command word. Still out: other expansions (a glob such as `ma?n`, `${x/…}`), and
+  braces in a PowerShell command (PowerShell has no brace expansion).
   Hooks see only the tools their matcher names (the guard: the shell tools, the edit tools — next
   bullet — and SendMessage, *Own sessions only* below) — **MCP tools are covered by deny rules only**
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
@@ -457,8 +464,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   nothing changes. **The limit:** shell writes (a
   redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
   brief hold it to its folder there, and the write tools of a connector its brief does not name go into
-  its settings' deny list. Nor does the guard's reading of git and gh see brace expansion (#345), a
-  command run by `find -exec`, `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
+  its settings' deny list. Nor does the guard's reading of git and gh see `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
   `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
   git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
   more.
