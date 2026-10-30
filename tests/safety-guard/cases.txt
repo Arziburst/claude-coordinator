@@ -1196,3 +1196,47 @@ allow	work	gh help:x	-	@PROJECT@	-	-
 allow	work	gh pr -b list	-	@PROJECT@	-	-
 allow	ps:work	gh Status	-	@PROJECT@	-	-
 allow	ps:work	gh --limit search repo list	-	@PROJECT@	-	-
+# --- the fix round on 2e97b63 (#281): a git read that runs a command (--upload-pack, a pager, an ssh command,
+# grep's -O / --open-files-in-pager) or writes a file (--output) is refused in the assistant mode; the plain
+# reads pass; without the folder the verdicts are today's
+block	work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -c core.pager='x' log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -c core.sshCommand='x' fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_PAGER='x' git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_SSH_COMMAND='x' git fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git grep -O'x' y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git grep --open-files-in-pager=x y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git log --output=../outside.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git diff --output=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -c core.pager='x' log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -c core.sshCommand='x' fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git grep -O'x' y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git grep --open-files-in-pager=x y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git log --output=../outside.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git diff --output=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git grep x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git grep x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# without the folder these git verdicts are unchanged
+allow	work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	-
+allow	work	git -c core.pager='x' log	-	@PROJECT@	-	-
+allow	work	git -c core.sshCommand='x' fetch	-	@PROJECT@	-	-
+allow	work	GIT_PAGER='x' git log	-	@PROJECT@	-	-
+allow	work	GIT_SSH_COMMAND='x' git fetch	-	@PROJECT@	-	-
+allow	work	git grep -O'x' y	-	@PROJECT@	-	-
+allow	work	git grep --open-files-in-pager=x y	-	@PROJECT@	-	-
+allow	work	git log --output=../outside.txt	-	@PROJECT@	-	-
+allow	work	git diff --output=x	-	@PROJECT@	-	-
+allow	work	git log	-	@PROJECT@	-	-
+allow	work	git grep x	-	@PROJECT@	-	-
+allow	ps:work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	-
+allow	ps:work	git -c core.pager='x' log	-	@PROJECT@	-	-
+allow	ps:work	git grep -O'x' y	-	@PROJECT@	-	-
+allow	ps:work	git log --output=../outside.txt	-	@PROJECT@	-	-
+allow	ps:work	git diff --output=x	-	@PROJECT@	-	-

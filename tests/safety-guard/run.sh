@@ -366,6 +366,16 @@ if [ -n "$flag" ]; then
     out="$("${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
     [ "$out" != "safety-guard: OK" ] || { echo "FAIL (self-test) a guard that blocks every call still says OK"; fail=1; }
   fi
+  # in an assistant's session (#281): the settings set COORD_ASSISTANT_DIR, and the session's start runs the
+  # self-test with it - still OK (exit 0) for this hook, still not OK for the copy that blocks every call
+  n=$((n + 1))
+  out="$(COORD_ASSISTANT_DIR="$adm" "$@" "$flag" 2>/dev/null)"; rc=$?; out="$(printf '%s' "$out" | tr -d '\r')"
+  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (self-test) with COORD_ASSISTANT_DIR set expected OK (exit 0), got (exit $rc): $out"; fail=1; }
+  if [ -f "$broken" ]; then
+    n=$((n + 1))
+    out="$(COORD_ASSISTANT_DIR="$adm" "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
+    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_ASSISTANT_DIR set, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
+  fi
 fi
 echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
