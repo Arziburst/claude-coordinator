@@ -108,7 +108,7 @@ runs() {
     "${PSX[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/$f.ps1" "${a[@]}"
   else bash "$core/scripts/$f.sh" "$@"; fi
 }
-PSX=("${PS[@]}")
+PSX=(${PS[@]+"${PS[@]}"})
 start() { runs "$kind" start-worker "$@"; }
 cleanup() { runs "$kind" cleanup-worker "$@"; }
 fail=0; n=0
@@ -205,10 +205,10 @@ STUB_HEADS="$h" check 0 "cleanup: a worker, the listing works" -- cleanup --work
 n=$((n + 1)); grep -qx "rm c0ffee81" "$STUB_LOG" && [ ! -d "$w" ] || { echo "FAIL (cleanup: a worker, the listing works): not cleaned"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 
 # --- M1: one decision in start-worker.sh and start-worker.ps1 on COORD_ASSISTANT_DIR and the brief's folder ---
-if [ ${#PSX[@]} -eq 0 ]; then
+if [ -z "${PSX[*]+x}" ]; then
   if command -v powershell >/dev/null 2>&1; then PSX=(powershell); elif command -v pwsh >/dev/null 2>&1; then PSX=(pwsh); fi
 fi
-if [ ${#PSX[@]} -eq 0 ]; then echo "SKIP: no PowerShell on PATH - the .sh / .ps1 comparison (M1) did not run"
+if [ -z "${PSX[*]+x}" ]; then echo "SKIP: no PowerShell on PATH - the .sh / .ps1 comparison (M1) did not run"
 else
   # agree <what> <expected exit or -> <name> <env folder> [<brief file>]: both variants (each with its own guard's
   # settings), --dry-run; the same exit, and the expected one when given
@@ -228,6 +228,7 @@ else
   }
   base="$mar/coordinator/assistants"
   agree "a trailing slash" 0 cmp1 "$base/cmp1/"
+  mkdir -p "$ar/coordinator/assistants/other"   # Linux and macOS resolve a .. only through a folder that exists
   agree "a .. segment" 0 cmp2 "$base/other/../cmp2"
   agree "letter case" - cmp3 "$(printf '%s' "$base/cmp3" | tr '[:lower:]' '[:upper:]')"
   if [ -n "$win" ]; then
