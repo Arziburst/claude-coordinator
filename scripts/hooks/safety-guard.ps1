@@ -817,24 +817,35 @@ function AsstGit([string]$sub, [string[]]$a) {
   Block "an assistant writes nothing to git (git $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
 }
 # AsstGh <gh's arguments>: an allowlist (281.5) - passes a read, refuses every other gh command (an alias
-# and its call, an extension, auth, config, agent-task, an unknown group ...), past -R / --repo / --hostname
-# and its value anywhere before the subcommand. Reads: no group (gh, gh --version), help, version, status,
-# browse (opens a URL), search; auth status, alias list, config get / list, org list; pr | issue | release |
-# repo | label | gist | workflow | secret | variable | run | cache | ruleset | project | codespace | ssh-key
-# | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api: AsstApi
+# and its call, an extension, auth, config, agent-task, an unknown group ...). gh's command line is read
+# exactly (281.6): before the group and before the subcommand only -R / --repo / --hostname with its value
+# (also --repo= / --hostname=) may stand, any other flag there refuses (gh may take the next word as its
+# value) - but gh --version alone, and gh --help / -h with only words after it (it prints help); names match
+# case-sensitively and whole, as gh matches them. Reads: no group (gh), help, version, status, browse (opens
+# a URL; these four take no subcommand), search; auth status, alias list, config get / list, org list; pr |
+# issue | release | repo | label | gist | workflow | secret | variable | run | cache | ruleset | project |
+# codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api:
+# AsstApi
 function AsstGh([string[]]$a) {
+  if ($a.Count -eq 1 -and $a[0] -ceq '--version') { return }
+  if ($a.Count -ge 1 -and ($a[0] -ceq '--help' -or $a[0] -ceq '-h') -and -not @($a | Select-Object -Skip 1 | Where-Object { $_.StartsWith('-') }).Count) { return }
   $grp = ''; $sub = ''; $nx = $false; $i = 0
   while ($i -lt $a.Count) {
     $t = $a[$i]; $i++
     if ($nx) { $nx = $false; continue }
-    if ($t -ceq '-R' -or $t -ceq '--repo' -or $t -ceq '--hostname') { $nx = $true; continue }
-    if ($t.StartsWith('-')) { continue }
-    if (-not $grp) { $grp = $t; if ($grp -ceq 'api') { break }; continue }
+    if ($t -cin '-R', '--repo', '--hostname') { $nx = $true; continue }
+    if ($t -clike '--repo=*' -or $t -clike '--hostname=*') { continue }
+    if ($t.StartsWith('-')) {
+      $at = if ($grp) { 'subcommand' } else { 'command' }
+      Block "an assistant writes nothing to GitHub (gh ... $t before the $at, which gh may take as its value): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
+    }
+    if (-not $grp) { $grp = $t; if ($grp -cin 'api', 'help', 'version', 'status', 'browse') { break }; continue }
     $sub = $t; break
   }
   if ($grp -ceq 'api') { AsstApi @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] }); return }
-  if ("${grp}:$sub" -match '^(:|(help|version|status|browse|search):.*|(auth|alias|config|org):|auth:status|alias:list|config:(get|list)|org:list)$') { return }
-  if ($grp -match '^(pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|project|codespace|ssh-key|gpg-key)$' -and $sub -match '^(|list|view|status|diff|checks|watch)$') { return }
+  if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }
+  if (($grp -ceq 'auth' -and $sub -cin '', 'status') -or ($grp -cin 'alias', 'org' -and $sub -cin '', 'list') -or ($grp -ceq 'config' -and $sub -cin '', 'get', 'list')) { return }
+  if ($grp -cin 'pr', 'issue', 'release', 'repo', 'label', 'gist', 'workflow', 'secret', 'variable', 'run', 'cache', 'ruleset', 'project', 'codespace', 'ssh-key', 'gpg-key' -and $sub -cin '', 'list', 'view', 'status', 'diff', 'checks', 'watch') { return }
   $gs = if ($sub) { "$grp $sub" } else { $grp }
   Block "an assistant writes nothing to GitHub (gh $gs): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
 }
