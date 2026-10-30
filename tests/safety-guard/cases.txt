@@ -1008,3 +1008,40 @@ allow	work	git push origin 12-fix	-	@PROJECT@	-	-
 allow	work	gh issue comment 281 --body x	-	@PROJECT@	-	-
 allow	work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	-
 allow	ps:work	git add .	-	@PROJECT@	-	-
+# --- round 2 of 281.1 (the review of dc2cb0b): F1 an argument holding :- is not a flag; F2 fetch --refmap
+# with a :<dst> updates local branches; F3 an edit path holding a line break; F4 the gh api endpoint
+# folded (a leading /, the host) before the graphql rule; git reflog reads pass, its writes are refused
+block	work	git config 'a.b:-c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config 'a.b:--c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git config 'a.b:-c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch --refmap=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch --refmap refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch origin --refmap=+refs/heads/main:refs/heads/main main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git fetch --refmap=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git fetch origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a1/notes\n.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1/sub\n/x.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	multiedit:work	@PROJECT@/coordinator/assistants/a1/sub/deep\n.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work/coordinator/assistants/a1	notes\n.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1\nx/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1 x
+block	work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api /graphql --method GET -f query='mutation { x }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog show HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog expire --all	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog delete HEAD@{1}	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog expire --expire=now --all	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git reflog delete HEAD@{1}	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# an edit path holding a line break without the assistant mode: the base verdicts (both shells at 3e15b27)
+block	edit:work	@PROJECT@/src/a\nb.js	@PROJECT@	@PROJECT@	-	-
+block	write:work	@PROJECT@/.claude/settings\n.json	@PROJECT@	@PROJECT@	-	-
+allow	write:work	@PROJECT@/x\ny.txt	-	@PROJECT@	-	-
