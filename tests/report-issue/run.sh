@@ -40,6 +40,11 @@
 #   round 6: a title from the repository (CHECK, REPEAT, FIXED UPSTREAM) is untrusted data: printed with no
 #     control or escape byte (C0, DEL, C1), at most 120 characters of it and a cut mark (... or the ellipsis
 #     character) when longer, in double quotes, after a line holding the word `untrusted` that names them
+#   round 7: a version keeps only its digits (N...); control bytes (below 0x20, 0x7f) go before the rules;
+#     --source (a core path kept, else an upper-case token) and --step pass the allowlist; the fixed words
+#     add ssl, certificate, connection, forbidden, unauthorized, proxy, publickey, submodule, ...; a printed
+#     title has no bidi (U+202E, U+2066-U+2069), zero-width (U+200B-U+200D) or U+FEFF character and its cut
+#     keeps every whole character that fits; the .sh dry-run REPEAT line = the .ps1's
 set -u
 [ $# -gt 0 ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -381,6 +386,52 @@ word 'zorblat cannot run scripts/start-worker.sh, see PROJECT.md' "cannot run sc
 fresh "signature: a core word in upper case is kept, lower-cased"
 word 'PERMISSION DENIED to ZORBLAT' "permission denied to" -- ZORBLAT zorblat PERMISSION DENIED
 
+# --- signature, round 7 of #338: versions, control bytes, --source and --step, the tool-error words ---
+# A version keeps only its digits (a name glued to it is a word like any other); control bytes go before
+# the rules; --source and --step pass the same allowlist (a --source that is no core path is a token).
+# ver <error> <names...>: one signature; its words hold the version's digits as a token, none of the names
+ver() {
+  local e="$1" x w; shift
+  sig --source scripts/run-stats.sh --step st --exit 1 --error "$e"; code 0
+  w="${out#*: exit 1: }"
+  case "$w" in *N*) ok ;; *) bad "the version's digits are no token: [$w]" ;; esac
+  for x in "$@"; do hasnt "$x"; done; }
+fresh "signature: a version keeps only its digits - a name glued to it is gone"
+ver 'build 1.2.3-acme failed' acme
+ver 'requires sdk 2.1.0-zorblat.jsmith' zorblat jsmith
+ver 'tag v1.0.jsmith' jsmith
+ver "node 18.2.0-ivanov-$jose" ivanov "$jose" jos
+ver 'release 2024.10.acme-shop' acme
+ver 'python 3.11.zorblat_internal' zorblat
+fresh "signature: build 1.2.3 failed and build 1.2.3-acme failed - failed kept, no name, they differ only by _"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3 failed'; code 0; s1="$out"; has failed
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3-acme failed'; code 0; has failed; hasnt acme
+# nous <sig>: the signature with each _ and the punctuation joining it to a word gone, spaces collapsed
+nous() { printf '%s' "$1" | sed -E 's/[-._]*_[-._]*/ /g; s/ +/ /g; s/ $//'; }
+[ -n "$s1" ] && [ "$(nous "$s1")" = "$(nous "$out")" ] && ok || bad "they differ in more than _: [$s1] [$out]"
+fresh "signature: control bytes go before the rules - \\001 and \\002, ESC sequences, BEL"
+sig --source scripts/run-stats.sh --step st --exit 1 --error "$(printf 'cannot read \001jsmith acme\002 now \033[31mred\033[0m bell\007 end')"; code 0
+hasnt jsmith; hasnt acme; has "cannot read"
+printf '%s' "$out" > "$tmp/sig"
+LC_ALL=C grep -q '[[:cntrl:]]' "$tmp/sig" && { bad "a byte below 0x20 or 0x7f in the signature"; od -c "$tmp/sig" | sed 's/^/    od: /'; } || ok
+fresh "signature: --source and --step pass the allowlist - a core path kept, any other source a token"
+sig --source scripts/start-worker.sh --step push --exit 1 --error 'cannot push'; code 0
+case "$out" in "scripts/start-worker.sh: push: exit 1: "*) ok ;; *) bad "the core path in --source is not kept" ;; esac
+for x in acme/deploy.sh zorblat.sh; do
+  sig --source "$x" --step push --exit 1 --error 'cannot push'; code 0
+  case "${out%%: *}" in *[!A-Z]*|"") bad "--source $x is no token: [${out%%: *}]" ;; *) ok ;; esac
+  hasnt acme; hasnt zorblat; hasnt deploy.sh
+done
+sig --source scripts/run-stats.sh --step "push to jsmith" --exit 1 --error 'cannot push'; code 0
+hasnt jsmith; has "scripts/run-stats.sh: push"
+fresh "signature: the fixed tool-error words - HTTP 403 and 401 differ, ssl, certificate, connection, proxy, ... kept"
+differ 'gh: Forbidden (HTTP 403)' 'gh: Unauthorized (HTTP 401)'
+word 'gh: Forbidden (HTTP 403)' "forbidden" "http" --
+word 'gh: Unauthorized (HTTP 401)' "unauthorized" "http" --
+word 'ssl certificate expired' "ssl certificate expired" --
+word 'connection refused' "connection refused" --
+word 'proxy publickey submodule timeout' "proxy publickey submodule timeout" --
+
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
@@ -560,10 +611,12 @@ clean; cut120 delta y 6; untrusted_before alpha bravo charlie delta IGNORE
 for x in alpha bravo charlie delta IGNORE; do quoted "$x"; done; has "$IGN"
 shsame --keywords "merge-queue update refused"
 
-# titled <tag>: a title printed is cleaned, cut, quoted and marked untrusted; a title left out passes
+# titled <tag>: the title is printed, cleaned, cut, quoted and marked untrusted (round 7: a title left out
+# fails)
 titled() {
   clean
-  if grep -qF IGNORE "$tmp/raw"; then cut120 IGNORE z 46; quoted IGNORE; untrusted_before IGNORE; fi; }
+  grep -qF IGNORE "$tmp/raw" && ok || bad "the issue's title is not printed"
+  cut120 IGNORE z 46; quoted IGNORE; untrusted_before IGNORE; }
 EXT="$(printf '\033[2J\033[31m%s %s' "$IGN" "$zs")"
 fresh "REPEAT: an exact match's title with escapes, an instruction, 250 characters - data like the CHECK titles"
 printf '77\tOPEN\t\t%s\n' "$EXT" > "$STUB_D/exact"
@@ -575,6 +628,34 @@ printf '55\tCLOSED\tCOMPLETED\t%s\n' "$EXT" > "$STUB_D/exact"
 rawfile --keywords "merge-queue update refused"
 code 3; has "FIXED UPSTREAM #55"; count create 0; count reaction 0; count comment 0; readonly_else
 titled; shsame --keywords "merge-queue update refused"
+
+# --- titles, round 7 of #338: bidi and zero-width characters, the cut keeps whole characters ---
+fresh "CHECK: bidi, zero-width and BOM characters removed; a 100-character Cyrillic title whole; the cut drops only a broken character"
+cyr="$(printf '\320\266%.0s' $(seq 100))"; a118="$(printf 'a%.0s' $(seq 118))"; e="$(printf '\303\251')"
+BIDI="$(printf 'bidi \342\200\256x\342\201\246y\342\201\247z\342\201\250w\342\201\251v \342\200\213u\342\200\214t\342\200\215s\357\273\277end')"
+{ printf '41\tOPEN\t\t%s\n' "$cyr"
+  printf '42\tOPEN\t\t%s%s%s tail\n' "$a118" "$e" "$e"
+  printf '43\tOPEN\t\t%s\n' "$BIDI"; } > "$STUB_D/keyword"
+rawfile --keywords "merge-queue update refused"
+code 4; has "CHECK #41 #42 #43"; count create 0; clean
+l="$(grep '^#41 ' "$tmp/raw" | head -n 1)"
+printf '%s\n' "$l" | grep -qF -- "\"$cyr\"" && ok || bad "the 100-character Cyrillic title is not printed whole: [$l]"
+printf '%s\n' "$l" | grep -qE '\.\.\.|'"$(printf '\342\200\246')" && bad "a cut mark on a title of 100 characters" || ok
+l="$(grep '^#42 ' "$tmp/raw" | head -n 1)"; r="${l#*"$a118"}"
+case "$r" in "$e$e"*|"$e..."*|"$e$(printf '\342\200\246')"*) ok ;; *) bad "the cut did not keep the first é that fits: [$l]" ;; esac
+case "$l" in *tail*) bad "the title of 125 characters is not cut" ;; *) ok ;; esac
+for x in '\342\200\256' '\342\201\246' '\342\201\247' '\342\201\250' '\342\201\251' '\342\200\213' '\342\200\214' '\342\200\215' '\357\273\277'; do
+  LC_ALL=C grep -qF "$(printf "$x")" "$tmp/raw" && bad "the character $x is in a printed title" || ok; done
+has "bidi"; has "end"
+shsame --keywords "merge-queue update refused"
+
+# --- the .sh dry-run REPEAT says what the .ps1 says (round 7 of #338) ---
+fresh "--dry-run REPEAT: one line naming the reaction once, the same in .sh and .ps1"
+printf '77\tOPEN\t\tmerge-queue: the refused update\n' > "$STUB_D/exact"
+rawfile --keywords "merge-queue update refused" --dry-run
+code 0; count reaction 0; count create 0; count comment 0; readonly_else
+[ "$(head -n 1 "$tmp/raw")" = "REPEAT #77 (dry run: would add a +1 reaction)" ] && ok || bad "the dry-run REPEAT line: [$(head -n 1 "$tmp/raw")]"
+shsame --keywords "merge-queue update refused" --dry-run
 
 echo "report-issue ($kind): $((pass + fail)) checks, $([ $fail = 0 ] && echo "all pass" || echo "$fail FAILED")"
 [ $fail = 0 ]
