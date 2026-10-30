@@ -1121,3 +1121,24 @@ allow	work	gh config set git_protocol ssh	-	@PROJECT@	-	-
 allow	work	gh foo bar	-	@PROJECT@	-	-
 allow	ps:work	gh extension install o/gh-x	-	@PROJECT@	-	-
 allow	ps:work	gh auth logout	-	@PROJECT@	-	-
+# 281.5, the lead's decisions (the worker's cases): search, status, org list, alias list, config get / list,
+# version and browse (it opens a URL) are reads and pass in the assistant mode; --hostname takes a value;
+# config clear-cache stays refused (alias set / delete / import and config set: the cases above)
+allow	work	gh search issues bug	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh search prs --author x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh org list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh alias list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh config get git_protocol	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --hostname h.example pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh search repos x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1

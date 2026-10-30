@@ -2,7 +2,7 @@
 # PreToolUse safety hook for coordinator projects (Bash / PowerShell tools; with COORD_PROTECTED_ROOT
 # set, also Edit / Write / MultiEdit / NotebookEdit: no edit under that folder outside its
 # .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*). With COORD_ASSISTANT_DIR set (the
-# assistant mode, #281): the edit tools only inside that folder, git and gh only to read.
+# assistant mode, #281): the edit tools only inside that folder, git only to read, gh only a known read.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only — the real enforcement is branch protection on the code host (CORE §2); deliberate
 # obfuscation (eval, quoting tricks, aliases ...) is out of scope (TOOLKIT.md *Safety*).
@@ -1029,27 +1029,29 @@ asst_git() {
   esac
   block "an assistant writes nothing to git (git $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
 }
-# asst_gh <gh's arguments>: refuses pr | issue | release | repo | label | gist | workflow | secret | variable
-# (and run | cache | ruleset | project | codespace | ssh-key | gpg-key, which write to GitHub the same way)
-# with a subcommand but list / view / status / diff / checks / watch, past -R / --repo and its value
-# anywhere before it; gh api: asst_api
+# asst_gh <gh's arguments>: an allowlist (281.5) - passes a read, refuses every other gh command (an alias
+# and its call, an extension, auth, config, agent-task, an unknown group ...), past -R / --repo / --hostname
+# and its value anywhere before the subcommand. Reads: no group (gh, gh --version), help, version, status,
+# browse (opens a URL), search; auth status, alias list, config get / list, org list; pr | issue | release |
+# repo | label | gist | workflow | secret | variable | run | cache | ruleset | project | codespace | ssh-key
+# | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api: asst_api
 asst_gh() {
   local t grp="" sub="" nx=0
   while [ $# -gt 0 ]; do
     t="$1"; shift
     if [ $nx = 1 ]; then nx=0; continue; fi
-    if [ "$t" = -R ] || [ "$t" = --repo ]; then nx=1; continue; fi
+    if [ "$t" = -R ] || [ "$t" = --repo ] || [ "$t" = --hostname ]; then nx=1; continue; fi
     case "$t" in -*) continue ;; esac
     if [ -z "$grp" ]; then grp="$t"; [ "$grp" = api ] && break; continue; fi
     sub="$t"; break
   done
-  case "$grp" in
-    api) asst_api "$@"; return ;;
-    pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|project|codespace|ssh-key|gpg-key) ;;
-    *) return 0 ;;
+  case "$grp:$sub" in
+    api:*) asst_api "$@"; return ;;
+    :|help:*|version:*|status:*|browse:*|search:*|auth:|auth:status|alias:|alias:list|config:|config:get|config:list|org:|org:list) return 0 ;;
+    pr:*|issue:*|release:*|repo:*|label:*|gist:*|workflow:*|secret:*|variable:*|run:*|cache:*|ruleset:*|project:*|codespace:*|ssh-key:*|gpg-key:*)
+      case "$sub" in ''|list|view|status|diff|checks|watch) return 0 ;; esac ;;
   esac
-  case "$sub" in ''|list|view|status|diff|checks|watch) return 0 ;; esac
-  block "an assistant writes nothing to GitHub (gh $grp $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+  block "an assistant writes nothing to GitHub (gh $grp${sub:+ $sub}): it reads only, and gh passes only a known read (COORD_ASSISTANT_DIR is set, #281)"
 }
 # asst_api <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
 # HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
