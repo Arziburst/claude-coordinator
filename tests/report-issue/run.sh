@@ -45,6 +45,10 @@
 #     add ssl, certificate, connection, forbidden, unauthorized, proxy, publickey, submodule, ...; a printed
 #     title has no bidi (U+202E, U+2066-U+2069), zero-width (U+200B-U+200D) or U+FEFF character and its cut
 #     keeps every whole character that fits; the .sh dry-run REPEAT line = the .ps1's
+#   round 8: a word mixing letters and digits (u123456, desktop-7qj3k2l's 7qj3k2l, jsmith1987) is `_`; kept are
+#     versions, hex ids, core paths and names and sha1 sha256 md5 utf8 utf16 base64 x64 x86 arm64 ipv4 ipv6
+#     http2 oauth2; a printed title has no Unicode format character (LRM, RLM, ALM, U+2060, U+00AD, U+180E,
+#     U+2028, U+2029, the tag characters U+E0001-U+E007F) - one made only of them prints ""
 set -u
 [ $# -gt 0 ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -432,6 +436,36 @@ word 'ssl certificate expired' "ssl certificate expired" --
 word 'connection refused' "connection refused" --
 word 'proxy publickey submodule timeout' "proxy publickey submodule timeout" --
 
+# --- signature, round 8 of #338: a word mixing letters and digits is `_` ---
+# A user id, a machine name, a name with a year: letters and digits in one word say nothing of the error.
+# Kept: a version, a hex id (tokens), a core path or name, and the technical words below.
+fresh "signature: a word mixing letters and digits becomes _ - no user id, machine name or name with digits"
+word 'permission denied for user u123456 on desktop-7qj3k2l' "permission denied for user" "desktop" -- u123456 123456 qj k2l 3k
+word 'ssh: Could not resolve hostname laptop-k3j9q2m: unknown' "could not resolve hostname" "laptop" "unknown" -- k3j q2m 9q
+word 'cannot reach DESKTOP-7QJ3K2L' "cannot reach" "desktop" -- qj k2l QJ K2L 3k
+word 'user jsmith1987 not allowed' "user _ not allowed" -- jsmith 1987
+word 'user zorb42lat not allowed' "user _ not allowed" -- zorb lat 42
+word 'user a1b2c3 not allowed' "user _ not allowed" -- a1b2c3 b2 c3
+fresh "signature: the same error with two mixed names - one signature"
+same 'user u123456 not allowed' 'user u654321 not allowed' 123456 654321
+same 'cannot reach desktop-7qj3k2l' 'cannot reach desktop-x8k2m4p' qj k2l x8k m4p
+same 'user jsmith1987 not allowed' 'user abrown2001 not allowed' 1987 2001
+fresh "signature: kept beside the rule - versions, hex ids, core paths and names (guard)"
+word 'build 1.2.3 failed for u123456' "build N.N.N failed for" -- 123456
+word 'needs v2.0 now' "needs N.N now" --
+word 'commit 3e15b27a9 failed' "commit ID failed" --
+word 'cannot run scripts/start-worker.ps1 now' "cannot run scripts/start-worker.ps1 now" -- PATH HOST
+word 'cannot run start-worker.ps1 now' "cannot run start-worker.ps1 now" -- PATH HOST
+fresh "signature: the technical words with digits are kept (guard)"
+for x in sha1 sha256 md5 utf8 utf16 base64 x64 x86 arm64 ipv4 ipv6 http2 oauth2; do word "$x failed" "$x failed" --; done
+word 'sha256 mismatch' "sha256" --
+word 'utf8 decode error' "utf8" "error" --
+word 'x64 build' "x64 build" --
+fresh "signature: two different core errors still differ, a technical word too (guard)"
+differ 'cannot read u123456' 'cannot write u123456'
+differ 'sha256 mismatch' 'md5 mismatch'
+differ 'ipv4 failed' 'ipv6 failed'
+
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
@@ -647,6 +681,31 @@ case "$l" in *tail*) bad "the title of 125 characters is not cut" ;; *) ok ;; es
 for x in '\342\200\256' '\342\201\246' '\342\201\247' '\342\201\250' '\342\201\251' '\342\200\213' '\342\200\214' '\342\200\215' '\357\273\277'; do
   LC_ALL=C grep -qF "$(printf "$x")" "$tmp/raw" && bad "the character $x is in a printed title" || ok; done
 has "bidi"; has "end"
+shsame --keywords "merge-queue update refused"
+
+# --- titles, round 8 of #338: every Unicode format character is dropped ---
+# LRM, RLM, ALM, word joiner, soft hyphen, U+180E, line and paragraph separators, tag characters (a hidden
+# word spelled in U+E0041-U+E007A); a title made only of them prints "".
+FMT='\342\200\216 \342\200\217 \330\234 \342\201\240 \302\255 \341\240\216 \342\200\250 \342\200\251 \363\240\200\201 \363\240\201\205 \363\240\201\226 \363\240\201\211 \363\240\201\214 \363\240\201\253 \363\240\201\272'
+fmts="$(for x in $FMT; do printf "$x"; done)"
+fresh "CHECK: format characters (LRM, RLM, ALM, WJ, SHY, U+180E, LS, PS, tag characters) never reach a printed title"
+{ printf '45\tOPEN\t\tfmt %s end\n' "$(for x in $FMT; do printf "a$x"; done)"
+  printf '46\tOPEN\t\t%s\n' "$fmts"; } > "$STUB_D/keyword"
+rawfile --keywords "merge-queue update refused"
+code 4; has "CHECK #45 #46"; count create 0; clean
+for x in $FMT; do
+  LC_ALL=C grep -qF "$(printf "$x")" "$tmp/raw" && bad "the character $x is in a printed title" || ok; done
+has "fmt"; has "end"
+l="$(grep '^#46 ' "$tmp/raw" | head -n 1)"
+case "$l" in *': ""') ok ;; *) bad "a title of format characters only does not print \"\": [$l]" ;; esac
+shsame --keywords "merge-queue update refused"
+fresh "REPEAT: an exact match's title of format characters only prints \"\""
+printf '78\tOPEN\t\t%s\n' "$fmts" > "$STUB_D/exact"
+rawfile --keywords "merge-queue update refused"
+code 0; has "REPEAT #78"
+for x in $FMT; do
+  LC_ALL=C grep -qF "$(printf "$x")" "$tmp/raw" && bad "the character $x is in a printed title" || ok; done
+grep -qxF '#78 ""' "$tmp/raw" && ok || bad "the title line is not: #78 \"\""
 shsame --keywords "merge-queue update refused"
 
 # --- the .sh dry-run REPEAT says what the .ps1 says (round 7 of #338) ---
