@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse safety hook for coordinator projects (Bash / PowerShell tools; with COORD_PROTECTED_ROOT
 # set, also Edit / Write / MultiEdit / NotebookEdit: no edit under that folder outside its
-# .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*).
+# .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*). With COORD_ASSISTANT_DIR set (the
+# assistant mode, #281): the edit tools only inside that folder, git and gh only to read.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only — the real enforcement is branch protection on the code host (CORE §2); deliberate
 # obfuscation (eval, quoting tricks, aliases ...) is out of scope (TOOLKIT.md *Safety*).
@@ -116,7 +117,7 @@ END {
   s = all; n = length(s); i = 1; CMD = ""; CWD = ""; TOOL = ""; FP = ""; NP = ""; TO = ""
   ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
   ws(); if (i <= n) exit 3
-  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(FP); printf "\n"; emit(NP); printf "\n"; emit(TO, 1); printf "\n"; emit(CMD); printf "."
+  emit(CWD); printf "\n"; emit(TOOL); printf "\n"; emit(FP, 1); printf "\n"; emit(NP, 1); printf "\n"; emit(TO, 1); printf "\n"; emit(CMD); printf "."
 }'
 fp="" np="" to=""
 if command -v jq >/dev/null 2>&1; then
@@ -427,16 +428,56 @@ claude_seg() {
   done
 }
 
+asst="${COORD_ASSISTANT_DIR:-}"   # the assistant mode (#281), below
+case "$tool" in
+  Edit|Write|MultiEdit|NotebookEdit)
+    if { [ -n "$asst" ] || [ -n "${COORD_PROTECTED_ROOT:-}" ]; } && command -v jq >/dev/null 2>&1; then
+      # a line break in a path as a space, as the awk reader gives it: a path is one line for canon_all
+      fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty | strings | gsub("[\n\r]"; " ")' 2>/dev/null)
+      np=$(printf '%s' "$input" | jq -r '.tool_input.notebook_path // empty | strings | gsub("[\n\r]"; " ")' 2>/dev/null)
+    fi ;;
+esac
+# --- the assistant mode (#281): with COORD_ASSISTANT_DIR set, an assistant edits only inside that folder,
+# and writes nothing to git or GitHub (asst_git, asst_gh below). An edit tool passes for a path that lies,
+# as it lies on disk (links resolved, #121; as written when none of it exists), in the folder or is the
+# folder, in either of the folder's forms (as written, as on disk) - also under COORD_PROTECTED_ROOT, whose
+# check below is then skipped; every other path, or none, is refused. A folder set but not absolute (or /,
+# or a drive) refuses every edit: a broken mode never fails open. Unset or empty changes nothing. ---
+if [ -n "$asst" ]; then
+  case "$tool" in
+    Edit|Write|MultiEdit|NotebookEdit)
+      ablock() { echo "Blocked by safety-guard: an assistant edits only inside its own folder, COORD_ASSISTANT_DIR ($asst)$1. If this is a false positive, ask the owner." >&2; exit 2; }
+      case "$asst" in /*|\\*|[A-Za-z]:[/\\]*) ;; *) ablock ", which is not an absolute path: every edit is refused until it names the assistant's folder" ;; esac
+      case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) cm="" ;; *) cm=keep ;; esac
+      eps=(); efull=()
+      for p in "$fp" "$np"; do
+        [ -n "$p" ] || continue
+        case "$p" in /*|\\*|[A-Za-z]:*) full="$p" ;; *) full="${cwd:-${CLAUDE_PROJECT_DIR:-$PWD}}/$p" ;; esac
+        eps+=("$p"); efull+=("$full")
+      done
+      [ ${#eps[@]} -gt 0 ] || ablock ": this call names no path"
+      # lines: the folder and each path as written, then the same as on disk ("." and the form, or empty)
+      ef=(); while IFS= read -r l; do ef+=("$l"); done <<ASST_FORMS_END
+$(canon_all "$cm" "$asst" "${efull[@]}"; physical "$cm" "$asst" "${efull[@]}")
+ASST_FORMS_END
+      ne=$(( ${#efull[@]} + 1 ))
+      aroots=("${ef[0]}"); [ -n "${ef[$ne]:-}" ] && aroots+=("${ef[$ne]#.}")
+      for r in "${aroots[@]}"; do case "$r" in ''|[A-Za-z]:) ablock ", which is / or a drive: every edit is refused until it names the assistant's folder" ;; esac; done
+      k=0
+      for p in "${eps[@]}"; do
+        k=$((k + 1)); full="${ef[$((ne + k))]:-}"; full="${full#.}"; [ -n "$full" ] || full="${ef[$k]}"
+        ok=0
+        for r in "${aroots[@]}"; do case "$full/" in "$r/"*) ok=1 ;; esac; done
+        [ $ok = 1 ] || ablock ", not $p"
+      done ;;
+  esac
+fi
 # --- the owner's working copy: no edit tool under COORD_PROTECTED_ROOT outside its .claude/worktrees/ ---
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only.
-if [ -n "${COORD_PROTECTED_ROOT:-}" ]; then
+if [ -n "${COORD_PROTECTED_ROOT:-}" ] && [ -z "$asst" ]; then
   case "$tool" in
     Edit|Write|MultiEdit|NotebookEdit)
-      if command -v jq >/dev/null 2>&1; then
-        fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty | strings' 2>/dev/null)
-        np=$(printf '%s' "$input" | jq -r '.tool_input.notebook_path // empty | strings' 2>/dev/null)
-      fi
       case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) cm="" ;; *) cm=keep ;; esac
       eps=(); efull=()
       for p in "$fp" "$np"; do
@@ -823,6 +864,7 @@ git_seg() {
   # discarding command acts on is not known
   deff="$eff"; [ "$redir" = 1 ] && deff="?"
   sub="$1"; shift
+  [ -n "$asst" ] && asst_git "$sub" "$@"
   case "$sub" in
     push) push_seg "$eff" "$@" ;;
     branch) branch_seg "$@" ;;
@@ -922,6 +964,108 @@ worktree_seg() {
   [[ ${1:-} == remove ]] || return
   shift
   for t in "$@"; do case "$t" in --force|-f|-ff) block "removing a worktree by force (use the cleanup script)" ;; esac; done
+}
+# --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
+# asst_git <subcommand> <its arguments>: passes a read - the subcommands below, a branch or tag listing,
+# a config read, remote with no subcommand / show / get-url, reflog / reflog show / exists, worktree list,
+# symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec); refuses the rest (a
+# write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks.
+asst_git() {
+  local sub="$1" t w=0 l=0 np=0 nx=0 fst=""
+  shift
+  case "$sub" in
+    log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version) return 0 ;;
+  esac
+  for t in "$@"; do
+    if [ $nx = 1 ]; then nx=0; continue; fi
+    case "$sub:$t" in
+      fetch:-*) ;;
+      fetch:*) np=$((np + 1)); [ $np -gt 1 ] && case "$t" in *:*) w=1 ;; esac ;;   # a refspec after the repository
+      branch:--list|tag:--list|tag:--verify|config:--list|config:--get|config:--get-all|config:--get-regexp|config:--get-urlmatch|config:--get-color|config:--get-colorbool) l=1 ;;
+      branch:--contains|branch:--no-contains|branch:--merged|branch:--no-merged|branch:--points-at|tag:--contains|tag:--no-contains|tag:--merged|tag:--no-merged|tag:--points-at) l=1; nx=1 ;;
+      branch:--contains=*|branch:--no-contains=*|branch:--merged=*|branch:--no-merged=*|branch:--points-at=*|tag:--contains=*|tag:--no-contains=*|tag:--merged=*|tag:--no-merged=*|tag:--points-at=*) l=1 ;;
+      branch:--sort|branch:--format|tag:--sort|tag:--format|config:--file|config:-f|config:--blob|config:--type|config:--default|config:--comment) nx=1 ;;
+      branch:--delete|branch:--move|branch:--copy|branch:--force|branch:--set-upstream-to*|branch:--unset-upstream|branch:--edit-description|branch:--track*|branch:--no-track|branch:--create-reflog|branch:--recurse-submodules) w=1 ;;
+      tag:--annotate|tag:--sign|tag:--local-user*|tag:--force|tag:--delete|tag:--message*|tag:--file*|tag:--edit|tag:--create-reflog|tag:--cleanup*|tag:--trailer*) w=1 ;;
+      config:--unset|config:--unset-all|config:--add|config:--replace-all|config:--rename-section|config:--remove-section|config:--edit|config:-e|symbolic-ref:-d|symbolic-ref:--delete|symbolic-ref:-m) w=1 ;;
+      config:-l) l=1 ;;
+      *:--*) ;;
+      branch:-*) case "$t" in *[dmcfut]*) w=1 ;; esac; case "$t" in *l*) l=1 ;; esac ;;
+      tag:-*) case "$t" in *[dfasmeu]*) w=1 ;; esac; case "$t" in *[lvn]*) l=1 ;; esac ;;
+      *:-*) ;;
+      *) np=$((np + 1)); [ -n "$fst" ] || fst="$t" ;;
+    esac
+  done
+  case "$sub" in
+    fetch) [ $w = 0 ] && return 0 ;;
+    branch|tag) [ $w = 0 ] && { [ $np = 0 ] || [ $l = 1 ]; } && return 0 ;;
+    config) [ $w = 0 ] && case "$fst" in get|list) return 0 ;; set|unset|rename-section|remove-section|edit) ;; *) { [ $l = 1 ] || [ $np = 1 ]; } && return 0 ;; esac ;;
+    remote) case "$fst" in ''|show|get-url) return 0 ;; esac ;;
+    reflog) case "$fst" in ''|show|exists) return 0 ;; esac ;;
+    worktree) [ "$fst" = list ] && return 0 ;;
+    symbolic-ref) [ $w = 0 ] && [ $np = 1 ] && return 0 ;;
+  esac
+  block "an assistant writes nothing to git (git $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+}
+# asst_gh <gh's arguments>: refuses pr | issue | release | repo | label | gist | workflow | secret | variable
+# (and run | cache | ruleset | project | codespace | ssh-key | gpg-key, which write to GitHub the same way)
+# with a subcommand but list / view / status / diff / checks / watch, past -R / --repo and its value
+# anywhere before it; gh api: asst_api
+asst_gh() {
+  local t grp="" sub="" nx=0
+  while [ $# -gt 0 ]; do
+    t="$1"; shift
+    if [ $nx = 1 ]; then nx=0; continue; fi
+    if [ "$t" = -R ] || [ "$t" = --repo ]; then nx=1; continue; fi
+    case "$t" in -*) continue ;; esac
+    if [ -z "$grp" ]; then grp="$t"; [ "$grp" = api ] && break; continue; fi
+    sub="$t"; break
+  done
+  case "$grp" in
+    api) asst_api "$@"; return ;;
+    pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|project|codespace|ssh-key|gpg-key) ;;
+    *) return 0 ;;
+  esac
+  case "$sub" in ''|list|view|status|diff|checks|watch) return 0 ;; esac
+  block "an assistant writes nothing to GitHub (gh $grp $sub): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+}
+# asst_api <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
+# HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
+# implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
+# comes from a file (--input, a field's =@file), whatever the method
+asst_api() {
+  local t v m="" fl=0 ep="" mu=0 at=0 ci
+  ci=$(shopt -p nocasematch); shopt -u nocasematch   # -f is a field, -F a typed one; -h is not -H
+  for t in "$@"; do case "$t" in *[Mm][Uu][Tt][Aa][Tt][Ii][Oo][Nn]*) mu=1 ;; esac; done
+  while [ $# -gt 0 ]; do
+    t="$1"; shift; v=""
+    case "$t" in
+      -X|--method) m="${1:-}"; [ $# -gt 0 ] && shift ;;
+      --method=*) m="${t#*=}" ;;
+      -X*) m="${t#-X}"; m="${m#=}" ;;
+      -f|-F|--field|--raw-field) fl=1; v="${1:-}"; [ $# -gt 0 ] && shift ;;
+      --field=*|--raw-field=*) fl=1; v="${t#*=}" ;;
+      -f*|-F*) fl=1; v="${t#-?}"; v="${v#=}" ;;
+      --input) fl=1; at=1; [ $# -gt 0 ] && shift ;;
+      --input=*) fl=1; at=1 ;;
+      -H|--header|-p|--preview|-q|--jq|-t|--template|--cache|--hostname) [ $# -gt 0 ] && shift ;;
+      -*) ;;
+      *) [ -n "$ep" ] || ep="$t" ;;
+    esac
+    case "$v" in *=@*) at=1 ;; esac
+  done
+  eval "$ci"
+  if [ "$ep" = graphql ]; then
+    [ $mu = 1 ] && block "an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+    [ $at = 1 ] && block "an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)"
+    return 0
+  fi
+  case "$m" in
+    '') [ $fl = 1 ] && block "an assistant writes nothing to GitHub (gh api with fields and no -X GET, which is a POST): it reads only (COORD_ASSISTANT_DIR is set, #281)" ;;
+    [Gg][Ee][Tt]|[Hh][Ee][Aa][Dd]) ;;
+    *) block "an assistant writes nothing to GitHub (gh api -X $m): it reads only (COORD_ASSISTANT_DIR is set, #281)" ;;
+  esac
+  return 0
 }
 cd_seg() {
   local t x=""
@@ -1093,6 +1237,7 @@ while IFS="$tab" read -r -a T; do
     claude) claude_seg "${A[@]:$((i + 1))}" ;;
     gh) gh_env=0; gk=0   # GH_REPO= before gh (also after env): see gh_seg
         while [ $gk -lt $i ]; do case "${A[$gk]}" in GH_REPO=*) gh_env=1 ;; esac; gk=$((gk + 1)); done
+        [ -n "$asst" ] && asst_gh "${A[@]:$((i + 1))}"
         gh_seg "${A[@]:$((i + 1))}" ;;
   esac
 done <<SAFETY_GUARD_SEGMENTS_END
