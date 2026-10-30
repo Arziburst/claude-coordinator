@@ -458,6 +458,12 @@ BOM, models priced apart),
   conflict, a merge of main that touched the PR's files with and without shared globs, a re-run once and
   a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
   / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh),
+  `tests/report-issue/run.sh` (a stub `gh` that logs every call: one signature from two machines' errors,
+  at most 120 characters, the `.ps1` line the `.sh` line, no path tail, e-mail or host in it; FIXED UPSTREAM
+  (the newest fix), closed as not planned going on,
+  REPEAT with one reaction and none when it is there, `--comment-file`, CHECK with at most 5 candidates,
+  FILED with its `Checked:` and `Signature:` lines, a dry run; an open match before a closed one,
+  `--regression`; no write but the issue, the reaction and the comment),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/probes.sh` (`selftest probes` against a stub `claude` that feeds the token
   probe's `echo` to this core's guard and writes the transcript; `hookcheck --expect probe`),
