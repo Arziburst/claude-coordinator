@@ -17,6 +17,7 @@ name: check-core
 #need guard      ^scripts/hooks/ ^tests/safety-guard/  # the guard's cases in every shell (the step without jq also runs selftest's settings: selftest's line too)
 #need workers    ^scripts/start-worker\. ^scripts/cleanup-worker\. ^scripts/check-contract\. ^scripts/merge-queue\. ^scripts/hooks/ ^roles/ ^settings\.example ^tests/workers/ ^tests/check-contract/  # start-worker and cleanup-worker: the scripts they run, the guard and its settings examples, the role files, the contract fixtures
 #need mergequeue ^scripts/merge-queue\. ^tests/merge-queue/  # merge-queue against a stub gh
+#need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 on:
   pull_request:
@@ -355,6 +356,18 @@ jobs:
         run: |
           bash tests/merge-queue/run.sh sh
           bash tests/merge-queue/run.sh ps powershell
+      - name: report-issue against a stub gh (bash)
+        if: runner.os != 'Windows' && steps.need.outputs.reportissue == 'true'
+        run: bash tests/report-issue/run.sh sh
+      - name: report-issue against a stub gh (PowerShell 7, Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.reportissue == 'true'
+        run: bash tests/report-issue/run.sh ps pwsh
+      - name: report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+        if: runner.os == 'Windows' && steps.need.outputs.reportissue == 'true'
+        run: |
+          bash tests/report-issue/run.sh sh
+          bash tests/report-issue/run.sh ps powershell
+          bash tests/report-issue/run.sh ps pwsh
       - name: selftest - the scripted steps (bash)
         if: runner.os != 'Windows'
         run: |

@@ -275,7 +275,10 @@ with the sandbox's `main` as the base.
 A FAIL whose cause is a core script, role or procedure (not the project or the machine) is a **core
 finding**: a row in `coordinator/CORE-FINDINGS.md` with the step, the command, its exit code and error
 lines, sent to claude-coordinator as the owner chose (title `selftest: <step> …`, prefixed once) — the one
-channel of [CORE-FINDINGS.md](CORE-FINDINGS.md). The next update proves the fix with the same step.
+channel of [CORE-FINDINGS.md](CORE-FINDINGS.md). Its signature is the script's, never a model's
+(`<core>/scripts/report-issue.sh signature --source scripts/selftest.sh --step <step> --exit <code> --error
+"<its first error line>"`), and it is filed through `report-issue file` as every finding is (CORE-FINDINGS
+§2: a repeat is a reaction, never a second issue; #338). The next update proves the fix with the same step.
 
 ## Not covered
 
