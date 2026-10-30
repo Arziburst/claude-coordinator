@@ -14,7 +14,8 @@
 # core path), e-mails (any word with an @; `Name <a@b>` from the last : whole), host names (an IP with its
 # port; a word.word that is no core or coordinator file name, number, version or abbreviation), hex ids
 # (0x..., or 7+ characters) and numbers replaced by the tokens URL, DATE, PATH, EMAIL, HOST, ID and N
-# (a version keeps only its digits), quotes dropped; then the allowlist: any other word (letters a-z and
+# (a version keeps only its digits; a word mixing letters and digits `_`, but a few technical words such
+# as sha256 or utf8), quotes dropped; then the allowlist: any other word (letters a-z and
 # non-ASCII) the core's own text and the fixed tool-error words do not hold becomes `_`; whitespace
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
@@ -29,8 +30,8 @@
 # --checked; (4) none left -> the issue filed, its body ending `Checked: #a, #b` (when any) and
 # `Signature: <sig>`, `FILED #<n>`. --dry-run prints what it would do and changes nothing. Every gh call is
 # read-only but `issue create`, `issue comment` and the reaction. A title read from the repository is
-# untrusted data: printed after a line that says so, cleaned of control bytes, bidi controls, zero-width
-# characters and U+FEFF, cut to 120 characters (`...` only when cut), in double quotes.
+# untrusted data: printed after a line that says so, cleaned of control bytes, every format character
+# and U+2028, U+2029, cut to 120 characters (`...` only when cut), in double quotes.
 # Exit codes: 0 a signature, REPEAT, FILED or a dry run of them; 1 usage error or gh failed; 3 FIXED
 # UPSTREAM; 4 CHECK. Windows: report-issue.ps1, the same lines and codes.
 set -uo pipefail
@@ -105,6 +106,8 @@ EOF
     s#(^|[^a-z0-9])0x[0-9a-f]+#\1ID#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
     s#(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)#\1ID\2#g
+EOF
+  IFS= read -r -d '' rules3 <<'EOF'
     s#(^|[^a-z0-9])[0-9]+#\1N#g
     s/ +/ /g; s/^ //; s/ $//
 EOF
@@ -141,6 +144,17 @@ EOF
           o = o substr(t, 1, RSTART) (h ~ /^v?[0-9]+\.[0-9]/ ? h : ((h in k) || h ~ /^[a-z0-9_-](\.[a-z0-9_-])+$/) ? "\001" h "\002" : "HOST")
           s = substr(s, RSTART + RLENGTH); t = substr(t, RSTART + RLENGTH) }
         print substr(o t, 2) }'; }
+  # mixed words (after the hex ids, before the numbers): a run of letters a-z, non-ASCII characters and
+  # digits holding both a letter and a digit (a user id, a machine name, a name with a year) -> `_`, whole;
+  # the technical words below are kept, marked, and the marked core paths and names stay as they are
+  mixed() { awk 'BEGIN { n = split("sha1 sha256 md5 utf8 utf16 base64 x64 x86 arm64 ipv4 ipv6 http2 oauth2", a, " ")
+        for (i = 1; i <= n; i++) k[a[i]] = 1 }
+      { t = $0; s = t; gsub(/[\200-\377]/, "a", s); o = ""
+        while (match(s, /\001[^\002]*\002|[a-z0-9]+/)) {
+          x = substr(t, RSTART, RLENGTH); y = substr(s, RSTART, RLENGTH)
+          if (substr(y, 1, 1) != "\001" && y ~ /[a-z]/ && y ~ /[0-9]/) x = (x in k) ? "\001" x "\002" : "_"
+          o = o substr(t, 1, RSTART - 1) x; s = substr(s, RSTART + RLENGTH); t = substr(t, RSTART + RLENGTH) }
+        print o t }'; }
   # the allowlist: a word - a run of letters a-z and non-ASCII characters (a hyphen, a dot, a digit or an
   # underscore parts two words) - stays only when the core's own text holds it (the root's .md files and
   # every file under procedures/ roles/ skills/ scripts/, read at run time and cut into words the same
@@ -159,7 +173,7 @@ EOF
           o = o substr(t, 1, RSTART - 1) x; s = substr(s, RSTART + RLENGTH); t = substr(t, RSTART + RLENGTH) }
         o = o t; gsub(/[\001\002]/, "", o); gsub(/_( _)+/, "_", o); print o }'; }
   # the step and the error go through the same rules, one line each (every rule works on one line)
-  w="$(printf '%s\n%s\n' "$(oneline "$step")" "$(oneline "$error")" | tr 'A-Z' 'a-z' | sed -E "$rules" | hosts | sed -E "$rules2")"
+  w="$(printf '%s\n%s\n' "$(oneline "$step")" "$(oneline "$error")" | tr 'A-Z' 'a-z' | sed -E "$rules" | hosts | sed -E "$rules2" | mixed | sed -E "$rules3")"
   ws="" we="" wr="" rest=""
   { IFS= read -r ws; IFS= read -r we; } <<EOF
 $w
@@ -211,16 +225,23 @@ q() { local out; out="$(gh "$@" 2>"$tmp/err")" || { printf 'gh %s %s failed: %s\
 jstr() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"; }
 ROW='[.number, .state, .stateReason, .title] | @tsv'
 TAB="$(printf '\t')" US="$(printf '\037')"
-ZW="$(printf '\342\200[\213-\215\252-\256]')" BD="$(printf '\342\201[\246-\251]')" BOM="$(printf '\357\273\277')"
+# every Unicode format character (category Cf: U+00AD, U+0600-U+0605, U+061C, U+06DD, U+070F,
+# U+0890-U+0891, U+08E2, U+180E, U+200B-U+200F, U+202A-U+202E, U+2060-U+2064, U+2066-U+206F, U+FEFF,
+# U+FFF9-U+FFFB, U+110BD, U+110CD, U+13430-U+1343F, U+1BCA0-U+1BCA3, U+1D173-U+1D17A, U+E0000-U+E007F)
+# and U+2028, U+2029, as their UTF-8 bytes - report-issue.ps1 holds the same code points
+FMT="$(printf '\302\255|\330[\200-\205\234]|\333\235|\334\217|\340\242[\220\221]|\340\243\242|\341\240\216|')"
+FMT="$FMT$(printf '\342\200[\213-\217\250-\256]|\342\201[\240-\244\246-\257]|\357\273\277|\357\277[\271-\273]|')"
+FMT="$FMT$(printf '\360\221\202\275|\360\221\203\215|\360\223\220[\260-\277]|\360\233\262[\240-\243]|\360\235\205[\263-\272]|')"
+FMT="$FMT$(printf '\363\240[\200\201][\200-\277]')"
 # rows <tsv>: the rows of four fields or more (a CR ends a line, as PowerShell reads gh's output), a unit
 # separator between the first four - `read` takes a tab for whitespace, and two of them around an empty
 # stateReason for one
 rows() { printf '%s\n' "$1" | tr '\r' '\n' | sed -n "s/$TAB/$US/; s/$TAB/$US/; s/$TAB/$US/p"; }
 # shown <title>: a title from the repository is untrusted data - every control byte (C0, DEL, C1) a space,
-# the bidi controls (U+202A-U+202E, U+2066-U+2069), the zero-width characters (U+200B-U+200D) and U+FEFF
-# removed, spaces collapsed, at most 120 characters (whole UTF-8 characters: a byte 0x80-0xBF continues
-# one) and `...` only when cut, a `"` as `'`, in double quotes
-shown() { local s; s="$(printf '%s' "$1" | tr '\001-\037\177' ' ' | sed "s/$C1/ /g; s/$ZW//g; s/$BD//g; s/$BOM//g" | sed -E 's/ +/ /g; s/^ //; s/ $//' | tr '"' "'")"
+# every format character (bidi controls, zero-width characters, U+FEFF, tag characters ...) and U+2028,
+# U+2029 removed, spaces collapsed, at most 120 characters (whole UTF-8 characters: a byte 0x80-0xBF
+# continues one) and `...` only when cut, a `"` as `'`, in double quotes
+shown() { local s; s="$(printf '%s' "$1" | tr '\001-\037\177' ' ' | sed "s/$C1/ /g" | sed -E "s/$FMT//g; s/ +/ /g; s/^ //; s/ \$//" | tr '"' "'")"
   s="$(printf '%s\n' "$s" | awk '{ n = 0
       for (i = 1; i <= length($0); i++) if (substr($0, i, 1) !~ /[\200-\277]/ && ++n > 120) { s = substr($0, 1, i - 1); sub(/ +$/, "", s); print s "..."; next }
       print }')"

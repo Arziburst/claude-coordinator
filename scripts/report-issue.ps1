@@ -15,7 +15,8 @@
 # core path), e-mails (any word with an @; `Name <a@b>` from the last : whole), host names (an IP with its
 # port; a word.word that is no core or coordinator file name, number, version or abbreviation), hex ids
 # (0x..., or 7+ characters) and numbers replaced by the tokens URL, DATE, PATH, EMAIL, HOST, ID and N
-# (a version keeps only its digits), quotes dropped; then the allowlist: any other word (letters a-z and
+# (a version keeps only its digits; a word mixing letters and digits `_`, but a few technical words such
+# as sha256 or utf8), quotes dropped; then the allowlist: any other word (letters a-z and
 # non-ASCII) the core's own text and the fixed tool-error words do not hold becomes `_`; whitespace
 # collapsed, at most 120 characters (bytes): the same error from two machines gives the same line.
 # file, in this order: (1) the exact signature (a `Signature: <sig>` line in the body) on an open issue ->
@@ -30,8 +31,8 @@
 # -Checked; (4) none left -> the issue filed, its body ending `Checked: #a, #b` (when any) and
 # `Signature: <sig>`, `FILED #<n>`. -DryRun prints what it would do and changes nothing. Every gh call is
 # read-only but `issue create`, `issue comment` and the reaction. A title read from the repository is
-# untrusted data: printed after a line that says so, cleaned of control characters, bidi controls,
-# zero-width characters and U+FEFF, cut to 120 characters (`...` only when cut), in double quotes.
+# untrusted data: printed after a line that says so, cleaned of control characters, every format
+# character and U+2028, U+2029, cut to 120 characters (`...` only when cut), in double quotes.
 # Exit codes: 0 a signature, REPEAT, FILED or a dry run of them; 1 usage error or gh failed; 3 FIXED
 # UPSTREAM; 4 CHECK. -ErrorText, not -Error: $Error is PowerShell's own.
 param([Parameter(Position = 0)][string]$Mode, [string]$Source, [string]$Step, [string]$Exit, [string]$ErrorText,
@@ -116,6 +117,7 @@ if ($Mode -ceq 'signature') {
   $tool = @('unable', 'auto', 'detect', 'pathspec', 'committer', 'mounting', 'http', 'https', 'ssh', 'curl', 'rpc',
     'ssl', 'tls', 'certificate', 'connection', 'password', 'invalid', 'forbidden', 'unauthorized', 'expired', 'corrupt',
     'aborted', 'socket', 'proxy', 'publickey', 'submodule', 'refused', 'reset', 'timeout')
+  $techWords = @('sha1', 'sha256', 'md5', 'utf8', 'utf16', 'base64', 'x64', 'x86', 'arm64', 'ipv4', 'ipv6', 'http2', 'oauth2')
   $held = New-Object 'Collections.Generic.Dictionary[string,bool]' ([StringComparer]::Ordinal)
   # Held <word>: the allowlist keeps it
   function Held([string]$x) {
@@ -151,8 +153,16 @@ if ($Mode -ceq 'signature') {
         @('(^|[^a-z0-9])v([0-9]+\.[0-9])', '${1}${2}'),
         @('(^|[^a-z0-9])0x[0-9a-f]+', '${1}ID'),
         @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
-        @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'),
-        @('(^|[^a-z0-9])[0-9]+', '${1}N'))) { $w = $w -creplace $r[0], $r[1] }
+        @('(^|[^a-z0-9])[0-9a-f]{7,}([^a-z0-9]|$)', '${1}ID${2}'))) { $w = $w -creplace $r[0], $r[1] }
+    # mixed words (after the hex ids, before the numbers): a run of letters a-z, non-ASCII characters and
+    # digits holding both a letter and a digit (a user id, a machine name, a name with a year) -> `_`,
+    # whole; the technical words are kept, marked, and the marked core paths and names stay as they are
+    $w = [regex]::Replace($w, $M1 + '[^' + $M2 + ']*' + $M2 + '|[a-z0-9\P{IsBasicLatin}]+', [Text.RegularExpressions.MatchEvaluator] {
+        param($m) $x = $m.Value
+        if ($x[0] -eq [char]1 -or $x -cnotmatch '[a-z\P{IsBasicLatin}]' -or $x -cnotmatch '[0-9]') { $x }
+        elseif ($techWords -ccontains $x) { $M1 + $x + $M2 }
+        else { '_' } })
+    $w = $w -creplace '(^|[^a-z0-9])[0-9]+', '${1}N'
     $w = ($w -creplace ' +', ' ').Trim(' ')
     $w = [regex]::Replace($w, $M1 + '[^' + $M2 + ']*' + $M2 + '|[a-z\P{IsBasicLatin}]+', [Text.RegularExpressions.MatchEvaluator] {
         param($m) $x = $m.Value
@@ -220,10 +230,19 @@ function Q([string[]]$a) {
 function JStr([string]$s) { '"' + ($s -creplace '\\', '\\' -creplace '"', '\"') + '"' }
 $ROW = '[.number, .state, .stateReason, .title] | @tsv'
 # Shown <title>: a title from the repository is untrusted data - every control character (C0, DEL, C1) a
-# space, the bidi controls (U+202A-U+202E, U+2066-U+2069), the zero-width characters (U+200B-U+200D) and
-# U+FEFF removed, spaces collapsed, at most 120 characters (whole characters: a low surrogate continues
-# one) and `...` only when cut, a `"` as `'`, in double quotes
-$INVIS = '[' + (-join @(0x200B, 0x2D, 0x200D, 0x202A, 0x2D, 0x202E, 0x2066, 0x2D, 0x2069, 0xFEFF | ForEach-Object { [char]$_ })) + ']'
+# space, every format character (bidi controls, zero-width characters, U+FEFF, tag characters ...) and
+# U+2028, U+2029 removed, spaces collapsed, at most 120 characters (whole characters: a low surrogate
+# continues one) and `...` only when cut, a `"` as `'`, in double quotes
+# every Unicode format character (category Cf) and U+2028, U+2029 - the code point ranges below, the same
+# as report-issue.sh's bytes; one past U+FFFF is matched as its surrogate pair
+$fmtRanges = @(0xAD, 0xAD, 0x600, 0x605, 0x61C, 0x61C, 0x6DD, 0x6DD, 0x70F, 0x70F, 0x890, 0x891, 0x8E2, 0x8E2,
+  0x180E, 0x180E, 0x200B, 0x200F, 0x2028, 0x202E, 0x2060, 0x2064, 0x2066, 0x206F, 0xFEFF, 0xFEFF, 0xFFF9, 0xFFFB,
+  0x110BD, 0x110BD, 0x110CD, 0x110CD, 0x13430, 0x1343F, 0x1BCA0, 0x1BCA3, 0x1D173, 0x1D17A, 0xE0000, 0xE007F)
+$fmtAlt = @(for ($i = 0; $i -lt $fmtRanges.Count; $i += 2) {
+  $a = $fmtRanges[$i]; $z = $fmtRanges[$i + 1]
+  if ($a -lt 0x10000) { '[' + [char]$a + '-' + [char]$z + ']' }
+  else { [string][char](0xD800 + (($a - 0x10000) -shr 10)) + '[' + [char](0xDC00 + (($a - 0x10000) -band 0x3FF)) + '-' + [char](0xDC00 + (($z - 0x10000) -band 0x3FF)) + ']' } })
+$INVIS = $fmtAlt -join '|'
 function Shown([string]$s) {
   $s = (((($s -creplace '\p{Cc}', ' ') -creplace $INVIS, '') -creplace ' +', ' ').Trim(' ')) -creplace '"', ''''
   $n = 0; $i = 0
