@@ -688,7 +688,7 @@ foreach ($wk in 'W', 'P') {
 $cd = 0; $ct = 1; $cr = 2; $ck = 3; $cm = 4; $ce = 6; $cc = 8; $cs = 9; $cw = 11; $ca = 12; $cx = 13; $cy = 14
 $Order = New-Object 'System.Collections.Generic.List[string]'; $Tasks = NewMap   # the tasks in order; per task its record
 $Unk = NewMap   # the results no first word explains, this week
-$coord = @{ W = [long]0; P = [long]0 }; $frun = @{ W = [long]0; P = [long]0 }
+$coord = @{ W = [long]0; P = [long]0 }; $asst = @{ W = [long]0; P = [long]0 }; $frun = @{ W = [long]0; P = [long]0 }
 $RN = NewMap   # the runs by role in the week (the core report: its period)
 $row = 0
 foreach ($line in $RunLines) {
@@ -708,6 +708,7 @@ foreach ($line in $RunLines) {
   if ($lt -cmatch '^#?st[0-9]' -or $lt -ceq '0' -or $lt -ceq '#0' -or (Lower "$kind $role") -cmatch 'probe|selftest|self-test') { continue }   # a probe or a self-test
   $d = & $col $cd; if ($d.Length -gt 10) { $d = $d.Substring(0, 10) }; if ($d -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}\z') { $d = '' }
   $cv = & $col $cc; $cost = Units $cv '$'; $wk = InWeek $d
+  if ($role -ceq 'assistant' -or $kind -ceq 'assistant') { if ($wk -and $cost -ge 0) { $asst[$wk] += $cost }; continue }   # an assistant's run (#281)
   if ($wk -eq 'W' -and $role -cne 'task') { Inc $RN $(if ($role -and $ROLES -ccontains $role) { $role } else { 'other' }) 1 }   # the runs by role
   if ($tid -eq '' -or $tid -eq '-') { if ($wk -and $cost -ge 0) { $coord[$wk] += $cost }; continue }   # the coordinator's own line
   if (-not $Tasks.ContainsKey($tid)) {
@@ -803,6 +804,7 @@ foreach ($wk in 'W', 'P') {
   $cell['tasks'] = "$($NT[$wk])"; $cell['merged'] = "$($MG[$wk])"
   $cell['median_per_task'] = if ((LN "${wk}c") -ge 3) { Cents (IDiv ((Med2 "${wk}c") + 100) 200) } else { $DASH }
   $cell['total'] = Cents (IDiv (2 * ($TOT[$wk] + $coord[$wk]) + 100) 200); $cell['coordinator'] = Cents (IDiv (2 * $coord[$wk] + 100) 200)
+  $cell['assistants'] = Cents (IDiv (2 * $asst[$wk] + 100) 200)
   $cell['per_merged_task'] = if ($MG[$wk] -ge 3) { Cents (IDiv (2 * ($TOT[$wk] + $coord[$wk]) + 100 * $MG[$wk]) (200 * $MG[$wk])) } else { $DASH }
   $cell['ready_median'] = if ((LN "${wk}r") -ge 3) { "$(IDiv ((Med2 "${wk}r") + 10000) 20000)" } else { $DASH }
   $cell['work_median'] = if ((LN "${wk}a") -ge 3) { "$(IDiv ((Med2 "${wk}a") + 10000) 20000)" } else { $DASH }
@@ -865,7 +867,8 @@ if ($CoreReport) {
 }
 if (-not $Public) {
   $out.Add("retro`tweek of $WS`tprevious week of $PS0"); $out.Add("axis`tmeasure`tweek`tprevious")
-  foreach ($mm in $MEAS) { $ax = $mm.Substring(0, $mm.IndexOf(':')); $nm = $mm.Substring($mm.IndexOf(':') + 1); $out.Add("$ax`t$nm`t$($Val.W[$nm])`t$($Val.P[$nm])") }
+  foreach ($mm in $MEAS) { $ax = $mm.Substring(0, $mm.IndexOf(':')); $nm = $mm.Substring($mm.IndexOf(':') + 1); $out.Add("$ax`t$nm`t$($Val.W[$nm])`t$($Val.P[$nm])")
+    if ($nm -ceq 'coordinator') { $out.Add("cost`tassistants`t$($Val.W['assistants'])`t$($Val.P['assistants'])") } }   # local only
   $out.Add("kind`tname`ttasks`trework`tescalated`tfailed")
   $kl = [string[]]@(foreach ($kk in $KN.Keys) { $q3 = Rates $KN[$kk]; "kind`t$kk`t$($KN[$kk].n)`t$($q3[0])`t$($q3[1])`t$($q3[2])" })
   [Array]::Sort($kl, [StringComparer]::Ordinal); foreach ($l1 in $kl) { $out.Add($l1) }

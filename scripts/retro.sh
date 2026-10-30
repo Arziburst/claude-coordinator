@@ -21,14 +21,16 @@
 # The run log (CORE 7, columns by its header, else in CORE 7's order): a task is its rows before the first dot
 # (37, 37.1, 37.2), as run-stats; it belongs to the week of its latest row date. Left out: rows of a probe or a
 # self-test (task st<n> or 0, or a kind or role naming probe / selftest / self-test); a task-less row (- or empty)
-# is the coordinator's own spend. A cost cell counts by its leading number (`0.0648 prices` is 0.0648). Results
+# is the coordinator's own spend; a row whose role or kind is `assistant` (#281) is an assistant's, never a task's
+# or the coordinator's (the local report's assistants only). A cost cell counts by its leading number (`0.0648 prices` is 0.0648). Results
 # read by their first word: rework / escalated / failed; done and pass are approved; another word in the week is
 # listed as "unknown result: <value> ×<n>" (local only).
 # The transcripts: session-insights --since <week> --until <week end> --skip-tests --project <root>|<worktree
 # roots>|<root>/.claude/worktrees for each week (no probe or self-test session, only this project's).
 # Prints tab-separated: "retro", the weeks; "axis measure week previous" and a line per measure:
 #   cost            tasks, merged, median_per_task (USD), total (the tasks' cost and the coordinator's own),
-#                   coordinator, per_merged_task (total / merged)
+#                   coordinator, assistants (their own spend, apart from total; the local report only),
+#                   per_merged_task (total / merged)
 #   speed           ready_median, work_median, owner_wait_median (minutes, from the task rows; the owner wait
 #                   is shown apart, never in the others), owner_wait_open (tasks ready, not merged)
 #   quality         rework_rate, escalated_rate, failed_rate (of the tasks with runs), escapes (ESCAPES.tsv rows
@@ -668,6 +670,7 @@ report() {
     if (x ~ /^#?st[0-9]/ || x == "0" || x == "#0" || y ~ /probe|selftest|self-test/) next   # a probe or a self-test
     d = substr(col(cd), 1, 10); if (d !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) d = ""
     c = units(col(cc), "$"); w = wk(d)
+    if (r == "assistant" || k == "assistant") { if (w != "" && c >= 0) asst[w] += c; next }   # an assistant s run (#281)
     if (w == "W" && r != "task") RN[index(" " ENVIRON["ROLES"] " ", " " r " ") && r != "" ? r : "other"]++   # the runs by role
     if (t == "" || t == "-") { if (w != "" && c >= 0) coord[w] += c; next }   # the coordinator s own line
     if (!(t in fa)) { fa[t] = row; T[++nt] = t }
@@ -701,6 +704,7 @@ report() {
       V[w, "tasks"] = n[w] + 0; V[w, "merged"] = mg[w] + 0
       V[w, "median_per_task"] = LN[w "c"] >= 3 ? cents(idiv(med2(w "c") + 100, 200)) : D
       V[w, "total"] = cents(idiv(2 * (tot[w] + coord[w]) + 100, 200)); V[w, "coordinator"] = cents(idiv(2 * coord[w] + 100, 200))
+      V[w, "assistants"] = cents(idiv(2 * asst[w] + 100, 200))
       V[w, "per_merged_task"] = mg[w] >= 3 ? cents(idiv(2 * (tot[w] + coord[w]) + 100 * mg[w], 200 * mg[w])) : D
       V[w, "ready_median"] = LN[w "r"] >= 3 ? idiv(med2(w "r") + 10000, 20000) : D
       V[w, "work_median"] = LN[w "a"] >= 3 ? idiv(med2(w "a") + 10000, 20000) : D
@@ -731,7 +735,8 @@ report() {
     print "retro\tweek of " WS "\tprevious week of " PS
     print "axis\tmeasure\tweek\tprevious"
     for (i = 1; i <= nm; i++) { ax = substr(M[i], 1, index(M[i], ":") - 1); me = substr(M[i], index(M[i], ":") + 1)
-      print ax "\t" me "\t" V["W", me] "\t" V["P", me] }
+      print ax "\t" me "\t" V["W", me] "\t" V["P", me]
+      if (me == "coordinator") print "cost\tassistants\t" V["W", "assistants"] "\t" V["P", "assistants"] }   # local only
     print "kind\tname\ttasks\trework\tescalated\tfailed"
     for (k in KN) print "kind\t" k "\t" KN[k] "\t" (KN[k] >= 3 ? pct(KR[k], KN[k]) "\t" pct(KE[k], KN[k]) "\t" pct(KF[k], KN[k]) : D "\t" D "\t" D) | "LC_ALL=C sort"
     close("LC_ALL=C sort")

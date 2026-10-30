@@ -12,7 +12,8 @@
 # names task, role, kind, model, cost, result, start, wall, active), else in CORE §7's order (task 2, role 3,
 # kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14; estimate and estimate_time, the last, are not read). Blank lines and lines starting
 # with # are skipped; CRLF and a UTF-8 BOM read as plain. A row with role `task` is a finished task's own row
-# (CORE §7: wall = its time to ready); it counts only toward ready below, never toward cost or time.
+# (CORE §7: wall = its time to ready); it counts only toward ready below, never toward cost or time. A row whose
+# role or kind is `assistant` (#281) is never part of a task: --per-run counts it under kind and role `assistant`.
 # Values: cost in USD (the cell's leading number, `$` allowed: `0.0648 prices` is 0.0648), active in minutes (a
 # number, a trailing `m` allowed); any
 # other value (empty, `-`, `n/a`, `in <parent>`) has none, and a row without the time columns has no time.
@@ -79,7 +80,7 @@
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
 # line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
 # ready or a wait line is malformed; 2 on a usage error.
-usage() { sed -n '2,81s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,82s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -269,7 +270,7 @@ taskrow() {
         if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "result") cs = i; if ($i == "start") cb = i
         if ($i == "wall") cw = i; if ($i == "active") ca = i }
       next }
-    { t = col(ct); sub(/[.].*$/, "", t); r = col(cr); if (t != T || r == "task") next
+    { t = col(ct); sub(/[.].*$/, "", t); r = col(cr); if (t != T || r == "task" || r == "assistant" || col(ck) == "assistant") next
       n++; a = minutes(col(ca)); s = epoch(col(cb))
       if (a >= 0 && col(cc) !~ /^[ \t]*in[ \t]/) { act += a; ha = 1 }   # a subagent: in its parent
       p = (r == "lead") ? 3 : ((r == "worker") ? 2 : 1)
@@ -344,6 +345,8 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
       if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "wall") cw = i; if ($i == "active") ca = i }   # the first of a name
     next }
   { k = col(ck); m = col(cm); r = col(cr); c = units(col(cc), "$"); a = units(col(ca), "m")
+    # an assistant'"'"'s run (#281): never a task'"'"'s; --per-run under kind and role assistant
+    if (r == "assistant" || k == "assistant") { if (mode != "run") next; k = r = "assistant" }
     # a task row (role task): its wall is the time to ready, the forecast only; the last one of a task counts
     if (r == "task") { if (mode == "run") next
       t = col(ct); sub(/[.].*$/, "", t); if (t == "" || t == "-") next

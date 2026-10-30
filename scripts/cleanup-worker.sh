@@ -14,8 +14,10 @@
 # after claude rm - the worktree and branch are left as is; 5 SESSION FOREIGN: the listing gives the
 # session a working folder outside this project (the repository's main checkout, its .claude/worktrees,
 # the worktree itself, the folder whose .claude/worktrees holds it) - nothing is stopped, removed or
-# changed (CORE §1.17); a session the listing does not have is handled as before (Windows:
-# cleanup-worker.ps1, the same checks and codes).
+# changed (CORE §1.17); a session the listing does not have is handled as before; 6 ASSISTANT KEPT: the
+# listing names the session `assistant: <name>` (#281) - nothing is stopped, removed or changed, decided before
+# any other check: an assistant is removed only on the owner's word (Windows: cleanup-worker.ps1, the same
+# checks and codes).
 set -euo pipefail
 
 session="" wt="" dry=0
@@ -52,6 +54,21 @@ canon() {
   if [ "$os" = win ]; then case "$x" in /[a-z]|/[a-z]/*) x="${x:1:1}:${x:2}" ;; esac; fi
   printf '%s' "$x"
 }
+
+# an assistant (#281: the listing names the session `assistant: <name>`) is never stopped or removed here,
+# whatever the worktree: decided before any other check
+if [ -n "$session" ] && command -v claude >/dev/null 2>&1; then
+  s0="$session"; case "$s0" in *[!0-9A-Fa-f-]*) ;; *) s0="$(printf '%s' "$s0" | tr 'A-F' 'a-f')" ;; esac
+  araw="$(claude agents --json --all 2>/dev/null)" || araw=""
+  aline="$(objects "$araw" | while IFS= read -r o; do
+    { [ "$(field id "$o")" = "$s0" ] || [ "$(field sessionId "$o")" = "$s0" ]; } && { printf '%s\t%s\n' "$(field id "$o")" "$(field name "$o")"; break; }
+  done || true)"
+  case "${aline#*	}" in "assistant:"*)
+    an="${aline#*	}"; an="${an#assistant:}"; an="${an#"${an%%[! ]*}"}"; aid="${aline%%	*}"
+    echo "ASSISTANT KEPT: $an (${aid:-$s0}) - an assistant is removed only on the owner's word" >&2
+    exit 6 ;;
+  esac
+fi
 
 # The main repository is found from the worktree itself, so this runs from any folder.
 [ -d "$wt" ] || stop_here "NO WORKTREE: $wt does not exist (check the path)"

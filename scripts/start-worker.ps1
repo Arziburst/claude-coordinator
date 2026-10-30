@@ -54,6 +54,11 @@
 # <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
+# An assistant (#281): -Name "assistant: <name>" and -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md start
+# a persistent session with no worktree and no branch from the repository root, its -Safety env
+# COORD_ASSISTANT_DIR naming that folder; -Branch, -Base, -WorktreeRoot, -LaunchFrom, -Contract, -TesterCommit and
+# -TesterTests are refused, and so is a session of that name already listed; after the launch the attach command
+# (the rules: start-worker.sh's top comment).
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
       [string]$TesterCommit = '', [string]$TesterTests = '')
@@ -71,8 +76,15 @@ if ($BriefFile) {
   if (-not (Test-Path -LiteralPath $BriefFile -PathType Leaf)) { Fail "-BriefFile: $BriefFile does not exist" }
   if (-not ("$(Get-Content -Raw -LiteralPath $BriefFile)" -match '\S')) { Fail "-BriefFile: $BriefFile is empty - a worker with no task would start" }
 }
-if (-not ($Repo -and $Name -and $Branch -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
+# an assistant (#281): a session beside the coordinator, no worktree and no branch - a worker's flags are refused
+$asst = $Name.StartsWith('assistant:', [StringComparison]::Ordinal)
+if ($asst) {
+  $given = @('Branch', 'Base', 'WorktreeRoot', 'LaunchFrom', 'Contract', 'TesterCommit', 'TesterTests' | Where-Object { $PSBoundParameters.ContainsKey($_) })
+  if ($given.Count) { Fail "refused: -$($given[0]) with an assistant ($Name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" }
+}
+if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
+  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-Mode auto] [-DryRun]') }
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
@@ -94,7 +106,35 @@ if ($WorktreeRoot -and -not [IO.Path]::IsPathRooted($WorktreeRoot)) { $WorktreeR
 
 $root = (git -C $Repo rev-parse --show-toplevel)
 if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Repo" }
-$wt = Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch
+# an assistant's name and folder: <root>/coordinator/assistants/<name>/, its brief BRIEF.md there
+$aname = ''; $adir = ''
+if ($asst) {
+  $aname = if ($Name.StartsWith('assistant: ', [StringComparison]::Ordinal)) { $Name.Substring(11) } else { '' }
+  if ($aname -cnotmatch '^[A-Za-z0-9._-]+\z' -or $aname -cmatch '^\.+\z') {
+    Fail "refused: the assistant name `"$($Name.Substring(10))`" in -Name `"$Name`" - write `"assistant: <name>`", <name> letters, digits, . _ - (not dots only)"
+  }
+  $adir = "$($root.Replace('\', '/'))/coordinator/assistants/$aname"
+  # a folder as it lies on disk, / separators, no trailing /, in one letter case where paths ignore it
+  $aWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
+  $aFold = $aWin -or $IsMacOS
+  function FCanon([string]$p) {
+    $q = $p.Replace('\', '/')
+    if (Test-Path -LiteralPath $q -PathType Container) {
+      if ($aWin) { $q = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $q).ProviderPath) }
+      else { $b = & { $ErrorActionPreference = 'Continue'; bash -c 'cd -P -- "$1" 2>/dev/null && pwd -P' _ $q }; if ("$b") { $q = "$b" } }
+    }
+    $q = $q.Replace('\', '/').TrimEnd('/'); if ($aFold) { $q.ToLowerInvariant() } else { $q }
+  }
+  if ((Split-Path -Leaf $BriefFile) -cne 'BRIEF.md' -or (FCanon (Split-Path -Parent $BriefFile)) -cne (FCanon $adir)) {
+    Fail "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $BriefFile"
+  }
+  # COORD_ASSISTANT_DIR in the safety file's env: the guard keeps the assistant's writes inside that folder
+  $acfg = [IO.File]::ReadAllText($Safety) | ConvertFrom-Json
+  $aenv = ''; if ($acfg.env -is [Management.Automation.PSCustomObject] -and $acfg.env.COORD_ASSISTANT_DIR -is [string]) { $aenv = $acfg.env.COORD_ASSISTANT_DIR.Replace('\', '/') }
+  if (-not $aenv) { Fail "refused: no COORD_ASSISTANT_DIR in the env of $Safety - it must name the assistant's folder $adir" }
+  if ((FCanon $aenv) -cne (FCanon $adir)) { Fail "refused: COORD_ASSISTANT_DIR in $Safety is $aenv - it must name the assistant's folder $adir" }
+}
+$wt = if ($asst) { '' } else { Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch }
 $from = if ($LaunchFrom) { $LaunchFrom } else { $root }
 if (-not (Test-Path -LiteralPath $from -PathType Container)) { Fail "no folder to launch from: $from" }
 # the branch exactly as named: on a case-insensitive file system (Windows, macOS) a branch that differs
@@ -143,6 +183,17 @@ if ($hook.EndsWith('.ps1')) {
 } else { $selftest = bash $hook --self-test }
 if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test printed nothing ($hook)" }
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
+# an assistant is one session per name: one already listed (running or stopped) is refused, never a second
+if ($asst -and (Get-Command claude -ErrorAction SilentlyContinue)) {
+  $aj = & { $ErrorActionPreference = 'Continue'; (@(& claude agents --json --all 2>$null | ForEach-Object { "$_" }) -join '') -replace "[`r`n]", '' }
+  foreach ($o in ($aj -split '}')) {
+    if ($o -cnotmatch ('"name": *"' + [regex]::Escape($Name) + '"')) { continue }
+    $xid = [regex]::Match($o, '"id": *"([^"]*)"').Groups[1].Value
+    if (-not $xid) { $xid = [regex]::Match($o, '"sessionId": *"([^"]*)"').Groups[1].Value }
+    $xst = [regex]::Match($o, '"state": *"([^"]*)"').Groups[1].Value
+    Fail "refused: the session `"$Name`" exists already ($(if ($xid) { $xid } else { 'no id' })$(if ($xst) { ", $xst" })) - wake it (SendMessage, claude attach), or remove it on the owner's word first"
+  }
+}
 
 # The contract passes check-contract before it goes out (CORE section 4, #267), checked before anything is
 # created: -Contract <file>, or for a worker or a lead (the role from the name, as the foresight below)
@@ -229,8 +280,9 @@ function Run([string]$exe, [string[]]$a) {
 
 # no origin (a local-only repository, e.g. a state repository without a remote): the local base branch;
 # a base not on origin yet (a lead's integration branch before its first push): the local one too
-$origin = git -C $root config --get remote.origin.url
-if ($origin) {
+$origin = if ($asst) { '' } else { git -C $root config --get remote.origin.url }
+if ($asst) { $start = '' }   # no branch, so no base
+elseif ($origin) {
   # Windows PowerShell 5.1 under 'Stop' turns git's stderr into a terminating error: read it as records.
   # git's first error line goes into the message; a failure other than "no such branch" (2) is retried
   # once: a transient DNS or network error should not stop a start
@@ -271,7 +323,13 @@ if ($tFull) {
 $notice = ''
 $wtFwd = $wt.Replace('\', '/')
 $same = (Resolve-Path -LiteralPath $from).Path.Replace('\', '/').TrimEnd('/') -eq (Resolve-Path -LiteralPath $root).Path.Replace('\', '/').TrimEnd('/')
-if ($same) {
+if ($asst) {
+  # an assistant: its folder is its memory - it lives on across compactions and restarts from the files there
+  $first = "YOUR FOLDER is $adir/ - you are the assistant `"$aname`": no worktree, no branch. Read $adir/BRIEF.md in full before anything else and keep $adir/NOTES.md as your memory; re-read both after every compaction (a summary loses rules) and after a restart. Write only inside $adir/; never change, commit, push or open a PR in the project."
+  $protRoot = ''
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $protRoot = $cfg.env.COORD_PROTECTED_ROOT }
+  if (-not $protRoot) { $notice = "notice: COORD_PROTECTED_ROOT is not set in ${Safety}: edit tools can reach the working copy (TOOLKIT Safety)" }
+} elseif ($same) {
   $first = "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $wtFwd. Work only inside it; never change files outside it."
   # it starts in the owner's working copy: the guard keeps the edit tools out of it only with
   # COORD_PROTECTED_ROOT in the safety file's env (a notice, not a failure)
@@ -284,7 +342,8 @@ if ($same) {
   $rootFwd = $root.Replace('\', '/')
   $first = "YOUR WORKING COPY is $wtFwd, a worktree of $rootFwd. Work in it by absolute path (git -C $wtFwd ..., files under $wtFwd); do not use EnterWorktree; never change files outside it."
 }
-$first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions."
+if ($asst) { $first += "`nQuestions to: the session named `"$ReportTo`" (SendMessage) - only what your folder, the run log and the journal do not hold." }
+else { $first += "`nReport to: the session named `"$ReportTo`" (SendMessage) - your report and your questions." }
 # the role from the name (#<task> <role>: <title>): a session is not a subagent, so its role file's body
 # heads the brief (TOOLKIT Roles) - from this core's roles/, unless the brief already carries it
 $briefText = [IO.File]::ReadAllText($BriefFile)
@@ -333,12 +392,13 @@ $nChars = $full.Length - [regex]::Matches($full, '[\uDC00-\uDFFF]').Count
 $cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
 $bd = (Join-Path $cfgDir 'coordinator/briefs').Replace('\', '/')
 $lFile = ''
-if ($nChars -gt 24000) { $lFile = "$bd/launch-$($Branch -replace '[^A-Za-z0-9._-]', '-')-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID.md" }
+if ($nChars -gt 24000) { $lFile = "$bd/launch-$($(if ($asst) { "assistant-$aname" } else { $Branch }) -replace '[^A-Za-z0-9._-]', '-')-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID.md" }
 
 # The worktrees' folder stays out of its repository's git, like coordinator/ (INIT 3.4): a line in the
 # local .git/info/exclude, never .gitignore - nothing the project's history, its team or a client sees.
 $wroot = if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }
-if ($DryRun) { "[dry-run] keep $wroot out of its repository's git (.git/info/exclude)" }
+if ($asst) { }   # an assistant creates nothing: no worktree, no exclude line
+elseif ($DryRun) { "[dry-run] keep $wroot out of its repository's git (.git/info/exclude)" }
 else {
   New-Item -ItemType Directory -Force -Path $wroot | Out-Null
   $r = & {
@@ -363,7 +423,7 @@ else {
 }
 # The coordinator's own state repository (<root>/coordinator, INIT 3.4) never shows in the project's git
 # either: a project that got `git init` after coordinator/ existed has no line for it yet
-if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
+if (-not $asst -and (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git'))) {
   $ign = & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q coordinator/ 2>$null; $LASTEXITCODE }
   if ($ign -ne 0) {
     if ($DryRun) { "[dry-run] add /coordinator/ to the repository's .git/info/exclude" }
@@ -383,7 +443,7 @@ if (Test-Path -LiteralPath (Join-Path $root 'coordinator/.git')) {
 }
 # An older lead kept its sub-contracts, briefs and run notes in <its worktree>/.lead/ (now beside it, #310),
 # never committed: one line, which info/exclude applies to every worktree of the repository
-$ign = & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q .lead/x 2>$null; $LASTEXITCODE }
+$ign = if ($asst) { 0 } else { & { $ErrorActionPreference = 'Continue'; git -C $root check-ignore -q .lead/x 2>$null; $LASTEXITCODE } }
 if ($ign -ne 0) {
   if ($DryRun) { "[dry-run] add /.lead/ to the repository's .git/info/exclude" }
   else {
@@ -399,7 +459,8 @@ if ($ign -ne 0) {
   }
 }
 
-if (Test-Path -LiteralPath $wt) {
+if ($asst) { $made = 'nothing (an assistant has no worktree or branch)' }
+elseif (Test-Path -LiteralPath $wt) {
   # only a worktree of this repository is reused; a stale folder there is refused, never entered
   $ok = & {
     $ErrorActionPreference = 'Continue'
@@ -472,7 +533,8 @@ if ($fr -in @('worker', 'lead', '')) {
 $brief = $full   # $full as sent, before the escaping below: kept for after a compaction
 $subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
 if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }
-if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <working copy $wtFwd, report to `"$ReportTo`", $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
+$where = if ($asst) { "the folder $adir/, questions to `"$ReportTo`"" } else { "working copy $wtFwd, report to `"$ReportTo`"" }
+if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <$where, $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
@@ -494,11 +556,17 @@ if ($PSVersionTable.PSVersion -lt [version]'7.3') {
 }
 Push-Location -LiteralPath $from
 $eff = @(if ($Effort) { '--effort', $Effort })
-try { & $claude.Source --bg --name $argName --model $Model @eff --permission-mode $Mode --settings $Safety $brief }
+# the launch output is read for its id (`backgrounded · <id> · <name>`), then printed as it came
+$bgOut = @()
+try { $bgOut = @(& $claude.Source --bg --name $argName --model $Model @eff --permission-mode $Mode --settings $Safety $brief | ForEach-Object { "$_" }) }
 finally { Pop-Location }
+$bgRc = $LASTEXITCODE
+$bgOut
+$bgId = ''; foreach ($l in $bgOut) { $m = [regex]::Match($l, 'backgrounded[^0-9A-Za-z]*([0-9A-Za-z][0-9A-Za-z-]*)'); if ($m.Success) { $bgId = $m.Groups[1].Value; break } }
 # a launch that fails leaves the worktree and branch: say so, and how to clean them
-if ($LASTEXITCODE -ne 0) {
+if ($bgRc -ne 0) {
   if ($lFile) { Remove-Item -LiteralPath $lFile -Force -ErrorAction SilentlyContinue }
+  if ($asst) { Fail "launch failed: claude --bg did not start the session. Created: $made - start again" }
   Fail "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch"
 }
 # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
@@ -521,6 +589,10 @@ if ($sid) {
   "brief kept for after a compaction: $((Join-Path $bd "$sid.md").Replace('\', '/'))"
   Get-ChildItem -LiteralPath $bd -Filter '*.md' -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-14) } | Remove-Item -Force -ErrorAction SilentlyContinue
 } else { [Console]::Error.WriteLine('no sessionId in the listing: the brief is not kept for after a compaction') }
+if ($asst) {
+  "attach: claude attach `"$Name`""
+  if ($bgId) { "attach: claude attach $bgId" }
+}
 $subscribe
 exit 0
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
