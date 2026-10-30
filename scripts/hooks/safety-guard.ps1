@@ -286,6 +286,9 @@ if ($asst -and $tool -cmatch '^(Edit|Write|MultiEdit|NotebookEdit)$') {
   foreach ($p in @($d.tool_input.file_path, $d.tool_input.notebook_path)) {
     if ($p -isnot [string] -or -not $p) { continue }
     $any = $true
+    # a path holding a line break or a carriage return is refused (as in safety-guard.sh, whose reader
+    # splits its fields at line breaks)
+    if ($p.IndexOfAny([char[]]@("`n", "`r")) -ge 0) { ABlock ': a path that holds a line break or a carriage return is refused' }
     $full = $p
     if ($full -notmatch '^([/\\]|[A-Za-z]:)') {
       $base = if ($cwd) { $cwd } elseif ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { (Get-Location).Path }
@@ -767,17 +770,21 @@ function WorktreeSeg([string[]]$a) {
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
 # AsstGit <subcommand> <its arguments>: passes a read - the subcommands below, a branch or tag listing, a
-# config read, remote with no subcommand / show / get-url, reflog / reflog show / exists, worktree list,
-# symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec); refuses the rest (a
+# config read, remote with no subcommand / show / get-url, reflog but expire / delete / drop / write,
+# worktree list, symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec, no
+# --refmap with a :<dst>); refuses the rest (a
 # write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks.
 $ASST_GIT_READ = '^(log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version)$'
 function AsstGit([string]$sub, [string[]]$a) {
   if ($sub -match $ASST_GIT_READ) { return }
-  $w = $false; $l = $false; $np = 0; $nx = $false; $fst = ''
+  $w = $false; $l = $false; $np = 0; $nx = $false; $rm = $false; $fst = ''
   foreach ($t in $a) {
     if ($nx) { $nx = $false; continue }
+    if ($rm) { $rm = $false; if ($t -match ':.') { $w = $true }; continue }   # --refmap's value
     $st = "${sub}:$t"
-    if ($st -match '^fetch:-') { }
+    if ($st -match '^fetch:--refmap$') { $rm = $true }   # a refmap with a :<dst> updates local refs, as a <src>:<dst> refspec does
+    elseif ($st -match '^fetch:--refmap=') { if ($t.Substring($t.IndexOf('=') + 1) -match ':.') { $w = $true } }
+    elseif ($st -match '^fetch:-') { }
     elseif ($st -match '^fetch:') { $np++; if ($np -gt 1 -and $t.Contains(':')) { $w = $true } }   # a refspec after the repository
     elseif ($st -match '^(branch:--list|tag:--list|tag:--verify|config:--list|config:--get|config:--get-all|config:--get-regexp|config:--get-urlmatch|config:--get-color|config:--get-colorbool)$') { $l = $true }
     elseif ($st -match '^(branch|tag):--(contains|no-contains|merged|no-merged|points-at)$') { $l = $true; $nx = $true }
@@ -803,7 +810,7 @@ function AsstGit([string]$sub, [string[]]$a) {
       }
     }
     '^remote$' { if ($fst -match '^(|show|get-url)$') { return } }
-    '^reflog$' { if ($fst -match '^(|show|exists)$') { return } }
+    '^reflog$' { if ($fst -notmatch '^(expire|delete|drop|write)$') { return } }   # no subcommand: reflog show
     '^worktree$' { if ($fst -ceq 'list') { return } }
     '^symbolic-ref$' { if (-not $w -and $np -eq 1) { return } }
   }
@@ -831,7 +838,8 @@ function AsstGh([string[]]$a) {
 # AsstApi <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
 # HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
 # implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
-# comes from a file (--input, a field's =@file), whatever the method. Flags with letter case: -h is not -H.
+# comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
+# /, an http(s)://<host>/ prefix). Flags with letter case: -h is not -H.
 function AsstApi([string[]]$a) {
   $m = ''; $fl = $false; $ep = ''; $mu = $false; $at = $false; $i = 0
   foreach ($t in $a) { if ($t -match 'mutation') { $mu = $true } }
@@ -851,6 +859,8 @@ function AsstApi([string[]]$a) {
     elseif (-not $ep) { $ep = $t }
     if ($v -like '*=@*') { $at = $true }
   }
+  if ($ep -match '^https?://') { $ep = $ep -replace '^https?://[^/]*/?', '' }
+  $ep = $ep.TrimStart('/')   # /graphql and https://<host>/graphql are graphql
   if ($ep -ceq 'graphql') {
     if ($mu) { Block 'an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
     if ($at) { Block 'an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
