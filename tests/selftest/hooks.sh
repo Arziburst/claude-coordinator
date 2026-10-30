@@ -103,6 +103,12 @@ ast() {   # ast <assistant example> <worker example> <placeholder of the project
   grep -q 'safety-guard\.' "$tmp/a.pre" || bad="$bad; no guard in PreToolUse"
   grep -q '"timeout": 30,' "$tmp/a.pre" || bad="$bad; the guard's timeout is not 30"
   grep -q '"onFailure": "block"' "$tmp/a.pre" || bad="$bad; the guard has no onFailure block"
+  # 281.5: the compact hook runs the assistant variant (after-compact.sh assistant, or .ps1 on Windows), never
+  # the worker's, and the _comment names after-compact
+  s=sh; case "$w" in *windows*) s=ps1 ;; esac
+  grep -q "\"command\": \"[^\"]*/scripts/hooks/after-compact\\.$s assistant\"" "$tmp/a.json" || bad="$bad; the compact hook does not run after-compact.$s assistant"
+  grep -v '^  "_comment"' "$tmp/a.json" | grep -qE 'after-compact\.(sh|ps1) (worker|coordinator)' && bad="$bad; the compact hook runs a worker's or the coordinator's variant"
+  grep -q '^  "_comment": ".*after-compact' "$tmp/a.json" || bad="$bad; the _comment does not name after-compact"
   [ -z "$bad" ] || { echo "FAIL ($a)${bad#;}"; fail=1; }
   n=$((n + 1))
   sed "s#C:/ABSOLUTE/PROJECT/coordinator/assistants/NAME#$core/tests#g; s#/ABSOLUTE/PROJECT/coordinator/assistants/NAME#$core/tests#g; s#C:/ABSOLUTE/PATH#$core#g; s#C:/ABSOLUTE/PROJECT#$core#g; s#/ABSOLUTE/PATH#$core#g; s#/ABSOLUTE/PROJECT#$core#g" "$a" > "$fx/${a##*/}"

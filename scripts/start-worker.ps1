@@ -159,7 +159,7 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:uppe
   if ((FCanon $aenv) -cne (FCanon $adir)) { Fail "refused: COORD_ASSISTANT_DIR in $Safety is $aenv - it must name the assistant's folder $adir" }
   # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
   if ("$(FCanon (Split-Path -Parent $Safety))/".StartsWith("$(FCanon $adir)/", [StringComparison]::Ordinal)) {
-    Fail "refused: the -Safety file $Safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it beside the folder (coordinator/assistants/$aname.settings.json)"
+    Fail "refused: the -Safety file $Safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it outside the folder (coordinator/assistant-settings/$aname.json)"
   }
 }
 $wt = if ($asst) { '' } else { Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch }

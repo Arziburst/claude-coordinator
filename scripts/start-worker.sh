@@ -168,7 +168,7 @@ if [ -n "$asst" ]; then
     { echo "refused: COORD_ASSISTANT_DIR in $safety is $aenv - it must name the assistant's folder $adir" >&2; exit 1; }
   # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
   case "$(fcanon "$(dirname "$safety")")/" in "$(fcanon "$adir")/"*)
-    echo "refused: the --safety file $safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it beside the folder (coordinator/assistants/$aname.settings.json)" >&2; exit 1 ;; esac
+    echo "refused: the --safety file $safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it outside the folder (coordinator/assistant-settings/$aname.json)" >&2; exit 1 ;; esac
   from="$root"
 fi
 wt="${wtroot:-$root/.claude/worktrees}/$branch"

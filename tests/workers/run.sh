@@ -1595,6 +1595,43 @@ LAST="$(printf 'not json' | ac coordinator | tr -d '\r')"
 expect_in '"additionalContext":"The conversation was just compacted'
 out="$(printf '%s' "$j" | ac nobody 2>/dev/null)"; rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: after-compact with an unknown role: exit $rc, printed '$out'"; fail=1; }
+# the assistant variant (281.5): an assistant outlives its kept brief (pruned after 14 days), so with or
+# without one it names its own files - <COORD_ASSISTANT_DIR>/BRIEF.md and NOTES.md, and the core's
+# roles/assistant.md (the core the hook runs from) - to read in full with the Read tool and follow, not the
+# summary; paths in the forward-slash form the worker variant prints; never a worker's or the coordinator's
+# text. Access points: the text holds "with the Read tool", "not the summary" and the three paths; without
+# COORD_ASSISTANT_DIR it still names BRIEF.md and NOTES.md and says the folder is "unknown"; the usage line
+# names assistant.
+ad="$tmp/assist/a1"; mkdir -p "$ad"; printf 'brief\n' > "$ad/BRIEF.md"; printf 'notes\n' > "$ad/NOTES.md"
+adw="$ad"; command -v cygpath >/dev/null 2>&1 && adw="$(cygpath -m "$ad")"
+mkdir -p "$tmp/cfg/coordinator/briefs"; printf 'You implement one contract\n' > "$tmp/cfg/coordinator/briefs/a5500000-0000-4000-8000-000000000001.md"
+not_worker_or_coord() {   # <case>: the text of neither the worker nor the coordinator variant
+  case "$LAST" in *coordinator/briefs*|*"your role file and the contract"*|*CORE.md*|*BINDINGS.md*|*"git status"*)
+    echo "FAIL (after-compact assistant, $1): a worker's or the coordinator's text: $LAST"; fail=1 ;; esac; }
+for as in a5500000-0000-4000-8000-000000000001 a5500000-0000-4000-8000-0000000000ff; do   # a kept brief, none
+  w="kept brief"; [ "$as" = a5500000-0000-4000-8000-000000000001 ] || w="no kept brief"
+  LAST="$(set -o pipefail; printf '{"session_id":"%s","cwd":"/work/proj","source":"compact"}' "$as" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac assistant | tr -d '\r')"; rc=$?
+  [ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, $w): exit $rc"; fail=1; }
+  expect_in '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The conversation was just compacted'
+  expect_in "with the Read tool"; expect_in "not the summary"
+  expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"; expect_in "$core/roles/assistant.md"
+  not_worker_or_coord "$w"
+done
+# COORD_ASSISTANT_DIR with backslashes (Windows): printed in the forward-slash form
+if command -v cygpath >/dev/null 2>&1; then
+  LAST="$(printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff"}' | COORD_ASSISTANT_DIR="$(cygpath -w "$ad")" ac assistant | tr -d '\r')"
+  expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"
+fi
+LAST="$(set -o pipefail; unset COORD_ASSISTANT_DIR; printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff","cwd":"/work/proj"}' | CLAUDE_CONFIG_DIR="$cfgw" ac assistant | tr -d '\r')"; rc=$?
+[ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, no COORD_ASSISTANT_DIR): exit $rc"; fail=1; }
+expect_in '"additionalContext":"The conversation was just compacted'
+expect_in "BRIEF.md"; expect_in "NOTES.md"; expect_in "unknown"
+not_worker_or_coord "no COORD_ASSISTANT_DIR"
+# the coordinator variant is silent in an assistant's session (its settings load the project's too)
+out="$(set -o pipefail; printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac coordinator | tr -d '\r')"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: the coordinator variant spoke in an assistant's session: exit $rc, printed '$out'"; fail=1; }
+err="$(printf '%s' "$j" | ac nobody 2>&1 >/dev/null | tr -d '\r')"
+case "$err" in *usage*assistant*) ;; *) echo "FAIL: the after-compact usage line does not name assistant: '$err'"; fail=1 ;; esac
 
 echo "worker scripts ($kind): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
