@@ -62,7 +62,7 @@
 # on the period's first day, then those of its lines in the period; none: PROJECT.md's Core row), the profile
 # (of PROJECT.md's Strictness, Spend level and Work mode only the vocabulary word the Value starts with, else <fill>;
 # the machine's os), the five axes over the period computed as
-# the week's, the run log's rows of the period by role (no task rows, probes or self-tests), the guard reasons and
+# the week's, the run log's rows of the period by role (no task rows, probes, self-tests or assistant rows), the guard reasons and
 # refusal sources of the period's transcripts, CORE-FINDINGS.md's rows dated in the period by their status's first
 # word ("fixed upstream" counts as fixed), the count after "local edits:" in PROJECT.md's Core row, and a row per
 # feature id of the "## Summary" table of --features (default: the core's FEATURES.md). Every cell the coordinator

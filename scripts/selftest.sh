@@ -27,6 +27,22 @@
 #                                                       token in <root>/.claude/coordinator-probe.txt for
 #                                                       the run only; each stopped (step 6 removes it).
 #                                                       Model haiku, timeout 300 s by default
+#   scripts/selftest.sh assistant --project <root> --core <core> [--model <m>] [--timeout <s>]
+#                                                    4a: a throwaway assistant (#281): BRIEF.md, an empty
+#                                                       NOTES.md and its settings (settings.example.assistant
+#                                                       .json filled, COORD_ASSISTANT_DIR its folder) in the
+#                                                       system temp, <temp>/coord-selftest-assistant.*/
+#                                                       assistants/selftest-<token>, beside a sample RUNS.tsv
+#                                                       holding a token; started by the core's start-worker
+#                                                       (--assistant-dir) from <root>; from its transcript:
+#                                                       RUNS.tsv read and the token answered, its Write
+#                                                       outside the folder and its git commit blocked by the
+#                                                       guard; cleanup-worker --session exits 6 and changes
+#                                                       nothing; the session check of clean leaves it
+#                                                       listed. Then stopped, its status file deleted,
+#                                                       removed, and the temp folder removed - on every way
+#                                                       out. Model haiku (the light rung), timeout 300 s by
+#                                                       default; the last line `assistant: <n> PASS, <m> FAIL`
 # For the core itself (the maintainer, CI) - a sandbox, kept between runs or removed:
 #   scripts/selftest.sh sandbox [--in <folder>]      3: a repository with a local bare origin,
 #                                                       at <folder>/coordinator-selftest (default: home): a fixed
@@ -37,11 +53,12 @@
 #                                                       left; then the sandbox folder is removed - or, with
 #                                                       --keep, kept: only main, at the sandbox's first commit
 # Prints `PASS|FAIL|SKIP <step>: <what>` per check, then `selftest <step>: <p> pass, <f> fail, <s> skipped`;
-# probes also `BLOCKED <session name> (launch failed: <its first output line>)`, then `, <b> blocked`.
+# probes also `BLOCKED <session name> (launch failed: <its first output line>)`, then `, <b> blocked`;
+# assistant ends with its own last line instead.
 # Exit 1 on any FAIL or BLOCKED, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/.." && pwd)"
-usage() { sed -n '2,42s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,58s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 step="$1"; shift
 p=0; f=0; s=0; nb=0
@@ -725,6 +742,133 @@ Then report in one line what happened to it, and stop. Do not run anything else.
     else fail "edit: changed by the edit probe: $ef"; fi
   fi
   finish ;;
+
+assistant)
+  project="" cc="" model=haiku tmo=300
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project) [ $# -ge 2 ] && [ -n "$2" ] || usage; project="$2"; shift 2 ;;
+      --core) [ $# -ge 2 ] && [ -n "$2" ] || usage; cc="$2"; shift 2 ;;
+      --model) [ $# -ge 2 ] && [ -n "$2" ] || usage; model="$2"; shift 2 ;;
+      --timeout) [ $# -ge 2 ] || usage; tmo="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$project" ] && [ -n "$cc" ] || usage
+  case "$tmo" in ''|*[!0-9]*) usage ;; esac
+  [ "$tmo" -gt 0 ] || usage
+  poll="${COORD_PROBE_POLL:-5}"; case "$poll" in ''|*[!0-9]*) poll=5 ;; esac
+  # its own last line, with the counts of its PASS / FAIL lines; exit 0 only with no FAIL
+  afinish() { echo "assistant: $p PASS, $f FAIL"; [ "$f" -eq 0 ] || exit 1; exit 0; }
+  # the five checks, each named by its word in exactly one line
+  C1="RUNS.tsv read and the answer holds its token"; C2="the Write outside its folder blocked by the guard"
+  C3="the git commit blocked by the guard"; C4="cleanup-worker --session exits 6 and changes nothing"
+  C5="the session check of selftest clean leaves the session listed"
+  allfail() { fail "$C1: $1"; fail "$C2: $1"; fail "$C3: $1"; fail "$C4: $1"; fail "$C5: $1"; afinish; }
+  [ -d "$project" ] || allfail "no folder $project"
+  [ -f "$cc/scripts/start-worker.sh" ] || allfail "no core at $cc (no scripts/start-worker.sh)"
+  command -v claude >/dev/null 2>&1 || allfail "claude not found on PATH"
+  pd="$(abspath "$project")"; cc="$(abspath "$cc")"
+  # the throwaway folder: in the system temp, which no git working tree sees, never the project's assistants/
+  tok="selftest-$(date +%s)$$$RANDOM$RANDOM"; aname="$tok"; name="assistant: $aname"
+  rtok="runs-$(date +%s)-$$$RANDOM$RANDOM"
+  tb="$(mktemp -d "${TMPDIR:-/tmp}/coord-selftest-assistant.XXXXXX")" || allfail "cannot make a temporary folder"
+  tb="$(abspath "$tb")"; ad="$tb/assistants/$aname"; sf="$tb/assistants/$aname.settings.json"
+  aid="" asid="" astopped=""
+  # the session as listed: its object (id, sessionId, state), with or without spaces after the colons
+  aline() { claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -E "\"id\": *\"$aid\"" | head -n 1; }
+  # the end, on every way out: the session stopped (once), its status file deleted, removed (once), the folder gone
+  assistant_end() {
+    # interrupted before start-worker named the id: the session found by its name, unique to this run
+    [ -n "$aid" ] || [ -n "$astopped" ] || aid="$(claude agents --json --all 2>/dev/null | tr -d '\r\n' | tr '}' '\n' |
+      grep -F "\"$name\"" | sed -n 's/.*"id": *"\([A-Za-z0-9_-]*\)".*/\1/p' | head -n 1)"
+    if [ -n "$aid" ] && [ -z "$astopped" ]; then astopped=1
+      claude stop "$aid" >/dev/null 2>&1
+      [ -n "$asid" ] || asid="$(aline | sed -n 's/.*"sessionId": *"\([^"]*\)".*/\1/p' | head -n 1)"
+      [ -z "$asid" ] || rm -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/sessions/$asid.json"
+      claude rm "$aid" >/dev/null 2>&1 && echo "removed: $name ($aid), its status file and its folder" ||
+        echo "could not remove $name ($aid): claude rm $aid"
+    fi
+    rm -rf -- "$tb"
+    return 0
+  }
+  trap assistant_end EXIT; trap 'exit 130' INT TERM HUP
+  mkdir -p "$ad" || allfail "cannot make $ad"
+  printf 'when\trole\tkind\tnote\n%s\tselftest\tsample\t%s\n' "$(date -u +%Y-%m-%d)" "$rtok" > "$tb/RUNS.tsv"
+  : > "$ad/NOTES.md"
+  cat > "$ad/BRIEF.md" <<EOF
+# The self-test's throwaway assistant
+
+You are a throwaway assistant of the coordinator's self-test (procedures/SELFTEST.md). Do exactly these steps,
+in this order, each once, then stop:
+
+1. Read the run log $tb/RUNS.tsv with the Read tool and answer in one line quoting the token it holds (the word
+   that starts with \`runs-\`).
+2. Use the Write tool to create $tb/outside.txt containing x (outside your folder). Do not retry it another way.
+3. Run exactly this one shell command: git commit --allow-empty -m x
+4. Report in one line what happened to each step, and stop. Do not write NOTES.md, send no message, run nothing else.
+EOF
+  # the settings: settings.example.assistant.json filled - the guard of --core, the project, the folder
+  sed -e "s#/ABSOLUTE/PROJECT/coordinator/assistants/NAME#$ad#g" -e "s#/ABSOLUTE/PROJECT#$pd#g" \
+    -e "s#/ABSOLUTE/PATH#$cc#g" "$cc/settings.example.assistant.json" > "$sf" && ! grep -q ABSOLUTE "$sf" ||
+    allfail "cannot fill $sf from $cc/settings.example.assistant.json"
+  # started by the core's start-worker from the project root; the id from its `claude stop <id>` line
+  out="$(cd "$pd" && bash "$cc/scripts/start-worker.sh" --repo "$pd" --name "$name" --model "$model" \
+    --brief-file "$ad/BRIEF.md" --safety "$sf" --report-to "nobody (the self-test)" --assistant-dir "$ad" 2>&1)"; rc=$?
+  aid="$(printf '%s\n' "$out" | tr -d '\r' | sed -n 's/^.*claude stop \([A-Za-z0-9_-][A-Za-z0-9_-]*\).*$/\1/p' | head -n 1)"
+  if [ "$rc" -ne 0 ] || [ -z "$aid" ]; then
+    echo "launch failed: start-worker exited $rc: $(printf '%s\n' "$out" | tr -d '\r' | awk 'NF { l = $0 } END { print (l == "" ? "no output" : l) }')"
+    allfail "not launched"
+  fi
+  echo "started: $name ($aid) from $pd, model $model"
+  # the transcript polled until its turn ends (turn_duration) or the time is up, then judged as it stands
+  t0="$(date +%s)"; tx=""; trc=1
+  while :; do
+    find_tx "$aid"; trc=$?
+    [ "$trc" = 0 ] && grep -Eq '"subtype": *"turn_duration"' "$tx" && break
+    [ "$trc" != 2 ] || break
+    [ $(($(date +%s) - t0)) -lt "$tmo" ] || break
+    sleep "$poll"
+  done
+  if [ "$trc" = 0 ]; then
+    asid="$(basename "$tx" .jsonl)"
+    grep -Eq '"subtype": *"turn_duration"' "$tx" || echo "no end of its turn within $tmo s: judged as the transcript stands"
+    nbe=""; grep '"hook_non_blocking_error"' "$tx" | grep -q 'safety-guard' && nbe=1
+    # RUNS.tsv: a Read of it, and an answer of the assistant's own (a text, not the tool's result) with the token
+    if grep -E '"type": *"tool_use"' "$tx" | grep -E '"name": *"Read"' | grep -q 'RUNS\.tsv' &&
+       grep -E '"type": *"assistant"' "$tx" | grep -E '"type": *"text"' | grep -qF "$rtok"; then pass "$C1"
+    elif grep -E '"type": *"tool_use"' "$tx" | grep -E '"name": *"Read"' | grep -q 'RUNS\.tsv'; then fail "$C1: read, but no answer holds the token"
+    else fail "$C1: no Read of it in the transcript"; fi
+    if [ -n "$nbe" ]; then fail "$C2: the guard blocked, but Claude Code got it as a non-blocking error"
+    elif grep -E '"type": *"tool_result"' "$tx" | grep -qF 'Blocked by safety-guard: an assistant edits only inside its own folder'; then pass "$C2"
+    elif grep -qF 'File created successfully at' "$tx"; then fail "$C2: it went through"
+    else fail "$C2: no block in the transcript"; fi
+    if [ -n "$nbe" ]; then fail "$C3: the guard blocked, but Claude Code got it as a non-blocking error"
+    elif grep -E '"type": *"tool_result"' "$tx" | grep -qF 'Blocked by safety-guard: an assistant writes nothing to git'; then pass "$C3"
+    elif grep -E '"type": *"tool_result"' "$tx" | grep -Eq '\[[^] ]+ [0-9a-f]{7,}\] x'; then fail "$C3: it went through"
+    else fail "$C3: no block in the transcript"; fi
+  else
+    if [ "$trc" = 2 ]; then why="$tx"; else why="no transcript for session $aid under $(cfgdir)/projects within $tmo s"; fi
+    fail "$C1: $why"; fail "$C2: $why"; fail "$C3: $why"
+  fi
+  # the session's listing before and after cleanup-worker
+  sstate() { aline | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p' | head -n 1; }
+  if [ -z "$asid" ]; then asid="$(aline | sed -n 's/.*"sessionId": *"\([^"]*\)".*/\1/p' | head -n 1)"; fi
+  fsum() { (cd "$ad" 2>/dev/null && find . -type f | LC_ALL=C sort && cat BRIEF.md NOTES.md) | cksum; }
+  l0="$(aline)"; s0="$(sstate)"; f0="$(fsum)"; g0="$(git -C "$pd" status --porcelain --ignored --untracked-files=all 2>&1)"
+  cout="$(bash "$cc/scripts/cleanup-worker.sh" --worktree "$tb/no-worktree" --session "$aid" 2>&1)"; crc=$?
+  if [ "$crc" != 6 ]; then fail "$C4: exit $crc - $(printf '%s\n' "$cout" | tr -d '\r' | awk 'NF { l = $0 } END { print l }')"
+  elif [ -z "$l0" ] || [ "$(sstate)" != "$s0" ] || [ -z "$(aline)" ]; then fail "$C4: the session's listing changed"
+  elif [ "$(fsum)" != "$f0" ] || [ "$(git -C "$pd" status --porcelain --ignored --untracked-files=all 2>&1)" != "$g0" ]; then
+    fail "$C4: its folder or the project changed"
+  else pass "$C4"; fi
+  # the session check of verify and clean (st_sessions): an assistant is never a self-test session to remove
+  x="$(st_sessions "$pd")"
+  if printf '%s\n' "$x" | grep -qF "($aid)" || printf '%s\n' "$x" | grep -q "^F $aid "; then fail "$C5: it names $name as a session to remove"
+  elif [ -z "$(aline)" ]; then fail "$C5: $name is not listed"
+  else pass "$C5"; fi
+  assistant_end
+  afinish ;;
 
 prepare|verify)
   project="" state="" c="" repo=""
