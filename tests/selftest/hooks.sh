@@ -83,6 +83,35 @@ for f in settings.example.json settings.example.windows.json; do
   tmo "$fx/$f" "$f" PASS
 done
 
+# the assistant's settings examples (#281, 281.1): each the matching worker example with the assistant's
+# changes - env COORD_ASSISTANT_DIR (/ABSOLUTE/PROJECT/coordinator/assistants/NAME, or C:/...) beside
+# COORD_PROTECTED_ROOT, the worker example's PreToolUse matcher and deny list, the guard's timeout 30 and
+# onFailure block, a _comment; filled (the folder here: this core's tests/), each passes selftest hooks
+ast() {   # ast <assistant example> <worker example> <placeholder of the project>
+  n=$((n + 1))
+  local a="$1" w="$2" p="$3" bad="" s
+  if [ ! -f "$a" ]; then echo "FAIL ($a): the assistant's settings example is missing"; fail=1; return; fi
+  tr -d '\r' < "$a" > "$tmp/a.json"; tr -d '\r' < "$w" > "$tmp/w.json"
+  grep -qF "\"COORD_ASSISTANT_DIR\": \"$p/coordinator/assistants/NAME\"" "$tmp/a.json" || bad="$bad; no env COORD_ASSISTANT_DIR $p/coordinator/assistants/NAME"
+  grep -qF "\"COORD_PROTECTED_ROOT\": \"$p\"" "$tmp/a.json" || bad="$bad; no env COORD_PROTECTED_ROOT $p"
+  grep -q '^  "_comment": "..*assistant' "$tmp/a.json" || bad="$bad; no _comment about the assistant"
+  for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" > "$tmp/$s.deny"; done
+  cmp -s "$tmp/a.deny" "$tmp/w.deny" || bad="$bad; the deny list differs from $w's"
+  for s in a w; do awk '/"PreToolUse"/ { f = 1 } f' "$tmp/$s.json" > "$tmp/$s.pre"; done
+  grep '"matcher"' "$tmp/w.pre" > "$tmp/w.m"; grep '"matcher"' "$tmp/a.pre" > "$tmp/a.m"
+  cmp -s "$tmp/a.m" "$tmp/w.m" || bad="$bad; the PreToolUse matcher differs from $w's"
+  grep -q 'safety-guard\.' "$tmp/a.pre" || bad="$bad; no guard in PreToolUse"
+  grep -q '"timeout": 30,' "$tmp/a.pre" || bad="$bad; the guard's timeout is not 30"
+  grep -q '"onFailure": "block"' "$tmp/a.pre" || bad="$bad; the guard has no onFailure block"
+  [ -z "$bad" ] || { echo "FAIL ($a)${bad#;}"; fail=1; }
+  n=$((n + 1))
+  sed "s#C:/ABSOLUTE/PROJECT/coordinator/assistants/NAME#$core/tests#g; s#/ABSOLUTE/PROJECT/coordinator/assistants/NAME#$core/tests#g; s#C:/ABSOLUTE/PATH#$core#g; s#C:/ABSOLUTE/PROJECT#$core#g; s#/ABSOLUTE/PATH#$core#g; s#/ABSOLUTE/PROJECT#$core#g" "$a" > "$fx/${a##*/}"
+  st hooks --settings "$fx/${a##*/}" > "$tmp/one" 2>&1; rc=$?
+  [ "$rc" = 0 ] || { echo "FAIL (hooks ${a##*/}, filled): expected exit 0, got exit $rc:"; sed 's/^/    /' "$tmp/one"; fail=1; }
+}
+ast settings.example.assistant.json settings.example.json /ABSOLUTE/PROJECT
+ast settings.example.assistant.windows.json settings.example.windows.json C:/ABSOLUTE/PROJECT
+
 usage() {   # usage <selftest.sh arguments>: exit 2 and no PASS / FAIL line
   n=$((n + 1))
   st "$@" > "$tmp/one" 2>&1; rc=$?

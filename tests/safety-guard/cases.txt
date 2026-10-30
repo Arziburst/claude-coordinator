@@ -12,6 +12,9 @@
 # An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset),
 # an optional 5th CLAUDE_PROJECT_DIR (without one: the cwd's first folder; -: unset), an optional 6th
 # COORD_PROTECTED_BRANCHES (without one or -: unset; main and master are protected either way). A cwd of dev is a repo on branch dev.
+# An optional 7th column is COORD_ASSISTANT_DIR (without one or -: unset; the assistant mode, #281). A row
+# with a 7th column writes the 4th to 6th out (- where unset). expect own: allow where letter case in paths
+# is ignored (Windows, macOS), block elsewhere (Linux).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
 # (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
@@ -770,3 +773,275 @@ allow	work	gh pr create --draft --title "fix the --repo flag" --body b
 allow	work	gh pr list --repo other/x
 allow	work	gh issue create -R other/x --title t
 allow	ps:work	gh pr create --draft --title t -r alice
+# --- the assistant mode (#281, 281.1): the 7th column is COORD_ASSISTANT_DIR (none or -: unset; @A@ in
+# these comments is @PROJECT@/coordinator/assistants/a1). An assistant edits only inside that folder and
+# never writes to git or GitHub. run.sh makes work/coordinator/assistants/a1 (with sub/, and out -> a folder
+# outside the project), a2 and a1-old.
+# The edit tools: inside the folder (and the folder itself) they pass, though it lies under COORD_PROTECTED_ROOT
+allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	multiedit:work	@PROJECT@/coordinator/assistants/a1/sub/deep.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	notebook:work	@PROJECT@/coordinator/assistants/a1/a.ipynb	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	write:work	@PROJECT@/coordinator/assistants/a1	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# the folder and the path written with backslashes, a trailing separator, the Git Bash form, . and ..
+allow	edit:work	@PROJECT_W@\coordinator\assistants\a1\x.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT_W@\coordinator\assistants\a1
+allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1/
+allow	edit:work	@PROJECT_U@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	edit:work	@PROJECT@/coordinator/assistants/a1/./sub//deep.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	edit:work	@PROJECT@/coordinator/assistants/a2/../a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# a relative path counts from the call's cwd
+allow	edit:work/coordinator/assistants/a1	notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	write:work/coordinator/assistants/a1	./sub/b.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work/coordinator/assistants/a1	../a2/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	coordinator/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# letter case as the guard compares it (own: allow where case is ignored - Windows, macOS - block on Linux)
+own	edit:work	@PROJECT_UP@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+own	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT_UP@/coordinator/assistants/a1
+# links as the guard resolves them: through @LINK@ into the folder passes; out of it through a link does not
+allow	write:work	@LINK@/coordinator/assistants/a1/a.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	write:work	@PROJECT@/coordinator/assistants/a1/a.md	@PROJECT@	@PROJECT@	-	@LINK@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1/out/a.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1/out/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# every other path is refused: in the project root, its worktrees, a sibling, a folder sharing the prefix, outside
+block	edit:work	@PROJECT@/src/app.js	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/src/app.js	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/PROJECT.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/.claude/worktrees/12-fix/new.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	multiedit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	notebook:work	@PROJECT@/.claude/worktrees/12-fix/a.ipynb	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work/.claude/worktrees/12-fix/src	app.js	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a2/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a1-old/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a1old.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a1/../a2/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT_W@\coordinator\assistants\a1\..\..\..\src\x.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/../elsewhere/a.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/../elsewhere/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@-old/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@HOME@/assistant-test.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	notebook:work	@PROJECT@/notebooks/a.ipynb	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# a folder that is set but not absolute refuses every edit (a broken mode never fails open)
+block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	coordinator/assistants/a1
+block	write:work/coordinator/assistants/a1	notes.md	@PROJECT@	@PROJECT@	-	coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1/notes.md	-	@PROJECT@	-	./coordinator/assistants/a1
+block	edit:work	@PROJECT@/../elsewhere/a.txt	-	@PROJECT@	-	a1
+# without the folder the edit verdicts are the ones above (no change)
+allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@	@PROJECT@	-	-
+allow	write:work	@PROJECT@/../elsewhere/a.txt	-	@PROJECT@	-	-
+block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	-
+# The shell: a command that writes to git, in any repository, is refused
+block	work	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git commit --amend --no-edit	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git push origin 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git push -u origin 281-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git merge 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git pull	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git pull --ff-only origin work	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git rebase main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reset --soft HEAD^	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reset HEAD a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git checkout 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git checkout -b new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git switch 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git switch -c new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git restore --staged a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git tag v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git tag -a v1 -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git tag -d v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git tag --delete v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch -d 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch -D 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch -m old-x new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch -M new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch new-x 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git stash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git stash push -u -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git stash pop	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git stash apply stash@{0}	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git stash list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git clean -n	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git clean -f build	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git worktree add ../x 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git worktree remove .claude/worktrees/12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git worktree move .claude/worktrees/12-fix ../y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git worktree prune	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git cherry-pick abc123	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git revert abc123	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git am fix.patch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git apply fix.patch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git add .	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git add coordinator/assistants/a1/notes.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git rm a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git mv a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git update-ref refs/heads/x HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# through git -C and other global options, another way to name git, and in a compound command
+block	work	git -C ../other commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C @PROJECT@/coordinator/assistants/a1 add notes.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -c user.name=x commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --no-pager commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --git-dir=.git --work-tree=. commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_TRACE=1 git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git.exe commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	/usr/bin/git push origin 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git status && git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git log; git push origin 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cd ../other || git add .	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git diff | git apply -R	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x\ngit commit -am x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	bash -c "git commit -m x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	other	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git push origin 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -C ..\other checkout 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git status; git stash list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& git add .	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git.exe tag v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# a folder set but not absolute: the shell's git writes are refused too
+block	work	git commit -m x	-	@PROJECT@	-	coordinator/assistants/a1
+# git reads pass
+allow	work	git log --oneline -5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git show HEAD:a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git diff main...work	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git status --short	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git blame a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git rev-parse HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git ls-files	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch -a	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch --list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch --show-current	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch -vv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git remote -v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git config --get user.name	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git -C ../other log -3	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git --no-pager log -3	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git status && git log -1 && git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo "git push origin 12-fix"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git log --oneline -5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git status; git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git -C ..\other show HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# GitHub: a write is refused (these groups with any subcommand but list / view / status / diff / checks)
+block	work	gh pr create --draft --title t --body b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr merge 12 --squash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr comment 12 --body x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr close 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr edit 12 --title x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr review 12 --approve	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr ready 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr checkout 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue create --title t --body b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue comment 281 --body x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue close 281	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue edit 281 --add-label x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue reopen 281	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh release create v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh release delete v1 --yes	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo create o/x --private	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo edit --description x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo fork o/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh label create bug	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh gist create a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh workflow run ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh workflow disable ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh secret set TOKEN	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh variable set X --body 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh -R o/x pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr -R o/x comment 12 -b x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh.exe issue comment 281 -b x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list && gh pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_REPO=o/x gh issue create --title t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh issue comment 281 --body x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr view 12; gh pr close 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# gh api: a method other than GET, or fields / --input without an explicit GET (gh's implicit POST);
+# graphql with a mutation (letter case ignored)
+block	work	gh api -X POST repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues/1 -X PATCH	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api --method PUT repos/o/x/pulls/1/merge	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api --method=DELETE repos/o/x/git/refs/heads/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api -X DELETE repos/o/x/issues/comments/1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues -F title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues --field title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues --raw-field title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api repos/o/x/issues --input body.json	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -f query='mutation { addComment(input: {}) { clientMutationId } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -f query='MUTATION { x }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api -X POST repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api graphql -f query='Mutation { x }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# GitHub reads pass
+allow	work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr view 12 --comments	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr diff 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr checks 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh issue list --state open	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh issue view 281 --json title,body,comments	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh issue status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh release list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh repo view o/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh -R o/x pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api repos/o/x/issues/281/comments --paginate	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api -X GET repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api -X GET search/issues -f q=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api --method GET repos/o/x/issues -F per_page=100	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh issue view 281	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh api repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# without the folder the shell verdicts are unchanged
+allow	work	git commit -m x	-	@PROJECT@	-	-
+allow	work	git push origin 12-fix	-	@PROJECT@	-	-
+allow	work	gh issue comment 281 --body x	-	@PROJECT@	-	-
+allow	work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	-
+allow	ps:work	git add .	-	@PROJECT@	-	-
+# --- round 2 of 281.1 (the review of dc2cb0b): F1 an argument holding :- is not a flag; F2 fetch --refmap
+# with a :<dst> updates local branches; F3 an edit path holding a line break; F4 the gh api endpoint
+# folded (a leading /, the host) before the graphql rule; git reflog reads pass, its writes are refused
+block	work	git config 'a.b:-c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config 'a.b:--c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git config 'a.b:-c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch --refmap=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch --refmap refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch origin --refmap=+refs/heads/main:refs/heads/main main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git fetch --refmap=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git fetch origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work	@PROJECT@/coordinator/assistants/a1/notes\n.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1/sub\n/x.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	multiedit:work	@PROJECT@/coordinator/assistants/a1/sub/deep\n.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	edit:work/coordinator/assistants/a1	notes\n.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	write:work	@PROJECT@/coordinator/assistants/a1\nx/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1 x
+block	work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api /graphql --method GET -f query='mutation { x }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git reflog show HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog expire --all	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog delete HEAD@{1}	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git reflog expire --expire=now --all	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git reflog delete HEAD@{1}	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# an edit path holding a line break without the assistant mode: the base verdicts (both shells at 3e15b27)
+block	edit:work	@PROJECT@/src/a\nb.js	@PROJECT@	@PROJECT@	-	-
+block	write:work	@PROJECT@/.claude/settings\n.json	@PROJECT@	@PROJECT@	-	-
+allow	write:work	@PROJECT@/x\ny.txt	-	@PROJECT@	-	-
