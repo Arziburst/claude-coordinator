@@ -487,8 +487,95 @@ function StartProc($toks) {
   if (-not $prog) { return '' }
   $prog + $args0.Replace(',', ' ')   # -ArgumentList push,origin,main
 }
-function Seg($list, [int]$depth, [bool]$qm, [bool]$pp) {
-  $toks = @($list)
+# --- brace expansion as bash does it (#345): Scan keeps the unquoted braces of a word as [char]2 and
+# [char]3 (a Bash command only: PowerShell has none) ---
+$B1 = [string][char]2; $B2 = [string][char]3; $BMAX = 64
+function IsRange([string]$x) { $x -match '^(-?[0-9]+\.\.-?[0-9]+|[A-Za-z]\.\.[A-Za-z])(\.\.-?[0-9]+)?$' }
+# BWord: the { at i, at the start of a word, opens an expansion: a comma at its top level or a range,
+# closed before the word ends (else it is a group: { git push; })
+function BWord([string]$s, [int]$i) {
+  $dep = 0; $q = ''; $cm = $false
+  for ($j = $i; $j -lt $s.Length; $j++) {
+    $c = [string]$s[$j]
+    if ($q) { if ($c -eq $q) { $q = '' } elseif ($c -eq '\' -and $q -eq '"') { $j++ }; continue }
+    if ($c -eq '\') { $j++; continue }
+    if ($c -eq "'" -or $c -eq '"') { $q = $c; continue }
+    if (" `t`r`n;|&()<>".Contains($c)) { return $false }
+    if ($c -eq '{') { $dep++ }
+    elseif ($c -eq '}') { $dep--; if ($dep -eq 0) { return ($cm -or (IsRange $s.Substring($i + 1, $j - $i - 1))) } }
+    elseif ($c -eq ',' -and $dep -eq 1) { $cm = $true }
+  }
+  $false
+}
+# InFind: the words so far are a find command (its {} and \; are words)
+function InFind($toks) { if ($toks.Count -eq 0) { return $false }; $j = CmdIdx $toks; ($j -lt $toks.Count) -and ((BaseName $toks[$j]) -eq 'find') }
+# BExp: the words bash makes of w into $script:bxw, as bash does it: the first brace with a comma at its
+# top level or a range, each alternative with the text before and after it, again; returns their number,
+# or -1 for more than BMAX words (or too much work)
+function BExp([string]$w) {
+  $script:bxw = New-Object System.Collections.Generic.List[string]
+  $todo = New-Object System.Collections.Generic.List[string]; $todo.Add($w); $it = 0
+  while ($todo.Count -gt 0) {
+    $x = $todo[$todo.Count - 1]; $todo.RemoveAt($todo.Count - 1); $it++; if ($it -gt 4096) { return -1 }
+    $found = $false
+    for ($a = 0; $a -lt $x.Length; $a++) {
+      if ($x[$a] -ne [char]2) { continue }
+      $dep = 0; $cm = $false
+      for ($b = $a; $b -lt $x.Length; $b++) {
+        $c = $x[$b]
+        if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep--; if ($dep -eq 0) { break } }
+        elseif ($c -eq [char]'\') { $b++ }   # an escaped character (\, ) is text
+        elseif ($c -eq [char]',' -and $dep -eq 1) { $cm = $true }
+      }
+      if ($b -lt $x.Length -and ($cm -or (IsRange $x.Substring($a + 1, $b - $a - 1)))) { $found = $true; break }
+    }
+    if (-not $found) { if ($script:bxw.Count -ge $BMAX) { return -1 }; $script:bxw.Add($x.Replace($B1, '{').Replace($B2, '}')); continue }
+    $body = $x.Substring($a + 1, $b - $a - 1); $al = New-Object System.Collections.Generic.List[string]
+    if ($cm) {
+      $dep = 0; $cur = ''
+      for ($k = 0; $k -lt $body.Length; $k++) {
+        $c = $body[$k]
+        if ($c -eq [char]'\') { $cur += $c; $k++; if ($k -lt $body.Length) { $cur += $body[$k] }; continue }
+        if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep-- }
+        if ($c -eq [char]',' -and $dep -eq 0) { $al.Add($cur); $cur = '' } else { $cur += $c }
+      }
+      $al.Add($cur)
+    } else {
+      $R = $body -split '\.\.'; $lt = $R[0] -match '^[A-Za-z]$'
+      if ($lt) { $lo = [double][int][char]$R[0]; $hi = [double][int][char]$R[1] } else { $lo = [double]$R[0]; $hi = [double]$R[1] }
+      $st = 1; if ($R.Count -gt 2) { $st = [Math]::Abs([double]$R[2]) }; if ($st -eq 0) { $st = 1 }
+      if ([Math]::Abs($hi - $lo) / $st -ge $BMAX) { return -1 }
+      $wd = 0; if ($R[0] -match '^-?0[0-9]' -or $R[1] -match '^-?0[0-9]') { $wd = [Math]::Max($R[0].Length, $R[1].Length) }
+      for ($v = $lo; ($lo -le $hi -and $v -le $hi) -or ($lo -gt $hi -and $v -ge $hi); $v += $(if ($lo -le $hi) { $st } else { -$st })) {
+        if ($lt) { $al.Add([string][char][int]$v); continue }
+        # as the .sh: %d, or %0<wd>d (the sign counts in the width)
+        $n = ([long][Math]::Abs($v)).ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($v -lt 0) { $n = '-' + $n.PadLeft([Math]::Max($wd - 1, 0), [char]'0') } else { $n = $n.PadLeft($wd, [char]'0') }
+        $al.Add($n)
+      }
+    }
+    for ($k = $al.Count - 1; $k -ge 0; $k--) { $todo.Add($x.Substring(0, $a) + $al[$k] + $x.Substring($b + 1)) }
+  }
+  $script:bxw.Count
+}
+# the commands the guard reads (and the shells and Start-Process, which run others)
+function Judged([string]$b) { $b -match '^(git|gh|claude|cd|pushd|chdir|set-location|sl|push-location|rm|remove-item|ri|del|erase|rd|rmdir|find|get-childitem|gci|ls|dir|get-item|gi|bash|sh|zsh|dash|ksh|pwsh|powershell|start-process|saps|start)$' }
+function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx) {
+  # each word with [char]2 [char]3 as the words bash makes of it (an empty one dropped); a word of more
+  # than BMAX words stays as written, and the command is refused when that word is its command word (or
+  # before it) or the command is one the guard reads
+  $ex = New-Object System.Collections.Generic.List[string]; $big = -1
+  foreach ($t in @($list)) {
+    if ($t.IndexOf([char]2) -lt 0 -and $t.IndexOf([char]3) -lt 0) { $ex.Add($t); continue }
+    $r = BExp $t
+    if ($r -lt 0) { if ($big -lt 0) { $big = $ex.Count }; $ex.Add($t.Replace($B1, '{').Replace($B2, '}')); continue }
+    foreach ($w in $script:bxw) { if ($w) { $ex.Add($w) } }
+  }
+  $toks = $ex.ToArray()
+  if ($big -ge 0) {
+    $j = CmdIdx $toks
+    if ($big -le $j -or ($j -lt $toks.Count -and (Judged (BaseName $toks[$j])))) { Block 'a brace expansion to more than 64 words in a command the guard reads (#345): write the words out' }
+  }
   if ($toks.Count -eq 0) { return }
   $clean = New-Object string[] $toks.Count
   for ($j = 0; $j -lt $toks.Count; $j++) { $clean[$j] = $toks[$j] -replace '[\t\r\n]', ' ' }
@@ -501,16 +588,31 @@ function Seg($list, [int]$depth, [bool]$qm, [bool]$pp) {
     for ($j = 0; $j -lt $clean.Count; $j++) { $un[$j] = Unesc $clean[$j]; if ($un[$j] -cne $clean[$j]) { $diff = $true } }
     if ($diff) { $script:segs.Add($un); $script:pipes.Add($pp) }
   }
-  $inner = StartProc $toks; if ($inner) { Scan $inner ($depth + 1) $qm }
+  # find -exec / -execdir / -ok / -okdir (#345): the command up to ; (\;) or {} + is a command of its own
+  $j = CmdIdx $toks
+  if ($j -lt $toks.Count -and (BaseName $toks[$j]) -eq 'find') {
+    for ($k = $j + 1; $k -lt $toks.Count; $k++) {
+      if ($toks[$k] -notmatch '^-(exec|execdir|ok|okdir)$') { continue }
+      $fx = New-Object System.Collections.Generic.List[string]
+      for ($k++; $k -lt $toks.Count; $k++) {
+        $t = $toks[$k]; if ($t -eq ';' -or $t -eq '\;' -or $t -eq '\' -or ($t -eq '+' -and $fx.Count -gt 0 -and $fx[$fx.Count - 1] -eq '{}')) { break }
+        $fx.Add($t)
+      }
+      if ($fx.Count -gt 0) { Seg $fx $depth $qm $false $bx }
+    }
+  }
+  # Start-Process runs the program itself, with no shell to expand braces
+  $inner = StartProc $toks; if ($inner) { Scan $inner ($depth + 1) $qm $false }
   if (-not (IsShell $toks)) { return }
+  $sbx = (BaseName $toks[$script:shJ]) -notmatch '^(pwsh|powershell)$'
   for ($k = $script:shJ + 1; $k -lt $toks.Count; $k++) { $lt = $toks[$k].ToLowerInvariant(); if ($lt -match '^-[a-z]*c$' -or $lt -match '^-com(m(a(n(d)?)?)?)?$') { break } }
   if ($k -lt $toks.Count - 1 -and $toks[$k + 1] -eq '--') { $k++ }
   if ($k -ge $toks.Count - 1) { return }
-  Scan ($toks[($k + 1)..($toks.Count - 1)] -join ' ') ($depth + 1) $qm
+  Scan ($toks[($k + 1)..($toks.Count - 1)] -join ' ') ($depth + 1) $qm $sbx
 }
-function Scan([string]$s, [int]$depth, [bool]$qm) {
+function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
   if ($depth -gt 8) { return }
-  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $pp = $false
+  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $bm = ''; $hbx = $false; $pp = $false
   $toks = New-Object System.Collections.Generic.List[string]
   for ($i = 0; $i -lt $n; $i++) {
     $set = if ($q -eq "'") { $RUN_SQ } elseif ($q) { $RUN_DQ } else { $RUN_UQ }
@@ -521,46 +623,58 @@ function Scan([string]$s, [int]$depth, [bool]$qm) {
     if ($q -eq '"') {
       if ($c -eq '\' -and ($d -eq '"' -or $d -eq '\' -or $d -eq '$' -or $d -eq '`')) { $tok += $d; $i++; continue }
       if ($c -eq '"') { $q = ''; continue }
-      if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm; $tok += '$SUBST'; $i = $k; continue }
-      if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm; $tok += '$SUBST'; $i = $k; continue }
+      if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm $bx; $tok += '$SUBST'; $i = $k; continue }
+      if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm $bx; $tok += '$SUBST'; $i = $k; continue }
       $tok += $c; continue
     }
+    if ($bx -and $c -eq '\' -and $d -eq ';' -and (InFind $toks)) { $tok += $c + $d; $st = $true; $i++; continue }   # \; of find is a word
+    # inside a brace of a word an escaped character is text: no brace, no word end ({main,x\}}, {main,\;})
+    if ($bx -and $c -eq '\' -and $bd -gt 0 -and $d) { $tok += $c + $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '\' -and ($d -eq '"' -or $d -eq "'" -or $d -eq '\')) { $tok += $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '$' -and $d -eq "'") { continue }   # $'...' (ANSI-C quoting): its text, as '...'
     if ($c -eq "'" -or $c -eq '"') { if ($qm) { $q = $c; $st = $true }; continue }
-    if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
-    if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm; $tok += '$SUBST'; $st = $true; $i = $k; continue }
-    if ($c -eq ' ' -or $c -eq "`t" -or $c -eq "`r") { if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; continue }
+    if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
+    if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
+    if ($c -eq ' ' -or $c -eq "`t" -or $c -eq "`r") { if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $bm = ''; continue }
     if ($c -eq '#' -and -not $tok -and -not $st) { while ($i -lt $n - 1 -and (Ch $s ($i + 1)) -ne "`n") { $i++ }; continue }
     if ($c -eq '<' -and $d -eq '<' -and (Ch $s ($i + 2)) -ne '<') {
-      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0
-      $hdsh = IsShell $toks; $hd = HereWord $s ($i + 2); $hdd = $script:hdDash; $i = $script:hdJ; continue
+      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $bm = ''
+      $hdsh = IsShell $toks; $hbx = $hdsh -and ((BaseName $toks[$script:shJ]) -notmatch '^(pwsh|powershell)$'); $hd = HereWord $s ($i + 2); $hdd = $script:hdDash; $i = $script:hdJ; continue
     }
     if ($c -eq '>' -or $c -eq '<') {
-      if ($tok -and $tok -notmatch '^[0-9]+$' -and $tok -ne '&' -and $tok -ne '*' -and $tok -notmatch '[<>]$') { $toks.Add($tok); $tok = ''; $bd = 0 }
+      if ($tok -and $tok -notmatch '^[0-9]+$' -and $tok -ne '&' -and $tok -ne '*' -and $tok -notmatch '[<>]$') { $toks.Add($tok); $tok = ''; $bd = 0; $bm = '' }
       $tok += $c; $st = $true; continue
     }
     if ($c -eq '&' -and ($p -eq '>' -or $p -eq '<' -or $d -eq '>')) { $tok += $c; $st = $true; continue }
     # { and } around words are groups and script blocks (& {git push}, % { ... }); inside a word they
-    # are data (${HOME}, @{0}, refs/heads/main^{})
+    # are data (${HOME}, @{0}, refs/heads/main^{}). In a Bash command a brace in a word, one opening an
+    # expansion ({main,} , {1..3}) and {} of a find command belong to the word; kept as [char]2 [char]3 for
+    # Seg, but not ${ or an escaped one (bm: which of the open braces are kept so)
+    if ($bx -and $c -eq '{' -and ($tok -or (InFind $toks) -or (BWord $s $i))) {
+      $bd++; $bk = if ($p -eq '$' -or $p -eq '\') { '0' } else { '1' }; $bm += $bk; $tok += $(if ($bk -eq '1') { $B1 } else { $c }); continue
+    }
+    if ($bx -and $c -eq '}' -and $bd -gt 0) {
+      $bd--; $bk = '0'; if ($bm) { $bk = $bm.Substring($bm.Length - 1); $bm = $bm.Substring(0, $bm.Length - 1) }
+      $tok += $(if ($bk -eq '1' -and $p -ne '\') { $B2 } else { $c }); continue
+    }
     if ($c -eq '{' -and $tok) { $bd++; $tok += $c; continue }
     if ($c -eq '}' -and $bd -gt 0) { $bd--; $tok += $c; continue }
     if ($c -eq "`n" -or $c -eq ';' -or $c -eq '|' -or $c -eq '&' -or $c -eq '(' -or $c -eq ')' -or $c -eq '{' -or $c -eq '}') {
-      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $e = ($toks.Count -eq 0)
-      Seg $toks $depth $qm $pp; $toks = New-Object System.Collections.Generic.List[string]
+      if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $bm = ''; $e = ($toks.Count -eq 0)
+      Seg $toks $depth $qm $pp $bx; $toks = New-Object System.Collections.Generic.List[string]
       $pp = ($c -eq '|' -and $d -ne '|' -and $p -ne '|') -or ($e -and $pp)
-      if ($c -eq "`n" -and $hd) { $k = HereEnd $s ($i + 1) $hd $hdd; $body = $script:hdBody; $hd = ''; if ($hdsh) { Scan $body ($depth + 1) $false }; $i = $k }
+      if ($c -eq "`n" -and $hd) { $k = HereEnd $s ($i + 1) $hd $hdd; $body = $script:hdBody; $hd = ''; if ($hdsh) { Scan $body ($depth + 1) $false $hbx }; $i = $k }
       continue
     }
     $tok += $c
   }
   if ($q) { $script:fail = $true }
   if ($tok) { $toks.Add($tok) }
-  Seg $toks $depth $qm $pp
+  Seg $toks $depth $qm $pp $bx
 }
 $joined = $cmd
-Scan $joined 0 $true
-if ($script:fail) { $script:segs.Clear(); $script:pipes.Clear(); Scan $joined 0 $false }
+$bx0 = $tool -ne 'PowerShell'; Scan $joined 0 $true $bx0
+if ($script:fail) { $script:segs.Clear(); $script:pipes.Clear(); Scan $joined 0 $false $bx0 }
 
 # --- helpers (case-insensitive matching: GIT PUSH ORIGIN MAIN counts) ---
 $REDIR = '^[0-9*]*&?[<>]'

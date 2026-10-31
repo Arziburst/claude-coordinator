@@ -1240,3 +1240,58 @@ allow	ps:work	git -c core.pager='x' log	-	@PROJECT@	-	-
 allow	ps:work	git grep -O'x' y	-	@PROJECT@	-	-
 allow	ps:work	git log --output=../outside.txt	-	@PROJECT@	-	-
 allow	ps:work	git diff --output=x	-	@PROJECT@	-	-
+# brace expansion and find -exec (#345): a Bash command is judged as the words bash expands it to, and the
+# command find runs; quoted braces, {x}, {}, ${var}, @{u} and braces in a safe command keep their verdicts
+block	work	git push origin {main,}
+block	work	git push origin {main,x}
+block	work	git push -f origin {x,main}
+block	work	git branch -D {main,}
+block	work	git push origin m{a,}in
+block	work	git push origin ma{h..j}n
+block	work	git push origin ma{i..i}n
+block	work	git push --force origin {master,x}
+block	work	git push origin {,feature:}main
+block	work	git push origin {x,{main,y}}
+block	work	git push origin x{,y} {main,}
+block	work	cd x && git push origin {main,}
+block	work	find . -exec git push --force origin main \;
+block	work	find . -execdir git push origin main +
+block	work	find . -ok git branch -D main \;
+block	work	find . -okdir git push origin main \;
+block	work	find . -name x -exec git push origin main {} \;
+block	work	find . -type f -exec git push --force origin main {} +
+allow	work	git push origin '{main,}'
+allow	work	git push origin "{a,b}"
+allow	work	git push origin "{main,}"
+allow	work	git push origin {main}
+allow	work	git push origin {}
+allow	work	echo ${var}
+allow	work	git rebase @{u}
+allow	work	git log @{u}..HEAD
+allow	work	echo {a,b}
+allow	work	git log --format='{x}'
+allow	work	git push origin {12-fix,x}
+allow	work	git push origin ma{h..j}x
+allow	work	find . -exec grep x {} \;
+allow	work	find . -name '*.md'
+allow	work	find . -execdir ls {} +
+allow	work	find . -exec git push origin 12-fix \;
+allow	work	find . -name x -exec echo {} \;
+# negative brace ranges and escaped characters in a brace word (#345, round 2): .sh and .ps1 give the same
+# verdict as the words bash runs - {-1..-1} is -1, {-01..-01} is -01; \}, \{, \;, \  and \| stay in the word
+block	work	git push -o x{-1..-1} origin main
+block	work	git -C .{-1..-1} push origin main
+block	work	git push origin {-1..-1} main
+block	work	git push -o x{-01..-01} origin main
+allow	work	git push origin main{-1..-1}
+allow	work	git push origin m{-1..-1}ain
+allow	work	git push origin main{-01..-01}
+allow	work	echo {-3..-1}
+block	work	git push origin {main,x\}}
+block	work	git push origin {main,\{x}
+block	work	git push origin {main,\;}
+block	work	git push origin {main,\ x}
+block	work	git push origin {main,\|}
+block	work	{find,.,-exec,git,push,origin,main,\;}
+allow	work	git push origin {12-fix,x\}}
+allow	work	echo {a,b\}}
