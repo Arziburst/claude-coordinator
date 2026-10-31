@@ -523,7 +523,9 @@ function BExp([string]$w) {
       $dep = 0; $cm = $false
       for ($b = $a; $b -lt $x.Length; $b++) {
         $c = $x[$b]
-        if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep--; if ($dep -eq 0) { break } } elseif ($c -eq [char]',' -and $dep -eq 1) { $cm = $true }
+        if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep--; if ($dep -eq 0) { break } }
+        elseif ($c -eq [char]'\') { $b++ }   # an escaped character (\, ) is text
+        elseif ($c -eq [char]',' -and $dep -eq 1) { $cm = $true }
       }
       if ($b -lt $x.Length -and ($cm -or (IsRange $x.Substring($a + 1, $b - $a - 1)))) { $found = $true; break }
     }
@@ -531,7 +533,9 @@ function BExp([string]$w) {
     $body = $x.Substring($a + 1, $b - $a - 1); $al = New-Object System.Collections.Generic.List[string]
     if ($cm) {
       $dep = 0; $cur = ''
-      foreach ($c in $body.ToCharArray()) {
+      for ($k = 0; $k -lt $body.Length; $k++) {
+        $c = $body[$k]
+        if ($c -eq [char]'\') { $cur += $c; $k++; if ($k -lt $body.Length) { $cur += $body[$k] }; continue }
         if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep-- }
         if ($c -eq [char]',' -and $dep -eq 0) { $al.Add($cur); $cur = '' } else { $cur += $c }
       }
@@ -544,8 +548,10 @@ function BExp([string]$w) {
       $wd = 0; if ($R[0] -match '^-?0[0-9]' -or $R[1] -match '^-?0[0-9]') { $wd = [Math]::Max($R[0].Length, $R[1].Length) }
       for ($v = $lo; ($lo -le $hi -and $v -le $hi) -or ($lo -gt $hi -and $v -ge $hi); $v += $(if ($lo -le $hi) { $st } else { -$st })) {
         if ($lt) { $al.Add([string][char][int]$v); continue }
-        $n = ([long][Math]::Abs($v)).ToString()
-        if ($v -lt 0) { $al.Add('-' + $n.PadLeft($wd - 1, [char]'0')) } else { $al.Add($n.PadLeft($wd, [char]'0')) }
+        # as the .sh: %d, or %0<wd>d (the sign counts in the width)
+        $n = ([long][Math]::Abs($v)).ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($v -lt 0) { $n = '-' + $n.PadLeft([Math]::Max($wd - 1, 0), [char]'0') } else { $n = $n.PadLeft($wd, [char]'0') }
+        $al.Add($n)
       }
     }
     for ($k = $al.Count - 1; $k -ge 0; $k--) { $todo.Add($x.Substring(0, $a) + $al[$k] + $x.Substring($b + 1)) }
@@ -622,6 +628,8 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
       $tok += $c; continue
     }
     if ($bx -and $c -eq '\' -and $d -eq ';' -and (InFind $toks)) { $tok += $c + $d; $st = $true; $i++; continue }   # \; of find is a word
+    # inside a brace of a word an escaped character is text: no brace, no word end ({main,x\}}, {main,\;})
+    if ($bx -and $c -eq '\' -and $bd -gt 0 -and $d) { $tok += $c + $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '\' -and ($d -eq '"' -or $d -eq "'" -or $d -eq '\')) { $tok += $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '$' -and $d -eq "'") { continue }   # $'...' (ANSI-C quoting): its text, as '...'
     if ($c -eq "'" -or $c -eq '"') { if ($qm) { $q = $c; $st = $true }; continue }

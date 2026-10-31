@@ -710,6 +710,7 @@ function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, 
         c = substr(x, b, 1)
         if (c == "\002") dep++
         else if (c == "\003") { if (--dep == 0) break }
+        else if (c == "\\") b++   # an escaped character (\, ) is text
         else if (c == "," && dep == 1) cm = 1
       }
       if (b <= length(x) && (cm || isrange(substr(x, a + 1, b - a - 1)))) break
@@ -720,6 +721,7 @@ function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, 
       AL[1] = ""; na = 1; dep = 0
       for (k = 1; k <= length(body); k++) {
         c = substr(body, k, 1)
+        if (c == "\\") { AL[na] = AL[na] c substr(body, ++k, 1); continue }
         if (c == "\002") dep++; else if (c == "\003") dep--
         if (c == "," && dep == 0) AL[++na] = ""; else AL[na] = AL[na] c
       }
@@ -796,6 +798,8 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
       tok = tok c; continue
     }
     if (bx && c == "\\" && d == ";" && infind(toks, nt)) { tok = tok c d; st = 1; i++; continue }   # \; of find is a word
+    # inside a brace of a word an escaped character is text: no brace, no word end ({main,x\}}, {main,\;})
+    if (bx && c == "\\" && bd > 0 && d != "") { tok = tok c d; st = 1; i++; continue }
     if (qm && c == "\\" && (d == "\"" || d == "\047" || d == "\\")) { tok = tok d; st = 1; i++; continue }
     if (qm && c == "$" && d == "\047") continue   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
     if (c == "\047" || c == "\"") { if (qm) { q = c; st = 1 }; continue }
