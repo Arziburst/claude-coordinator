@@ -57,14 +57,24 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    <branch>` — `git checkout -b <b> origin/main` sets main as its upstream, and a bare `git push` would
    aim there (#231). Start at most as many at once as the
    brief allows, each with `--report-to` your own session name; briefs carry the sub-contract and the
-   facts, not the rules (roles/worker.md). Right after each start, `SendMessage(to: <its name>,
-   notify_when_idle: true)`; no notice or report when due → `ListAgents`; a `waiting` worker (a
-   permission prompt) is reported to the coordinator, never answered. **Stay reachable:** a
-   background session idle with nothing running may exit (`done`) and is then unreachable by
-   SendMessage (2.1.296). While any of your workers runs, keep one background wait alive: a
-   `run_in_background` Bash command that ends when a worker reports, its state changes or its branch
-   moves (e.g. a loop polling `claude agents --json` or `git ls-remote origin <its branch>`), re-armed
-   after each wakeup. Gone `done` anyway: the worker's report falls back to the coordinator
+   facts, not the rules (roles/worker.md). Your workers report by message, so they get no idle
+   subscription (each idle notice is a turn of your whole context; CORE §4 *Control*, #342): right
+   after each start, add the worker (its short id or its full name, one a line) to your own list file
+   in your notes folder, `<your worktree>.lead/watch.txt`, and remove it when its report (or its stop)
+   is handled. A `waiting` worker (a permission prompt) is reported to the coordinator, never answered.
+   **Stay reachable:** a background session idle with nothing running may exit (`done`) and is then
+   unreachable by SendMessage (2.1.296). While any of your workers runs, keep one background wait
+   alive: one `watch-sessions` on your list as a `run_in_background` command (`bash
+   <core>/scripts/watch-sessions.sh --list <your worktree>.lead/watch.txt`; Windows: `powershell
+   -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file>`), started again after it ends (a
+   finding handled, or an `ERROR` once), never a second one beside it. You yourself are on the
+   coordinator's list with a long limit of your own (`<id> @120`): your quiet wait for your workers is
+   no finding before it. Its findings, as the coordinator's (CORE §4
+   *Control*): `STOPPED` → the worker's branch and log, resumed or restarted as the work needs;
+   `GONE` → the line fixed or dropped; `QUIET` → `ListAgents` once, `waiting` to the coordinator, idle
+   → one SendMessage asking for its report or its state; `ERROR` → once more, then the coordinator.
+   A worker's message still wakes you as before; a wait on your branch moving (`git ls-remote origin
+   <its branch>`) may run beside it. Gone `done` anyway: the worker's report falls back to the coordinator
    (roles/worker.md step 5), which resumes you by your full id with that report (TOOLKIT *Pause and
    resume*). Your own report goes to the address your brief names, with the same fallback
    (roles/worker.md step 5). Any SendMessage of yours refused by a hook error or a hook timeout is sent
