@@ -220,7 +220,7 @@ is lost (#242).
 
 | Event | What runs |
 |---|---|
-| A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); `coordinator/watch.txt` not empty → the watcher started (step 4 below, *Control*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10); each assistant's spend row read (§7) and its folder, `NOTES.md` included, committed in the state repository |
+| A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); `coordinator/watch.txt` not empty → the watcher started (step 4 below, *Control*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10); each assistant's spend row read (§7) and its folder, `NOTES.md` included, committed in the state repository; `scripts/runs check` run and each run it lists gets its row (§7) |
 | A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and on the watch list, the watcher running (steps 3–4 below); its journal line (§12) |
 | A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
@@ -576,13 +576,22 @@ never assumed (below).
   of the table by its name, or a project's own kind under one) · model · effort · estimate (the contract's `budget.cost`) · tokens (from the session's transcript, TOOLKIT *Usage*; never
   the worker's own count) · cost (`scripts/session-tokens`'s `cost` line, else the transcript's tokens
   per model times the ladder's list prices, §7a; a cell is read by its leading number, so `0.0648 prices`
-  is 0.0648) · result (`approved` / `rework <n>` / `escalated` / `failed`, a lead's `ready`; read by its
+  is 0.0648) · result (`approved` / `rework <n>` / `escalated` / `failed`, a lead's `ready`, `dropped` for
+  a run stopped without a result; read by its
   first word — `done` and `pass` are synonyms of `approved`, any other word is no approval and the retro
   lists it) · start (UTC) · wall · active (minutes; the `time` line of
   `scripts/session-tokens`, from the transcript's timestamps, never a self-reported time, §7a; rows
   written before these three columns leave them empty) · wait (task rows only, below) · estimate_time
   (the contract's `budget.time` as logged when the run started: minutes or a range `18-40`). The
   coordinator's own model and effort get a line per day.
+  **A run's row is written by `scripts/runs add`** (TOOLKIT *Usage*), never by hand (#332): it takes the
+  tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
+  <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
+  <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
+  and role. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
+  done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
+  row is written when it is stopped — whose start has no row yet (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
+  then — a missed row is seen on the next cycle, not weeks later.
   **An assistant's spend** ([roles/assistant.md](roles/assistant.md)) is never a task's or the
   coordinator's own: rows of role and kind `assistant`, the task column holding the assistant's name (so
   the rows of several assistants stay apart; `scripts/run-stats` and the retro keep a row of role or kind
@@ -799,6 +808,9 @@ change that affects them.
   and the UTC time it was asked and answered — the `--waits` input of `run-stats --task`, §7a).
   It survives compaction, restarts and moves. No customer data or secrets
   (§1.13); in a client's repository, written for the client.
+- **Run log rows** (§7): each finished run's row is written by `scripts/runs add` with a result from the
+  fixed words, never by hand; `scripts/runs check` at each sync (§4) and before the retro lists the
+  finished runs still without a row, and each gets its row then (#332).
 - **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
   owner's test, CI on the main line, another task, a user) gets one line in `coordinator/ESCAPES.tsv`
   (private, never in the client's tracker): date · the bug (issue or link) · the task that introduced

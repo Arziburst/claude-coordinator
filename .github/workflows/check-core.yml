@@ -19,6 +19,7 @@ name: check-core
 #need mergequeue ^scripts/merge-queue\. ^tests/merge-queue/  # merge-queue against a stub gh
 #need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need watch      ^scripts/watch-sessions\. ^tests/watch-sessions/  # watch-sessions against a stub claude
+#need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 on:
   pull_request:
@@ -399,6 +400,18 @@ jobs:
           bash tests/watch-sessions/run.sh sh
           bash tests/watch-sessions/run.sh ps powershell
           bash tests/watch-sessions/run.sh ps pwsh
+      - name: runs against fixture transcripts and a stub claude (bash)
+        if: runner.os != 'Windows' && steps.need.outputs.runs == 'true'
+        run: bash tests/runs/run.sh sh
+      - name: runs against fixture transcripts and a stub claude (PowerShell 7, Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.runs == 'true'
+        run: bash tests/runs/run.sh ps pwsh
+      - name: runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+        if: runner.os == 'Windows' && steps.need.outputs.runs == 'true'
+        run: |
+          bash tests/runs/run.sh sh
+          bash tests/runs/run.sh ps powershell
+          bash tests/runs/run.sh ps pwsh
       - name: selftest - the scripted steps (bash)
         if: runner.os != 'Windows'
         run: |
