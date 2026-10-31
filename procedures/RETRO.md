@@ -23,7 +23,11 @@ the owner's word it also files the project's anonymous report for the core's own
 
 ## 2. The steps
 
-1. **Run** `scripts/retro.sh coordinator/RUNS.tsv` from the core copy (Windows: `powershell
+1. **First the missing rows** (#332): `scripts/runs.sh check --log coordinator/RUNS.tsv --root <project
+   root> --self <the coordinator's session id>` from the core copy (Windows: `scripts/runs.ps1 check -Log
+   … -Root … -Self …`; TOOLKIT *Usage*); each run it lists as `MISSING` gets its row with `scripts/runs
+   add` (CORE §7) before the retro reads the log. Then **run**
+   `scripts/retro.sh coordinator/RUNS.tsv` from the core copy (Windows: `powershell
    -NoProfile -ExecutionPolicy Bypass -File coordinator/core/scripts/retro.ps1 coordinator/RUNS.tsv`;
    TOOLKIT *Usage*). It reads the run log, `LOG.md`, `ESCAPES.tsv`, `ROUTING.md` (its `## Kinds` map) and
    `PROJECT.md` (its *Worktree roots*) next to it, and the project's transcripts of both weeks through
