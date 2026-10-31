@@ -31,9 +31,13 @@
 #     ready; any other: exit 2, the file byte-identical. No transcript for --session: exit 1, file
 #     unchanged. A row already there with the same start and role: refused, exit non-zero, file unchanged
 #     — except role `assistant`.
+#   add / check: a log that cannot be written (add) or read (add, check; e.g. a directory in its place, a
+#     file held open without sharing): exit 1 with a line starting `runs:`, no row on stdout, never
+#     ALL LOGGED, the log unchanged.
 #   check: the sessions from `claude agents --json --all` (its only claude call; fields id, sessionId,
-#     name, cwd, state, status). Finished = state done, stopped or failed and no status busy; working,
-#     idle or a busy status = not finished. A session belongs to the project when its cwd is the root or
+#     name, cwd, state, status). Finished = the process ended: state done, stopped or failed and no
+#     status field; working, or any status (idle - a worker waiting between rounds - or busy) = not
+#     finished. A session belongs to the project when its cwd is the root or
 #     inside it, or the root or inside of a worktree of the root's git repository (`git worktree list`),
 #     compared as paths (C:\x and C:/x the same; /x/app-other is not inside /x/app). Never listed: --self
 #     (its sessionId or short id), a name starting `assistant:`. Its start = the session-tokens `time`
@@ -301,6 +305,80 @@ fresh "check: claude agents fails - exit 1, never ALL LOGGED, nothing written"
 printf '%s\n%s\n' "$H" "$LOGGED" > "$L"; cp "$L" "$L.before"; : > "$STUB_D/fail"
 run check --log "$L" --root "$ROOT" --self $COS
 code 1; hasnt "ALL LOGGED"; same "$L" "$L.before"; rm -f "$STUB_D/fail"
+
+# a log that cannot be written or read: exit 1, a line `runs:`, no row claimed on stdout, the log unchanged
+# runio <args>: as run, with stdout alone in $sout
+runio() { runs "$@" > "$tmp/out.raw" 2> "$tmp/err.raw"; rc=$?; sout="$(tr -d '\r' < "$tmp/out.raw")"
+  out="$(cat "$tmp/out.raw" "$tmp/err.raw" | tr -d '\r')"; }
+norow() { printf '%s\n' "$sout" | grep -q "$(printf '\t')" && bad "stdout claims a row: $sout" || ok; }
+refused_io() { code 1; has "^runs: "; norow; hasnt "ALL LOGGED"; }
+
+fresh "add: a read-only log - exit 1, runs:, no row, the file byte-identical"
+printf '%s\n%s\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"; chmod a-w "$L"
+if [ -w "$L" ]; then echo "SKIP [$name] the file stays writable here (root?)"
+else runio add --log "$L" --session $W1S "${A[@]}" --result approved; refused_io; fi
+chmod u+w "$L"; same "$L" "$L.before"
+
+fresh "add: a directory in place of the log - exit 1, runs:, no row, nothing written"
+mkdir "$L"
+runio add --log "$L" --session $W1S "${A[@]}" --result approved
+refused_io; [ -d "$L" ] && [ -z "$(ls -A "$L")" ] && ok || bad "the directory changed"
+
+fresh "check: a directory in place of the log - exit 1, runs:, never ALL LOGGED or a silent 0"
+mkdir "$L"
+runio check --log "$L" --root "$ROOT" --self $COS
+refused_io; [ "$rc" = 0 ] && [ -z "$out" ] && bad "a silent exit 0" || ok; hasnt "^MISSING"
+
+if command -v cygpath >/dev/null 2>&1; then
+  # a log held open without sharing (Windows): a powershell this harness starts holds it until $L.go is gone
+  fresh "add: a log held open without sharing - exit 1, runs:, the file byte-identical"
+  printf '%s\n%s\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"; : > "$L.go"
+  powershell -NoProfile -Command "\$f = [IO.File]::Open('$L', 'Open', 'ReadWrite', 'None'); New-Item -ItemType File '$L.ready' | Out-Null; while (Test-Path '$L.go') { Start-Sleep -Milliseconds 100 }; \$f.Close()" &
+  lockpid=$!; i=0; while [ ! -f "$L.ready" ] && [ $i -lt 300 ]; do sleep 0.1; i=$((i + 1)); done
+  if [ -f "$L.ready" ]; then
+    runio add --log "$L" --session $W1S "${A[@]}" --result approved; refused_io
+    name="check: a log held open without sharing - exit 1, runs:, never ALL LOGGED"
+    runio check --log "$L" --root "$ROOT" --self $COS; refused_io; hasnt "^MISSING"
+  else echo "SKIP [$name] the log could not be held open"; fi
+  rm -f "$L.go"; wait "$lockpid"; rm -f "$L.ready"; same "$L" "$L.before"
+fi
+
+# finished = the process ended: no status field and state done, stopped or failed (the coordinator's
+# decision, round 2); a status idle (a worker waiting between rounds) or busy is never finished.
+# Each case's listing holds one session in the root.
+DN=d0e1f2a3 DNS=d0e1f2a3-0000-4000-8000-00000000000a   # done, no status
+SN=e1f2a3b4 SNS=e1f2a3b4-0000-4000-8000-00000000000b   # stopped, no status
+DI=f2a3b4c5 DIS=f2a3b4c5-0000-4000-8000-00000000000c   # done + idle
+SI=a3b4c5d6 SIS=a3b4c5d6-0000-4000-8000-00000000000d   # stopped + idle
+tx -proj "$DNS" "$ROOT" 2026-10-10T10:00:00.000Z 2026-10-10T10:03:00.000Z 2026-10-10T10:20:00.000Z 0.1
+tx -proj "$SNS" "$ROOT" 2026-10-11T10:00:00.000Z 2026-10-11T10:03:00.000Z 2026-10-11T10:20:00.000Z 0.1
+tx -proj "$DIS" "$ROOT" 2026-10-12T10:00:00.000Z 2026-10-12T10:03:00.000Z 2026-10-12T10:20:00.000Z 0.1
+tx -proj "$SIS" "$ROOT" 2026-10-13T10:00:00.000Z 2026-10-13T10:03:00.000Z 2026-10-13T10:20:00.000Z 0.1
+for s in $DNS $SNS; do bash "$core/scripts/session-tokens.sh" "$s" | tr -d '\r' > "$tmp/st/$s"; done
+cp "$STUB_D/agents.json" "$tmp/agents.main.json"
+# one <id> <sessionId> <name> <state> [<status>]: the listing holds this one session, in the root
+one() { { echo "["; agent "$1" "$2" "$3" "$ROOT" "$4" ${5:+"$5"}; echo; echo "]"; } > "$STUB_D/agents.json"; }
+
+fresh "check: done with no status - finished, listed"
+printf '%s\n' "$H" > "$L"; one $DN $DNS "#20 worker" done
+run check --log "$L" --root "$ROOT" --self $COS
+code 0; has "^MISSING $DN #20 worker $(st $DNS start)\$"; hasnt "ALL LOGGED"
+
+fresh "check: stopped with no status - finished, listed"
+printf '%s\n' "$H" > "$L"; one $SN $SNS "#21 tester" stopped
+run check --log "$L" --root "$ROOT" --self $COS
+code 0; has "^MISSING $SN #21 tester $(st $SNS start)\$"; hasnt "ALL LOGGED"
+
+fresh "check: done + idle (a worker waiting between rounds) - not finished, not listed"
+printf '%s\n' "$H" > "$L"; one $DI $DIS "#22 worker" done idle
+run check --log "$L" --root "$ROOT" --self $COS
+code 0; hasnt "$DI"; has "^ALL LOGGED\$"
+
+fresh "check: stopped + idle - not finished, not listed"
+printf '%s\n' "$H" > "$L"; one $SI $SIS "#23 worker" stopped idle
+run check --log "$L" --root "$ROOT" --self $COS
+code 0; hasnt "$SI"; has "^ALL LOGGED\$"
+cp "$tmp/agents.main.json" "$STUB_D/agents.json"
 
 echo "runs ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" = 0 ]
