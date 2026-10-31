@@ -773,6 +773,28 @@ BOM, models priced apart),
   / `session-tokens.ps1 -Prune` (deletes files older than 7 × 24 hours, and the status line's
   `coordinator/statusline.*.tmp` older than an hour, left when it was killed mid-write; on Windows only
   the `-Prune` form reaches the script through `-File`).
+- **A run's row in the run log** (CORE §7, #332): `scripts/runs.sh add --log coordinator/RUNS.tsv
+  --session <id> --task <n> --role <role> --kind <kind> --model <m> --effort <e> --estimate <cost|->
+  --estimate-time <t|-> --result <word> [--date <YYYY-MM-DD>]` (Windows: `powershell -NoProfile
+  -ExecutionPolicy Bypass -File scripts/runs.ps1 add -Log coordinator/RUNS.tsv -Session <id> -Task <n> -Role
+  <role> -Kind <kind> -Model <m> -Effort <e> -Estimate:<cost|-> -EstimateTime:<t|-> -Result <word> [-Date
+  <YYYY-MM-DD>]` — a `-` value goes as `-Estimate:-` / `-EstimateTime:-`: Windows PowerShell 5.1 `-File`
+  refuses a bare `-` value) — after the stop and before `claude rm` (*The order* above). It appends one row
+  in the file's header order (else CORE §7's), its tokens, cost, start, wall and active read from
+  `session-tokens <id>`, and prints it. The result is one of `approved` `done` `pass` `rework <n>`
+  `escalated` `failed` `dropped` (stopped without a result) `ready`; any other word is refused (exit 2), as
+  is a missing transcript (exit 1) and a second row of the same session start and role (exit 1; an
+  assistant's rows share their start and are allowed, their cost the session's since that assistant's
+  previous row). The file keeps its BOM and line ends. A subagent's row: `add --log … --in <parent>
+  --tokens <n> --task …` (`-In <parent> -Tokens <n>`), cost `in <parent>`, the time columns empty. Task rows
+  stay `run-stats --task … --append`. **The finished runs without a row:** `scripts/runs.sh check --log
+  coordinator/RUNS.tsv --root <project root> --self "$CLAUDE_CODE_SESSION_ID" [--since <YYYY-MM-DD>]`
+  (Windows: `… -File scripts/runs.ps1 check -Log coordinator/RUNS.tsv -Root <project root> -Self
+  $env:CLAUDE_CODE_SESSION_ID [-Since <YYYY-MM-DD>]`) lists `MISSING <short id> <name> <start>` per finished
+  session of the project (from `claude agents --json --all`: its folder the root, a worktree root of its
+  repository, or inside one) whose start has no row, else `ALL LOGGED`; never the coordinator's own session
+  (`--self`) or an assistant (`assistant:` names; their rows are daily). It only reads; exit 1 when claude
+  agents fails.
 - **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
   `blocked`): pause until the status line's `resets_at` (CORE §9), then for each blocked session
   `claude respawn <id>` **and** a one-line SendMessage ("the limit has reset, continue") —
