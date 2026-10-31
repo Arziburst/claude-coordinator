@@ -2,29 +2,38 @@
 # Watch the sessions a report is awaited from, in place of subscribing to their idle notices (#342): run
 # as one background command, it polls `claude agents --json --all` and ends - waking its caller once -
 # only when a listed session stopped, vanished or went quiet without its report.
-#   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--once]
+#   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>]
+#                             [--agents-timeout <s>] [--once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
 # name; blank lines and comments ignored - a comment is a line whose first non-blank `#` is followed by a
-# blank or the line's end (`#12 worker: Fix` is a name). A line matches a session by the whole id or the
-# whole name, never a part of it; a name several sessions have: the one at work, else a quiet one, else
-# a stopped one. The file is read again on every poll (it is edited while the watcher runs).
-# States: working / busy = at work, nothing printed; stopped / failed / done = STOPPED; any other state
-# (idle, blocked, waiting - a permission prompt or a limit) = quiet: QUIET once it stayed quiet for
-# --quiet-minutes (default 20; --quiet-seconds in its place, for tests), counted by the watcher from the
-# first poll that saw it quiet and started again after a poll that saw it at work.
+# blank or the line's end (`#12 worker: Fix` is a name); a UTF-8 BOM at its start is not part of the
+# first line. A line may end with its own quiet limit, ` @<n>` minutes (` @<n>s`: seconds), in place of
+# the global one (e.g. a lead waiting for its workers: `<id> @120`); the entry is the line without that
+# end (a name may hold blanks). An entry matches a session by the whole id or the whole name, never a
+# part of it; a name several sessions have: the one at work, else a quiet one, else a stopped one. The
+# file is read again on every poll (it is edited while the watcher runs).
+# States, as measured: the listing gives `state`, and `status` (busy / idle) only while the session's
+# process lives - a live session between turns is `done` + `idle`, an exited one `done` with no status.
+# State working or status busy = at work, nothing printed; state stopped / failed (any status), or done
+# with no status = STOPPED; done + idle and any other state (idle, blocked, waiting - a permission
+# prompt or a limit), with or without a status = quiet: QUIET once it stayed quiet for its limit
+# (--quiet-minutes, default 20; --quiet-seconds in its place, for tests; or the line's own), counted by
+# the watcher from the first poll that saw it quiet and started again after a poll that saw it at work.
 # Output (stdout): the findings of one poll, one line each, then the end -
-#   STOPPED <id> <name> | GONE <id or name as listed> (claude does not list it) | QUIET <id> <name> <minutes>
+#   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes>
 #   EMPTY: the list file is missing or holds no session (nothing to watch: it does not run)
-#   ERROR <first line of claude's stderr>: claude agents failed on two polls in a row (one failure is
-#   retried on the next poll; with --once there is no next poll)
-# --interval: seconds between polls (default 120). --once: one poll, then the end (tests, a manual check).
+#   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
+#   (one failure is retried on the next poll; with --once there is no next poll)
+# --interval: seconds between polls (default 120). --agents-timeout: seconds one claude agents call may
+# take (default 60); past it the call - with every process under it - is killed and the poll failed.
+# --once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or --once with nothing found (nothing printed); 1 ERROR; 2 usage error.
 # It writes no file and never stops, messages or changes a session (Windows: watch-sessions.ps1, the same
 # output and exit codes).
 set -u
 
-list="" interval=120 qmin=20 qsec="" once=0
-usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--once]"
+list="" interval=120 qmin=20 qsec="" atimeout=60 once=0
+usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--agents-timeout <s>] [--once]"
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 2; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2); $usage" >&2; exit 2 ;; esac; }
 num() { need "$@"; case "$2" in *[!0-9]*) echo "$1 takes a whole number (got $2); $usage" >&2; exit 2 ;; esac; }
@@ -34,35 +43,81 @@ while [ $# -gt 0 ]; do
     --interval) num "$@"; interval="$2"; shift 2 ;;
     --quiet-minutes) num "$@"; qmin="$2"; shift 2 ;;
     --quiet-seconds) num "$@"; qsec="$2"; shift 2 ;;
+    --agents-timeout) num "$@"; atimeout="$2"; shift 2 ;;
     --once) once=1; shift ;;
-    -h|--help) sed -n '2,23s/^# \{0,1\}//p' "$0"; exit 2 ;;
+    -h|--help) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2 ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 2 ;;
   esac
 done
 [ -n "$list" ] || { echo "$usage" >&2; exit 2; }
+[ "$atimeout" -gt 0 ] || { echo "--agents-timeout must be above 0; $usage" >&2; exit 2; }
 limit=$((qmin * 60)); [ -n "$qsec" ] && limit=$qsec
 tab="$(printf '\t')" nl='
 '
 
-# entries: the list file's sessions, one a line, the blanks around each trimmed
+# entries: the list file's sessions, one a line as `<own limit in seconds, or empty> TAB <entry>`, the
+# blanks around each trimmed (bytes as they are: C locale, so a BOM is three bytes)
 entries() {
   [ -f "$list" ] || return 0
-  awk '{ sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") } $0 == "" || /^#([ \t]|$)/ { next } { print }' "$list"
+  LC_ALL=C awk 'NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
+    { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
+    $0 == "" || /^#([ \t]|$)/ { next }
+    { l = ""
+      if (match($0, /[ \t]+@[0-9]+s?$/)) {
+        t = substr($0, RSTART); $0 = substr($0, 1, RSTART - 1); sub(/^[ \t]+@/, "", t)
+        if (t ~ /s$/) l = substr(t, 1, length(t) - 1) + 0; else l = t * 60 }
+      print l "\t" $0 }' "$list"
 }
-# agents: one call of claude agents --json --all; sets rc, json (its stdout) and err (the first line of its
-# stderr), no file written: stderr comes through the pipe, stdout and the exit code through fd 3
+# kill_tree <pid>: the process and every process under it, killed - the ones under it first, the deepest
+# first; on Windows then its Windows tree (a native claude's own children), then the process itself
+kill_tree() {
+  local all=" $1 " grew=1 k pp rev=""
+  pp="$( { ps -A -o pid= -o ppid= 2>/dev/null || ps -e 2>/dev/null; } |
+    awk '{ sub(/^[^0-9]*/, "") } $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print $1, $2 }')"
+  while [ "$grew" = 1 ]; do
+    grew=0
+    for k in $(printf '%s\n' "$pp" | A="$all" awk '{ a = ENVIRON["A"]; if (index(a, " " $2 " ") && !index(a, " " $1 " ")) print $1 }'); do
+      all="$all$k "; rev="$k $rev"; grew=1
+    done
+  done
+  # shellcheck disable=SC2086
+  [ -n "$rev" ] && kill -9 $rev 2>/dev/null
+  if [ -r "/proc/$1/winpid" ] && command -v taskkill >/dev/null 2>&1; then
+    taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1
+  fi
+  kill -9 "$1" 2>/dev/null
+}
+# call: one claude agents call under a watchdog; its stderr to this function's stdout, its stdout, a
+# `#timeout` marker and its exit code (`#rc`, on a line of its own) to fd 3
+call() {
+  local p w rc
+  claude agents --json --all 2>&1 1>&3 3>&- &
+  p=$!
+  ( s=""; trap '[ -n "$s" ] && kill "$s" 2>/dev/null; exit 0' TERM
+    sleep "$atimeout" 3>&- & s=$!; wait "$s"
+    echo "#timeout" >&3; kill_tree "$p" ) >/dev/null 2>&1 &
+  w=$!
+  wait "$p"; rc=$?
+  kill "$w" 2>/dev/null; wait "$w" 2>/dev/null
+  printf '\n#rc %s\n' "$rc" >&3
+}
+# agents: one poll; sets rc, json (claude's stdout) and err (the first line of its stderr, or the
+# timeout), no file written: stderr comes through the pipe, the rest through fd 3
 agents() {
   local all
-  all="$( { { claude agents --json --all 2>&1 1>&3 3>&-; echo "#rc $?" >&3; } | sed 's/^/#err /'; } 3>&1 )"
+  all="$( { call | sed 's/^/#err /'; } 3>&1 )"
   rc="$(printf '%s\n' "$all" | sed -n 's/^#rc //p')"
   err="$(printf '%s\n' "$all" | sed -n 's/^#err //p' | sed -n '/./{p;q;}')"
-  json="$(printf '%s\n' "$all" | grep -v -e '^#rc ' -e '^#err ')"
-  if [ "$rc" = 0 ] && ! printf '%s' "$json" | grep -q '\['; then
+  json="$(printf '%s\n' "$all" | grep -v -e '^#rc ' -e '^#err ' -e '^#timeout$')"
+  if printf '%s\n' "$all" | grep -q '^#timeout$'; then
+    rc=124; err="claude agents --json --all did not answer in $atimeout s"
+  elif [ "$rc" = 0 ] && ! printf '%s' "$json" | grep -q '\['; then
     rc=1; err="claude agents --json --all printed no JSON list"
   fi
   [ -n "$err" ] || err="claude agents --json --all exited with $rc"
 }
-# sessions <json>: `<id> TAB <state> TAB <name>` per session object of the list (string values unescaped)
+# sessions <json>: `<id> TAB <work|stop|quiet> TAB <name>` per session object of the list (string values
+# unescaped; the class from state and status, as the header says)
 sessions() {
   printf '%s' "$1" | awk 'BEGIN { RS = "\001" } { s = s $0 } END {
     n = length(s); d = 0; q = 0; after = 0
@@ -81,7 +136,13 @@ sessions() {
       else if (c == ",") { if (d == 2) after = 0 }
       else if (c == "{" || c == "[") { if (d == 2) after = 0; d++ }
       else if (c == "}" || c == "]") {
-        if (d == 2 && c == "}" && v["id"] != "") print v["id"] "\t" v["state"] "\t" v["name"]
+        if (d == 2 && c == "}" && v["id"] != "") {
+          st = v["state"]; su = v["status"]
+          if (st == "working" || su == "busy") cl = "work"
+          else if (st == "stopped" || st == "failed" || (st == "done" && su == "")) cl = "stop"
+          else cl = "quiet"
+          print v["id"] "\t" cl "\t" v["name"]
+        }
         if (d == 2) delete v
         d--
       }
@@ -90,9 +151,9 @@ sessions() {
 # pick <sessions> <entry>: the session the entry names (by the whole id or the whole name), at work first
 pick() {
   printf '%s\n' "$1" | E="$2" awk '{ i = index($0, "\t"); id = substr($0, 1, i - 1); r = substr($0, i + 1)
-      j = index(r, "\t"); st = substr(r, 1, j - 1); nm = substr(r, j + 1)
+      j = index(r, "\t"); cl = substr(r, 1, j - 1); nm = substr(r, j + 1)
       if (id != ENVIRON["E"] && nm != ENVIRON["E"]) next
-      p = (st == "working" || st == "busy") ? 3 : (st == "stopped" || st == "failed" || st == "done") ? 1 : 2
+      p = (cl == "work") ? 3 : (cl == "stop") ? 1 : 2
       if (p > best) { best = p; line = $0 } }
     END { if (best) print line }'
 }
@@ -112,16 +173,17 @@ while :; do
   fails=0
   sess="$(sessions "$json")"
   now=$SECONDS found="" quiet=""
-  while IFS= read -r e; do
+  while IFS= read -r x; do
+    lim="${x%%$tab*}"; e="${x#*$tab}"; [ -n "$lim" ] || lim=$limit
     m="$(pick "$sess" "$e")"
     if [ -z "$m" ]; then found="${found}GONE $e$nl"; continue; fi
-    id="${m%%$tab*}"; r="${m#*$tab}"; st="${r%%$tab*}"; nm="${r#*$tab}"
-    case "$st" in
-      working|busy) ;;
-      stopped|failed|done) found="${found}STOPPED $id $nm$nl" ;;
+    id="${m%%$tab*}"; r="${m#*$tab}"; cl="${r%%$tab*}"; nm="${r#*$tab}"
+    case "$cl" in
+      work) ;;
+      stop) found="${found}STOPPED $id $nm$nl" ;;
       *) t0="$(since "$e")"; [ -n "$t0" ] || t0=$now
          quiet="$quiet$t0$tab$e$nl"
-         [ $((now - t0)) -ge "$limit" ] && found="${found}QUIET $id $nm $(((now - t0) / 60))$nl" ;;
+         [ $((now - t0)) -ge "$lim" ] && found="${found}QUIET $id $nm $(((now - t0) / 60))$nl" ;;
     esac
   done <<EOF
 $ents

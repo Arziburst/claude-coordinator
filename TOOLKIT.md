@@ -277,14 +277,20 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   on every poll, prints nothing while every listed session is at work, and ends with one line per
   finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`
   (exit 0); `EMPTY` when the list is missing or holds no session (exit 0 — with nothing to watch it does
-  not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1).
-  **States:** `working` / `busy` = at work; `stopped` / `failed` / `done` = STOPPED; any other state
-  (`idle`, `blocked`, `waiting` — a permission prompt or a limit) = quiet: QUIET after
-  `--quiet-minutes` (default 20), counted by the watcher from the first poll that saw it quiet and
-  started again after a poll that saw it at work. A list line is the session's short id (`id` in the
-  listing) or its whole name; blank lines and comments (`# …`, a `#` followed by a blank or the line's
-  end) are skipped, `#12 worker: Fix` is a name. It writes nothing and never stops, messages or
-  changes a session; `--once` polls once (a manual check). Tests: `tests/watch-sessions/run.sh
+  not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1) — a call
+  past `--agents-timeout` (default 60 s) is a failed poll, killed with every process under it.
+  **States, as measured:** the listing gives `state`, and `status` (`busy` / `idle`) only while the
+  session's process lives — a live session between turns is `done` + `idle`, an exited one `done`
+  with no status. State `working` or status `busy` = at work; state `stopped` / `failed` (any status),
+  or `done` with no status = STOPPED; `done` + `idle` and any other state (`idle`, `blocked`,
+  `waiting` — a permission prompt or a limit) = quiet: QUIET after `--quiet-minutes` (default 20),
+  counted by the watcher from the first poll that saw it quiet and started again after a poll that saw
+  it at work. A list line is the session's short id (`id` in the listing) or its whole name, with an
+  optional limit of its own at its end, ` @<n>` minutes (a lead waiting for its workers: `<id> @120`);
+  a UTF-8 BOM, blank lines and comments (`# …`, a `#` followed by a blank or the line's end) are
+  skipped, `#12 worker: Fix` is a name. It writes nothing and never stops, messages or changes a
+  session; `--once` polls once (a manual check). The list is committed in `coordinator/` with the
+  event's journal line; the sync starts the watcher when the list is not empty. Tests: `tests/watch-sessions/run.sh
   sh|ps <powershell>` against a stub `claude`. A subscription stays only for a session no message is
   expected from (CORE §4 *Control* says which).
 - **Names change:** a restarted or renamed session may come back under another name, so a report
@@ -602,9 +608,11 @@ BOM, models priced apart),
   REPEAT with one reaction and none when it is there, `--comment-file`, CHECK with at most 5 candidates,
   FILED with its `Checked:` and `Signature:` lines, a dry run; an open match before a closed one,
   `--regression`; no write but the issue, the reaction and the comment),
-  `tests/watch-sessions/run.sh` (a stub `claude` answering scripted listings: each finding, the quiet
-  time from the first quiet poll and restarted after work, comments and names, the list edited between
-  polls, one failure retried and two in a row an ERROR, the interval kept, nothing written),
+  `tests/watch-sessions/run.sh` (a stub `claude` answering scripted listings: each finding, state and
+  status, the quiet time from the first quiet poll and restarted after work, a line's own limit,
+  comments and names, the list edited between polls, one failure retried and two in a row an ERROR, a
+  hung listing past `--agents-timeout`, JSON without a final newline, a BOM, the interval kept,
+  nothing written),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/probes.sh` (`selftest probes` against a stub `claude` that feeds the token
   probe's `echo` to this core's guard and writes the transcript; `hookcheck --expect probe`),

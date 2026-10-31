@@ -66,8 +66,10 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    unreachable by SendMessage (2.1.296). While any of your workers runs, keep one background wait
    alive: one `watch-sessions` on your list as a `run_in_background` command (`bash
    <core>/scripts/watch-sessions.sh --list <your worktree>.lead/watch.txt`; Windows: `powershell
-   -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file>`), re-armed after each wakeup that is
-   not a finding and after each finding is handled. Its findings, as the coordinator's (CORE §4
+   -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file>`), started again after it ends (a
+   finding handled, or an `ERROR` once), never a second one beside it. You yourself are on the
+   coordinator's list with a long limit of your own (`<id> @120`): your quiet wait for your workers is
+   no finding before it. Its findings, as the coordinator's (CORE §4
    *Control*): `STOPPED` → the worker's branch and log, resumed or restarted as the work needs;
    `GONE` → the line fixed or dropped; `QUIET` → `ListAgents` once, `waiting` to the coordinator, idle
    → one SendMessage asking for its report or its state; `ERROR` → once more, then the coordinator.
