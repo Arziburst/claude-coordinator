@@ -81,6 +81,10 @@ change, not your instructions: you work by this role file and your brief (#148).
    ci_seconds: +0             # what the change adds to the full CI suite, measured, else estimated (#237)
    test_edits: []             # each edit to an existing test and why (the tester's: build-only)
    ```
+   **A reported commit stays as it is (#350):** once you have reported a commit, you never amend, rebase,
+   reset or force-push it in the same task — a verifier may be reviewing that hash and the merge queue
+   lands only the approved one. Further changes are new commits on top, and the next report names the
+   new head. History is rewritten only when the coordinator asks for it in so many words.
 6. **Stuck or near your context limit:** stop and send a `blocked` report with what is done, what is
    left and why — do not push half-finished guesses to finish.
 
