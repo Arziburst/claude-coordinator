@@ -278,7 +278,9 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`
   (exit 0); `EMPTY` when the list is missing or holds no session (exit 0 — with nothing to watch it does
   not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1) — a call
-  past `--agents-timeout` (default 60 s) is a failed poll, killed with every process under it.
+  past `--agents-timeout` (default 60 s) is a failed poll: the watcher kills only the listing process
+  it started itself (by its own `$!` / process handle), never a process under it or one looked up by
+  name or id — a descendant of a hung listing is left running.
   **States, as measured:** the listing gives `state`, and `status` (`busy` / `idle`) only while the
   session's process lives — a live session between turns is `done` + `idle`, an exited one `done`
   with no status. State `working` or status `busy` = at work; state `stopped` / `failed` (any status),
@@ -288,8 +290,9 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   it at work. A list line is the session's short id (`id` in the listing) or its whole name, with an
   optional limit of its own at its end, ` @<n>` minutes (a lead waiting for its workers: `<id> @120`);
   a UTF-8 BOM, blank lines and comments (`# …`, a `#` followed by a blank or the line's end) are
-  skipped, `#12 worker: Fix` is a name. It writes nothing and never stops, messages or changes a
-  session; `--once` polls once (a manual check). The list is committed in `coordinator/` with the
+  skipped, `#12 worker: Fix` is a name. The only files it writes are the listing's output, in a fresh
+  temp location per call (read from files, not a pipe, so a leftover child cannot hang it), deleted at
+  once; it never stops, messages or changes a session; `--once` polls once (a manual check). The list is committed in `coordinator/` with the
   event's journal line; the sync starts the watcher when the list is not empty. Tests: `tests/watch-sessions/run.sh
   sh|ps <powershell>` against a stub `claude`. A subscription stays only for a session no message is
   expected from (CORE §4 *Control* says which).

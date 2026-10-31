@@ -25,10 +25,13 @@
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with -Once there is no next poll)
 # -Interval: seconds between polls (default 120). -AgentsTimeout: seconds one claude agents call may
-# take (default 60); past it the call - with every process under it - is killed and the poll failed.
-# -Once: one poll, then the end (tests, a manual check).
+# take (default 60); past it the one process the watcher started is killed by its own handle - nothing
+# under it, nothing else - and the poll failed. -Once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or -Once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# It writes no file and never stops, messages or changes a session.
+# The only files it touches: two temp files per call ([IO.Path]::GetTempFileName) holding claude's
+# stdout and stderr - read from files, not a pipe, so a process left under a killed claude cannot hang
+# the watcher - removed as soon as they are read and on every way out. It never stops, messages or
+# changes a session.
 param([string]$List, [string]$Interval = '120', [string]$QuietMinutes = '20', [string]$QuietSeconds = '',
   [string]$AgentsTimeout = '60', [switch]$Once)
 # a name is written as UTF-8, whatever the console's code page; the caller's console gets its own encoding
@@ -64,84 +67,48 @@ function Entries {
   }
   , $r
 }
-# KillTree: the process and every process under it, the deepest first. Windows: its Windows process tree,
-# and - when a bash of MSYS / Git Bash or Cygwin is in it - the processes that bash exec'd, which the
-# Windows tree does not show (their ps.exe beside that bash.exe lists them with their Windows ids);
-# elsewhere Kill(true) (PowerShell 7).
-function KillTree($p) {
-  if (($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows) {
-    try {
-      $all = @(Get-CimInstance Win32_Process -ErrorAction Stop | Select-Object ProcessId, ParentProcessId, ExecutablePath)
-      $tree = @([int]$p.Id); $grew = $true
-      while ($grew) {
-        $grew = $false
-        foreach ($x in $all) { if ($tree -contains [int]$x.ParentProcessId -and $tree -notcontains [int]$x.ProcessId) { $tree += [int]$x.ProcessId; $grew = $true } }
-      }
-      $ps = $null
-      foreach ($x in $all) {
-        if ($tree -contains [int]$x.ProcessId -and "$($x.ExecutablePath)" -match '\\(bash|sh)\.exe$') {
-          $c = Join-Path (Split-Path $x.ExecutablePath) 'ps.exe'; if (Test-Path -LiteralPath $c) { $ps = $c; break }
-        }
-      }
-      $extra = @()
-      if ($ps) {
-        # ps -e: PID PPID PGID WINPID ... (a row may start with a flag letter)
-        $rows = @(& $ps -e 2>$null | ForEach-Object { $f = @(("$_" -replace '^[^0-9]*', '') -split '\s+')
-          if ($f.Count -ge 4 -and $f[0] -match '^[0-9]+$' -and $f[3] -match '^[0-9]+$') { , @([int]$f[0], [int]$f[1], [int]$f[3]) } })
-        $mp = @(); foreach ($r in $rows) { if ($tree -contains $r[2]) { $mp += $r[0] } }
-        $grew = $true
-        while ($grew) {
-          $grew = $false
-          foreach ($r in $rows) { if ($mp -contains $r[1] -and $mp -notcontains $r[0]) { $mp += $r[0]; $extra += $r[2]; $grew = $true } }
-        }
-      }
-      $ids = @($extra + $tree); [array]::Reverse($ids)
-      foreach ($i in $ids) { Stop-Process -Id $i -Force -ErrorAction SilentlyContinue }
-    } catch { try { & taskkill /F /T /PID $p.Id 2>&1 | Out-Null } catch { } }
-  } else {
-    try { $p.Kill($true) } catch { }
-  }
-  try { $p.Kill() } catch { }
-  try { [void]$p.WaitForExit(5000) } catch { }
+# The one place the watcher writes: two temp files per call ([IO.Path]::GetTempFileName) for claude's
+# stdout and stderr (a pipe would stay open while anything under a killed claude still holds it, and the
+# watcher would hang on it); read once the call ends or is killed, and removed at once - on every way out
+# too (the finally at the end)
+$script:tmpFiles = @()
+function RemoveTmp { foreach ($f in $script:tmpFiles) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }; $script:tmpFiles = @() }
+function ReadShared([string]$f) {
+  try {
+    $fs = New-Object System.IO.FileStream($f, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+    $sr = New-Object System.IO.StreamReader($fs, (New-Object System.Text.UTF8Encoding $false))
+    try { $sr.ReadToEnd() } finally { $sr.Dispose() }
+  } catch { '' }
 }
-# Agents: one call of claude agents --json --all, killed past -AgentsTimeout; sets rc, json (its stdout)
-# and err (the first line of its stderr, or the timeout), no file written. claude as PATH gives it: a .ps1
-# through this PowerShell, a .cmd / .bat through cmd, else the program itself.
+# Agents: one call of claude agents --json --all; sets rc, json (its stdout) and err (the first line of
+# its stderr, or the timeout). Past -AgentsTimeout only the process the watcher started is killed, by its
+# own handle - nothing under it, nothing looked up by name or id. claude as PATH gives it: a .ps1 through
+# this PowerShell, a .cmd / .bat through cmd, else the program itself.
 function Agents {
   $script:json = ''; $script:err = ''; $script:rc = 0
   $c = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $c) { $script:rc = 127; $script:err = 'claude: command not found'; return }
-  $psi = New-Object System.Diagnostics.ProcessStartInfo
   $a = 'agents --json --all'
   if ($c.CommandType -eq 'ExternalScript') {
-    $psi.FileName = (Get-Process -Id $PID).Path
-    $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $c.Path + '" ' + $a
+    $exe = (Get-Process -Id $PID).Path; $al = '-NoProfile -ExecutionPolicy Bypass -File "' + $c.Path + '" ' + $a
   } elseif ($c.Path -match '\.(cmd|bat)$') {
-    $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c ""' + $c.Path + '" ' + $a + '"'
-  } else { $psi.FileName = $c.Path; $psi.Arguments = $a }
-  $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-  $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true; $psi.RedirectStandardInput = $true
-  $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding $false
-  $psi.StandardErrorEncoding = New-Object System.Text.UTF8Encoding $false
-  try { $p = [System.Diagnostics.Process]::Start($psi) } catch { $script:rc = 127; $script:err = ($_.Exception.Message -split "`r?`n")[0]; return }
-  try { $p.StandardInput.Close() } catch { }
-  $o = $p.StandardOutput.ReadToEndAsync(); $e = $p.StandardError.ReadToEndAsync()
-  $ms = [int64]$AgentsTimeout * 1000; $w0 = [DateTime]::UtcNow
-  if (-not $p.WaitForExit([int]$ms)) {
-    KillTree $p
-    $script:rc = 124; $script:err = "claude agents --json --all did not answer in $AgentsTimeout s"; return
-  }
-  $left = [Math]::Max(1000, $ms - [int64]([DateTime]::UtcNow - $w0).TotalMilliseconds)
-  # a process left under it may still hold its output open: past the time left, killed too
-  if (-not ([System.Threading.Tasks.Task]::WaitAll(@($o, $e), [int]$left))) {
-    KillTree $p
-    $script:rc = 124; $script:err = "claude agents --json --all did not answer in $AgentsTimeout s"; return
-  }
-  $p.WaitForExit()
-  $script:rc = $p.ExitCode
-  $script:json = $o.Result
-  foreach ($x in ($e.Result -split "`r?`n")) { if ($x -ne '') { $script:err = $x; break } }
-  if ($script:rc -eq 0 -and -not $script:json.Contains('[')) { $script:rc = 1; $script:err = 'claude agents --json --all printed no JSON list' }
+    $exe = $env:ComSpec; $al = '/d /s /c ""' + $c.Path + '" ' + $a + '"'
+  } else { $exe = $c.Path; $al = $a }
+  $timed = $false
+  try {
+    $out = [System.IO.Path]::GetTempFileName(); $script:tmpFiles += $out
+    $er = [System.IO.Path]::GetTempFileName(); $script:tmpFiles += $er
+    try {
+      $p = Start-Process -FilePath $exe -ArgumentList $al -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $er -ErrorAction Stop
+    } catch { $script:rc = 127; $script:err = ($_.Exception.Message -split "`r?`n")[0]; return }
+    $null = $p.Handle   # keeps its exit code readable after it ends
+    if ($p.WaitForExit([int]([int64]$AgentsTimeout * 1000))) { $p.WaitForExit(); $script:rc = $p.ExitCode }
+    else { $timed = $true; try { $p.Kill() } catch { }; try { [void]$p.WaitForExit(5000) } catch { } }
+    $script:json = ReadShared $out
+    foreach ($x in ((ReadShared $er) -split "`r?`n")) { if ($x -ne '') { $script:err = $x; break } }
+  } finally { RemoveTmp }
+  if ($timed) { $script:rc = 124; $script:err = "claude agents --json --all did not answer in $AgentsTimeout s" }
+  elseif ($script:rc -eq 0 -and -not $script:json.Contains('[')) { $script:rc = 1; $script:err = 'claude agents --json --all printed no JSON list' }
   if ($script:err -eq '') { $script:err = "claude agents --json --all exited with $($script:rc)" }
 }
 # Sessions <json>: @(id, class, name) per session object of the list - class work, stop or quiet from
@@ -226,4 +193,6 @@ while ($true) {
   if ($Once) { exit 0 }
   Start-Sleep -Seconds ([int]$Interval)
 }
-} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
+} finally {
+  foreach ($f in @($script:tmpFiles)) { if ($f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+  if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

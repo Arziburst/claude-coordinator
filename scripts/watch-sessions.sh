@@ -25,11 +25,13 @@
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with --once there is no next poll)
 # --interval: seconds between polls (default 120). --agents-timeout: seconds one claude agents call may
-# take (default 60); past it the call - with every process under it - is killed and the poll failed.
-# --once: one poll, then the end (tests, a manual check).
+# take (default 60); past it the one claude process the watcher started is killed - nothing under it,
+# nothing else - and the poll failed. --once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or --once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# It writes no file and never stops, messages or changes a session (Windows: watch-sessions.ps1, the same
-# output and exit codes).
+# The only file it touches: one temp folder per call (mktemp -d) holding claude's stdout and stderr - read
+# from files, not a pipe, so a process left under a killed claude cannot hang the watcher - removed as
+# soon as it is read and on every way out. It never stops, messages or changes a session (Windows:
+# watch-sessions.ps1, the same output and exit codes).
 set -u
 
 list="" interval=120 qmin=20 qsec="" atimeout=60 once=0
@@ -45,7 +47,7 @@ while [ $# -gt 0 ]; do
     --quiet-seconds) num "$@"; qsec="$2"; shift 2 ;;
     --agents-timeout) num "$@"; atimeout="$2"; shift 2 ;;
     --once) once=1; shift ;;
-    -h|--help) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2 ;;
+    -h|--help) sed -n '2,34s/^# \{0,1\}//p' "$0"; exit 2 ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 2 ;;
   esac
 done
@@ -68,48 +70,32 @@ entries() {
         if (t ~ /s$/) l = substr(t, 1, length(t) - 1) + 0; else l = t * 60 }
       print l "\t" $0 }' "$list"
 }
-# kill_tree <pid>: the process and every process under it, killed - the ones under it first, the deepest
-# first; on Windows then its Windows tree (a native claude's own children), then the process itself
-kill_tree() {
-  local all=" $1 " grew=1 k pp rev=""
-  pp="$( { ps -A -o pid= -o ppid= 2>/dev/null || ps -e 2>/dev/null; } |
-    awk '{ sub(/^[^0-9]*/, "") } $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print $1, $2 }')"
-  while [ "$grew" = 1 ]; do
-    grew=0
-    for k in $(printf '%s\n' "$pp" | A="$all" awk '{ a = ENVIRON["A"]; if (index(a, " " $2 " ") && !index(a, " " $1 " ")) print $1 }'); do
-      all="$all$k "; rev="$k $rev"; grew=1
-    done
-  done
-  # shellcheck disable=SC2086
-  [ -n "$rev" ] && kill -9 $rev 2>/dev/null
-  if [ -r "/proc/$1/winpid" ] && command -v taskkill >/dev/null 2>&1; then
-    taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1
-  fi
-  kill -9 "$1" 2>/dev/null
-}
-# call: one claude agents call under a watchdog; its stderr to this function's stdout, its stdout, a
-# `#timeout` marker and its exit code (`#rc`, on a line of its own) to fd 3
-call() {
-  local p w rc
-  claude agents --json --all 2>&1 1>&3 3>&- &
-  p=$!
-  ( s=""; trap '[ -n "$s" ] && kill "$s" 2>/dev/null; exit 0' TERM
-    sleep "$atimeout" 3>&- & s=$!; wait "$s"
-    echo "#timeout" >&3; kill_tree "$p" ) >/dev/null 2>&1 &
-  w=$!
-  wait "$p"; rc=$?
-  kill "$w" 2>/dev/null; wait "$w" 2>/dev/null
-  printf '\n#rc %s\n' "$rc" >&3
-}
+# The one place the watcher writes: a fresh temp folder per call, for claude's stdout and stderr (a pipe
+# would stay open while anything under a killed claude still holds it, and the watcher would hang on it);
+# read once the call ends or is killed, and removed at once - on every way out too (the trap)
+tdir=""
+cleanup() { [ -n "$tdir" ] || return 0; rm -f "$tdir/out" "$tdir/err"; rmdir "$tdir" 2>/dev/null; tdir=""; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 # agents: one poll; sets rc, json (claude's stdout) and err (the first line of its stderr, or the
-# timeout), no file written: stderr comes through the pipe, the rest through fd 3
+# timeout). Past --agents-timeout only the claude process the watcher started ($!) is killed - nothing
+# under it, nothing looked up by name or id.
 agents() {
-  local all
-  all="$( { call | sed 's/^/#err /'; } 3>&1 )"
-  rc="$(printf '%s\n' "$all" | sed -n 's/^#rc //p')"
-  err="$(printf '%s\n' "$all" | sed -n 's/^#err //p' | sed -n '/./{p;q;}')"
-  json="$(printf '%s\n' "$all" | grep -v -e '^#rc ' -e '^#err ' -e '^#timeout$')"
-  if printf '%s\n' "$all" | grep -q '^#timeout$'; then
+  local p t=0 timed=0
+  json="" err="" rc=0
+  tdir="$(mktemp -d "${TMPDIR:-/tmp}/watch-sessions.XXXXXX")" || { rc=1; err="no temp folder for claude's output"; return; }
+  claude agents --json --all > "$tdir/out" 2> "$tdir/err" < /dev/null &
+  p=$!
+  while kill -0 "$p" 2>/dev/null; do
+    if [ "$t" -ge $((atimeout * 10)) ]; then kill -9 "$p" 2>/dev/null; timed=1; break; fi
+    sleep 0.1; t=$((t + 1))
+  done
+  wait "$p"; rc=$?
+  json="$(cat "$tdir/out" 2>/dev/null)"
+  err="$(sed -n '/./{p;q;}' "$tdir/err" 2>/dev/null)"
+  cleanup
+  if [ "$timed" = 1 ]; then
     rc=124; err="claude agents --json --all did not answer in $atimeout s"
   elif [ "$rc" = 0 ] && ! printf '%s' "$json" | grep -q '\['; then
     rc=1; err="claude agents --json --all printed no JSON list"
