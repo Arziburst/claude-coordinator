@@ -10,25 +10,35 @@
 # add appends exactly one row (CORE 7) and prints it: its cells by the file's header, else CORE 7's order; tokens, cost,
 # start, wall and active from scripts/session-tokens <id>, never typed by hand; result one of approved done pass
 # `rework <n>` escalated failed dropped ready (exit 2 otherwise); no transcript: exit 1; a second row of the same start
-# and role: exit 1, except role assistant; the file keeps its BOM and line ends. check lists the project's finished
-# sessions with no row - `MISSING <short id> <name> <start>` each, else `ALL LOGGED` - and only reads.
+# and role: exit 1, except role assistant; the file keeps its BOM and line ends; a log that is no file or cannot be
+# read or written: exit 1, a line `runs:`, no row printed. check lists the project's finished sessions (the process
+# ended: state done, stopped or failed and no status field) with no row - `MISSING <short id> <name> <start>` each,
+# else `ALL LOGGED` - and only reads (a log it cannot read: exit 1, never read as empty).
 # Exit 0, 1 as runs.sh says or when claude agents fails, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Command, [string]$Log, [string]$Session, [string]$Task, [string]$Role,
   [string]$Kind, [string]$Model, [string]$Effort, [string]$Estimate, [string]$EstimateTime, [string]$Result,
   [string]$Date, [string]$In, [string]$Tokens, [string]$Root, [string]$Self, [string]$Since)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 15 | ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 17| ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
 function Die([int]$Code, [string]$Msg) { [Console]::Error.WriteLine("runs: $Msg"); exit $Code }
 $Names = @('date', 'task', 'role', 'kind', 'model', 'effort', 'estimate', 'tokens', 'cost', 'result', 'start', 'wall', 'active', 'wait', 'estimate_time')
 # Plain <file>: its lines without the BOM and the CRs
 function Plain([string]$f) {
-  $t = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $f).Path, (New-Object System.Text.UTF8Encoding $false))
+  try { $t = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $f).Path, (New-Object System.Text.UTF8Encoding $false)) }
+  catch { Die 1 "cannot read the run log $f" }
   if ($t.Length -and $t[0] -eq [char]0xFEFF) { $t = $t.Substring(1) }
   $l = @($t -split "`n" | ForEach-Object { $_ -replace "`r$", '' })
   if ($l.Count -eq 1 -and $l[0] -eq '') { $l = @() }
   elseif ($l.Count -gt 1 -and $l[$l.Count - 1] -eq '') { $l = @($l[0..($l.Count - 2)]) }
   , $l
+}
+# CanOpen <file> <access>: a file that opens for that access (Read, or Write: nothing written), else exit 1 -
+# a directory, a missing file, a read-only one or one held open without sharing; never read as empty
+function CanOpen([string]$f, [string]$a) {
+  if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { Die 1 "no run log at $f (no such file)" }
+  try { $fs = [IO.File]::Open((Resolve-Path -LiteralPath $f).Path, 'Open', $a, 'ReadWrite'); $fs.Close() }
+  catch { if ($a -eq 'Write') { Die 1 "cannot write the run log $f" } else { Die 1 "cannot read the run log $f" } }
 }
 function IsHeader([string]$line) { $h = 0; foreach ($x in ($line -split "`t")) { if ($x -ceq 'date' -or $x -ceq 'role') { $h++ } }; $h -ge 2 }
 # Cols <lines>: the column names in the file's order (its header, else CORE 7's)
@@ -77,7 +87,7 @@ if ($Command -ceq 'add') {
   foreach ($v in $Task, $Role, $Kind, $Model, $Effort, $Estimate, $EstimateTime, $Date, $In, $Session) {
     if ($v -match "[`t`r`n]") { Die 2 'a cell may not hold a tab or a line break' }
   }
-  if (-not (Test-Path -LiteralPath $Log -PathType Leaf)) { Die 1 "no run log at $Log" }
+  CanOpen $Log 'Read'; CanOpen $Log 'Write'
   $lines = Plain $Log; $c = Cols $lines
   $Row = @{ date = $Date; task = $Task; role = $Role; kind = $Kind; model = $Model; effort = $Effort; estimate = $Estimate
     tokens = $Tokens; cost = ''; result = $Result; start = ''; wall = ''; active = ''; wait = ''; estimate_time = $EstimateTime }
@@ -119,10 +129,12 @@ if ($Command -ceq 'add') {
   foreach ($h in $Names) { if (-not $u.ContainsKey($h)) { $out.Add($Row[$h]) } }
   $line = $out -join "`t"
   # the row as the file's last line, in its line ends; a last line without its end gets one first
-  $p = (Resolve-Path -LiteralPath $Log).Path; $t = [IO.File]::ReadAllText($p)
-  $nl = if ($t.Contains("`r")) { "`r`n" } else { "`n" }
-  $pre = if ($t.Length -and -not $t.EndsWith("`n")) { $nl } else { '' }
-  [IO.File]::AppendAllText($p, $pre + $line + $nl, (New-Object System.Text.UTF8Encoding $false))
+  try {
+    $p = (Resolve-Path -LiteralPath $Log).Path; $t = [IO.File]::ReadAllText($p)
+    $nl = if ($t.Contains("`r")) { "`r`n" } else { "`n" }
+    $pre = if ($t.Length -and -not $t.EndsWith("`n")) { $nl } else { '' }
+    [IO.File]::AppendAllText($p, $pre + $line + $nl, (New-Object System.Text.UTF8Encoding $false))
+  } catch { Die 1 "cannot write the run log $Log" }
   $line
   exit 0
 }
@@ -131,7 +143,7 @@ if ($Command -ceq 'add') {
 foreach ($b in $bound) { if ('Log', 'Root', 'Self', 'Since' -notcontains $b) { Show-Usage } }
 if (-not $Root) { Show-Usage }
 if ($Since -and $Since -notmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') { Die 2 "--since must be YYYY-MM-DD: $Since" }
-if (-not (Test-Path -LiteralPath $Log -PathType Leaf)) { Die 1 "no run log at $Log" }
+CanOpen $Log 'Read'
 # Canon <path>: the path to compare - its full form when it exists, forward slashes, no trailing slash, a drive
 # letter in lower case (C:\x and C:/x the same)
 function Canon([string]$p) {
@@ -183,8 +195,8 @@ for ($i = 0; $i -lt $s.Length; $i++) {
   elseif ($ch -eq [char]'{' -or $ch -eq [char]'[') { if ($d -eq 2) { $after = $false }; $d++ }
   elseif ($ch -eq [char]'}' -or $ch -eq [char]']') {
     if ($d -eq 2 -and $ch -eq [char]'}' -and $v['id']) {
-      $sv = [string]$v['state']; $su = [string]$v['status']
-      if (($sv -ceq 'done' -or $sv -ceq 'stopped' -or $sv -ceq 'failed') -and $su -cne 'busy') {
+      $sv = [string]$v['state']
+      if (($sv -ceq 'done' -or $sv -ceq 'stopped' -or $sv -ceq 'failed') -and -not $v.ContainsKey('status')) {
         [void]$fin.Add(@([string]$v['id'], [string]$v['sessionId'], [string]$v['cwd'], [string]$v['name']))
       }
     }
@@ -219,4 +231,7 @@ foreach ($e in $fin) {
 }
 if ($missing.Count) { $missing } else { 'ALL LOGGED' }
 exit 0
+} catch {
+  # no exception ends in exit 0
+  [Console]::Error.WriteLine("runs: " + $_.Exception.Message); exit 1
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

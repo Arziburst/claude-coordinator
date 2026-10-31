@@ -588,8 +588,9 @@ never assumed (below).
   tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
   <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
   <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
-  and role. **`scripts/runs check`** lists the project's finished sessions whose start has no row yet
-  (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
+  and role. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
+  done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
+  row is written when it is stopped — whose start has no row yet (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
   then — a missed row is seen on the next cycle, not weeks later.
   **An assistant's spend** ([roles/assistant.md](roles/assistant.md)) is never a task's or the
   coordinator's own: rows of role and kind `assistant`, the task column holding the assistant's name (so

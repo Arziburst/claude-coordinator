@@ -791,10 +791,14 @@ BOM, models priced apart),
   coordinator/RUNS.tsv --root <project root> --self "$CLAUDE_CODE_SESSION_ID" [--since <YYYY-MM-DD>]`
   (Windows: `… -File scripts/runs.ps1 check -Log coordinator/RUNS.tsv -Root <project root> -Self
   $env:CLAUDE_CODE_SESSION_ID [-Since <YYYY-MM-DD>]`) lists `MISSING <short id> <name> <start>` per finished
-  session of the project (from `claude agents --json --all`: its folder the root, a worktree root of its
-  repository, or inside one) whose start has no row, else `ALL LOGGED`; never the coordinator's own session
-  (`--self`) or an assistant (`assistant:` names; their rows are daily). It only reads; exit 1 when claude
-  agents fails.
+  session of the project (from `claude agents --json --all`: the process ended — state `done`, `stopped` or
+  `failed` and no `status` field; a session waiting between rounds, `done` + `idle`, is not listed, its row
+  is written when it is stopped; its folder the root, a worktree root of its repository, or inside one) whose
+  start has no row, else `ALL LOGGED`; never the coordinator's own session (`--self`), an assistant
+  (`assistant:` names; their rows are daily) or a session already removed with `claude rm` (the listing no
+  longer holds it). It only reads; exit 1 when claude agents fails. Both commands: a log that is no file or
+  cannot be read (`add`: or written — read-only, held open by another program) is exit 1 with a `runs:`
+  line, no row printed, the file unchanged — never read as empty.
 - **A run cut by a usage limit** (a 429 "You've hit your weekly limit · resets …", a session shown
   `blocked`): pause until the status line's `resets_at` (CORE §9), then for each blocked session
   `claude respawn <id>` **and** a one-line SendMessage ("the limit has reset, continue") —

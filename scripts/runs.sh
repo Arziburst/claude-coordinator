@@ -18,21 +18,25 @@
 # else today (UTC). Result words: approved done pass `rework <n>` escalated failed dropped (stopped without a
 # result) ready. The file keeps its BOM and its line ends (a CRLF file gets a CRLF row); a last line
 # without its end gets one first. Refused, the file unchanged: another result word or a cell with a tab or
-# a line break (exit 2); no transcript for --session or no run log file (exit 1); a row already there with
-# the same start and role (exit 1) - except role assistant, whose rows share their session's start.
-# check lists the project's finished sessions (`claude agents --json --all`: state done, stopped or failed,
-# and no status busy) whose start has no row: one line `MISSING <short id> <name> <start>` each, else
+# a line break (exit 2); no transcript for --session (exit 1); a run log that is no file or cannot be read
+# or written (exit 1, a line `runs:`, no row printed); a row already there with the same start and role
+# (exit 1) - except role assistant, whose rows share their session's start.
+# check lists the project's finished sessions (`claude agents --json --all`: the process ended - state
+# done, stopped or failed and no status field; a status idle, a worker waiting between rounds, or busy is
+# not finished: its row is written when it is stopped) whose start has no row: one line
+# `MISSING <short id> <name> <start>` each, else
 # `ALL LOGGED`. A session is the project's when its folder is the root or inside it, or a root of the
 # root's repository's worktrees (`git worktree list`) or inside one, compared as paths (CORE 1.17). Never
 # listed: --self (by its session id or short id; the coordinator's own runs get a row per day), a name
 # starting `assistant:` (rows per day, CORE 7), a session without a transcript (no row can be written).
 # Its start: the session-tokens time line's start=; logged = a row's start cell equals it. --since: only
-# sessions started on that date or later. check only reads: it writes no file, touches no session, and
-# runs nothing but claude agents --json --all, git worktree list and session-tokens.
+# sessions started on that date or later. check only reads - a log it cannot read is exit 1, never read
+# as empty: it writes only its own temp folder (claude's output, removed at its end), touches no
+# session, and runs nothing but claude agents --json --all, git worktree list and session-tokens.
 # Exit 0 (check: also when it lists some), 1 as above or when claude agents fails, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
-usage() { sed -n '2,32s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+usage() { sed -n '2,36s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 die() { echo "runs: $2" >&2; exit "$1"; }
 [ $# -ge 1 ] || usage
 cmd="$1"; shift
@@ -66,6 +70,10 @@ cols() { local h; h="$(header "$1")"; if [ -n "$h" ]; then printf '%s\n' "$h" | 
 rowsof() { plain "$1" | LC_ALL=C awk -F'\t' '
   NR == 1 { h = 0; for (i = 1; i <= NF; i++) if ($i == "date" || $i == "role") h++; if (h >= 2) next }
   /^#/ || /^$/ { next } { print }'; }
+# canread <file>: a file that can be read, else exit 1 (a directory, a missing file, one held open without
+# sharing: never read as empty)
+canread() { [ -f "$1" ] || die 1 "no run log at $1 (no such file)"
+  { : < "$1"; } 2>/dev/null && cat "$1" > /dev/null 2>&1 || die 1 "cannot read the run log $1"; }
 # colno <cols> <name>: its field number, 0 when absent
 colno() { printf '%s\n' "$1" | tr ' ' '\n' | awk -v n="$2" 'NF { i++; if ($0 == n) { print i; f = 1; exit } } END { if (!f) print 0 }'; }
 
@@ -84,7 +92,9 @@ if [ "$cmd" = add ]; then
     case "$v" in *"$TAB"*|*"$CR"*|*'
 '*) die 2 "a cell may not hold a tab or a line break" ;; esac
   done
-  [ -f "$log" ] || die 1 "no run log at $log"
+  canread "$log"
+  # opened for appending, nothing written: a read-only file or one held open without sharing fails here
+  { : >> "$log"; } 2>/dev/null && [ -w "$log" ] || die 1 "cannot write the run log $log"
   cost="" start="" wall="" active=""
   if [ -n "$session" ]; then
     st="$(bash "$here/session-tokens.sh" "$session" | tr -d '\r')" || die 1 "no transcript for session $session (session-tokens failed)"
@@ -120,8 +130,8 @@ if [ "$cmd" = add ]; then
       print o }')"
   nl='
 '; [ "$(tr -cd '\r' < "$log" | wc -c | tr -d ' ')" = 0 ] || nl="$CR$nl"   # not grep: Git Bash's drops CRs
-  if [ -s "$log" ] && [ "$(tail -c 1 "$log" | wc -l | tr -d ' ')" = 0 ]; then printf '%s' "$nl" >> "$log" || exit 1; fi
-  printf '%s%s' "$row" "$nl" >> "$log" || exit 1
+  pre=""; if [ -s "$log" ] && [ "$(tail -c 1 "$log" | wc -l | tr -d ' ')" = 0 ]; then pre="$nl"; fi
+  { printf '%s%s%s' "$pre" "$row" "$nl" >> "$log"; } 2>/dev/null || die 1 "cannot write the run log $log"
   printf '%s\n' "$row"
   exit 0
 fi
@@ -130,7 +140,7 @@ fi
 for o in $seen; do case "$o" in --log|--root|--self|--since) ;; *) usage ;; esac; done
 [ -n "$root" ] || usage
 [ -z "$since" ] || printf '%s\n' "$since" | grep -Eqx '[0-9]{4}-[0-9]{2}-[0-9]{2}' || die 2 "--since must be YYYY-MM-DD: $since"
-[ -f "$log" ] || die 1 "no run log at $log"
+canread "$log"
 # canon <path>: the path to compare - its real folder when it exists, forward slashes, no trailing slash,
 # a drive letter in lower case (C:\x and C:/x the same)
 canon() { local p="$1" r
@@ -169,8 +179,8 @@ fin="$(LC_ALL=C awk 'BEGIN { RS = "\001" } { s = s $0 } END {
       else if (c == "{" || c == "[") { if (d == 2) after = 0; d++ }
       else if (c == "}" || c == "]") {
         if (d == 2 && c == "}" && v["id"] != "") {
-          st = v["state"]; su = v["status"]
-          if ((st == "done" || st == "stopped" || st == "failed") && su != "busy")
+          st = v["state"]   # never v["status"] here: reading it would create the key
+          if ((st == "done" || st == "stopped" || st == "failed") && !("status" in v))
             print v["id"] "\t" v["sessionId"] "\t" v["cwd"] "\t" v["name"]
         }
         if (d == 2) delete v
