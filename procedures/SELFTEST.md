@@ -223,9 +223,12 @@ the report notes the interruption and the resume time.
    - A worker (`#st2 worker: selftest PR <P>`, start-worker with the flags above, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
      file, commits it as exactly `selftest: task-1` (never the project's own message format or an issue
-     number from its history), pushes and opens a **draft** PR into `selftest/<c>/base` — the command names
-     the state repository: `gh pr create --draft -R <owner/name> --base selftest/<c>/base --head
-     selftest/<c>/task-1 …` (#322). Its brief says to push
+     number from its history), pushes and opens a **draft** PR into `selftest/<c>/base` — the command runs
+     **inside the worker's worktree** (the shell's current folder is the worktree, reached by its absolute
+     path, never the project root), with **no** `-R`: `gh pr create --draft --base selftest/<c>/base --head
+     selftest/<c>/task-1 …`. The guard refuses `gh pr create -R` (#261), and inside the worktree gh takes
+     the state repository from the worktree's origin — which is why the PR lands there and not in the
+     project's own repository (#322). Its brief says to push
      **without** `-u` (`git push origin selftest/<c>/task-1`) on purpose, so every run proves
      cleanup-worker's fallback to `origin/<branch>` (roles/worker.md pushes with `-u`).
    - A verifier subagent reviews it and returns its verdict (it changes nothing, roles/verifier.md);
