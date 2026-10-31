@@ -12,14 +12,24 @@
 # twice, missing files and usage errors); the ready columns from task rows
 # (ready.tsv); --task on the fixtures in task/ (the checks green after the verifier and before it, a red run
 # then a green rerun, owner waits mid-task, an unmerged PR, no checks, no PR, a lead, no header and another
-# order, CRLF and a BOM, stdin, not ready on a red or running check or an unapproved verifier, errors).
-#   tests/run-stats/run.sh sh              # scripts/run-stats.sh, with the bash running this file
+# order, CRLF and a BOM, stdin, not ready on a red or running check or an unapproved verifier, errors);
+# --ratio on ratio.tsv (#333: tasks with and without estimates, a range estimate_time, a lead with its sub-runs
+# counted once, assistant rows and a task row never counted, a model with no task of its own, errors).
+# --ratio, the access point (#333): `run-stats.sh <RUNS.tsv> --ratio --model <m>` (.ps1: -Ratio -Model <m>)
+# prints ONE line, no header, tab-separated: model cost_n cost_ratio time_n time_ratio. Over the TASKS whose
+# model (as run-stats assigns it: the lead row's, else the first worker's, else the first row's) is <m>,
+# rows of role or kind `assistant` and role `task` left out: cost_n = the tasks with an estimate (the
+# `estimate` cell of the task's first row in the file) and a cost (the rows' costs summed); cost_ratio = the
+# median of cost / estimate per task, two decimals; time_n, time_ratio the same for the work (the rows'
+# active summed) over `estimate_time` (the first row's; `a-b` counts as its middle). n 0: ratio `-`. Exit 1
+# on a file it cannot read (`run-stats: cannot read <file>`), 2 on --ratio without --model or with --kind.
+#   tests/run-stats/run.sh sh             # scripts/run-stats.sh, with the bash running this file
 #   tests/run-stats/run.sh ps pwsh         # scripts/run-stats.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
-[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 2; }
+[ "$kind" = sh ] || [ "$kind" = ps ] || { sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 2; }
 PS=("$@")
 [ "$kind" = sh ] || [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; }
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
@@ -50,6 +60,7 @@ run() {
       --prices) a+=(-Prices) ;; --prev-5h) a+=(-Prev5h) ;; --prev-week) a+=(-PrevWeek) ;; --cap-5h) a+=(-Cap5h) ;;
       --cap-week) a+=(-CapWeek) ;; --block) a+=(-Block) ;; --block-top) a+=(-BlockTop) ;; --now) a+=(-Now) ;;
       --task) a+=(-Task) ;; --pr-json) a+=(-PrJson) ;; --waits) a+=(-Waits) ;; --append) a+=(-Append) ;;
+      --ratio) a+=(-Ratio) ;;
       # stdin: 5.1 takes a bare - after a parameter through -File for a parameter name and fails, so -Spend5h:-
       -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek | -PrJson | -Waits) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
       *) a+=("$x") ;; esac; done
@@ -152,6 +163,16 @@ expect "ready: one kind and model" 0 "$t/expected-ready-one.txt" - -- ready.tsv 
 expect "real: a cost cell read by its leading number, estimate_time ignored" 0 "$t/expected-real.txt" - -- real.tsv
 expect "real: --task with a verifier's pass" 0 "$t/expected-real-pass.txt" - -- real.tsv --task 50
 expect "real: --task with a verifier's Done (…)" 0 "$t/expected-real-done.txt" - -- real.tsv --task 53
+
+# --ratio (#333): one model's actual over its estimates, per task, the median (the header: the access point)
+expect "ratio: a lead counted once, a range by its middle, no estimate or no cost left out, assistant and task rows never" 0 \
+  "$t/expected-ratio-opus.txt" - -- ratio.tsv --ratio --model opus
+expect "ratio: another model's tasks apart" 0 "$t/expected-ratio-sonnet.txt" - -- ratio.tsv --ratio --model sonnet
+expect "ratio: a model only in another task's verifier row has no task" 0 "$t/expected-ratio-none.txt" - -- ratio.tsv --ratio --model haiku
+expect "ratio: a model not in the log" 0 "$t/expected-ratio-absent.txt" - -- ratio.tsv --ratio --model fable
+expect "ratio: a missing file" 1 - "run-stats: cannot read missing.tsv" -- missing.tsv --ratio --model opus
+expect "ratio: --ratio without --model is a usage error" 2 '*' - -- ratio.tsv --ratio
+expect "ratio: --ratio with --kind is a usage error" 2 '*' - -- ratio.tsv --ratio --kind ordinary --model opus
 
 # --task: one task's row from its runs, the PR's gh JSON and the journal's owner waits (fixtures in task/)
 k="$here/task"

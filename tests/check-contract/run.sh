@@ -4,16 +4,31 @@
 # On Windows the .ps1 runs as on a Russian Windows, with the console's code page 866: the section signs
 # of its warnings (CORE §7) must still come out as UTF-8, and the caller's 866 must be back afterwards,
 # after a usage error (exit 2) and after a run to the end.
+# Then --runs (#333) on runs-ordinary.md and its variants against runs.tsv: a budget inside the range, cost
+# above and below, time outside, the kind from --kind, a full model name, a thin history, a missing log, a
+# failing contract, and no --runs as today.
+# --runs, the access point (#333): `check-contract.sh <contract> --runs <RUNS.tsv> [--kind <k>]` (.ps1: -Runs
+# <RUNS.tsv> [-Kind <k>]; the options after the contract). The kind: the contract's top-level `kind:` field,
+# else --kind. The model: budget.model as run-stats lists it, or a full name holding it (claude-opus-5-5 is
+# opus). After the contract's own checks, from run-stats' line for that kind and model:
+#   4 or more tasks: budget.cost outside cost_low..cost_high prints the line
+#     `<file>: WARN  budget.cost <cost> is outside run-stats <kind>/<model>: median <m>, range <low>-<high>, <n> tasks`
+#   and budget.time outside time_low..time_high the same with `budget.time <time>` and the time columns;
+#   inside the range: no such line;
+#   under 4 tasks: one line `<file>: thin history: <n> tasks; this model's runs came in at <R>× their estimates`
+#   (R: cost_ratio of `run-stats <RUNS.tsv> --ratio --model <m>`), and no budget WARN line;
+#   a run log it cannot read: a line `<file>: WARN  ...` naming the log.
+#   Never an ERROR from --runs: the exit code is the one without it. Without --runs the output is today's.
 #   tests/check-contract/run.sh sh                  # check-contract.sh, with the bash running this file
 #   tests/check-contract/run.sh ps pwsh             # check-contract.ps1 (or: ps powershell)
 # Exit 1 if the output or the exit code differs.
 set -u
-[ $# -gt 0 ] || { sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,24s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
 win=""; command -v cygpath >/dev/null 2>&1 && { win=1; core="$(cygpath -m "$core")"; }
-cp "$here"/*.md "$tmp/"
+cp "$here"/*.md "$here/runs.tsv" "$tmp/"
 # and a body line that reads like a key: below the header it is not part of the contract
 { printf '\357\273\277'; cat "$core/tests/selftest/contract.md"; printf 'acceptance: is read from the header only\n'; } > "$tmp/bom.md"
 files=(how-in-text.md quoted.md empty-id-title.md misplaced.md empty-how.md commented-defaults.md budget-time.md budget-time-ok.md feature-scope.md tests-first-missing.md tests-first-bad.md tests-first-no-reason.md bom.md missing.md)
@@ -83,5 +98,48 @@ for a in none empty; do
   [ "$FRC" = 2 ] && case "$FO" in *"Check a contract"*) true ;; *) false ;; esac ||
     { echo "FAIL: $fopt with key $a: expected the usage and exit 2, got exit $FRC:"; printf '%s\n' "$FO" | tr -d '\r' | sed 's/^/    /'; fail=1; }
 done
+# --runs (#333): the budget against the run log's line (the header: the access point)
+sed 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-above.md
+sed 's/^  cost: 6$/  cost: 3/' runs-ordinary.md > runs-below.md
+sed 's/^  time: 40$/  time: 90/' runs-ordinary.md > runs-time.md
+sed -e '/^kind: /d' -e 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-nokind.md
+sed -e 's/^  model: opus$/  model: claude-opus-5-5/' -e 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-full.md
+sed 's/^kind: ordinary$/kind: hard/' runs-ordinary.md > runs-thin.md
+crun() {   # crun <arguments>: check-contract's output (no CRs) in CO, its exit in CRC
+  if [ "$kind" = ps ]; then
+    local a=() x; for x in "$@"; do case "$x" in --runs) a+=(-Runs) ;; --kind) a+=(-Kind) ;; *) a+=("$x") ;; esac; done
+    CO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "${a[@]}" 2>&1)"; CRC=$?
+  else CO="$(bash "$core/scripts/check-contract.sh" "$@" 2>&1)"; CRC=$?; fi
+  CO="$(printf '%s\n' "$CO" | tr -d '\r')"
+}
+rfail() { echo "FAIL: runs $rname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
+rexit() { [ "$CRC" = "$1" ] || rfail "exit $CRC, want $1"; }
+rhas() { printf '%s\n' "$CO" | grep -qF -- "$1" || rfail "no line with: $1"; }
+rhasnt() { ! printf '%s\n' "$CO" | grep -qE -- "$1" || rfail "a line matches: $1"; }
+cost9='budget.cost 9 is outside run-stats ordinary/opus: median 6.00, range 5.00-7.00, 5 tasks'
+rname="a budget inside the range"; crun runs-ordinary.md --runs runs.tsv
+rexit 0; rhasnt 'WARN|ERROR|thin history|cannot read'
+rname="cost above the range"; crun runs-above.md --runs runs.tsv
+rexit 0; rhas "runs-above.md: WARN  $cost9"; rhasnt 'WARN  budget\.time|ERROR|cannot read'
+rname="cost below the range"; crun runs-below.md --runs runs.tsv
+rexit 0; rhas 'runs-below.md: WARN  budget.cost 3 is outside run-stats ordinary/opus: median 6.00, range 5.00-7.00, 5 tasks'
+rhasnt 'ERROR|cannot read'
+rname="time outside the range"; crun runs-time.md --runs runs.tsv
+rexit 0; rhas 'runs-time.md: WARN  budget.time 90 is outside run-stats ordinary/opus: median 40, range 30-50, 5 tasks'
+rhasnt 'WARN  budget\.cost|ERROR|cannot read'
+rname="no kind field: the kind from --kind"; crun runs-nokind.md --runs runs.tsv --kind ordinary
+rexit 0; rhas "runs-nokind.md: WARN  $cost9"; rhasnt 'ERROR|cannot read'
+rname="budget.model as the ladder's full name"; crun runs-full.md --runs runs.tsv
+rexit 0; rhas "runs-full.md: WARN  $cost9"; rhasnt 'ERROR|cannot read'
+rname="under 4 tasks: the thin-history line with the model's ratio"; crun runs-thin.md --runs runs.tsv
+rexit 0; rhas "runs-thin.md: thin history: 1 tasks; this model's runs came in at 0.55× their estimates"
+rhasnt 'WARN  budget|ERROR|cannot read'
+rname="a missing run log is a WARN"; crun runs-ordinary.md --runs missing-runs.tsv
+rexit 0; printf '%s\n' "$CO" | grep -qE '^runs-ordinary\.md: WARN  .*missing-runs\.tsv' || rfail "no WARN line naming missing-runs.tsv"
+rhasnt 'ERROR'
+rname="a failing contract keeps its errors and exit"; crun how-in-text.md --runs runs.tsv
+rexit 1; rhas 'how-in-text.md: ERROR criterion 1: oracle check without `how`'; rhasnt 'cannot read'
+rname="no --runs: as today"; crun runs-above.md
+rexit 0; [ "$CO" = 'runs-above.md: OK (0 errors, 0 warnings)' ] || rfail "the output is not today's"
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
