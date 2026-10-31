@@ -585,7 +585,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   that fails or prints no JSON list, refused and nothing touched; one comparison of folders in both
   start-worker scripts; `--assistant-dir`). The others take the same
   `sh|ps <powershell>`: `tests/check-contract/run.sh` (the fixture contracts against their expected
-  output), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
+  output; `--runs` against `tests/check-contract/runs.tsv`: in range, above, below, time, a full model
+  name, a thin history, no log), `tests/check-core/run.sh` (a core copy with a wrapped feature field and a script without its
   pair), `tests/check-scripts/run.sh` (odd folder names, extensions in capitals, 5.1's rules, a `bash`
   that checks nothing), `tests/session-tokens/run.sh` (the fixture transcripts counted exactly, their time lines included),
   `tests/session-insights/run.sh` (fixture transcripts: the cases its top comment lists),
@@ -600,7 +601,8 @@ and its sub-runs summed, only the last 10 tasks counted, old rows without the ti
 values, under 4 tasks, even counts, `--per-run`, no header or one in another order, a header only,
 CRLF with a BOM, a missing file; `--limits` on `tests/run-stats/limits/`: trusted, guessed and previous
 ratios, a block that fits and one that does not, a window that has reset, no `rate_limits`, CRLF with a
-BOM, models priced apart),
+BOM, models priced apart; `--ratio` on `tests/run-stats/ratio.tsv`: a lead counted once, a range by its
+middle, tasks without an estimate or a cost left out, assistant and task rows never counted),
   `tests/merge-queue/run.sh` (a stub `gh` answering from a state folder: merged, behind and updated, a
   conflict, a merge of main that touched the PR's files with and without shared globs, a re-run once and
   a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
@@ -675,7 +677,14 @@ BOM, models priced apart),
   delegation, WARN goes into the brief. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,
-  the usage and exit 2 in both shells (#288). `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
+  the usage and exit 2 in both shells (#288). `--runs <RUNS.tsv> [--kind <k>]` (`-Runs <RUNS.tsv> [-Kind <k>]`,
+  after the contract; CORE §7a, #333): after its own checks, the budget against `run-stats`' line for the
+  contract's kind (its `kind:` field, else `--kind`) and `budget.model` (as run-stats lists it, or a full name
+  holding it: `claude-opus-5-5` is `opus`) — from 4 tasks of the pair a WARN when `budget.cost` or
+  `budget.time` is outside the line's low–high, naming its median, range and tasks; under 4, one line
+  `thin history: <n> tasks; this model's runs came in at <R>× their estimates` (R: `run-stats --ratio`);
+  a run log it cannot read, or no kind, is a WARN; never an ERROR, the exit code as without it; not with
+  `--field`. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
@@ -937,8 +946,16 @@ BOM, models priced apart),
   (`-Kind`, `-Model`) prints that pair's line only — a contract's `budget.cost` and `budget.time`, and the
   ready forecast beside them. `--per-run` (`-PerRun`) groups single rows by kind, role and model instead,
   for diagnosis, without task rows and without the ready columns.
+  `--ratio --model <m>` (`-Ratio -Model <m>`; #333) prints one line, no header, `model cost_n cost_ratio
+  time_n time_ratio`: over all the model's tasks (rows of role or kind `assistant` and task rows left out),
+  the median of the task's cost over its first row's `estimate` and of its work over its first row's
+  `estimate_time` (a range `a-b` by its middle), two decimals, `-` with none — this project's measured
+  actual/estimate for that model, the factor a thin history's guess is scaled by (CORE §7a); with `--kind`,
+  a usage error. `scripts/check-contract.sh <contract> --runs <RUNS.tsv> [--kind <k>]` (`check-contract.ps1
+  <contract> -Runs <RUNS.tsv> [-Kind <k>]`) holds a contract's budget against this line at the task start
+  (*Checks*).
   Columns are read by the header line (first field `date`), else in CORE §7's order; `estimate` and
-  `estimate_time` are not read (the forecast is the medians). Exit 1 when the
+  `estimate_time` are not read by the forecast (the forecast is the medians), only by `--ratio`. Exit 1 when the
   file cannot be read, 2 on a usage error.
 - **A task's time to ready and owner wait** (CORE §7a): `scripts/run-stats.sh <RUNS.tsv> --task <n>
   --pr-json <file> --waits <file>` (`run-stats.ps1 <RUNS.tsv> -Task <n> -PrJson <file> -Waits <file>`)

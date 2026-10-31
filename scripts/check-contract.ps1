@@ -12,19 +12,36 @@
 #   -Field <key> <contract>: read-only - the same checks, and when the contract passes only the key's
 #   value as they read it (its text with continuation lines, comment and quotes removed) on one line,
 #   exit 0; else the usual ERROR and FAIL lines and exit 1 (start-worker's tests_first gate, #276).
+#   <contract> ... -Runs <RUNS.tsv> [-Kind <k>]: after its own checks, the budget against the run log (CORE
+#   section 7a, #333) - the kind from the contract's `kind:` field (it wins over -Kind), else -Kind; the
+#   model as run-stats lists it, or the longest listed name budget.model holds (claude-opus-5-5 is opus);
+#   4+ tasks: a WARN when budget.cost or budget.time (a range by its middle) is outside run-stats' low..high;
+#   fewer (by cost): `thin history: <n> tasks; this model's runs came in at <R>x their estimates` (R: run-stats
+#   -Ratio's cost_ratio, - for none; the sign is U+00D7 as in the .sh); an unreadable log or no kind: a WARN.
+#   WARN lines count as warnings; never an ERROR, the exit code unchanged; not with -Field (check-contract.sh).
 # the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
 # usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
 $Field = ''; $Files = @($args | ForEach-Object { "$_" }); $usage = -not $Files
 if ($Files.Count -gt 0 -and $Files[0] -match '^-field:?$') {
   if ($Files.Count -lt 3 -or -not $Files[1]) { $usage = $true } else { $Field = $Files[1]; $Files = @($Files[2..($Files.Count - 1)]) }
 }
+$Runs = ''; $RKind = ''; $HasRuns = $false; $rest = New-Object System.Collections.Generic.List[string]
+for ($i = 0; $i -lt $Files.Count; $i++) {
+  if ($Files[$i] -match '^-(runs|kind):?$') {
+    if ($i + 1 -ge $Files.Count -or -not $Files[$i + 1]) { $usage = $true; break }
+    if ($Matches[1] -eq 'runs') { $Runs = $Files[$i + 1]; $HasRuns = $true } else { $RKind = $Files[$i + 1] }
+    $i++
+  } else { $rest.Add($Files[$i]) }
+}
+$Files = @($rest.ToArray())
+if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)) { $usage = $true }
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 14 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 21 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -38,6 +55,46 @@ function Filled([string]$s) { $s = (Val $s).Trim(' ', "`t"); $s -ne '' -and $s -
 # a top-level value that holds nothing: comments, block markers, blanks or empty quotes only
 function Blank([string]$t) { $t = $t -creplace '#[^\n]*', '' -creplace '[>|\n \t]', ''; $t -eq '' -or $t -eq '""' -or $t -eq "''" }
 
+# the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: -Runs)
+$inv = [Globalization.CultureInfo]::InvariantCulture
+$RunStats = Join-Path $PSScriptRoot 'run-stats.ps1'
+function Forecast([string]$k, [string]$bm, [string]$c, [string]$t) {
+  if (-not (Test-Path -LiteralPath $Runs -PathType Leaf)) { return "W`tcannot read the run log ${Runs}: the budget is not checked against run-stats (CORE ${sect}7a)" }
+  if (-not $k) { return "W`t--runs without a kind (no ``kind:`` field, no --kind): the budget is not checked against run-stats" }
+  if (-not $bm) { return }   # budget.model missing: warned above
+  $tbl = @(& $RunStats $Runs)
+  if ($LASTEXITCODE) { return "W`trun-stats failed on ${Runs}" }
+  # the model as run-stats lists it: the same name, else the longest listed name budget.model holds
+  $m = ''; $exact = $false; $y = $bm.ToLowerInvariant()
+  foreach ($ln in @($tbl | Select-Object -Skip 1)) {
+    $x = "$ln".Split("`t"); if ($x.Count -lt 2) { continue }; $xm = $x[1].ToLowerInvariant()
+    if ($xm -ceq $y) { $m = $x[1]; $exact = $true }
+    elseif (-not $exact -and $xm -ne '' -and $y.Contains($xm) -and $x[1].Length -gt $m.Length) { $m = $x[1] }
+  }
+  if (-not $m) { $m = $bm }
+  $p = $null
+  foreach ($ln in @($tbl | Select-Object -Skip 1)) { $x = "$ln".Split("`t"); if ($x.Count -ge 10 -and $x[0] -ceq $k -and $x[1] -ceq $m) { $p = $x; break } }
+  $n = if ($p) { [int]$p[2] } else { 0 }
+  if ($n -lt 4) {
+    $rt = @(& $RunStats $Runs -Ratio -Model $m 2>$null); $r = '-'
+    if ($rt.Count -ge 1) { $q = "$($rt[0])".Split("`t"); if ($q.Count -ge 3 -and $q[2]) { $r = $q[2] } }
+    "I`tthin history: $n tasks; this model's runs came in at $r$([char]0x00D7) their estimates"
+  }
+  if (-not $p) { return }
+  # the WARN lines from the pair's line (cost from 4 tasks on; the time likewise)
+  $num = '^[0-9]+([.][0-9]+)?\z'; $pair = "$k/$m"
+  $v = $c -creplace '^[$]', ''
+  if ($n -ge 4 -and $v -cmatch $num) {
+    $d = [decimal]::Parse($v, $inv)
+    if ($d -lt [decimal]::Parse($p[4], $inv) -or $d -gt [decimal]::Parse($p[5], $inv)) { "W`tbudget.cost $c is outside run-stats ${pair}: median $($p[3]), range $($p[4])-$($p[5]), $($p[2]) tasks" }
+  }
+  $v = $t -creplace '[ \t]', ''; $d = $null
+  if ($v -cmatch '^([0-9]+(?:[.][0-9]+)?)-([0-9]+(?:[.][0-9]+)?)\z') { $d = ([decimal]::Parse($Matches[1], $inv) + [decimal]::Parse($Matches[2], $inv)) / 2 }
+  elseif ($v -cmatch $num) { $d = [decimal]::Parse($v, $inv) }
+  if ([int]$p[6] -ge 4 -and $null -ne $d) {
+    if ($d -lt [decimal]::Parse($p[8], $inv) -or $d -gt [decimal]::Parse($p[9], $inv)) { "W`tbudget.time $t is outside run-stats ${pair}: median $($p[7]), range $($p[8])-$($p[9]), $($p[6]) tasks" }
+  }
+}
 $failed = 0
 foreach ($f in $Files) {
   $L = $null
@@ -158,6 +215,17 @@ foreach ($f in $Files) {
   }
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
+  }
+  # -Runs: the budget against the run log, after the checks above; a `kind:` field wins over -Kind
+  if ($HasRuns) {
+    $ck = if ($txt.ContainsKey('kind')) { Val (($txt['kind'] -split "`n")[0]) } else { '' }
+    if (-not $ck) { $ck = $RKind }
+    $cm = if ($b -cmatch '\n[ \t]+model:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }
+    $cc = if ($b -cmatch '\n[ \t]+cost:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }
+    $ctm = if ($b -cmatch '\n[ \t]+time:([^\n]*)') { Val $Matches[1] } else { '' }
+    foreach ($w in @(Forecast $ck $cm $cc $ctm)) {
+      if ($w.StartsWith("W`t")) { $out.Add('WARN  ' + $w.Substring(2)); $nw++ } elseif ($w.StartsWith("I`t")) { $out.Add($w.Substring(2)) }
+    }
   }
   # errors first, then warnings, as check-contract.sh prints them in order of the checks
   # -Field: the key's value as read above, its lines joined into one; warnings left out

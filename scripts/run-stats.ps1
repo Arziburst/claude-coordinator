@@ -12,6 +12,9 @@
 # ready_n ready_median ready_low ready_high (-PerRun: kind role model and the cost and time columns, no task rows)
 # (median: the mean of the two middle values for an even count; low / high: the 25th and 75th percentile by nearest
 # rank from 4 values on, min and max under 4; cost to the cent, time to the minute, half up; no values: 0 and -).
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 <RUNS.tsv> -Ratio -Model <m>   one line:
+#     model cost_n cost_ratio time_n time_ratio - over all the model's tasks, the median of cost over the first row's
+#     `estimate` and of work over its `estimate_time` (a range a-b by its middle), two decimals; none: 0 and - (#333).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stats.ps1 <RUNS.tsv> -Task <n> [-PrJson <file|->]
 #     [-Waits <file>] [-Append]   the task's `task` row to append (-Append writes it to RUNS.tsv, #242): time to
 #     ready and owner wait from its runs, the PR's
@@ -26,16 +29,18 @@
 #     <since> prints; prices: `<model id> <input> <output> <cache read> <cache write> [not-weekly] [top]`, USD per million.
 # Exit 1 when a file cannot be read (and in -Limits: no rate limits in the JSON, a malformed price line, a spend
 # model without a price; in -Task: no rows for the task, no start, not ready, a malformed wait line), 2 on a usage error.
-param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [string]$Task, [string]$PrJson, [string]$Waits,
+param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [switch]$Ratio, [string]$Task, [string]$PrJson, [string]$Waits,
   [switch]$Append, [switch]$Limits, [string]$Status, [string]$Spend5h, [string]$SpendWeek, [string]$Prices,
   [string]$Prev5h, [string]$PrevWeek, [string]$Cap5h, [string]$CapWeek, [string]$Block, [string]$BlockTop, [string]$Now)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 28 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 31 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 if ($Limits) {
-  if ($File -or $Kind -or $Model -or $PerRun -or $Task -or $PrJson -or $Waits -or $Append) { Show-Usage }
+  if ($File -or $Kind -or $Model -or $PerRun -or $Ratio -or $Task -or $PrJson -or $Waits -or $Append) { Show-Usage }
 } elseif ($Task -or $PrJson -or $Waits -or $Append) {
-  if (-not $File -or -not $Task -or $Kind -or $Model -or $PerRun -or $Waits -eq '-') { Show-Usage }
+  if (-not $File -or -not $Task -or $Kind -or $Model -or $PerRun -or $Ratio -or $Waits -eq '-') { Show-Usage }
+} elseif ($Ratio) {
+  if (-not $File -or -not $Model -or $Kind -or $PerRun) { Show-Usage }
 } elseif (-not $File -or ([bool]$Kind -ne [bool]$Model) -or ($PerRun -and $Kind)) { Show-Usage }
 $ErrorActionPreference = 'Stop'
 # numbers as the .sh prints them (6.50, not 6,50 on a Russian or German Windows)
@@ -337,7 +342,15 @@ function Add([string]$g, [long]$c, [long]$a, [long]$w) {
   if ($w -ge 0) { $ready[$g].Add($w) }
 }
 
-$ct = 1; $cr = 2; $ck = 3; $cm = 4; $cc = 8; $cw = 11; $ca = 12   # CORE 7's order, 0-based
+# an estimate twice over, in units (a range a-b: a + b, its middle twice; `$` allowed); -1 when it is none or 0
+function Est([string]$v) {
+  $v = $v.Trim(' ', "`t") -creplace '^[$]', ''
+  $p = $v.IndexOf('-')
+  if ($p -gt 0) { $x = Units $v.Substring(0, $p) 'm'; $y = Units $v.Substring($p + 1) 'm'; $x = if ($x -lt 0 -or $y -lt 0) { -1 } else { $x + $y } }
+  else { $x = Units $v 'm'; if ($x -ge 0) { $x *= 2 } }
+  if ($x -gt 0) { [long]$x } else { [long]-1 }
+}
+$ct = 1; $cr = 2; $ck = 3; $cm = 4; $ce = 6; $cc = 8; $cw = 11; $ca = 12; $cx = 14   # CORE 7's order, 0-based
 $order = New-Object 'System.Collections.Generic.List[string]'   # tasks, a task moved to the end at each of its rows
 $byTask = @{}
 $rorder = New-Object 'System.Collections.Generic.List[string]'; $byReady = @{}   # the task rows, likewise
@@ -348,6 +361,7 @@ foreach ($line in $L) {
   if ($f[0] -ceq 'date') {
     $ct = [Array]::IndexOf($f, 'task'); $cr = [Array]::IndexOf($f, 'role'); $ck = [Array]::IndexOf($f, 'kind')
     $cm = [Array]::IndexOf($f, 'model'); $cc = [Array]::IndexOf($f, 'cost'); $cw = [Array]::IndexOf($f, 'wall'); $ca = [Array]::IndexOf($f, 'active')
+    $ce = [Array]::IndexOf($f, 'estimate'); $cx = [Array]::IndexOf($f, 'estimate_time')
     continue
   }
   $col = { param($i) if ($i -ge 0 -and $i -lt $f.Count) { $f[$i] } else { '' } }
@@ -366,13 +380,33 @@ foreach ($line in $L) {
   if ($PerRun) { if ($k -ne '' -and $m -ne '') { Add "$k`t$r`t$m" $c $a -1 }; continue }
   $t = (& $col $ct) -creplace '[.].*$', ''
   if ($t -eq '' -or $t -eq '-') { continue }
-  if (-not $byTask.ContainsKey($t)) { $byTask[$t] = @{ c = [long]0; hc = $false; a = [long]0; ha = $false; p = 0; k = ''; m = '' } }
+  # the estimates: those of the task's first row
+  if (-not $byTask.ContainsKey($t)) { $byTask[$t] = @{ c = [long]0; hc = $false; a = [long]0; ha = $false; p = 0; k = ''; m = ''; e = (Est (& $col $ce)); x = (Est (& $col $cx)) } }
   $x = $byTask[$t]; [void]$order.Remove($t); $order.Add($t)
   if ($c -ge 0) { $x.c += $c; $x.hc = $true }
   if ($a -ge 0 -and $cv -cnotmatch '^[ \t]*in[ \t]') { $x.a += $a; $x.ha = $true }   # a subagent: in its parent
   # its kind and model: the lead row, else the first worker row, else the first row
   $p = if ($r -ceq 'lead') { 3 } elseif ($r -ceq 'worker') { 2 } else { 1 }
   if ($p -gt $x.p) { $x.p = $p; $x.k = $k; $x.m = $m }
+}
+if ($Ratio) {
+  # per task actual / (estimate twice / 2) in 1/1000000, rounded down; the median, two decimals half up
+  $Per = { param([long]$a, [long]$e) [long](($a * 2000000 - (($a * 2000000) % $e)) / $e) }
+  $Med = { param($v)
+    if ($v.Count -eq 0) { return '-' }
+    $s = [long[]]@($v.ToArray()); [Array]::Sort($s); $n = $s.Count
+    [long]$w = if ($n % 2) { 2 * $s[($n - 1) / 2] } else { $s[$n / 2 - 1] + $s[$n / 2] }
+    [long]$h = [Math]::Floor(($w + 10000) / 20000)
+    '{0}.{1:00}' -f [long][Math]::Floor($h / 100), ($h % 100)
+  }
+  $rc = New-Object 'System.Collections.Generic.List[long]'; $rt = New-Object 'System.Collections.Generic.List[long]'
+  foreach ($t in $order) {
+    $x = $byTask[$t]; if ($x.m -cne $Model) { continue }
+    if ($x.hc -and $x.e -gt 0) { $rc.Add((& $Per $x.c $x.e)) }
+    if ($x.ha -and $x.x -gt 0) { $rt.Add((& $Per $x.a $x.x)) }
+  }
+  "$Model`t$($rc.Count)`t$(& $Med $rc)`t$($rt.Count)`t$(& $Med $rt)"
+  exit 0
 }
 if (-not $PerRun) {
   foreach ($t in $order) {
