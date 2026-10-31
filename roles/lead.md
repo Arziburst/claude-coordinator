@@ -131,7 +131,9 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    cheaper model).
 7. **Finish.** Open the PR the parent contract names from the integration branch, as a draft
    (`gh pr create --draft …`, roles/worker.md step 3), and return the
-   report (CONTRACT.md *The report*) with every parent criterion's evidence, plus `runs` as shown
+   report (CONTRACT.md *The report*) — sent with SendMessage to the report address the brief names
+   (roles/worker.md step 5, its fallbacks included); a report only in your own output never reaches
+   the coordinator (#351) — with every parent criterion's evidence, plus `runs` as shown
    there: one entry per run, each tester and verifier subagent run included, its cost `in lead` (its estimate and estimate_time are the sub-contract's `budget.cost` and
    `budget.time`; `start`, `wall` and `active` as session-tokens printed them; the coordinator writes
    them to `RUNS.tsv`), your own session last, read as in step 6 just before the report (the

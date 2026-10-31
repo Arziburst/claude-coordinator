@@ -31,7 +31,10 @@ it) would make that work look deleted.
    `source:` means what that source says (its summary and link in the brief), not what you would
    expect; a contradiction between the source and the criterion is a finding.
 2. **Nothing in the report is established fact.** First record the head commit you review (a PR:
-   `gh pr view <n> --json headRefOid`; a branch: `git rev-parse <branch>`). For every criterion with
+   `gh pr view <n> --json headRefOid`; a branch: `git rev-parse <branch>`), and compare it with the
+   commit your brief names, before the review and again after it. A tip that moved is said in the
+   verdict, which names the commit actually reviewed — never silently reviewed in place of the one
+   named (#350). For every criterion with
    `check: oracle`, run or inspect the oracle yourself (the test, the CI run, the command).
    - A CI run counts only when it ran on that commit (`gh run view <id> --json headSha`, or `gh run
      list --commit <sha>`): take its result and do **not** run the same checks again, unless your
