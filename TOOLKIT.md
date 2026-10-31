@@ -108,8 +108,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   *Workers*). Resume takes the other one: `claude --bg --resume <full session id> "<message>"`, from any **trusted** folder (an
   untrusted one is refused: "Workspace not trusted"; a session not stopped but still idle in the
   background is not resumed but copied under a new id — stop it first): the same id,
-  worktree, name, model, permission mode, settings (the guard) and history — the subscription is renewed
-  (SendMessage `notify_when_idle`) and its cost read by the same id. Never a short id (it starts a
+  worktree, name, model, permission mode, settings (the guard) and history — its watch-list line stays
+  (the watcher started again if it ended), a subscription is renewed (SendMessage `notify_when_idle`) only
+  where one is used (*Messages between sessions*), and its cost read by the same id. Never a short id (it starts a
   **copy** under a new id in the current folder, without the name: in the owner's working copy, that is a
   session working there) and never `claude resume <id>` (no such command — the id becomes a new
   session's prompt). After a pause over an hour the prompt cache is gone and the resumed session pays its
@@ -264,6 +265,28 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
   the worker is next idle (same machine, expires after 12 h). A session **waiting on a permission
   prompt is not idle**: no notice comes; `ListAgents` shows it as `waiting` (seen on 2.1.296).
+- **The session watcher in place of idle subscriptions** (#342, CORE §4 *Control*): every idle notice
+  and every message starts a turn of the receiver's whole context, and a worker that reports by
+  message still made 2–4 idle notices. So a session that reports by message is not subscribed; the
+  coordinator (and a lead, for its workers) keeps the sessions it awaits a report from in a list file —
+  `coordinator/watch.txt`, a lead's in its notes folder — and runs one watcher as a background command
+  while the list is not empty: `bash coordinator/core/scripts/watch-sessions.sh --list
+  coordinator/watch.txt` (Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File
+  coordinator\core\scripts\watch-sessions.ps1 -List coordinator\watch.txt`), with `run_in_background`.
+  It polls `claude agents --json --all` every `--interval` seconds (default 120), reads the list again
+  on every poll, prints nothing while every listed session is at work, and ends with one line per
+  finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`
+  (exit 0); `EMPTY` when the list is missing or holds no session (exit 0 — with nothing to watch it does
+  not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1).
+  **States:** `working` / `busy` = at work; `stopped` / `failed` / `done` = STOPPED; any other state
+  (`idle`, `blocked`, `waiting` — a permission prompt or a limit) = quiet: QUIET after
+  `--quiet-minutes` (default 20), counted by the watcher from the first poll that saw it quiet and
+  started again after a poll that saw it at work. A list line is the session's short id (`id` in the
+  listing) or its whole name; blank lines and comments (`# …`, a `#` followed by a blank or the line's
+  end) are skipped, `#12 worker: Fix` is a name. It writes nothing and never stops, messages or
+  changes a session; `--once` polls once (a manual check). Tests: `tests/watch-sessions/run.sh
+  sh|ps <powershell>` against a stub `claude`. A subscription stays only for a session no message is
+  expected from (CORE §4 *Control* says which).
 - **Names change:** a restarted or renamed session may come back under another name, so a report
   address written into a brief can go stale. start-worker writes
   the address it is given (`--report-to`, the coordinator's name as `ListAgents` shows it now); the
@@ -278,7 +301,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
 - **Subscribing right after a start can race:** the new session may not be listed yet ("No agent named
   … is reachable"). start-worker waits until `claude agents --json` lists it; if a subscribe still
   fails, retry once a few seconds later. One subscription per expected report — every re-subscription
-  to an idle lead (idle while its workers run) only brings another notice for the same pause.
+  to an idle lead (idle while its workers run) only brings another notice for the same pause. (Where a
+  subscription is still used: a session no message is expected from, CORE §4 *Control*.)
   [cross-session-messaging](https://code.claude.com/docs/en/cross-session-messaging.md)
 - Setting **`crossSessionInbound: "accept"`** on the receiving side lets a session take
   messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the
@@ -578,6 +602,9 @@ BOM, models priced apart),
   REPEAT with one reaction and none when it is there, `--comment-file`, CHECK with at most 5 candidates,
   FILED with its `Checked:` and `Signature:` lines, a dry run; an open match before a closed one,
   `--regression`; no write but the issue, the reaction and the comment),
+  `tests/watch-sessions/run.sh` (a stub `claude` answering scripted listings: each finding, the quiet
+  time from the first quiet poll and restarted after work, comments and names, the list edited between
+  polls, one failure retried and two in a row an ERROR, the interval kept, nothing written),
   `tests/selftest/hooks.sh` (every settings fixture against its expected output, the steps' usage
   errors), `tests/selftest/probes.sh` (`selftest probes` against a stub `claude` that feeds the token
   probe's `echo` to this core's guard and writes the transcript; `hookcheck --expect probe`),

@@ -221,7 +221,7 @@ is lost (#242).
 | Event | What runs |
 |---|---|
 | A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10); each assistant's spend row read (§7) and its folder, `NOTES.md` included, committed in the state repository |
-| A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and subscribed (steps 3–4 below); its journal line (§12) |
+| A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and on the watch list, the watcher running (steps 3–4 below); its journal line (§12) |
 | A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
 | A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a); a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12) |
@@ -296,15 +296,33 @@ The continuous work:
    lead runs the tester per sub-contract`, `yes` belongs only in its sub-contracts, and start-worker
    refuses a lead whose contract has `tests_first: yes` or that is given `--tester-commit` /
    `--tester-tests` (#289).
-4. **Control:** every session started, by any script, gets `SendMessage(to: <its name>,
-   notify_when_idle: true)` right after it starts (start-worker prints the line), and its brief names
-   the coordinator's current session name as the report address (`--report-to`), never a guessed
-   one. A session waiting on a permission prompt sends no idle notice: no report or notice when one
-   is due → `ListAgents`; `waiting` → tell the owner, never answer the prompt (§1.9). **One
-   subscription per expected report:** a lead idle while its workers run is normal — check
-   `ListAgents` once, never re-subscribe in a loop, wait for its report; one gone `done` (its
-   worker's report fell back to you) is resumed by its full id with that report (TOOLKIT *Pause and
-   resume*). **Renamed** (by the owner, or
+4. **Control:** every session started, by any script, has a brief that names the coordinator's
+   current session name as the report address (`--report-to`), never a guessed one. Messages between
+   sessions stay as they are (SendMessage both ways). **The watch list, not idle subscriptions**
+   (#342): each idle notice is a turn of the coordinator's whole context, so a session that reports by
+   message gets no `notify_when_idle` subscription. Instead each session a report is awaited from
+   goes into `coordinator/watch.txt` (its short id or its full name, one a line) when it starts, and
+   leaves it when its report — or its stop — is handled. While the list is not empty, one
+   `scripts/watch-sessions --list coordinator/watch.txt` runs as a background command
+   (`run_in_background`, TOOLKIT *Messages between sessions*); it reads the list on every poll, prints
+   nothing while the sessions work, and ends — one wakeup — only with a finding; it is started again
+   once the finding is handled, never while one runs, and not at all with the list empty. A
+   subscription (`SendMessage(to: <its name>, notify_when_idle: true)`, the line start-worker prints)
+   stays allowed only for a session no message is expected from: one whose brief names no report
+   address (a session the coordinator did not brief, e.g. one the owner started and asked it to watch);
+   every role the core starts reports by message, so none of them. **One subscription per expected
+   report** where one is used. The watcher's findings: `STOPPED <id> <name>` (stopped, failed or
+   done without its report reaching you) → its branch, PR and `claude logs <id>`; one gone `done`
+   while it still had work (a lead whose worker's report fell back to you included) is resumed by its
+   full id, with that report if there is one (TOOLKIT *Pause and resume*); `GONE <id or name>` (no
+   longer listed) → a name changed (a respawn, a rename) gets its id in the line, a removed session
+   leaves the list and the owner hears what was lost; `QUIET <id> <name> <minutes>` (not at work for
+   the limit, 20 minutes by default, without a report) → `ListAgents` once: `waiting` (a permission
+   prompt sends no idle notice) → tell the owner, never answer the prompt (§1.9); idle → one
+   SendMessage asking for its report or its state; a lead quiet while its workers run is normal —
+   keep its line, never message it in a loop, wait for its report; `EMPTY` → nothing to watch;
+   `ERROR <line>` (`claude agents` failed twice in a row) → start it once more; failing again → tell
+   the owner and check `ListAgents` while a report is due. **Renamed** (by the owner, or
    after a restart) → tell every running session of this project (§1.17) the new name, one SendMessage each; the roles'
    fallback to the project's Coordinator is only the net. Answer workers
    point first; only owner decisions go to the owner; a worker near its context limit or stuck → help
