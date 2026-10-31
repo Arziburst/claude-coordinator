@@ -1277,3 +1277,21 @@ allow	work	find . -name '*.md'
 allow	work	find . -execdir ls {} +
 allow	work	find . -exec git push origin 12-fix \;
 allow	work	find . -name x -exec echo {} \;
+# negative brace ranges and escaped characters in a brace word (#345, round 2): .sh and .ps1 give the same
+# verdict as the words bash runs - {-1..-1} is -1, {-01..-01} is -01; \}, \{, \;, \  and \| stay in the word
+block	work	git push -o x{-1..-1} origin main
+block	work	git -C .{-1..-1} push origin main
+block	work	git push origin {-1..-1} main
+block	work	git push -o x{-01..-01} origin main
+allow	work	git push origin main{-1..-1}
+allow	work	git push origin m{-1..-1}ain
+allow	work	git push origin main{-01..-01}
+allow	work	echo {-3..-1}
+block	work	git push origin {main,x\}}
+block	work	git push origin {main,\{x}
+block	work	git push origin {main,\;}
+block	work	git push origin {main,\ x}
+block	work	git push origin {main,\|}
+block	work	{find,.,-exec,git,push,origin,main,\;}
+allow	work	git push origin {12-fix,x\}}
+allow	work	echo {a,b\}}
