@@ -76,8 +76,8 @@ case "$kind" in
       runs() { local a=("$1"); shift
         while [ $# -gt 0 ]; do
           case "$1" in
-            --estimate-time) a+=(-EstimateTime "$2"); shift 2 ;;
-            --*) local o="${1#--}"; a+=("-$(printf '%s' "${o:0:1}" | tr a-z A-Z)${o:1}" "$2"); shift 2 ;;
+            --estimate-time) a+=("-EstimateTime:$2"); shift 2 ;;
+            --*) local o="${1#--}"; a+=("-$(printf '%s' "${o:0:1}" | tr a-z A-Z)${o:1}:$2"); shift 2 ;;
             *) a+=("$1"); shift ;;
           esac
         done
