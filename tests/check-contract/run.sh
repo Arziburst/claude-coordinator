@@ -99,12 +99,14 @@ for a in none empty; do
     { echo "FAIL: $fopt with key $a: expected the usage and exit 2, got exit $FRC:"; printf '%s\n' "$FO" | tr -d '\r' | sed 's/^/    /'; fail=1; }
 done
 # --runs (#333): the budget against the run log's line (the header: the access point)
-sed 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-above.md
-sed 's/^  cost: 6$/  cost: 3/' runs-ordinary.md > runs-below.md
-sed 's/^  time: 40$/  time: 90/' runs-ordinary.md > runs-time.md
-sed -e '/^kind: /d' -e 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-nokind.md
-sed -e 's/^  model: opus$/  model: claude-opus-5-5/' -e 's/^  cost: 6$/  cost: 9/' runs-ordinary.md > runs-full.md
-sed 's/^kind: ordinary$/kind: hard/' runs-ordinary.md > runs-thin.md
+# the variants from an LF copy: a Windows checkout may hold runs-ordinary.md with CRLF, and sed's $ is before the \r
+tr -d '\r' < runs-ordinary.md > runs-lf.md
+sed 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-above.md
+sed 's/^  cost: 6$/  cost: 3/' runs-lf.md > runs-below.md
+sed 's/^  time: 40$/  time: 90/' runs-lf.md > runs-time.md
+sed -e '/^kind: /d' -e 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-nokind.md
+sed -e 's/^  model: opus$/  model: claude-opus-5-5/' -e 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-full.md
+sed 's/^kind: ordinary$/kind: hard/' runs-lf.md > runs-thin.md
 crun() {   # crun <arguments>: check-contract's output (no CRs) in CO, its exit in CRC
   if [ "$kind" = ps ]; then
     local a=() x; for x in "$@"; do case "$x" in --runs) a+=(-Runs) ;; --kind) a+=(-Kind) ;; *) a+=("$x") ;; esac; done
