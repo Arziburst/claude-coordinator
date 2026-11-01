@@ -22,17 +22,24 @@
 #   tests_first gate, #276)
 #   scripts/check-contract.sh <contract> ... --runs <RUNS.tsv> [--kind <k>] - after its own checks, the
 #   budget against the run log (CORE §7a, #333): the kind is the contract's top-level `kind:` field (it wins
-#   over --kind), else --kind; the model is budget.model as run-stats lists it, or the longest model run-stats
-#   lists that budget.model holds (claude-opus-5-5 is opus). From `run-stats <RUNS.tsv>`'s line for that pair:
+#   over --kind), else --kind. The model, matched both ways (letter case aside), among the models run-stats
+#   lists: budget.model itself; else the longest listed name budget.model holds (claude-opus-5-5 is opus);
+#   else the listed names that hold budget.model (opus finds claude-opus-5-5), of several the model of the
+#   log's newest (last-written) row among them; none: budget.model as written. That resolved <model> is in
+#   every line below and is the --model of the --ratio lookup. From `run-stats <RUNS.tsv>`'s line for the pair:
+#   a pair with history (a task with a cost or a time): one plan line, for the coordinator to copy into the
+#   plan next to the budget (not a WARN, not counted)
+#     `run-stats <kind>/<model>: cost median <m>, range <low>-<high>, time median <m>, range <low>-<high>, <n> tasks`
 #   with 4 or more tasks with a cost, budget.cost outside cost_low..cost_high is a WARN
 #     `budget.cost <cost> is outside run-stats <kind>/<model>: median <m>, range <low>-<high>, <n> tasks`
 #   with fewer, one line (not a WARN) `thin history: <n> tasks; this model's runs came in at <R>× their
-#   estimates`, R the cost_ratio of `run-stats <RUNS.tsv> --ratio --model <model>` (`-` when it has none);
+#   estimates`, R the cost_ratio of `run-stats <RUNS.tsv> --ratio --model <model>`; when it has none:
+#   `thin history: <n> tasks; this model has no ratio yet (no task with an estimate and a cost)`;
 #   with 4 or more tasks with a time, budget.time (a range by its middle) outside time_low..time_high is the
 #   same WARN with `budget.time <time>` and the time columns. A run log it cannot read, or no kind, is a WARN.
 #   These WARN lines count in the summary's warnings like the others; never an ERROR, the exit code is the
 #   one without --runs. Not with --field.
-usage() { sed -n '2,34s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,40s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 field=""
 if [ "$1" = --field ]; then
@@ -58,15 +65,35 @@ forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
   [ -n "$k" ] || { printf 'W\t--runs without a kind (no `kind:` field, no --kind): the budget is not checked against run-stats\n'; return 0; }
   [ -n "$bm" ] || return 0   # budget.model missing: warned above
   tbl="$(bash "$here/run-stats.sh" "$runs" 2>&1)" || { printf 'W\trun-stats failed on %s: %s\n' "$runs" "$(printf '%s' "$tbl" | head -n 1)"; return 0; }
-  # the model as run-stats lists it: the same name, else the longest listed name budget.model holds
-  m="$(printf '%s\n' "$tbl" | BM="$bm" awk -F '\t' 'NR > 1 { x = tolower($2); y = tolower(ENVIRON["BM"])
-      if (x == y) { b = $2; e = 1 } else if (!e && x != "" && index(y, x) && length($2) > length(b)) b = $2 }
-    END { print (b == "" ? ENVIRON["BM"] : b) }')"
+  # the model as run-stats lists it: the same name (`=`), else the longest listed name budget.model holds
+  # (`=`), else the listed names holding budget.model (`?`, one per line)
+  m="$(printf '%s\n' "$tbl" | BM="$bm" awk -F '\t' 'NR > 1 && $2 != "" { x = tolower($2); y = tolower(ENVIRON["BM"])
+      if (x == y) e = $2; else if (index(y, x)) { if (length($2) > length(s)) s = $2 } else if (index(x, y)) c[$2] = 1 }
+    END { if (e != "") print "=" e; else if (s != "") print "=" s; else for (k in c) print "?" k }')"
+  case "$m" in
+    =*) m="${m#=}" ;;
+    "?"*) # several full ids holding a short budget.model: the model of the log's last row among them
+      m="$(C="$(printf '%s\n' "$m" | sed 's/^?//')" B="$(printf '\357\273\277')" awk -F '\t' '
+        BEGIN { n = split(ENVIRON["C"], a, "\n"); for (i = 1; i <= n; i++) C[a[i]] = 1; cm = 5 }
+        { sub(/\r$/, ""); if (NR == 1 && index($0, ENVIRON["B"]) == 1) $0 = substr($0, length(ENVIRON["B"]) + 1) }
+        /^[ \t]*$/ || /^#/ { next }
+        $1 == "date" { for (i = NF; i >= 1; i--) if ($i == "model") cm = i; next }
+        ($cm in C) { last = $cm }
+        END { print last }' "$runs")" ;;
+    *) m="$bm" ;;
+  esac
+  [ -n "$m" ] || m="$bm"
   ln="$(printf '%s\n' "$tbl" | K="$k" M="$m" awk -F '\t' 'NR > 1 && $1 == ENVIRON["K"] && $2 == ENVIRON["M"] { print; exit }')"
+  # the plan line: a pair with history
+  printf '%s\n' "$ln" | K="$k" M="$m" awk -F '\t' 'NF >= 10 && $3 + $7 > 0 {
+    print "I\trun-stats " ENVIRON["K"] "/" ENVIRON["M"] ": cost median " $4 ", range " $5 "-" $6 ", time median " $8 ", range " $9 "-" $10 ", " $3 " tasks" }'
   n="$(printf '%s\n' "$ln" | awk -F '\t' '{ print $3 + 0 }')"
   if [ "${n:-0}" -lt 4 ]; then
     r="$(bash "$here/run-stats.sh" "$runs" --ratio --model "$m" 2>/dev/null | awk -F '\t' '{ print $3 }')"
-    printf "I\tthin history: %s tasks; this model's runs came in at %s× their estimates\n" "${n:-0}" "${r:--}"
+    case "$r" in
+      ''|-) printf 'I\tthin history: %s tasks; this model has no ratio yet (no task with an estimate and a cost)\n' "${n:-0}" ;;
+      *) printf "I\tthin history: %s tasks; this model's runs came in at %s× their estimates\n" "${n:-0}" "$r" ;;
+    esac
   fi
   # the WARN lines from the pair's line (cost from 4 tasks on; the time likewise)
   printf '%s\n' "$ln" | K="$k" M="$m" C="$3" T="$4" awk -F '\t' '

@@ -12,6 +12,6 @@ goes on the watch list (`coordinator/watch.txt`, its short id or full name) inst
 and one `watch-sessions --list coordinator/watch.txt` runs in the background unless one already runs
 (CORE §4 step 4 *Control*); the subscribe line is used only for a session no message is expected from.
 Before start-worker, run `scripts/check-contract <contract> --runs coordinator/RUNS.tsv` (`--kind <k>` when
-the contract has no `kind:` field; .ps1: `-Runs`, `-Kind`) and put the run-stats line it reads in the plan
-next to the budget: a budget WARN is explained in the brief; a thin history's guess is multiplied by the
-ratio it prints and marked `guess` (CORE §7a).
+the contract has no `kind:` field; .ps1: `-Runs`, `-Kind`) and copy the plan line it prints
+(`<file>: run-stats <kind>/<model>: …`) into the plan next to the budget: a budget WARN is explained in the
+brief; a thin history's guess is multiplied by the ratio it prints and marked `guess` (CORE §7a).

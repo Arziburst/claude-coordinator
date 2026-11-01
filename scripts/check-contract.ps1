@@ -14,11 +14,14 @@
 #   exit 0; else the usual ERROR and FAIL lines and exit 1 (start-worker's tests_first gate, #276).
 #   <contract> ... -Runs <RUNS.tsv> [-Kind <k>]: after its own checks, the budget against the run log (CORE
 #   section 7a, #333) - the kind from the contract's `kind:` field (it wins over -Kind), else -Kind; the
-#   model as run-stats lists it, or the longest listed name budget.model holds (claude-opus-5-5 is opus);
-#   4+ tasks: a WARN when budget.cost or budget.time (a range by its middle) is outside run-stats' low..high;
-#   fewer (by cost): `thin history: <n> tasks; this model's runs came in at <R>x their estimates` (R: run-stats
-#   -Ratio's cost_ratio, - for none; the sign is U+00D7 as in the .sh); an unreadable log or no kind: a WARN.
-#   WARN lines count as warnings; never an ERROR, the exit code unchanged; not with -Field (check-contract.sh).
+#   model among run-stats' names: budget.model itself, else the longest one budget.model holds (claude-opus-5-5
+#   is opus), else those holding it (opus finds claude-opus-5-5; of several, the model of the log's last row);
+#   a pair with history: the plan line `run-stats <kind>/<model>: cost median .., range .., time median ..,
+#   range .., <n> tasks`; 4+ tasks: a WARN when budget.cost or budget.time (a range by its middle) is outside
+#   run-stats' low..high; fewer (by cost): `thin history: <n> tasks; this model's runs came in at <R>x their
+#   estimates` (R: -Ratio's cost_ratio; the sign is U+00D7 as in the .sh), none: `... this model has no ratio
+#   yet (...)`; an unreadable log or no kind: a WARN. WARN lines count as warnings; never an ERROR, the exit
+#   code unchanged; not with -Field (the rules: check-contract.sh).
 # the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
 # usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
 $Field = ''; $Files = @($args | ForEach-Object { "$_" }); $usage = -not $Files
@@ -41,7 +44,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 21 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 24 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -64,21 +67,38 @@ function Forecast([string]$k, [string]$bm, [string]$c, [string]$t) {
   if (-not $bm) { return }   # budget.model missing: warned above
   $tbl = @(& $RunStats $Runs)
   if ($LASTEXITCODE) { return "W`trun-stats failed on ${Runs}" }
-  # the model as run-stats lists it: the same name, else the longest listed name budget.model holds
-  $m = ''; $exact = $false; $y = $bm.ToLowerInvariant()
+  # the model as run-stats lists it: the same name, else the longest listed name budget.model holds, else
+  # the listed names holding budget.model - of several, the model of the log's last row among them
+  $e = ''; $s = ''; $cand = @{}; $y = $bm.ToLowerInvariant()
   foreach ($ln in @($tbl | Select-Object -Skip 1)) {
-    $x = "$ln".Split("`t"); if ($x.Count -lt 2) { continue }; $xm = $x[1].ToLowerInvariant()
-    if ($xm -ceq $y) { $m = $x[1]; $exact = $true }
-    elseif (-not $exact -and $xm -ne '' -and $y.Contains($xm) -and $x[1].Length -gt $m.Length) { $m = $x[1] }
+    $x = "$ln".Split("`t"); if ($x.Count -lt 2 -or $x[1] -eq '') { continue }; $xm = $x[1].ToLowerInvariant()
+    if ($xm -ceq $y) { $e = $x[1] }
+    elseif ($y.Contains($xm)) { if ($x[1].Length -gt $s.Length) { $s = $x[1] } }
+    elseif ($xm.Contains($y)) { $cand[$x[1]] = 1 }
+  }
+  $m = if ($e) { $e } elseif ($s) { $s } else { '' }
+  if (-not $m -and $cand.Count) {
+    $cm = 4; $first = $true
+    foreach ($line in [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Runs).Path)) {
+      if ($first) { $line = $line.TrimStart([char]0xFEFF); $first = $false }
+      $line = $line -creplace "`r$", ''
+      if ($line -cmatch '^[ \t]*\z' -or $line -cmatch '^#') { continue }
+      $f2 = $line.Split("`t")
+      if ($f2[0] -ceq 'date') { $cm = [Array]::IndexOf($f2, 'model'); continue }
+      if ($cm -ge 0 -and $cm -lt $f2.Count -and $cand.ContainsKey($f2[$cm]) -and $cand.Keys -ccontains $f2[$cm]) { $m = $f2[$cm] }
+    }
   }
   if (-not $m) { $m = $bm }
   $p = $null
   foreach ($ln in @($tbl | Select-Object -Skip 1)) { $x = "$ln".Split("`t"); if ($x.Count -ge 10 -and $x[0] -ceq $k -and $x[1] -ceq $m) { $p = $x; break } }
+  # the plan line: a pair with history
+  if ($p -and ([int]$p[2] + [int]$p[6]) -gt 0) { "I`trun-stats ${k}/${m}: cost median $($p[3]), range $($p[4])-$($p[5]), time median $($p[7]), range $($p[8])-$($p[9]), $($p[2]) tasks" }
   $n = if ($p) { [int]$p[2] } else { 0 }
   if ($n -lt 4) {
     $rt = @(& $RunStats $Runs -Ratio -Model $m 2>$null); $r = '-'
     if ($rt.Count -ge 1) { $q = "$($rt[0])".Split("`t"); if ($q.Count -ge 3 -and $q[2]) { $r = $q[2] } }
-    "I`tthin history: $n tasks; this model's runs came in at $r$([char]0x00D7) their estimates"
+    if ($r -eq '-') { "I`tthin history: $n tasks; this model has no ratio yet (no task with an estimate and a cost)" }
+    else { "I`tthin history: $n tasks; this model's runs came in at $r$([char]0x00D7) their estimates" }
   }
   if (-not $p) { return }
   # the WARN lines from the pair's line (cost from 4 tasks on; the time likewise)

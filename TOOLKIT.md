@@ -679,10 +679,14 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,
   the usage and exit 2 in both shells (#288). `--runs <RUNS.tsv> [--kind <k>]` (`-Runs <RUNS.tsv> [-Kind <k>]`,
   after the contract; CORE §7a, #333): after its own checks, the budget against `run-stats`' line for the
-  contract's kind (its `kind:` field, else `--kind`) and `budget.model` (as run-stats lists it, or a full name
-  holding it: `claude-opus-5-5` is `opus`) — from 4 tasks of the pair a WARN when `budget.cost` or
-  `budget.time` is outside the line's low–high, naming its median, range and tasks; under 4, one line
-  `thin history: <n> tasks; this model's runs came in at <R>× their estimates` (R: `run-stats --ratio`);
+  contract's kind (its `kind:` field, else `--kind`) and `budget.model` matched both ways (as run-stats lists
+  it; else a full name holding a listed one: `claude-opus-5-5` is `opus`; else the listed full ids holding a
+  short one: `opus` finds `claude-opus-5-5`, of several the model of the log's last row) — that resolved
+  name in every line and in the `--ratio` lookup. A pair with history gets one plan line, `<file>: run-stats
+  <kind>/<model>: cost median …, range …, time median …, range …, <n> tasks`, copied into the plan (CORE
+  §7a); from 4 tasks of the pair a WARN when `budget.cost` or `budget.time` is outside the line's low–high,
+  naming its median, range and tasks; under 4, one line `thin history: <n> tasks; this model's runs came in
+  at <R>× their estimates` (R: `run-stats --ratio`), or `… this model has no ratio yet (…)` without one;
   a run log it cannot read, or no kind, is a WARN; never an ERROR, the exit code as without it; not with
   `--field`. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
