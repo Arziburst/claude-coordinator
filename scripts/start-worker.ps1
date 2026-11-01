@@ -7,8 +7,10 @@
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
-# (names change on a restart). It heads the brief; at the end the script prints the line that
-# subscribes to the new session's idle notice (CORE section 4, Control).
+# (names change on a restart). It heads the brief; the script's last line says how to watch the new
+# session: a `watch:` line with its short id (a dry run, or a launch that printed no id: its name), the
+# watch list and the watcher; an assistant, from which no report is awaited, gets the line that subscribes
+# to its idle notice instead (CORE section 4, Control; #365).
 # -Safety: a settings file for the worker (from settings.example.windows.json) with the deny rules, the
 #          PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. The hook's
 #          self-test must pass, or no worker starts. -Model is required (CORE section 7). Default mode auto;
@@ -563,10 +565,13 @@ if ($fr -in @('worker', 'lead', '')) {
   }
 }
 $brief = $full   # $full as sent, before the escaping below: kept for after a compaction
-$subscribe = "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)"
+function LastLine([string]$id) {
+  if ($asst) { return "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)" }
+  "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: $(if ($id) { $id } else { $Name })"
+}
 if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }
 $where = if ($asst) { "the folder $adir/, questions to `"$ReportTo`"" } else { "working copy $wtFwd, report to `"$ReportTo`"" }
-if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <$where, $(if ($roleText) { 'the role, ' })then the brief>)"; $subscribe; exit 0 }
+if ($DryRun) { "[dry-run] (cd $from && claude --bg --name `"$Name`" --model $Model$(if ($Effort) { " --effort $Effort" }) --permission-mode $Mode --settings $Safety <$where, $(if ($roleText) { 'the role, ' })then the brief>)"; LastLine ''; exit 0 }
 $claude = Get-Command claude -ErrorAction SilentlyContinue
 if (-not $claude) { Fail 'claude not found on PATH' }
 # A .cmd shim (npm install) cuts a multi-line argument at the first line break.
@@ -601,14 +606,14 @@ if ($bgRc -ne 0) {
   if ($asst) { Fail "launch failed: claude --bg did not start the session. Created: $made - start again" }
   Fail "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch"
 }
-# wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
+# wait (up to 20 s) until the new session is listed, so the next step does not race it
 # the listing is JSON: a backslash or a double quote in the name is escaped there
 $jname = $Name.Replace('\', '\\').Replace('"', '\"')
 for ($i = 0; $i -lt 20; $i++) {
   if ("$(& $claude.Source agents --json)".Contains('"' + $jname + '"')) { break }
   Start-Sleep -Seconds 1
 }
-if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the subscribe fails, retry it in a few seconds') }
+if ($i -ge 20) { [Console]::Error.WriteLine('not listed after 20 s: if the next step does not find the session, retry it in a few seconds') }
 # the brief as sent, kept by the session's id: hooks/after-compact.ps1 points the session back to it after
 # a compaction (a summary loses rules); briefs older than 14 days are pruned
 $sid = ''
@@ -625,6 +630,6 @@ if ($asst) {
   "attach: claude attach `"$Name`""
   if ($bgId) { "attach: claude attach $bgId" }
 }
-$subscribe
+LastLine $bgId
 exit 0
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

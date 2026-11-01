@@ -29,8 +29,10 @@
 # A lead gets a notes folder beside its worktree, <worktree>.lead/ (made, or an existing one kept), named
 # in its launch text (#310); a dry run says it would make it.
 # --report-to: the session the worker reports to - the coordinator's name as ListAgents shows it now
-# (names change on a restart). It heads the brief; at the end the script prints the line that
-# subscribes to the new session's idle notice (CORE section 4, Control).
+# (names change on a restart). It heads the brief; the script's last line says how to watch the new
+# session: a `watch:` line with its short id (a dry run, or a launch that printed no id: its name), the
+# watch list and the watcher; an assistant, from which no report is awaited, gets the line that subscribes
+# to its idle notice instead (CORE section 4, Control; #365).
 # A worker or a lead: before the launch it prints the conflict foresight (CORE §4a) - merge-queue status
 # with the brief's `touches` - as `foresight:` lines; informational, never a stop.
 # The contract must pass check-contract before it goes out (CORE §4, #267): --contract <file>, or for a
@@ -511,6 +513,7 @@ case "$role" in worker|lead|"")
     else echo "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a): $(printf '%s\n' "$fo" | head -n 1)"; fi
   fi ;;
 esac
+bgid=""
 if [ "$dry" = 1 ]; then
   [ -z "$lfile" ] || echo "[dry-run] brief through a file: $nchars characters of launch text, over 24000 - it would go to $lfile and the first message would point to it"
   if [ -n "$asst" ]; then where="the folder $adir/, questions to \"$report\""; else where="working copy $wt, report to \"$report\""; fi
@@ -524,7 +527,7 @@ else
     echo "brief through a file: $nchars characters of launch text, over 24000 - the session's first message points to $lfile"
   fi
   # a launch that fails leaves the worktree and branch: say so, and how to clean them
-  # an assistant's launch output is read for its id (`backgrounded · <id> · <name>`), then printed as it came
+  # the launch output is read for its id (`backgrounded · <id> · <name>`), then printed as it came
   bgo="$(mktemp "${TMPDIR:-/tmp}/start-worker-bg.XXXXXX")"
   lrc=0; ( cd "$from" && claude --bg --name "$name" --model "$model" ${eff[@]+"${eff[@]}"} --permission-mode "$mode" --settings "$safety" "$msg" ) > "$bgo" || lrc=$?
   cat "$bgo"; bgid="$(tr -d '\r' < "$bgo" | sed -n 's/.*backgrounded[^0-9A-Za-z]*\([0-9A-Za-z][0-9A-Za-z-]*\).*/\1/p' | head -n 1)"; rm -f "$bgo"
@@ -532,7 +535,7 @@ else
     { [ -z "$lfile" ] || rm -f "$lfile"
       if [ -n "$asst" ]; then echo "launch failed: claude --bg did not start the session. Created: $made - start again" >&2; exit 1; fi
       echo "launch failed: claude --bg did not start the session. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
-  # wait (up to 20 s) until the new session is listed, so the subscribe below does not race it
+  # wait (up to 20 s) until the new session is listed, so the next step does not race it
   i=0
   # the listing is JSON: a backslash or a double quote in the name is escaped there
   jname="$(printf '%s' "$name" | sed 's/\\/\\\\/g; s/"/\\"/g')"
@@ -540,7 +543,7 @@ else
     claude agents --json 2>/dev/null | grep -qF "\"$jname\"" && break
     i=$((i + 1)); sleep 1
   done
-  [ "$i" -lt 20 ] || echo "not listed after 20 s: if the subscribe fails, retry it in a few seconds" >&2
+  [ "$i" -lt 20 ] || echo "not listed after 20 s: if the next step does not find the session, retry it in a few seconds" >&2
   # the brief as sent, kept by the session's id: hooks/after-compact.sh points the session back to it after
   # a compaction (a summary loses rules); briefs older than 14 days are pruned
   sid="$(claude agents --json 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -F "\"$jname\"" |
@@ -554,4 +557,5 @@ else
     [ -z "$bgid" ] || echo "attach: claude attach $bgid"
   fi
 fi
-echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"
+if [ -n "$asst" ]; then echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"
+else echo "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: ${bgid:-$name}"; fi

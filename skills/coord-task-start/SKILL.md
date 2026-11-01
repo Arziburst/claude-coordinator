@@ -7,10 +7,10 @@ Core skill: `coordinator/core/skills/` holds the source and every "update the co
 
 Read the event table in CORE §4 of `coordinator/core/CORE.md`, the row "A task starts", and the continuous
 work steps 2-4 under it; do every item of the row. start-worker prints the conflict foresight
-(`foresight:` lines) and the subscribe line: act on the foresight; a session that reports by message
+(`foresight:` lines) and the `watch:` line (an assistant: `subscribe:`): act on the foresight; a session that reports by message
 goes on the watch list (`coordinator/watch.txt`, its short id or full name) instead of being subscribed,
 and one `watch-sessions --list coordinator/watch.txt` runs in the background unless one already runs
-(CORE §4 step 4 *Control*); the subscribe line is used only for a session no message is expected from.
+(CORE §4 step 4 *Control*); the `subscribe:` line, printed for an assistant, is used only for a session no message is expected from.
 Before start-worker, run `scripts/check-contract <contract> --runs coordinator/RUNS.tsv` (`--kind <k>` when
 the contract has no `kind:` field; .ps1: `-Runs`, `-Kind`) and copy the plan line it prints
 (`<file>: run-stats <kind>/<model>: …`) into the plan next to the budget: a budget WARN is explained in the

@@ -43,9 +43,11 @@ passed here, so the owner can go back to a proven version. It does **not** repla
 ## The steps
 
 The scripted steps use `scripts/selftest` from the core copy: the `.ps1` on Windows (it runs every
-`.ps1` script under Windows PowerShell 5.1 **and** pwsh where both exist), the `.sh` elsewhere. Each
-prints `PASS` / `FAIL` / `SKIP` lines. Every session the test starts has `selftest` in its name, is
-subscribed right after its start (CORE §4, *Control*) and reports to the coordinator's current name
+`.ps1` script under Windows PowerShell 5.1 **and** pwsh where both exist), the `.sh` elsewhere. The
+options below are written in the `.sh` form; the `.ps1` takes them as its usage prints them (`-Project`,
+`-WorkerSettings`, `-EditRoot` …). Each
+prints `PASS` / `FAIL` / `SKIP` lines. Every session the test starts has `selftest` in its name, goes on
+the watch list right after its start, not subscribed (CORE §4, *Control*), and reports to the coordinator's current name
 (`--report-to`). Models: the light rung for everything (Haiku where the ladder has it), the lead one
 rung up (Sonnet): a lead on the lightest model may fail its role, and a FAIL must mean the
 environment, not the model. `<c>` below is the core commit under test.
@@ -197,7 +199,9 @@ the report notes the interruption and the resume time.
    - PASS when the lead stopped at the budget, its report is `ready`, both oracles hold, each sub-task
      has a verdict and `st1` is merged into the base.
 4a. **Assistant** (#281): `selftest assistant --project <root> --core <root>/coordinator/core` — one
-   command, no owner action; the coordinator only reads its lines. It writes a sample `BRIEF.md`, an empty
+   command, no owner action; the coordinator only reads its lines. It runs with no other test session
+   working: its check that `cleanup-worker` changes nothing compares the whole project, so a lead or a
+   worker at work beside it is a false `FAIL`. It writes a sample `BRIEF.md`, an empty
    `NOTES.md` and the assistant settings (`settings.example.assistant(.windows).json` filled,
    `COORD_ASSISTANT_DIR` the folder) into a throwaway folder in the system temp,
    `<temp>/coord-selftest-assistant.*/assistants/selftest-<token>/` — outside the project's real
