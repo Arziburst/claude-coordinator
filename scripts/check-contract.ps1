@@ -27,6 +27,14 @@
 #     payment price billing invoice refund money role permission auth access customer "personal data" pii gdpr
 #   - one WARN `tests_first is no, but <field> names `<word>` (...): tests first are expected ...`, for a
 #   failing contract too, never an ERROR, the exit unchanged; not with -Field.
+#   The core's own role files (#362): in touches only, an item `roles/<file>` or `coordinator/core/roles/<file>`
+#   (also with a leading `./`) whose <file> exists in this script's own ..\roles\ folder (never the working
+#   directory's) is not read for the word list; other items, title and intent as above; no such folder: none.
+$CoreRoles = @{}
+$crd = Join-Path (Split-Path -Parent $PSScriptRoot) 'roles'
+if (Test-Path -LiteralPath $crd -PathType Container) {
+  foreach ($x in @(Get-ChildItem -LiteralPath $crd -File)) { $CoreRoles[$x.Name.ToLowerInvariant()] = $true }
+}
 $GuardWords = @('payment', 'price', 'billing', 'invoice', 'refund', 'money', 'role', 'permission', 'auth', 'access', 'customer', 'personal data', 'pii', 'gdpr')
 # the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
 # usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
@@ -50,7 +58,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 29 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 32 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -247,6 +255,13 @@ foreach ($f in $Files) {
     $gm = ''
     foreach ($gf in 'title', 'intent', 'touches') {
       $t = (($txt[$gf] + '').ToLowerInvariant()) -creplace '(^|[ \t\n])#[^\n]*', ' '
+      if ($gf -eq 'touches' -and $CoreRoles.Count -gt 0) {
+        # each item on its own line, a core role file left out (#362)
+        $t = @($t -split '[,\n]' | Where-Object {
+          $s = $_ -creplace ('^[ \t]*(\[[ \t]*)?(-[ \t]+)?["' + "'" + ']?|["' + "'" + ']?[ \t]*\]?[ \t]*\z'), ''
+          -not ($s -cmatch '^(\./)?(coordinator/core/)?roles/([^/]+)\z' -and $CoreRoles.ContainsKey($Matches[3]))
+        }) -join "`n"
+      }
       foreach ($gw in $GuardWords) {
         if ($t -cmatch ('(^|[^a-z0-9])' + ($gw -creplace ' ', '[ \t\n_-]+') + 's?([^a-z0-9]|\z)')) { $gm = "$gf names ``$gw``"; break }
       }

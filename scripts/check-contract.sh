@@ -49,7 +49,12 @@
 # "personal data" with one or more blanks (a folded line break too), `-` or `_` between. One line per contract:
 # the first field in the order title, intent, touches, and in it the list's first word it holds; comments
 # (# ...) are not read. It prints for a failing contract too (a warning beside its errors); not with --field.
-usage() { sed -n '2,51s/^# \{0,1\}//p' "$0"; exit 2; }
+# The core's own role files (#362): in touches only, an item `roles/<file>` or `coordinator/core/roles/<file>`
+# (also with a leading `./`) whose <file> exists in this script's own ../roles/ folder (the core it belongs
+# to, never the working directory's) is not read for the word list; the other items of touches still are,
+# and title and intent as above. A project's own roles/admin.md (no such core file), src/auth/roles.ts,
+# `roles/` alone still warn; a core with no roles/ folder leaves nothing out.
+usage() { sed -n '2,56s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 [ $# -gt 0 ] || usage
 field=""
@@ -69,6 +74,12 @@ done
 [ -z "$rkind" ] || [ -n "$hasruns" ] || usage   # --kind only with --runs
 [ -z "$hasruns" ] || [ -z "$field" ] || usage
 here="$(cd "$(dirname "$0")" && pwd)"
+# the core's own role files (#362, the header): `|name|name|`, lower case; none without a ../roles/ folder
+core_roles=""
+if [ -d "$here/../roles" ]; then
+  for x in "$here/../roles"/*; do [ -f "$x" ] && core_roles="$core_roles|${x##*/}"; done
+  [ -z "$core_roles" ] || core_roles="$core_roles|"
+fi
 # the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: --runs)
 forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
   local k="$1" bm="$2" tbl m ln n r
@@ -119,7 +130,17 @@ forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
         print "W\tbudget.time " t " is outside run-stats " p ": median " $8 ", range " $9 "-" $10 ", " $7 " tasks" }'
 }
 prog='
-    BEGIN { F = ENVIRON["F"]; K = ENVIRON["K"]; B = ENVIRON["B"]; q = sprintf("%c", 39) }
+    BEGIN { F = ENVIRON["F"]; K = ENVIRON["K"]; B = ENVIRON["B"]; CR = tolower(ENVIRON["CR"]); q = sprintf("%c", 39) }
+    # touches without the core own role files (#362): each item on its own line, a core role file left out
+    function nocoreroles(t,   n, it, i, s, o) {
+      n = split(t, it, /[,\n]/); o = ""
+      for (i = 1; i <= n; i++) {
+        s = it[i]; gsub("^[ \t]*(\\[[ \t]*)?(-[ \t]+)?[\"" q "]?|[\"" q "]?[ \t]*\\]?[ \t]*$", "", s)
+        if (s ~ /^(\.\/)?(coordinator\/core\/)?roles\/[^\/]+$/ && index(CR, "|" substr(s, index(s, "roles/") + 6) "|")) continue
+        o = o "\n" it[i]
+      }
+      return o
+    }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
       if (length(s) >= 2 && (a == "\"" || a == q) && substr(s, length(s), 1) == a) s = substr(s, 2, length(s) - 2); return s }
@@ -237,6 +258,7 @@ prog='
         nwd = split(ENVIRON["GW"], GW, "|"); split("title intent touches", GF, " "); gm = ""
         for (k = 1; k <= 3 && gm == ""; k++) {
           t = tolower(txt[GF[k]]); gsub(/(^|[ \t\n])#[^\n]*/, " ", t)
+          if (GF[k] == "touches" && CR != "") t = nocoreroles(t)
           for (j = 1; j <= nwd && gm == ""; j++) { w = GW[j]; gsub(/ /, "[ \t\n_-]+", w)
             if (t ~ ("(^|[^a-z0-9])" w "s?([^a-z0-9]|$)")) gm = GF[k] " names `" GW[j] "`" }
         }
@@ -263,6 +285,6 @@ EOF
     R="$(forecast "${ck:-$rkind}" "$cm" "$cc" "$ct")"
   fi
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" awk "$prog" "$f" || failed=1
+  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" awk "$prog" "$f" || failed=1
 done
 exit $failed

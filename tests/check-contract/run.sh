@@ -43,11 +43,17 @@
 #   customers2 do not); `personal data`: one or more blanks, `-` or `_` between the two words. Several
 #   matches: one line only - the first field in the order title, intent, touches, and in it the list's first
 #   word it holds. `tests_first: yes ...` or no match: no such line, the output as today.
+# The core's own role files (#362), the access point: in touches only, an item `roles/<file>` or
+#   `coordinator/core/roles/<file>`, also with a leading `./`, where <file> exists in the roles/ folder of
+#   the core the running check-contract belongs to (its own ../roles/, not the working directory's), is not
+#   read for the word list; the other items of touches still are; title and intent as above. A project's own
+#   roles/admin.md (no such core file), src/auth/roles.ts, app/models/role.rb, `roles/` alone still warn;
+#   a core with no roles/ folder leaves nothing out. Checked from copies of the scripts (nocore, onlyworker).
 #   tests/check-contract/run.sh sh                  # check-contract.sh, with the bash running this file
 #   tests/check-contract/run.sh ps pwsh             # check-contract.ps1 (or: ps powershell)
 # Exit 1 if the output or the exit code differs.
 set -u
-[ $# -gt 0 ] || { sed -n '2,47s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
@@ -134,8 +140,8 @@ sed 's/^kind: ordinary$/kind: hard/' runs-lf.md > runs-thin.md
 crun() {   # crun <arguments>: check-contract's output (no CRs) in CO, its exit in CRC
   if [ "$kind" = ps ]; then
     local a=() x; for x in "$@"; do case "$x" in --runs) a+=(-Runs) ;; --kind) a+=(-Kind) ;; *) a+=("$x") ;; esac; done
-    CO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "${a[@]}" 2>&1)"; CRC=$?
-  else CO="$(bash "$core/scripts/check-contract.sh" "$@" 2>&1)"; CRC=$?; fi
+    CO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "${ccore:-$core}/scripts/check-contract.ps1" "${a[@]}" 2>&1)"; CRC=$?
+  else CO="$(bash "${ccore:-$core}/scripts/check-contract.sh" "$@" 2>&1)"; CRC=$?; fi
   CO="$(printf '%s\n' "$CO" | tr -d '\r')"
 }
 rfail() { echo "FAIL: runs $rname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
@@ -247,5 +253,36 @@ gname="GDPR in a quoted title"; gwarn g-gdpr.md title gdpr
 gname="auth before an underscore"; gwarn g-auth.md touches auth
 gname="two fields: the first field, the list's first word"; gwarn g-two.md title money
 gname="words inside other words"; gnone g-inner.md
+# the core's own role files in touches (#362): not read for the word list; a project's own and the rest still are
+sed 's/^touches: .*/touches: [roles\/assistant.md, tests\/sort.sh]/' g-base.md > g-core-role.md
+sed 's/^touches: .*/touches: [coordinator\/core\/roles\/worker.md, .\/roles\/lead.md]/' g-base.md > g-core-roles.md
+sed 's/^touches: .*/touches: [roles\/assistant.md, scripts\/billing.sh]/' g-base.md > g-core-billing.md
+sed 's/^touches: .*/touches: [roles\/assistant.md, scripts\/permission.sh]/' g-base.md > g-core-perm.md
+sed 's/^touches: .*/touches: [roles\/admin.md]/' g-base.md > g-proj-role.md
+sed 's/^touches: .*/touches: [src\/auth\/roles.ts]/' g-base.md > g-src-roles.md
+sed 's/^touches: .*/touches: [app\/models\/role.rb]/' g-base.md > g-model-role.md
+sed 's/^touches: .*/touches: [roles\/]/' g-base.md > g-roles-dir.md
+sed 's/^title: .*/title: Role text/' g-core-role.md > g-core-title.md
+sed 's/^touches: .*/touches: [roles\/worker.md]/' g-base.md > g-core-worker.md
+gname="a core role file in touches"; gnone g-core-role.md
+gname="core role files under coordinator/core/ and ./"; gnone g-core-roles.md
+gname="a core role file and billing in touches"; gwarn g-core-billing.md touches billing
+gname="a core role file and a permission file: the permission"; gwarn g-core-perm.md touches permission
+gname="a project's own roles/admin.md"; gwarn g-proj-role.md touches role
+gname="src/auth/roles.ts"; gwarn g-src-roles.md touches role
+gname="app/models/role.rb"; gwarn g-model-role.md touches role
+gname="roles/ alone"; gwarn g-roles-dir.md touches role
+gname="a core role file in touches, role in the title"; gwarn g-core-title.md title role
+# the core is the one check-contract runs from (its ../roles/), not the working directory: copies of the scripts
+for d in nocore onlyworker; do
+  mkdir -p "$d/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/scripts/"
+done
+mkdir onlyworker/roles; cp "$core/roles/worker.md" onlyworker/roles/
+ccore="$(pwd)/nocore"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+gname="a core with no roles/ folder: nothing left out"; gwarn g-core-role.md touches role
+ccore="$(pwd)/onlyworker"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+gname="a core whose roles/ holds only worker.md: assistant.md"; gwarn g-core-role.md touches role
+gname="a core whose roles/ holds only worker.md: worker.md"; gnone g-core-worker.md
+ccore=""
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
