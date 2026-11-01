@@ -47,7 +47,9 @@ the owner's word it also files the project's anonymous report for the core's own
      logged at the start (`estimate` for cost, `estimate_time` for work, CORE §7: a range `lo-hi`, its
      midpoint for the ratio; one number `n`, in range from `2n/3` to `3n/2` — symmetric on a log scale and close to a range's 25th–75th band), counted as `_logged`; else it
      is rebuilt as `run-stats` gave it before the task (the 25th–75th percentile, CORE §7a), counted as
-     `_rebuilt`; time to ready is always rebuilt;
+     `_rebuilt`; time to ready is always rebuilt. `scripts/run-stats <RUNS.tsv> --ratio --model <m>` is the
+     same median of actual over the logged estimate, per model over all its tasks — the factor a thin
+     history's guess is scaled by at the task start (CORE §7a);
    - *stability*: failed runs, guard blocks and deny rules, blocks worked around, guard false positives
      (§5), guard errors (the guard's own hook failing or timing out instead of blocking), other
      refusals, tool errors and their rate, cache rewrites per task, minutes waited on a person, rereads.

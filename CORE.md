@@ -221,7 +221,7 @@ is lost (#242).
 | Event | What runs |
 |---|---|
 | A session starts in a set-up project (§2 step 4), and once a day in a session that keeps running | the sync — `coordinator/` pulled (`--ff-only`) and its unpushed commits pushed (§12b); merged and open PRs, their checks, running sessions, limits (stale status files pruned, TOOLKIT *Usage*); `coordinator/watch.txt` not empty → the watcher started (step 4 below, *Control*); merged, fully pushed work cleaned up (§8); upstream core newer?; core findings not yet filed are filed (§10); each assistant's spend row read (§7) and its folder, `NOTES.md` included, committed in the state repository; `scripts/runs check` run and each run it lists gets its row (§7) |
-| A task starts | its contract passes check-contract; conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and on the watch list, the watcher running (steps 3–4 below); its journal line (§12) |
+| A task starts | its contract passes check-contract, run with `--runs <RUNS.tsv>`, and the plan line it prints (`run-stats <kind>/<model>: …`) is copied into the plan next to the budget (§7a, #333); conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and on the watch list, the watcher running (steps 3–4 below); its journal line (§12) |
 | A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
 | A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a); a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12) |
@@ -651,7 +651,16 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   seeded at init from the project's existing transcripts (`scripts/session-tokens` over
   `~/.claude/projects/<project>/`; on a real project this changed the first guess about 10×), else the
   coordinator's own estimate; either is marked `guess` in the plan. Transcripts carry no task kind, so
-  a seed is a median **per model**, not per kind, until the run log has the kind's own runs.
+  a seed is a median **per model**, not per kind, until the run log has the kind's own runs. A guess for
+  a kind with under 4 tasks on the model is multiplied by the model's measured actual over estimate,
+  `scripts/run-stats <RUNS.tsv> --ratio --model <m>` (`cost_ratio`; `time_ratio` for `budget.time`), and
+  stays marked `guess` (#333: forecasts ran about 2× above actual where they were made by eye). At every
+  task start the coordinator runs `scripts/check-contract <contract> --runs <RUNS.tsv>` (`--kind <k>` when
+  the contract has no `kind:` field); for a pair with history it prints the plan line
+  (`run-stats <kind>/<model>: cost median …, range …, time median …, range …, <n> tasks`), which the
+  coordinator copies into the plan next to the budget, never retyped by hand: a budget outside the line's
+  range is a WARN, explained in the brief like any other; under 4 tasks it also prints the model's ratio
+  (or `no ratio yet`) (TOOLKIT *Checks*).
 - **Limit percent per dollar:** the limits are shown as whole percents, so one task rarely moves them
   enough to read. The ratio is the limit's rise since its reset over the **account's** list-price cost
   since then (`scripts/session-tokens --since <reset>`, priced per model, TOOLKIT *Usage*): the limits

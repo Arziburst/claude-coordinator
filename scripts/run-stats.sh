@@ -3,6 +3,7 @@
 #   scripts/run-stats.sh <RUNS.tsv>                                 per kind and model, over TASKS
 #   scripts/run-stats.sh <RUNS.tsv> --kind <kind> --model <model>   that pair's line only (a contract's estimate)
 #   scripts/run-stats.sh <RUNS.tsv> --per-run                       per kind, role and model, over single rows
+#   scripts/run-stats.sh <RUNS.tsv> --ratio --model <model>         that model's actual over its estimates (below)
 #   scripts/run-stats.sh <RUNS.tsv> --task <n> [--pr-json <file|->] [--waits <file>] [--append]
 #                                                                   one task's `task` row: time to ready (below);
 #                                                                   --append also writes it to RUNS.tsv (#242)
@@ -10,7 +11,8 @@
 #                                                                   and a block's fit (below)
 # RUNS.tsv (CORE §7): tab-separated, columns by the header line when there is one (its first field `date`;
 # names task, role, kind, model, cost, result, start, wall, active), else in CORE §7's order (task 2, role 3,
-# kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14; estimate and estimate_time, the last, are not read). Blank lines and lines starting
+# kind 4, model 5, cost 9, result 10, start 11, wall 12, active 13, wait 14; estimate 7 and estimate_time, the
+# last (15), are read by --ratio only). Blank lines and lines starting
 # with # are skipped; CRLF and a UTF-8 BOM read as plain. A row with role `task` is a finished task's own row
 # (CORE §7: wall = its time to ready); it counts only toward ready below, never toward cost or time. A row whose
 # role or kind is `assistant` (#281) is never part of a task: --per-run counts it under kind and role `assistant`.
@@ -33,6 +35,13 @@
 #   low / high: the 25th and 75th percentile by nearest rank (the value at rank ceil(p * n / 100) of the
 #   sorted values, 1-based) from 4 values on, min and max under 4;
 #   cost to the cent, time to the minute, each rounded half up once; no values: n 0 and `-`.
+# --ratio --model <m> (CORE §7a: a thin history's guess scaled; #333): one line, no header, tab-separated:
+#   model cost_n cost_ratio time_n time_ratio - over ALL the TASKS whose model (as above) is <m>, rows of role
+#   or kind `assistant` and `task` rows left out. Per task the estimate is its first row's `estimate` cell and
+#   the estimate time its first row's `estimate_time` (`$` allowed; a range `a-b` counts as its middle; 0, `-`
+#   or none: no estimate); cost_n = the tasks with an estimate and a cost, cost_ratio = the median of cost /
+#   estimate; time_n, time_ratio the same for the work over the estimate time. Ratios two decimals, half up;
+#   n 0: `-`. --kind with --ratio is a usage error.
 # --task <n> (CORE §7a: time to ready, owner wait): prints the task's `task` row to append to RUNS.tsv, in the
 #   header's order (a column it does not name stays empty), then the names it lacks in CORE §7's order, `wait`
 #   last: date (UTC: the merge, else ready) task role(`task`) kind model effort(-) estimate(-) tokens(-) cost(-)
@@ -80,7 +89,7 @@
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
 # line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
 # ready or a wait line is malformed; 2 on a usage error.
-usage() { sed -n '2,82s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,91s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -322,6 +331,7 @@ f="${1:-}"; kind=""; model=""; mode=task
 case $# in
   1) ;;
   2) [ "$2" = --per-run ] || usage; mode=run ;;
+  4) [ "$2" = --ratio ] && [ "$3" = --model ] && [ -n "$4" ] || usage; model="$4"; mode=ratio ;;
   5) [ "$2" = --kind ] && [ "$4" = --model ] && [ -n "$3" ] && [ -n "$5" ] || usage; kind="$3"; model="$5"; mode=one ;;
   *) usage ;;
 esac
@@ -329,7 +339,7 @@ esac
 { [ -f "$f" ] && [ -r "$f" ]; } || { echo "run-stats: cannot read $f" >&2; exit 1; }
 # the file name and the pair via the environment: awk -v would read C:\Users as escapes (Git Bash)
 K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '\t' '
-  BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cw = 12; ca = 13 }
+  BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; ce = 7; cc = 9; cw = 12; ca = 13; cx = 15 }
   # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number
   function units(v, unit,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
     # a cost: its leading number (`0.0648 prices` is 0.0648, `$1.20` 1.20); minutes: the whole value, `m` allowed
@@ -340,10 +350,16 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
   function col(c) { return c ? $c : "" }
   { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
   /^[ \t]*$/ || /^#/ { next }
-  $1 == "date" { ct = cr = ck = cm = cc = cw = ca = 0
+  $1 == "date" { ct = cr = ck = cm = ce = cc = cw = ca = cx = 0
     for (i = NF; i >= 1; i--) { if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
-      if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "wall") cw = i; if ($i == "active") ca = i }   # the first of a name
+      if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "wall") cw = i; if ($i == "active") ca = i   # the first of a name
+      if ($i == "estimate") ce = i; if ($i == "estimate_time") cx = i }
     next }
+  # an estimate twice over, in units (a range a-b: a + b, its middle twice); -1 when it is none or 0
+  function est(v,   p, x, y) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
+    if ((p = index(v, "-")) > 1) { x = units(substr(v, 1, p - 1), "m"); y = units(substr(v, p + 1), "m"); x = (x < 0 || y < 0) ? -1 : x + y }
+    else { x = units(v, "m"); if (x >= 0) x *= 2 }
+    return x > 0 ? x : -1 }
   { k = col(ck); m = col(cm); r = col(cr); c = units(col(cc), "$"); a = units(col(ca), "m")
     # an assistant'"'"'s run (#281): never a task'"'"'s; --per-run under kind and role assistant
     if (r == "assistant" || k == "assistant") { if (mode != "run") next; k = r = "assistant" }
@@ -356,6 +372,7 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
       if (c >= 0) V[g, "c", ++N[g, "c"]] = c; if (a >= 0) V[g, "t", ++N[g, "t"]] = a; next }
     t = col(ct); sub(/[.].*$/, "", t); if (t == "" || t == "-") next
     last[t] = ++row
+    if (!(t in fe)) { fe[t] = est(col(ce)); fx[t] = est(col(cx)) }   # the estimates: those of the first row of the task
     if (c >= 0) { tc[t] += c; hc[t] = 1 }
     if (a >= 0 && col(cc) !~ /^[ \t]*in[ \t]/) { ta[t] += a; ha[t] = 1 }   # a subagent: in its parent
     # its kind and model: the lead row, else the first worker row, else the first row
@@ -371,7 +388,18 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
   function rank(p, n,   q) { q = p * n / 100; return q == int(q) ? q : int(q) + 1 }
   # twice a value in units, rounded half up to the step r: cents as d.cc, minutes as a whole number
   function out(w, r,   c) { c = int((w + r) / (2 * r)); return r == 100 ? sprintf("%d.%02d", int(c / 100), c % 100) : sprintf("%d", c) }
+  # the median of a measure'"'"'s ratios (in 1/1000000), two decimals half up; none: `-`
+  function ratio(x, n,   i, j, v) { if (!n) return "-"
+    for (i = 2; i <= n; i++) for (j = i; j > 1 && RQ[x, j - 1] > RQ[x, j]; j--) { v = RQ[x, j]; RQ[x, j] = RQ[x, j - 1]; RQ[x, j - 1] = v }
+    v = (n % 2) ? 2 * RQ[x, (n + 1) / 2] : RQ[x, n / 2] + RQ[x, n / 2 + 1]
+    v = int((v + 10000) / 20000); return sprintf("%d.%02d", int(v / 100), v % 100) }
+  function per(a, e,   x) { x = a * 2000000; return (x - x % e) / e }   # a / (e / 2) in 1/1000000, rounded down
   END {
+    if (mode == "ratio") { M = ENVIRON["M"]; nc = nt = 0
+      for (t in last) { if (tm[t] != M) continue
+        if ((t in hc) && fe[t] > 0) RQ["c", ++nc] = per(tc[t], fe[t])
+        if ((t in ha) && fx[t] > 0) RQ["t", ++nt] = per(ta[t], fx[t]) }
+      print M "\t" nc "\t" ratio("c", nc) "\t" nt "\t" ratio("t", nt); exit }
     if (mode != "run") {
       # the tasks in the order of their last row, each under its kind and model
       for (t in last) at[last[t]] = t

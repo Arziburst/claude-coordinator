@@ -1,0 +1,9 @@
+date	task	role	kind	model	effort	estimate	tokens	cost	result	start	wall	active	wait	estimate_time
+# --runs (#333): ordinary/opus 5 tasks - cost median 6.00, range 5.00-7.00, time median 40, range 30-50;
+# hard/opus 1 task (a thin history); opus cost actual/estimate per task 0.4 0.5 0.6 0.7 0.8 0.5 - ratio 0.55
+2026-10-01	1	worker	ordinary	opus	medium	10	1	4.00	approved	2026-10-01T08:00:00Z	30	20		40
+2026-10-02	2	worker	ordinary	opus	medium	10	1	5.00	approved	2026-10-02T08:00:00Z	40	30		40
+2026-10-03	3	worker	ordinary	opus	medium	10	1	6.00	approved	2026-10-03T08:00:00Z	50	40		40
+2026-10-04	4	worker	ordinary	opus	medium	10	1	7.00	approved	2026-10-04T08:00:00Z	60	50		40
+2026-10-05	5	worker	ordinary	opus	medium	10	1	8.00	approved	2026-10-05T08:00:00Z	70	60		40
+2026-10-06	6	worker	hard	opus	medium	10	1	5.00	approved	2026-10-06T08:00:00Z	20	10		20
