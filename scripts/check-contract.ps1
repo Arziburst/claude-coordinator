@@ -58,7 +58,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 29 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 32 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
