@@ -29,11 +29,25 @@
 #   - the words `no ratio yet`, never `-×`;
 #   a run log it cannot read: a line `<file>: WARN  ...` naming the log.
 #   Never an ERROR from --runs: the exit code is the one without it. Without --runs the output is today's.
+# The guard on tests_first: no (#334), the access point: when `tests_first` is `no ...` and the contract's
+# title, intent or touches (nothing else: not inputs, outputs, non_goals or the body below the header) hold a
+# word of this list, held in the script header in this order:
+#   payment price billing invoice refund money role permission auth access customer "personal data" pii gdpr
+# then one WARN line, counted in the summary's warnings like the others, never an ERROR, the exit unchanged:
+#   `<file>: WARN  tests_first is no, but <field> names `<word>` (money, roles or customer data): tests first
+#   are expected for such a change (CORE §4 step 3)` - the key words, checked: `<file>: WARN  `, `tests_first`,
+#   `<field> names `<word>`` (field: title / intent / touches; the word as the list writes it, lower case),
+#   `tests first are expected`. Matching: any letter case; a whole word - the letter or digit before it and
+#   after it (an optional plural `s` aside: roles, permissions) is no letter or digit, so `_ - / . '` and blanks
+#   bound it (auth_token.sh, billing.sh, customer's match; rolex, accessible, priceless, prepayment,
+#   customers2 do not); `personal data`: one or more blanks, `-` or `_` between the two words. Several
+#   matches: one line only - the first field in the order title, intent, touches, and in it the list's first
+#   word it holds. `tests_first: yes ...` or no match: no such line, the output as today.
 #   tests/check-contract/run.sh sh                  # check-contract.sh, with the bash running this file
 #   tests/check-contract/run.sh ps pwsh             # check-contract.ps1 (or: ps powershell)
 # Exit 1 if the output or the exit code differs.
 set -u
-[ $# -gt 0 ] || { sed -n '2,33s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,47s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
@@ -186,5 +200,52 @@ rname="no ratio yet: no estimates"; crun runs-thin.md --runs runs-noest.tsv
 rexit 0; rhas 'runs-thin.md: thin history: 1 tasks'; rhas 'no ratio yet'; rhasnt '-×|ERROR'
 rname="no ratio yet: a model not in the log"; crun runs-sonnet.md --runs runs.tsv
 rexit 0; rhas 'runs-sonnet.md: thin history: 0 tasks'; rhas 'no ratio yet'; rhasnt '-×|ERROR|WARN  budget'
+# tests_first: no on money, roles or customer data (#334): one WARN line, never an error (the header)
+tr -d '\r' < tests-first-guard.md > g-base.md
+sed 's/^title: .*/title: Round the Price on the receipt/' g-base.md > g-title.md
+sed 's/^  stays as it was\.$/  stays as it was, as on an invoice./' g-base.md > g-intent.md
+sed 's/^touches: .*/touches: [scripts\/billing.sh, tests\/sort.sh]/' g-base.md > g-touches.md
+sed 's/^tests_first: .*/tests_first: yes/' g-touches.md > g-yes.md
+sed 's/^tests_first: .*/tests_first: yes - the guard has no test yet/' g-title.md > g-yes-reason.md
+sed 's/^title: .*/title: Give new users the admin ROLES/' g-base.md > g-role.md
+sed -e 's/^intent: >$/intent: Permissions are read once at start-up./' -e '/^  The list is sorted/d' -e '/^  stays as it was/d' g-base.md > g-perm.md
+sed "s/^  The list is sorted/  The customer's list is sorted/" g-base.md > g-customer.md
+sed 's/^title: .*/title: Keep personal  data out of the log/' g-base.md > g-personal.md
+sed 's/^touches: .*/touches: [scripts\/pii-export.sh]/' g-base.md > g-pii.md
+sed 's/^title: .*/title: "Clean the GDPR log"/' g-base.md > g-gdpr.md
+sed 's/^touches: .*/touches: [scripts\/auth_token.sh]/' g-base.md > g-auth.md
+sed -e 's/^title: .*/title: Sort the access list and the money list/' -e 's/^touches: .*/touches: [scripts\/billing.sh]/' g-base.md > g-two.md
+sed -e 's/^title: .*/title: Sort the rolex, accessible and priceless lists/' \
+    -e 's/^  stays as it was\.$/  stays as it was: an authority, a moneyed customers2 and repayments are no words of the list./' \
+    -e 's/^touches: .*/touches: [scripts\/prepayment.sh, scripts\/roleplay.sh]/' g-base.md > g-inner.md
+gfail() { echo "FAIL: guard $gname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
+gwarn() {   # gwarn <file> <field> <word>: exit 0, exactly one guard line naming the field and the word, counted
+  crun "$1"
+  [ "$CRC" = 0 ] || gfail "exit $CRC, want 0"
+  [ "$(printf '%s\n' "$CO" | grep -c 'tests first are expected')" = 1 ] || gfail "not exactly one line with 'tests first are expected'"
+  printf '%s\n' "$CO" | grep -F -- "$1: WARN  " | grep -F -- 'tests_first' | grep -F -- "$2 names \`$3\`" | grep -qF 'tests first are expected' ||
+    gfail "no line '$1: WARN  ...tests_first...$2 names \`$3\`...tests first are expected...'"
+  printf '%s\n' "$CO" | grep -qxF -- "$1: OK (0 errors, 1 warnings)" || gfail "the summary is not '$1: OK (0 errors, 1 warnings)'"
+}
+gnone() {   # gnone <file>: exit 0 and only the clean summary - no guard line, no warning
+  crun "$1"
+  [ "$CRC" = 0 ] || gfail "exit $CRC, want 0"
+  [ "$CO" = "$1: OK (0 errors, 0 warnings)" ] || gfail "want only '$1: OK (0 errors, 0 warnings)'"
+}
+gname="an unrelated contract (words in inputs and the body)"; gnone g-base.md
+gname="a money word in the title, any case"; gwarn g-title.md title price
+gname="a money word in the intent's second line"; gwarn g-intent.md intent invoice
+gname="a money word in touches"; gwarn g-touches.md touches billing
+gname="the same with tests_first: yes"; gnone g-yes.md
+gname="yes with a reason"; gnone g-yes-reason.md
+gname="a role word, plural, upper case"; gwarn g-role.md title role
+gname="a permission word, plural, in a one-line intent"; gwarn g-perm.md intent permission
+gname="a customer word before an apostrophe"; gwarn g-customer.md intent customer
+gname="personal data, two words"; gwarn g-personal.md title 'personal data'
+gname="PII in a file name"; gwarn g-pii.md touches pii
+gname="GDPR in a quoted title"; gwarn g-gdpr.md title gdpr
+gname="auth before an underscore"; gwarn g-auth.md touches auth
+gname="two fields: the first field, the list's first word"; gwarn g-two.md title money
+gname="words inside other words"; gnone g-inner.md
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
