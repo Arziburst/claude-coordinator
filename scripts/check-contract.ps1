@@ -22,6 +22,12 @@
 #   estimates` (R: -Ratio's cost_ratio; the sign is U+00D7 as in the .sh), none: `... this model has no ratio
 #   yet (...)`; an unreadable log or no kind: a WARN. WARN lines count as warnings; never an ERROR, the exit
 #   code unchanged; not with -Field (the rules: check-contract.sh).
+#   The guard on tests_first: no (#334): `tests_first` is `no ...` and title, intent or touches hold a word of
+#   this list, in this order (whole words, any case, an optional plural s; the rules: check-contract.sh):
+#     payment price billing invoice refund money role permission auth access customer "personal data" pii gdpr
+#   - one WARN `tests_first is no, but <field> names `<word>` (...): tests first are expected ...`, for a
+#   failing contract too, never an ERROR, the exit unchanged; not with -Field.
+$GuardWords = @('payment', 'price', 'billing', 'invoice', 'refund', 'money', 'role', 'permission', 'auth', 'access', 'customer', 'personal data', 'pii', 'gdpr')
 # the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
 # usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
 $Field = ''; $Files = @($args | ForEach-Object { "$_" }); $usage = -not $Files
@@ -44,7 +50,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 24 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 29 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -235,6 +241,18 @@ foreach ($f in $Files) {
   }
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
+  }
+  # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
+  if ($txt.ContainsKey('tests_first') -and $tf -cmatch '^no([^a-z0-9]|\z)') {
+    $gm = ''
+    foreach ($gf in 'title', 'intent', 'touches') {
+      $t = (($txt[$gf] + '').ToLowerInvariant()) -creplace '(^|[ \t\n])#[^\n]*', ' '
+      foreach ($gw in $GuardWords) {
+        if ($t -cmatch ('(^|[^a-z0-9])' + ($gw -creplace ' ', '[ \t\n_-]+') + 's?([^a-z0-9]|\z)')) { $gm = "$gf names ``$gw``"; break }
+      }
+      if ($gm) { break }
+    }
+    if ($gm) { $out.Add("WARN  tests_first is no, but $gm (money, roles or customer data): tests first are expected for such a change (CORE ${sect}4 step 3)"); $nw++ }
   }
   # -Runs: the budget against the run log, after the checks above; a `kind:` field wins over -Kind
   if ($HasRuns) {

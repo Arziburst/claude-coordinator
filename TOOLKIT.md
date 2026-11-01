@@ -110,7 +110,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   background is not resumed but copied under a new id — stop it first): the same id,
   worktree, name, model, permission mode, settings (the guard) and history — its watch-list line stays
   (the watcher started again if it ended), a subscription is renewed (SendMessage `notify_when_idle`) only
-  where one is used (*Messages between sessions*), and its cost read by the same id. Never a short id (it starts a
+  where one is used (*Messages between sessions*), and its cost read by the same id. **Before any resume**,
+  read `claude agents --json --all`: a session that still has a `status` field (its process lives, idle
+  or busy) is sent a SendMessage, never resumed — resuming it starts a copy; only one with no `status`
+  (its process exited, `done`) or one stopped is resumed (#334). Never a short id (it starts a
   **copy** under a new id in the current folder, without the name: in the owner's working copy, that is a
   session working there) and never `claude resume <id>` (no such command — the id becomes a new
   session's prompt). After a pause over an hour the prompt cache is gone and the resumed session pays its

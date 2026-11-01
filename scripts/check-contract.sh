@@ -39,7 +39,18 @@
 #   same WARN with `budget.time <time>` and the time columns. A run log it cannot read, or no kind, is a WARN.
 #   These WARN lines count in the summary's warnings like the others; never an ERROR, the exit code is the
 #   one without --runs. Not with --field.
-usage() { sed -n '2,41s/^# \{0,1\}//p' "$0"; exit 2; }
+# The guard on tests_first: no (#334): when `tests_first` is `no ...` and the contract's title, intent or
+# touches (nothing else) hold a word of this list (money, roles or customer data), in this order:
+#   payment price billing invoice refund money role permission auth access customer "personal data" pii gdpr
+# a WARN `tests_first is no, but <field> names `<word>` (money, roles or customer data): tests first are
+# expected for such a change (CORE §4 step 3)`, counted with the warnings, never an ERROR, the exit unchanged.
+# Any letter case; a whole word: no letter a-z or digit right before it or after it (an optional plural `s`
+# aside), so blanks, `_ - / . '` bound it (auth_token.sh, customer's match; rolex, accessible do not);
+# "personal data" with one or more blanks (a folded line break too), `-` or `_` between. One line per contract:
+# the first field in the order title, intent, touches, and in it the list's first word it holds; comments
+# (# ...) are not read. It prints for a failing contract too (a warning beside its errors); not with --field.
+usage() { sed -n '2,51s/^# \{0,1\}//p' "$0"; exit 2; }
+guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 [ $# -gt 0 ] || usage
 field=""
 if [ "$1" = --field ]; then
@@ -221,6 +232,16 @@ prog='
       }
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
+      # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
+      if (("tests_first" in has) && tf ~ /^no([^a-z0-9]|$)/) {
+        nwd = split(ENVIRON["GW"], GW, "|"); split("title intent touches", GF, " "); gm = ""
+        for (k = 1; k <= 3 && gm == ""; k++) {
+          t = tolower(txt[GF[k]]); gsub(/(^|[ \t\n])#[^\n]*/, " ", t)
+          for (j = 1; j <= nwd && gm == ""; j++) { w = GW[j]; gsub(/ /, "[ \t\n_-]+", w)
+            if (t ~ ("(^|[^a-z0-9])" w "s?([^a-z0-9]|$)")) gm = GF[k] " names `" GW[j] "`" }
+        }
+        if (gm != "") warn("tests_first is no, but " gm " (money, roles or customer data): tests first are expected for such a change (CORE §4 step 3)")
+      }
       # --runs: the budget against the run log, after the checks above
       nr = split(ENVIRON["R"], RL, "\n")
       for (i = 1; i <= nr; i++) { t = RL[i]; if (substr(t, 1, 2) == "W\t") warn(substr(t, 3)); else if (substr(t, 1, 2) == "I\t" && K == "") print F ": " substr(t, 3) }
@@ -242,6 +263,6 @@ EOF
     R="$(forecast "${ck:-$rkind}" "$cm" "$cc" "$ct")"
   fi
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" K="$field" R="$R" B="$B" awk "$prog" "$f" || failed=1
+  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" awk "$prog" "$f" || failed=1
 done
 exit $failed
