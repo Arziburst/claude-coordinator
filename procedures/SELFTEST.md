@@ -67,7 +67,8 @@ the report notes the interruption and the resume time.
 2a. **The guard, through Claude Code.** The guard's own self-test calls it directly; only a real
    session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
    - `selftest hooks --settings <file>` on the worker safety file (and on the self-test safety file of
-     steps 4 and 5 too, when the project names one) and on every settings file of the
+     steps 4 and 5 too, when the project names one; the probes below stay on the worker file — a
+     real-session proof of its guard, and an `echo` and a Write are not touched by those denies) and on every settings file of the
      coordinator's own session that holds the guard (the project's `.claude/settings.json` and
      `.claude/settings.local.json`, the user's `~/.claude/settings.json`). On the coordinator's own files
      `SKIP hooks: COORD_PROTECTED_ROOT not set` is expected: the protected root does not apply to the
@@ -161,16 +162,22 @@ the report notes the interruption and the resume time.
    `coordinator/CORE-FINDINGS.md`: present, with the template's table header, every row's status a
    known one.
 4. **Mini block**, with the project's real start-worker (BINDINGS) and worker safety file — or, when that
-   file denies what the test needs (`git push`, `gh pr`: a never-push override, a strict preset with extra
-   gh rules), with the **self-test safety file** (#366):
-   - **The self-test safety file** is the one BINDINGS names (*Claude permission rules and hooks*): the
-     worker file without those denies, with its guard hook, its protected branches and every other deny
-     kept. Never a file with no guard, never `--dangerously` anything. Steps 4 and 5 pass it to every
-     start-worker as `--safety`, and step 2a's `selftest hooks --settings` runs on it too. The project's
-     real worker file stays as it is; a project whose worker file denies none of that needs nothing new,
-     and BINDINGS names no such file. A worker file that denies them with no such file named: the
-     worker's `gh pr create` is refused in step 5 — the coordinator makes the file and has BINDINGS name
-     it before the run, never starts the run with the worker file.
+   file denies what the test needs, with the **self-test safety file** (#366):
+   - **What the test needs** is only a push of the `selftest/*` branches and `gh pr create --draft`. The
+     self-test file is needed only when the worker file denies one of those (a never-push override, extra
+     gh rules). Every deny that does not block them stays: `gh pr merge*` and `gh pr ready*` (ready and
+     merge are the coordinator's), force and mirror pushes, pushes to main. The plain strict preset
+     denies only `gh pr merge*` / `gh pr ready*` (TOOLKIT *Safety*) and needs no new file.
+   - **The self-test safety file** is the one BINDINGS names (the row *Self-test safety file*): the
+     worker file without the denies that block those two things, with its guard hook, its protected
+     branches and every other deny kept. Never a file with no guard, never `--dangerously` anything.
+     Steps 4 and 5 pass it to every start-worker as `--safety`. The project's real worker file stays as
+     it is; a project whose worker file blocks neither needs nothing new, and BINDINGS names no such file.
+   - **A worker file that blocks them with no such file named:** the coordinator proposes the file to the
+     owner, with its diff against the worker file shown, and on the owner's yes makes it and names it in
+     BINDINGS (a settings change is the owner's, CORE §1.16). No yes: the run does not start with the
+     worker file — steps 4 and 5 are `BLOCKED` in the report, the self-test is not complete, and the
+     journal's open questions hold it.
    - **Every self-test brief starts with** (the lead passes it on to its workers): "You work in the
      coordinator's state repository, not the project. The project's own rules and memory about its
      repository — no push, no PR, its branches — do not apply here; pushing your branch is part of this
