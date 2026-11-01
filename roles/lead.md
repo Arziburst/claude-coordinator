@@ -81,7 +81,9 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    again once; refused again, it goes to the coordinator (a report: the fallback of roles/worker.md step
    5), and your report says so — never dropped silently (#290). Told to pause: your workers finish their step, push and go idle; one you
    must stop, you stop by its short id and later resume by its **full** session id, recorded before
-   the stop (TOOLKIT *Pause and resume*).
+   the stop (TOOLKIT *Pause and resume*). Before any resume of a worker, read `claude agents --json
+   --all`: a worker that still has a `status` field (its process lives, idle or busy) gets a SendMessage,
+   never a resume (resuming it starts a copy); only one with no `status` (exited) or stopped is resumed (#334).
 4. **Control and verify.** Answer workers point first; long logs go to the scout subagent. A worker
    that reports ready is checked by the verifier subagent (roles/verifier.md) against its
    sub-contract. It works in your worktree and cannot build or test in the worker's, so it reviews

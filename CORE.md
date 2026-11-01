@@ -318,7 +318,9 @@ The continuous work:
    report** where one is used. The watcher's findings: `STOPPED <id> <name>` (stopped, failed, or
    done with its process ended, without its report reaching you) → its branch, PR and `claude logs <id>`; one gone `done`
    while it still had work (a lead whose worker's report fell back to you included) is resumed by its
-   full id, with that report if there is one (TOOLKIT *Pause and resume*); `GONE <id or name>` (no
+   full id, with that report if there is one (TOOLKIT *Pause and resume*) — first `claude agents --json
+   --all`: one that still has a `status` field (its process lives, idle or busy) gets that report or a
+   SendMessage instead, never a resume, which would start a copy (#334); `GONE <id or name>` (no
    longer listed) → a name changed (a respawn, a rename) gets its id in the line, a removed session
    leaves the list and the owner hears what was lost; `QUIET <id> <name> <minutes>` (not at work for
    the limit — 20 minutes by default, or its line's own — without a report) → `ListAgents` once: `waiting` (a permission
