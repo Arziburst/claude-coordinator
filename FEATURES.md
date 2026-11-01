@@ -55,7 +55,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-01 | start-worker | a named background session in its own worktree with safety settings | WORKERS |
 | F-WORKERS-02 | Worker safety settings checked | no worker starts with a guard that would not block | WORKERS |
 | F-WORKERS-03 | Start from a trusted folder | the session starts in the trusted root and enters its worktree | WORKERS |
-| F-WORKERS-04 | Report address and subscription | `--report-to` is required; the subscribe line is printed once the session is listed | WORKERS |
+| F-WORKERS-04 | Report address and subscription | `--report-to` is required; the `watch:` line (an assistant: the subscribe line) is printed once the session is listed | WORKERS |
 | F-WORKERS-05 | Worktrees kept out of git | one `.git/info/exclude` line each for the worktrees and an older lead's `.lead/`, never `.gitignore` | WORKERS |
 | F-WORKERS-06 | cleanup-worker | only clean, pushed and merged work is removed, or an empty never-pushed branch | WORKERS |
 | F-WORKERS-07 | Permission modes | workers run in `auto` or `acceptEdits`; bypass is refused | WORKERS |
@@ -243,7 +243,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: CORE.md §4, TOOLKIT.md
 - entry: delegating a task
 - promises: one task per worker or lead; workers, leads, testers and verifiers are named `#<task> <role>: <title>` with no project prefix (a researcher `researcher: <topic>`, the coordinator by its name); the brief's text carries the contract, decisions, parallel work, resources and the report phrase, never the role rules (start-worker prepends the role file)
-- tested by: tests/workers/run.sh (the name reaches the session and the subscribe line; a name with a quote or a backslash reaches claude intact)
+- tested by: tests/workers/run.sh (the name reaches the session and the `watch:` line; a name with a quote or a backslash reaches claude intact)
 - not covered: none known
 
 ### F-WORK-06 Tests first
@@ -349,8 +349,8 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-WORKERS-04 Report address and subscription
 - defined: scripts/start-worker.sh, CORE.md §4, TOOLKIT.md
 - entry: `--report-to`
-- promises: start-worker refuses to start without a report address; the address heads the brief; the subscribe line is printed only after the session is listed (up to about 20 seconds; a name with a quote or a backslash is found as the JSON listing escapes it); one subscription per expected report, used only for a session no message is expected from — one that reports by message is on the watch list instead (F-WORKERS-13, #342)
-- tested by: tests/workers/run.sh (no report address, the subscribe line, names the listing escapes, reaching claude intact under Windows PowerShell 5.1 and PowerShell 7)
+- promises: start-worker refuses to start without a report address; the address heads the brief; the output's last line, printed only after the session is listed (up to about 20 seconds; a name with a quote or a backslash is found as the JSON listing escapes it), is the `watch:` line — the session's short id (its name in a dry run or when the launch printed no id), `coordinator/watch.txt` and `scripts/watch-sessions` — and for an assistant, from which no report is awaited, the subscribe line (#365); a refused start prints neither; one subscription per expected report, used only for a session no message is expected from — one that reports by message is on the watch list instead (F-WORKERS-13, #342)
+- tested by: tests/workers/run.sh (no report address, the `watch:` line and an assistant's subscribe line, names the listing escapes, reaching claude intact under Windows PowerShell 5.1 and PowerShell 7)
 - not covered: a session waiting on a permission prompt sends no idle notice
 
 ### F-WORKERS-05 Worktrees kept out of git

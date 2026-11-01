@@ -4,6 +4,9 @@
 #   tests/workers/run.sh sh                    # the .sh scripts, with the bash running this file
 #   tests/workers/run.sh ps pwsh               # the .ps1 scripts (or: ps powershell)
 # Exit 1 if any check fails.
+# Access point of the `watch:` checks (#365): a started session's short id is the one the launch prints,
+# `backgrounded · <id> · <name>` (the stub below prints it; start-worker already reads that line); a dry run
+# has no id yet, so its line holds the session's name.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -25,6 +28,8 @@ if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; print
   # the session's first message (the last argument) as received, alone; $STUB_BG_RC: the launch fails (#291)
   printf '%s' "${!#}" > "$STUB_LOG.arg"
   [ "${STUB_BG_RC:-0}" = 0 ] || { echo "stub claude: launch failed" >&2; exit "$STUB_BG_RC"; }
+  # the launch's line with the short id, one per start (stub_id below gives the last one)
+  printf 'backgrounded · b9%06d · %s\n' "$(wc -l < "$STUB_LOG.names" | tr -d ' ')" "$3"
 fi
 if [ "${1:-}" = agents ]; then
   all=""; case " $* " in *" --all "*) all=1 ;; esac
@@ -129,6 +134,20 @@ check() {   # check <expected exit> <description> -- command...
 }
 expect_in() { case "$LAST" in *"$1"*) ;; *) echo "FAIL: output lacks '$1'"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1 ;; esac; }
 S=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "Core lead")
+stub_id() { printf 'b9%06d' "$(wc -l < "$STUB_LOG.names" | tr -d ' ')"; }   # the short id the stub printed last
+# expect_watch <what the line holds>: the output ends with the one `watch:` line, which holds that, the list and
+# the watcher, and has no `subscribe:` line (#365, CORE section 4, Control)
+expect_watch() {
+  local o l x; o="$(printf '%s\n' "$LAST" | tr -d '\r')"; l="$(printf '%s\n' "$o" | sed -n '$p')"
+  case "$l" in watch:*) ;; *) echo "FAIL: the output does not end with a watch: line"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1 ;; esac
+  [ "$(printf '%s\n' "$o" | grep -c '^watch:')" = 1 ] || { echo "FAIL: not exactly one watch: line"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }
+  for x in "$1" coordinator/watch.txt scripts/watch-sessions; do
+    case "$l" in *"$x"*) ;; *) echo "FAIL: the watch: line lacks '$x': $l"; fail=1 ;; esac
+  done
+  case "$o" in *subscribe:*) echo "FAIL: a subscribe: line beside the watch list"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1 ;; esac
+}
+# expect_no_line <prefix>: no line of the output begins with it
+expect_no_line() { printf '%s\n' "$LAST" | grep -q "^$1" && { echo "FAIL: a $1 line in the output"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; }
 
 # --- start-worker ---
 if [ "$kind" = sh ]; then check 1 "start: --model without a value" -- start --repo "$tmp/repo" --model; fi
@@ -137,6 +156,7 @@ expect_in "only the owner's own explicit setup"
 check 1 "start: not a git repository" -- start --repo "$tmp" --name x --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
 check 1 "start: no report address" -- start --repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json"
 expect_in "<session>"
+expect_no_line "watch:"; expect_no_line "subscribe:"   # refused: neither line (#365)
 # a brief that is missing, empty or blanks only is refused by name, before any worktree (#226)
 : > "$tmp/empty-brief.md"; printf '  \r\n\t\n' > "$tmp/blank-brief.md"
 for b in empty-brief blank-brief; do
@@ -147,6 +167,7 @@ check 1 "start: a brief file that does not exist" -- start --repo "$tmp/repo" --
 expect_in "nope.md does not exist"
 check 0 "start: dry run" -- start "${S[@]}" --dry-run
 expect_in "[dry-run]"
+expect_watch "#12 worker: Fix"   # no id exists yet: the session's name
 expect_in "keep "
 grep -q 'worktrees' "$tmp/repo/.git/info/exclude" 2>/dev/null && { echo "FAIL: the dry run wrote info/exclude"; fail=1; }
 expect_in "[dry-run] add /.lead/ to the repository's .git/info/exclude"
@@ -154,9 +175,9 @@ grep -q '^/.lead/' "$tmp/repo/.git/info/exclude" 2>/dev/null && { echo "FAIL: th
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] && { echo "FAIL: the dry run created the worktree"; fail=1; }
 [ -s "$STUB_LOG" ] && { echo "FAIL: the dry run called claude"; fail=1; }
 check 0 "start: real start with the stub claude" -- start "${S[@]}"
-expect_in 'subscribe: SendMessage(to: "#12 worker: Fix", notify_when_idle: true)'
+expect_watch "$(stub_id)"
 expect_in "added /.lead/ to the repository's .git/info/exclude"
-# it waited until the new session was listed before printing the subscribe line (no race)
+# it waited until the new session was listed before printing its last line (no race)
 grep -qx "agents --json" "$STUB_LOG" || { echo "FAIL: start-worker did not wait for the session to be listed"; fail=1; }
 case "$LAST" in *"not listed after"*) echo "FAIL: the started session was not found in claude agents"; fail=1 ;; esac
 [ -d "$tmp/repo/.claude/worktrees/12-fix" ] || { echo "FAIL: no worktree after start"; fail=1; }
@@ -1002,7 +1023,9 @@ done
 grep -q EnterWorktree "$STUB_LOG.arg" 2>/dev/null && { echo "FAIL (an assistant): the launch text sends it into a worktree"; fail=1; }
 grep -qF 'Log the hours (the fixture brief of timesheet).' "$STUB_LOG.arg" 2>/dev/null || { echo "FAIL (an assistant): the brief is not in the launch text"; fail=1; }
 expect_in 'claude attach "assistant: timesheet"'
+# an assistant (a session named `assistant: ...`) keeps the subscribe line, not the watch list (#365)
 expect_in 'subscribe: SendMessage(to: "assistant: timesheet", notify_when_idle: true)'
+expect_no_line "watch:"
 # its session exists now (listed): a second start of that name is refused
 : > "$STUB_LOG"
 check 1 "start: an assistant whose session exists" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf"
@@ -1083,6 +1106,7 @@ for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
   : > "$STUB_LOG"
   check 1 "start: an assistant without $vf" -- start "${a[@]}"
   asnothing "an assistant without $vf"
+  expect_no_line "watch:"; expect_no_line "subscribe:"   # refused: neither line (#365)
 done
 
 # --- cleanup-worker ---
