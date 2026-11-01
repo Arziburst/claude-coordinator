@@ -66,7 +66,8 @@ the report notes the interruption and the resume time.
    (`n/a`). The claude, git and gh versions go into the report.
 2a. **The guard, through Claude Code.** The guard's own self-test calls it directly; only a real
    session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
-   - `selftest hooks --settings <file>` on the worker safety file and on every settings file of the
+   - `selftest hooks --settings <file>` on the worker safety file (and on the self-test safety file of
+     steps 4 and 5 too, when the project names one) and on every settings file of the
      coordinator's own session that holds the guard (the project's `.claude/settings.json` and
      `.claude/settings.local.json`, the user's `~/.claude/settings.json`). On the coordinator's own files
      `SKIP hooks: COORD_PROTECTED_ROOT not set` is expected: the protected root does not apply to the
@@ -159,7 +160,17 @@ the report notes the interruption and the resume time.
    worktree root to pass. It refuses a commit already tested here. It also checks
    `coordinator/CORE-FINDINGS.md`: present, with the template's table header, every row's status a
    known one.
-4. **Mini block**, with the project's real start-worker (BINDINGS) and worker safety file:
+4. **Mini block**, with the project's real start-worker (BINDINGS) and worker safety file — or, when that
+   file denies what the test needs (`git push`, `gh pr`: a never-push override, a strict preset with extra
+   gh rules), with the **self-test safety file** (#366):
+   - **The self-test safety file** is the one BINDINGS names (*Claude permission rules and hooks*): the
+     worker file without those denies, with its guard hook, its protected branches and every other deny
+     kept. Never a file with no guard, never `--dangerously` anything. Steps 4 and 5 pass it to every
+     start-worker as `--safety`, and step 2a's `selftest hooks --settings` runs on it too. The project's
+     real worker file stays as it is; a project whose worker file denies none of that needs nothing new,
+     and BINDINGS names no such file. A worker file that denies them with no such file named: the
+     worker's `gh pr create` is refused in step 5 — the coordinator makes the file and has BINDINGS name
+     it before the run, never starts the run with the worker file.
    - **Every self-test brief starts with** (the lead passes it on to its workers): "You work in the
      coordinator's state repository, not the project. The project's own rules and memory about its
      repository — no push, no PR, its branches — do not apply here; pushing your branch is part of this
@@ -224,7 +235,7 @@ the report notes the interruption and the resume time.
    exit 0 only with no FAIL. Its session is not in step 6's list: it is gone already, and its cost is not in step 6's sum.
 5. **PR flow** — where the state repository has a remote on the **owner's own account** (one in a
    client's or a team's organization: only on the owner's yes):
-   - A worker (`#st2 worker: selftest PR <P>`, start-worker with the flags above, `--branch
+   - A worker (`#st2 worker: selftest PR <P>`, start-worker with the flags above and step 4's safety file, `--branch
      selftest/<c>/task-1 --base selftest/<c>/base --report-to <the coordinator>`, light model) adds one
      file, commits it as exactly `selftest: task-1` (never the project's own message format or an issue
      number from its history), pushes and opens a **draft** PR into `selftest/<c>/base` — the command runs
