@@ -66,6 +66,10 @@ the report notes the interruption and the resume time.
    (`n/a`). The claude, git and gh versions go into the report.
 2a. **The guard, through Claude Code.** The guard's own self-test calls it directly; only a real
    session shows whether Claude Code honours its block (a PowerShell shell wrapper, a broken path).
+   - **First, before anything below** (detail in step 4): does the worker file deny a push of
+     `selftest/*` or `gh pr create --draft`? If it does and BINDINGS names no self-test safety file, the
+     owner is asked now, so the file exists and gets the check below before its first use. On a no, the
+     report says `BLOCKED` for steps 4 and 5 before `selftest prepare` runs.
    - `selftest hooks --settings <file>` on the worker safety file (and on the self-test safety file of
      steps 4 and 5 too, when the project names one; the probes below stay on the worker file — a
      real-session proof of its guard, and an `echo` and a Write are not touched by those denies) and on every settings file of the
@@ -167,17 +171,20 @@ the report notes the interruption and the resume time.
      self-test file is needed only when the worker file denies one of those (a never-push override, extra
      gh rules). Every deny that does not block them stays: `gh pr merge*` and `gh pr ready*` (ready and
      merge are the coordinator's), force and mirror pushes, pushes to main. The plain strict preset
-     denies only `gh pr merge*` / `gh pr ready*` (TOOLKIT *Safety*) and needs no new file.
+     adds only `gh pr merge*` / `gh pr ready*` of the gh rules (TOOLKIT *Safety*) and needs no new file.
    - **The self-test safety file** is the one BINDINGS names (the row *Self-test safety file*): the
      worker file without the denies that block those two things, with its guard hook, its protected
-     branches and every other deny kept. Never a file with no guard, never `--dangerously` anything.
+     branches and every other deny kept. A broad deny such as `Bash(gh pr*)` or `Bash(git push*)` is
+     **narrowed**, never just removed, so the denies the test does not need (`gh pr merge*`,
+     `gh pr ready*`) still stand in the file. Never a file with no guard, never `--dangerously` anything.
      Steps 4 and 5 pass it to every start-worker as `--safety`. The project's real worker file stays as
      it is; a project whose worker file blocks neither needs nothing new, and BINDINGS names no such file.
    - **A worker file that blocks them with no such file named:** the coordinator proposes the file to the
      owner, with its diff against the worker file shown, and on the owner's yes makes it and names it in
      BINDINGS (a settings change is the owner's, CORE §1.16). No yes: the run does not start with the
      worker file — steps 4 and 5 are `BLOCKED` in the report, the self-test is not complete, and the
-     journal's open questions hold it.
+     journal's open questions hold it. This is asked before step 2a (see there), so a no stops steps 4
+     and 5 before `selftest prepare` runs and no `selftest/<c>/base` is left to block a later run.
    - **Every self-test brief starts with** (the lead passes it on to its workers): "You work in the
      coordinator's state repository, not the project. The project's own rules and memory about its
      repository — no push, no PR, its branches — do not apply here; pushing your branch is part of this
