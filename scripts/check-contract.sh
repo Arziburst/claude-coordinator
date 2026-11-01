@@ -39,7 +39,7 @@
 #   same WARN with `budget.time <time>` and the time columns. A run log it cannot read, or no kind, is a WARN.
 #   These WARN lines count in the summary's warnings like the others; never an ERROR, the exit code is the
 #   one without --runs. Not with --field.
-usage() { sed -n '2,40s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,41s/^# \{0,1\}//p' "$0"; exit 2; }
 [ $# -gt 0 ] || usage
 field=""
 if [ "$1" = --field ]; then
