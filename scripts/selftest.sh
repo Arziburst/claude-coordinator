@@ -399,7 +399,7 @@ hooks)
   # "timeout" when it is a number (empty otherwise) - in the awk reader's output, after its two env lines.
   hook_jq='[ .hooks | objects | .PreToolUse | arrays | .[] | objects | . as $v | .hooks | arrays | .[] | objects
     | select((.command | type) == "string") | select(.command | test("safety-guard\\."; "i"))
-    | select(.command | test("-selftest|--self-test"; "i") | not)
+    | select(.command | test("safety-guard\\.(sh|ps1).{0,2}[ \t]+(-selftest|--self-test)"; "i") | not)
     | [ (.command | gsub("[\n\r\t]"; " ")), (.shell | strings // ""), (.onFailure | strings // ""), ($v.matcher | strings // ""), (.timeout | numbers // "") ] ]
     | first // empty | .[]'
   hook_awk='
@@ -442,7 +442,7 @@ hooks)
       h = substr(P[6], 2) + 0
       if (P[7] == "command") {
         C[e, h] = v
-        if (ge == "" && tolower(v) ~ /safety-guard\./ && tolower(v) !~ /-selftest|--self-test/) { ge = e; gh = h }
+        if (ge == "" && tolower(v) ~ /safety-guard\./ && tolower(v) !~ /safety-guard\.(sh|ps1).?.?[ \t]+(-selftest|--self-test)/) { ge = e; gh = h }
       } else if (P[7] == "shell") S[e, h] = v
       else if (P[7] == "onFailure") F[e, h] = v
     }

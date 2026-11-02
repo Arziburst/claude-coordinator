@@ -517,7 +517,7 @@ switch ($Step) {
   foreach ($entry in $entries) {
     if ($entry -isnot [Management.Automation.PSCustomObject] -or $entry.hooks -isnot [array]) { continue }
     $x = @($entry.hooks | Where-Object { $_ -is [Management.Automation.PSCustomObject] -and $_.command -is [string] -and
-      $_.command -match 'safety-guard\.' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+      $_.command -match 'safety-guard\.' -and $_.command -notmatch 'safety-guard\.(ps1|sh).{0,2}\s+(-SelfTest|--self-test)' })[0]
     if ($x) { $h = $x; if ($entry.matcher -is [string]) { $matcher = $entry.matcher }; break }
   }
   if (-not $h) { Fail 'no safety-guard hook in the file'; Finish }
