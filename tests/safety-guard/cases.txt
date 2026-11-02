@@ -998,12 +998,13 @@ allow	work	gh api repos/o/x/issues/281/comments --paginate	-	@PROJECT@	-	@PROJEC
 allow	work	gh api -X GET repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh api -X GET search/issues -f q=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh api --method GET repos/o/x/issues -F per_page=100	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# gh api graphql without a mutation: blocked by the owner's decision of 2026-11-02 (#345; a board is read by gh project)
+block	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh issue view 281	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh api repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # without the folder the shell verdicts are unchanged
 allow	work	git commit -m x	-	@PROJECT@	-	-
 allow	work	git push origin 12-fix	-	@PROJECT@	-	-
@@ -1033,8 +1034,8 @@ block	work	gh api /graphql --method GET -f query='mutation { x }'	-	@PROJECT@	-	
 block	work	gh api graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog show HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -1134,14 +1135,15 @@ allow	work	gh alias list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh config get git_protocol	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# gh browse opens a browser: blocked by the owner's decision of 2026-11-02 (#345; 281.5's lead had let it pass); its --no-browser stays allowed
+block	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh --hostname h.example pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh search repos x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # --- 281.6: gh's own command line read exactly in the assistant mode - before the group and before the
@@ -1661,3 +1663,404 @@ allow	work	git subtree --prefix=a PUSH origin main
 allow	ps:work	git subtree --prefix=a PUSH origin main
 allow	work	git send-pack --STDIN origin 12-fix
 allow	ps:work	git send-pack --STDIN origin 12-fix
+# --- #345 part 2: the assistant mode closes the deliberate-evasion routes (the owner's choice, 2026-10-30) ---
+# Access points: nothing new. The hook reads its usual JSON on stdin and answers by its exit code alone (2 block,
+# 0 allow), COORD_ASSISTANT_DIR is the 7th column as above, no message's wording is fixed here, and both scripts
+# give the same verdict on every line. On a block the assistant's folder need not be named. An unknown folder or
+# file ($X) counts as outside its folder. Seven lines above were flipped to block, gh browse and gh api graphql, by the owner's
+# decision of 2026-11-02; their new lines are at the end of this section.
+# ... GH_BROWSER / BROWSER on a gh or git command, set for a later one too
+block	work	GH_BROWSER=x gh pr view 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	BROWSER=x gh pr view 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_BROWSER=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	BROWSER=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	env GH_BROWSER=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export GH_BROWSER=x; gh pr view 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export BROWSER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_BROWSER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:GH_BROWSER='x'; gh pr view 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:BROWSER = 'x'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:BROWSER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	GH_REPO=o/x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo GH_BROWSER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep -rn BROWSER= scripts	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls env:BROWSER	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... any gh --web / -w, in a cluster of short options too (-w after a pipe is another command's)
+block	work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 -cw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 --web=true	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue view 281 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue list --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo view o/x --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh run view 12 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh release view v1 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh gist view abc -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh workflow view ci.yml --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh search issues bug --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr checks 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh -R o/x pr view 12 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh issue view 281 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh search issues bug --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr view 12 --json url --jq .url	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh run list --workflow ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list | grep -w x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh pr view 12 --json url	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... gh --help <an extension> runs the extension: only a name gh knows passes
+block	work	gh --help x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh -h x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh --help x run	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh --help x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh -h x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --help pr	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh --help pr view	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr view --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh --help pr	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... git long options abbreviated. git takes no abbreviated global option (it answers unknown option, 129), but
+# they are refused as their full form; after a subcommand git does take them, and these reach a write
+block	work	git --git-d=x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --git-di .git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --work-t=. log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --work-tr . log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --config-e=a.b=X log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --exec-p=x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git --git-d=x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git --work-t=. log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git symbolic-ref --del refs/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch --unset-u	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch --unset-u x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch --set-u=o/x x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch --edit-d	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git tag --del v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config --unset-a a.b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config --rem a	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config --ed	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config --ad a.b c	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git config --rep a.b c	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch --refm=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git symbolic-ref --del refs/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git branch --unset-u	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git config --unset-a a.b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git config --ed	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log --oneli -3	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git config --get-a a.b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch --lis	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git log --oneli -3	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... git in its own folder: a .git there could be crafted, so a read there can run a command. Its folder as
+# git -C, as cd before it, or as the cwd; a folder that cannot be known counts as its own
+block	work	git -C @PROJECT@/coordinator/assistants/a1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C @PROJECT@/coordinator/assistants/a1/sub status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C coordinator/assistants/a1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C ./coordinator/assistants/a1/sub log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C @LINK@/coordinator/assistants/a1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+fold	work	git -C @PROJECT_UP@/coordinator/assistants/a1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cd @PROJECT@/coordinator/assistants/a1 && git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cd coordinator/assistants/a1; git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	pushd @PROJECT@/coordinator/assistants/a1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git -C $X log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cd $X && git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git -C . log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1/sub	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -C @PROJECT_W@ordinatorssistants1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	cd @PROJECT_W@ordinatorssistants1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Location @PROJECT_W@ordinatorssistants1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -C $X log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work/coordinator/assistants/a1	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	git -C @PROJECT@ log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	git -C ../../.. log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	cd @PROJECT@ && git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git -C @PROJECT@/coordinator/assistants/a2 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git -C @PROJECT@/coordinator/assistants/a1-old log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cd @PROJECT@/coordinator/assistants/a1 && ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cd @PROJECT@/coordinator/assistants/a1; cat notes.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cd @PROJECT@/coordinator/assistants/a1 && cd ../../.. && git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	cat notes.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work/coordinator/assistants/a1	git -C @PROJECT_W@ log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cd @PROJECT_W@ordinatorssistants1; ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... running a script or inline code
+block	work	bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sh x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	bash @PROJECT@/coordinator/assistants/a1/x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	bash -c 'ls'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sh -c 'ls'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	python x.py	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	python3 x.py	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	python -c 'print(1)'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	python3 -c 'print(1)'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	node x.js	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	node -e '1'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	perl -e '1'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ruby -e '1'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	pwsh -File x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	pwsh -c 'ls'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	powershell -File x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	powershell -Command ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	eval ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	eval "$x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	source x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	. ./x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	./x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	@PROJECT@/coordinator/assistants/a1/x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cat x | sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cat x | bash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo ls | bash -s	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cat x | python	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cat x | pwsh -	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	env bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	command bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	exec sh x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ls && bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ls; sh x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	(bash x.sh)	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo $(sh x.sh)	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ls | xargs sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	find . -name x -exec sh {} \;	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	./x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	pwsh -File x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	pwsh -c ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	powershell -File x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	powershell -c ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	iex 'ls'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Invoke-Expression 'ls'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	invoke-expression ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	'ls' | iex	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	. ./x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	. .\x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& ./x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	.\x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	./x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& { ls }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Invoke-Command -ScriptBlock { ls }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	python -c 'print(1)'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	node -e '1'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	bash -c ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	cmd /c dir	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Start-Process x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work/coordinator/assistants/a1	.\x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo hi	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cat a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep x a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo "bash x.sh"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo eval	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep python a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep 'bash -c' a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls bash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cat x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep sh x.sh | wc -l	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cat a.txt | grep b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cat a.txt | sort	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	find . -name '*.sh'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log --grep='bash -c'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo hi	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cat a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Get-Content x.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Select-String iex a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo iex	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Get-ChildItem *.ps1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cat a.txt | Select-String b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... a shell write outside its folder (the unknown one too); its own folder allowed, and nothing written is no write
+block	work	echo x > a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x >> a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x>a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > src/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > ../y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > @HOME@/y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > $X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x 2> a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ls &> a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cat <<X > a.txt\nhi\nX	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > @PROJECT@/coordinator/assistants/a1/../a2/y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > @PROJECT@/coordinator/assistants/a1/out/y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x > @PROJECT@/coordinator/assistants/a1-old/y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x | tee a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x | tee -a a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x | tee @PROJECT@/coordinator/assistants/a1/x.txt a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cp a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cp @PROJECT@/coordinator/assistants/a1/a.txt src/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cp -r @PROJECT@/coordinator/assistants/a1 ../y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mv a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mv a.txt @PROJECT@/coordinator/assistants/a1/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mv @PROJECT@/coordinator/assistants/a1/a.txt src/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	rm a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	rm -f src/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	rm @PROJECT@/coordinator/assistants/a1/a.txt a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	echo x > ../a2/y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	cp a.txt ../../y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Content a.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Content -Path ..\y.txt -Value x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Out-File a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	'x' | Out-File a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	'x' | Out-File -FilePath src\a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	echo x > a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	echo x >> a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	cp a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	mv a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	rm a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	tee a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Copy-Item a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Move-Item a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Remove-Item a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Add-Content a.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	'x' | Tee-Object a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	echo x > @PROJECT_W@ordinatorssistants1\..\a2\y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo x > @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo x >> @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo x > @PROJECT@/coordinator/assistants/a1/sub/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cat a.txt > @PROJECT@/coordinator/assistants/a1/c.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log > @PROJECT@/coordinator/assistants/a1/log.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo x | tee @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo x | tee -a @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cp a.txt @PROJECT@/coordinator/assistants/a1/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cp @PROJECT@/coordinator/assistants/a1/a.txt @PROJECT@/coordinator/assistants/a1/b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	mv @PROJECT@/coordinator/assistants/a1/a.txt @PROJECT@/coordinator/assistants/a1/b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	rm @PROJECT@/coordinator/assistants/a1/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	rm -rf @PROJECT@/coordinator/assistants/a1/sub	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	echo x > x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	echo x > ./sub/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	cp x.txt y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	rm x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls 2>/dev/null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls > /dev/null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls >/dev/null 2>&1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls 2>&1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo "a > b"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep 'a>b' a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Set-Content @PROJECT_W@ordinatorssistants1\x.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Set-Content -Path @PROJECT_W@ordinatorssistants1\x.txt -Value x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	'x' | Out-File @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	'x' | Out-File -FilePath @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo x > @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cp a.txt @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Copy-Item a.txt @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	rm @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Remove-Item @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work/coordinator/assistants/a1	Set-Content x.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls 2>$null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls > $null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls | Out-Null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo 'a > b'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... an environment variable set for good
+block	ps:work	[Environment]::SetEnvironmentVariable('X','y')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	[Environment]::SetEnvironmentVariable('X','y','User')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	[System.Environment]::SetEnvironmentVariable('X','y')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	[environment]::setenvironmentvariable('X','y')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	setx X y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	setx X y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	setx.exe X y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	[Environment]::GetEnvironmentVariable('PATH')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo setx	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep setx a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... git <command> --help and git help <command> open the owner's browser on Windows (the same verdict on every
+# system); -h is the terminal help, also for a command that writes when it runs. git --help alone prints
+block	work	git log --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git status --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git --help log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git help log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git help -w log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git commit -h -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git log --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git help log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git status -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git diff -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git send-pack -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git commit -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log -- --help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log --grep=--help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git log -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git commit -h	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... GIT_DIR= before a read is judged as the read, with a known path outside its folder; everything else stays
+# refused; the text GIT_DIR= or env:GIT_X in a search is no assignment
+allow	work	GIT_DIR=.git git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	GIT_DIR=@PROJECT@/.git git log -1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	GIT_DIR=../other/.git git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	env GIT_DIR=.git git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=.git git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=@PROJECT@/coordinator/assistants/a1 git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=@PROJECT@/coordinator/assistants/a1/x/.git git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=@LINK@/coordinator/assistants/a1 git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	GIT_DIR=.git git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=$X git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=.git GIT_PAGER=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_CONFIG_GLOBAL=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_WORK_TREE=. git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_EXTERNAL_DIFF=x git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export GIT_DIR=.git; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export GIT_PAGER=x; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GIT_DIR=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:GIT_DIR = 'x'; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:GIT_PAGER='x'; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:GIT_PAGER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git grep GIT_DIR=	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep -rn GIT_PAGER= scripts	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git log -S GIT_DIR=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo GIT_DIR=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git grep GIT_DIR=	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls env:GIT_X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Get-ChildItem env:GIT_X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... without the folder every one of these keeps its verdict
+allow	work	GH_BROWSER=x gh pr view 12
+allow	work	gh browse
+allow	work	gh pr view 12 --web
+allow	work	gh api graphql -f query='query{a}'
+allow	work	gh --help x
+allow	work	git branch --unset-u
+allow	work	bash x.sh
+allow	work	python -c '1'
+allow	work	echo x > a.txt
+allow	work	cp a.txt b.txt
+allow	work	setx X y
+allow	work	git log --help
+allow	work	GIT_DIR=.git git log
+allow	ps:work	iex 'ls'
+allow	ps:work	Set-Content a.txt x
+allow	ps:work	[Environment]::SetEnvironmentVariable('X','y')
+# #345 leftovers: a line continuation in a brace word, as bash joins it: {ma\<NL>in,x} is main and x, {x,y}\<NL>main is xmain and ymain
+block	work	git push origin {ma\\nin,x}
+allow	work	git push origin {x,y}\\nmain
+# ... gh browse and gh api graphql (the owner's decision, 2026-11-02: the flipped lines above name it). gh browse --no-browser
+# only prints the URL; a board is read by gh project view / item-list, without graphql; every other gh project command writes
+block	work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh browse --settings	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh browse -n	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_BROWSER=x gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql --paginate -f query='query{a}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api https://api.github.com/graphql -f query='query{a}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api https://api.github.com/graphql -f query='query{a}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh project view 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh project view 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project view 1 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project item-edit --id x --project-id y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project item-add 1 --url u	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project item-create 1 --title t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project item-delete 1 --id x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project item-archive 1 --id x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project create --title t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project edit 1 --title t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project delete 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project close 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project copy 1 --title t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project link 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project unlink 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project mark-template 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project field-create 1 --name n --data-type TEXT	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh project field-delete --id x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh project item-edit --id x --project-id y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh project delete 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1

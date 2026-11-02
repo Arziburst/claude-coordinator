@@ -417,6 +417,20 @@ if [ -n "$flag" ]; then
     case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_NO_PUSH=1, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
   fi
 fi
+# A very long comma list in a brace word (#345; about 20 kB, too long for a line of cases.txt): an answer within
+# SG_CASE_LIMIT, one process at a time, and the verdict of a word of more than BMAX words: it stays as written, and a
+# command the guard reads is refused. The guard's memory (a count check before the words are pushed) cannot be seen from here.
+longlist="$(awk 'BEGIN { for (i = 0; i < 5000; i++) printf ",x"; for (i = 0; i < 10000; i++) printf "t" }')"
+longcase() {   # longcase <expect> <the command before the word> <the word's first alternative>
+  local hd="${longlist%%t*}" tl="${longlist#"${longlist%%t*}"}" rc got
+  n=$((n + 1))
+  printf '{"tool_name":"Bash","tool_input":{"command":"%s {%s%s}%s"},"cwd":"%s"}' "$2" "$3" "$hd" "$tl" "$wkm" > "$tmp/long.json"
+  CLAUDE_PROJECT_DIR="$wkm" bounded "$tmp/long.json"; rc=$?
+  got=allow; [ "$rc" = 2 ] && got=block; [ "$rc" = 124 ] && got="no answer within ${SG_CASE_LIMIT:-10}s"
+  [ "$got" = "$1" ] || { echo "FAIL (long brace word) expected $1, got $got (exit $rc): $2 {$3,x,x,...}ttt..."; fail=1; }
+}
+longcase block "git push origin" main
+longcase allow "echo" main
 # COORD_NO_PUSH (#367): tests/safety-guard/no-push.txt, in a file of its own that also runs alone
 bash "$here/no-push.sh" "$@" || fail=1
 echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
