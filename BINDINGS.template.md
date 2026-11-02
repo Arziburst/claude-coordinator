@@ -31,6 +31,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Owner's test station / preview | `<command or URL pattern>` |
 | Owner's build (latest product for the owner) | `<command>` |
 | Claude permission rules and hooks | `<path>`: deny-list, hooks |
+| Self-test safety file (optional, SELFTEST step 4) | `<path>`, or empty when the worker safety file is enough: the worker file without the denies that block a push of `selftest/*` branches or `gh pr create --draft`, guard hook, protected branches and every other deny kept (a broad deny such as `Bash(gh pr*)` is narrowed, never just removed); serves steps 4 and 5 of the self-test and never real workers |
 
 ## Project map (CORE §4c)
 | What | Where |
