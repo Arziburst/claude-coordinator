@@ -6,7 +6,8 @@
 # work/.claude/worktrees/13-clone: a repository of its own in work's worktrees' folder); a ps: prefix
 # makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
 # of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path. A timed: before
-# all that (timed:work, timed:ps:work) fails the case when the hook gives no answer within SG_CASE_LIMIT seconds (default 20).
+# all that (timed:work, timed:ps:work) fails the case when the hook gives no answer within SG_CASE_LIMIT seconds (default 10);
+# those cases run one at a time after all the others, and the first with no answer ends them (run.sh: bounded).
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
 # expect fold8: the same for a non-ASCII letter (Ü / ü); own8: the other way round - allow on Windows and macOS,
 # block on Linux. The project Üw (on work) is reached as @PROJECT_UML@: @PROJECT@ with Ü written ü.
@@ -1629,19 +1630,18 @@ allow	work	git push origin {x,\\}
 allow	work	git push origin {x,$'y\''}
 allow	work	echo {'a\',main}
 allow	work	echo {main,x\\}
-# a range with huge bounds (above 2^53 the guard cannot count): an answer within the time limit (timed:), judged as too big to
-# expand, as the limit of BMAX words is. bash itself makes one word of it (or, past its integers, keeps it as written), so with
-# no protected name in the line only the limit blocks; a command the guard does not read stays allowed. {2^53-1} is still counted
-block	timed:work	git push origin {9007199254740993..9007199254740993}
+# a range with huge bounds (above 2^53 the guard cannot count): an answer within the time limit (timed:). bash makes one word of
+# it, a number (or, past its integers, keeps it as written), so no protected name comes of it: the line's other words decide
+allow	timed:work	git push origin {9007199254740993..9007199254740993}
 block	timed:work	git push origin main {9007199254740993..9007199254740993}
 allow	timed:work	echo {9007199254740993..9007199254740993}
-block	timed:work	git push origin {99999999999999999999..99999999999999999999}
+allow	timed:work	git push origin {99999999999999999999..99999999999999999999}
 block	timed:work	git push origin main {99999999999999999999..99999999999999999999}
 allow	timed:work	echo {99999999999999999999..99999999999999999999}
-block	timed:work	git push origin {-9007199254740993..-9007199254740993}
+allow	timed:work	git push origin {-9007199254740993..-9007199254740993}
 block	timed:work	git push origin main {-9007199254740993..-9007199254740993}
 allow	timed:work	echo {-9007199254740993..-9007199254740993}
-block	timed:work	git push origin {-99999999999999999999..-99999999999999999999}
+allow	timed:work	git push origin {-99999999999999999999..-99999999999999999999}
 block	timed:work	git push origin main {-99999999999999999999..-99999999999999999999}
 allow	timed:work	echo {-99999999999999999999..-99999999999999999999}
 block	timed:work	bash -c "git push origin main {9007199254740993..9007199254740993}"
