@@ -83,6 +83,35 @@ for f in settings.example.json settings.example.windows.json; do
   tmo "$fx/$f" "$f" PASS
 done
 
+# COORD_NO_PUSH (#367). The access point, which selftest implements as written: a file whose top-level env sets
+# COORD_NO_PUSH to "1" (the one value that turns the guard's pushes off) gets exactly one line holding the word
+# COORD_NO_PUSH, in any shape but FAIL; everything else is as for the same file without it (the summary line may
+# count that line), with no fail and exit 0. Any other value, no such key, or the key elsewhere in the file: the
+# output is the same file's, byte for byte. The fixtures: good.json plus one line.
+tr -d '\r' < tests/selftest/hooks/good.json > "$fx/nopush-base.json"
+st hooks --settings "$fx/nopush-base.json" 2>&1 | tr -d '\r' > "$tmp/nopush-base"
+nopf() {   # nopf <name> <the line added to good.json>
+  awk -v e="$2" 'NR == 1 { print; print "  " e ","; next } { print }' "$fx/nopush-base.json" > "$fx/nopush-$1.json"
+  st hooks --settings "$fx/nopush-$1.json" > "$tmp/one" 2>&1; rc=$?
+  tr -d '\r' < "$tmp/one" > "$tmp/lines"
+}
+nopoff() {   # nopoff <name> <the line added to good.json>: the output does not change
+  n=$((n + 1)); nopf "$1" "$2"
+  { [ "$rc" = 0 ] && cmp -s "$tmp/nopush-base" "$tmp/lines"; } ||
+    { echo "FAIL (hooks COORD_NO_PUSH, $1): expected exit 0 and the output without the setting, got exit $rc:"; diff "$tmp/nopush-base" "$tmp/lines" | sed 's/^/    /'; fail=1; }
+}
+n=$((n + 1)); nopf on '"env": { "COORD_NO_PUSH": "1" }'
+grep -v '^selftest hooks:' "$tmp/nopush-base" > "$tmp/nopush-want"
+grep -v 'COORD_NO_PUSH' "$tmp/lines" | grep -v '^selftest hooks:' > "$tmp/nopush-got"
+{ [ "$rc" = 0 ] && [ "$(grep -c 'COORD_NO_PUSH' "$tmp/lines")" = 1 ] && ! grep -q '^FAIL' "$tmp/lines" &&
+  grep -q '^selftest hooks: .* 0 fail' "$tmp/lines" && cmp -s "$tmp/nopush-want" "$tmp/nopush-got"; } ||
+  { echo "FAIL (hooks COORD_NO_PUSH, on): expected exit 0, one line naming COORD_NO_PUSH, no FAIL and the rest unchanged, got exit $rc:"; sed 's/^/    /' "$tmp/lines"; fail=1; }
+nopoff zero '"env": { "COORD_NO_PUSH": "0" }'
+nopoff empty '"env": { "COORD_NO_PUSH": "" }'
+nopoff true '"env": { "COORD_NO_PUSH": "true" }'
+nopoff none '"env": { "SOME_OTHER": "1" }'
+nopoff nested '"x": { "env": { "COORD_NO_PUSH": "1" } }'
+
 # the assistant's settings examples (#281, 281.1): each the matching worker example with the assistant's
 # changes - env COORD_ASSISTANT_DIR (/ABSOLUTE/PROJECT/coordinator/assistants/NAME, or C:/...) beside
 # COORD_PROTECTED_ROOT, the worker example's PreToolUse matcher and deny list, the guard's timeout 30 and

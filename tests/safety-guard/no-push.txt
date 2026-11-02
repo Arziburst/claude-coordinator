@@ -1,0 +1,43 @@
+# COORD_NO_PUSH (#367), read by tests/safety-guard/no-push.sh: <verdict with 1> <verdict with 0> <tool> <command>,
+# separated by single tabs; the cwd is a repository on the branch work. \n in the command is a newline.
+# --- every form the guard reads as a push ---
+block	allow	Bash	git push origin 12-fix
+block	allow	Bash	git -C /x push origin 12-fix
+block	allow	Bash	git -c a=b push
+block	allow	Bash	cd /x && git push
+block	allow	Bash	bash -c 'git push origin x'
+block	allow	Bash	git push origin {a,b}
+block	allow	Bash	find . -name x -exec git push origin y \;
+block	allow	Bash	git --git-dir=/x/.git push
+block	allow	Bash	git push
+block	allow	Bash	git --git-d=/x/.git push
+block	allow	Bash	git --no-p push origin 12-fix
+block	allow	Bash	git push --dry-run origin 12-fix
+block	allow	Bash	GIT_TRACE=1 git push origin 12-fix
+block	allow	Bash	git.exe push origin 12-fix
+block	allow	Bash	/usr/bin/git push origin 12-fix
+block	allow	Bash	sudo git push origin 12-fix
+block	allow	Bash	timeout 30 git push origin 12-fix
+block	allow	Bash	(git push origin 12-fix)
+block	allow	Bash	git fetch; git push origin 12-fix
+block	allow	Bash	echo ok\ngit push origin 12-fix
+block	allow	Bash	pwsh -Command git push origin 12-fix
+block	allow	Bash	{find,.,-exec,git,push,origin,12-fix,\;}
+block	allow	PowerShell	git push origin 12-fix
+block	allow	PowerShell	git -C /x push origin 12-fix
+block	allow	PowerShell	& git push origin 12-fix
+block	allow	PowerShell	1 | % { git push origin 12-fix }
+block	block	Bash	git push origin main
+# --- no other git command changes ---
+allow	allow	Bash	git fetch
+allow	allow	Bash	git log --grep push
+allow	allow	Bash	git checkout push
+allow	allow	Bash	echo git push
+allow	allow	Bash	git commit -m 'git push'
+allow	allow	Bash	git status
+allow	allow	Bash	git branch push
+allow	allow	Bash	git pull origin push
+allow	allow	Bash	git config push.default current
+allow	allow	Bash	git stash push -m x
+allow	allow	PowerShell	git status
+allow	allow	PowerShell	echo git push
