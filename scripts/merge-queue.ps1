@@ -2,7 +2,7 @@
 # steps, lines and codes; CORE section 4a): parallel work, serial merging - each PR merges main once, when
 # its turn comes, never after every other merge.
 #   powershell -File scripts\merge-queue.ps1 land -Pr <pr>[@<approved sha>],... [-Method squash|merge|rebase]
-#                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-DryRun]
+#                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-OverBoundsOk <pr>:<the owner's words>] [-DryRun]
 #   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...] [-Touches <path or glob>,...]
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
@@ -22,19 +22,24 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
+# The bounds (#381), land run from the repository's root: the contract by the id its branch starts with (coordinator/briefs/<id>-contract.md),
+# scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
+# fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
-# says why; the queue goes on with the next). Only gh is called, never git.
+# says why; the queue goes on with the next). gh is called, and git only to fetch the head check-bounds reads.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
-      [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [switch]$DryRun)
+      [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [string]$OverBoundsOk = '', [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
 # page; the caller's console gets its own encoding back on every way out
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-DryRun] | status [-Shared <glob>,...] [-Touches <path>,...]'
+$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-OverBoundsOk <pr>:<words>] [-DryRun] | status [-Shared <glob>,...] [-Touches <path>,...]'
 function Usage([string]$m) { [Console]::Error.WriteLine($(if ($m) { "$m; $usage" } else { $usage })); exit 1 }
 if ($Mode -ne 'land' -and $Mode -ne 'status') { Usage '' }
 if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, merge or rebase' }
 if ($Poll -notmatch '^[0-9]+$' -or $Timeout -notmatch '^[0-9]+$') { Usage '-Poll and -Timeout take whole numbers' }
+$okPr = ''; $okW = ''
+if ($PSBoundParameters.ContainsKey('OverBoundsOk')) { if ($OverBoundsOk -cnotmatch '^([0-9]+):(.+)$') { Usage "-OverBoundsOk takes <pr>:<the owner's words>" }; $okPr = $Matches[1]; $okW = $Matches[2] }
 $prs = @(if ($Pr) { $Pr -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
 $globs = @(if ($Shared) { $Shared -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
 $tl = @(if ($Touches) { $Touches -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
@@ -109,6 +114,16 @@ foreach ($item in $prs) {
   if ($draft -eq 'true') { Leave $pr 'SKIP' 'a draft'; continue }
   if ($want -and -not $head.StartsWith($want)) {
     Leave $pr 'NOT APPROVED' "its head $(Short $head) is not the approved $(Short $want) - verify the new commit, then queue $pr@$(Short $head)"; continue
+  }
+  # the contract's bounds (#381, the header)
+  $bc = "coordinator/briefs/$(($branch -split '-')[0])-contract.md"
+  if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
+  else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
+    $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE
+    $bover = @($bo | Where-Object { $_ -clike 'check-bounds: OVER *' } | ForEach-Object { $_.Substring(19) })
+    if ($brc -eq 1 -and $okPr -ceq $pr) { "BOUNDS #${pr}: over its bounds ($($bover -join ' ')) - passed on the owner's words: $okW" }
+    elseif ($brc -eq 1) { $bover | ForEach-Object { "OVER BOUNDS $pr $_" }; $left += "#$pr (OVER BOUNDS)"; continue }
+    elseif ($brc -ne 0) { Leave $pr 'BOUNDS' "check-bounds exit ${brc}: $($bo | Select-Object -First 1)"; continue }
   }
   $files = @(Q @('pr', 'view', $pr, '--json', 'files', '--template', $T_FILES))
   # runs of this branch on an older head: superseded, they only hold the runners. A run's id is the end of

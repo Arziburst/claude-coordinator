@@ -62,6 +62,8 @@ it) would make that work look deleted.
    - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
      report says for each round whether its new or changed tests came from the tester (its commit) or
      from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
+   - **The bounds** (#381): a contract with `bounds:` gets `scripts/check-bounds <contract>
+     <base>...<head>` as an oracle; an `OVER` is a failed bound, its output your evidence.
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
      `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
@@ -82,7 +84,9 @@ criterion or a business decision), each with its evidence class: `oracle` (you r
 reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)` (above), `review` (you
 read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner). Each
 finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
-touch**. Severity: **Blocker / Major / Minor / Nit**. No patches: the author fixes. List the tools you
+touch**. Severity: **Blocker / Major / Minor / Nit**. Each finding is also marked **fix now** or **new
+issue** (#381, CORE §6): `fix now` only if the PR introduced it, or the PR fails its intent or a named
+criterion without it; anything else is a new issue, and the PR merges. No patches: the author fixes. List the tools you
 used and skipped, and every known gap. A rule, script or check of the coordinator core that got in
 your way is listed apart, as `core_findings` with its evidence, for the coordinator.
 

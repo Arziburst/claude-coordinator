@@ -54,8 +54,15 @@
 # to, never the working directory's) is not read for the word list; the other items of touches still are,
 # and title and intent as above. A project's own roles/admin.md (no such core file), src/auth/roles.ts,
 # `roles/` alone still warn; a core with no roles/ folder leaves nothing out.
-usage() { sed -n '2,56s/^# \{0,1\}//p' "$0"; exit 2; }
+# Important components (#381): a contract one of whose `touches` items a glob of the list matches (the whole path, `*`
+# the one wildcard, it crosses folders), or a folder item whose path with its slash starts a glob, must carry `bounds:`
+# (lines `- <glob> <max added lines>`, each a whole number, at least one) and `wall:` (one non-empty line); missing or
+# malformed: one ERROR per field, naming the glob. The list: the defaults below and the row *Important components* of
+# the PROJECT.md two folders above this script's (a space-separated list; adds, never removes; `<fill>` adds nothing).
+# `--field budget.cost`: budget's cost as written, for start-worker's gate.
+usage() { sed -n '2,62s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
+important='scripts/hooks/* .github/workflows/* tests/*/run.*'
 [ $# -gt 0 ] || usage
 field=""
 if [ "$1" = --field ]; then
@@ -80,6 +87,9 @@ if [ -d "$here/../roles" ]; then
   for x in "$here/../roles"/*; do [ -f "$x" ] && core_roles="$core_roles|${x##*/}"; done
   [ -z "$core_roles" ] || core_roles="$core_roles|"
 fi
+pf="$here/../../PROJECT.md"
+[ ! -f "$pf" ] || important="$important $(awk -F'|' '{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }
+  n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</) print v; exit }' "$pf")"
 # the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: --runs)
 forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
   local k="$1" bm="$2" tbl m ln n r
@@ -141,6 +151,14 @@ prog='
       }
       return o
     }
+    # a glob against a whole path; the first glob of the list a touches item holds (#381, the header)
+    function gmatch1(g, p,   n, a, i, k) { n = split(g, a, /[*]/); if (n == 1) return g == p; if (a[1] != "" && index(p, a[1]) != 1) return 0; p = substr(p, length(a[1]) + 1)
+      for (i = 2; i < n; i++) if (a[i] != "") { k = index(p, a[i]); if (!k) return 0; p = substr(p, k + length(a[i])) }
+      return length(p) >= length(a[n]) && substr(p, length(p) - length(a[n]) + 1) == a[n] }
+    function imp(t,   n, it, m, G, i, j, s) { gsub(/(^|[ \t\n])#[^\n]*/, " ", t); n = split(t, it, /[,\n]/); m = split(ENVIRON["IMP"], G, " ")
+      for (j = 1; j <= m; j++) for (i = 1; i <= n; i++) { s = it[i]; gsub("^[ \t]*(\\[[ \t]*)?(-[ \t]+)?[\"" q "]?|[\"" q "]?[ \t]*\\]?[ \t]*$", "", s)
+        if (s != "" && (gmatch1(G[j], s) || (s ~ /\/$/ && index(G[j], s) == 1))) return G[j] }
+      return "" }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
       if (length(s) >= 2 && (a == "\"" || a == q) && substr(s, length(s), 1) == a) s = substr(s, 2, length(s) - 2); return s }
@@ -253,6 +271,12 @@ prog='
       }
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
+      # important components (#381, the header): bounds and wall
+      ig = imp(txt["touches"])
+      if (ig != "") { nb = 0; bad = !("bounds" in has); m = split(txt["bounds"], BL, "\n"); if (BL[1] !~ /^[ \t]*(#.*)?$/) bad = 1
+        for (i = 2; i <= m; i++) { if (BL[i] ~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) nb++; else if (BL[i] !~ /^[ \t]*(#.*)?$/) bad = 1 }
+        if (bad || !nb) err("`bounds` missing or malformed (lines `- <glob> <max added lines>`): touches holds the important " ig " (CONTRACT.md)")
+        if (!("wall" in has) || blank("wall")) err("`wall` missing or empty (what really protects it, one line): touches holds the important " ig " (CONTRACT.md)") }
       # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
       if (("tests_first" in has) && tf ~ /^no([^a-z0-9]|$)/) {
         nwd = split(ENVIRON["GW"], GW, "|"); split("title intent touches", GF, " "); gm = ""
@@ -268,7 +292,7 @@ prog='
       nr = split(ENVIRON["R"], RL, "\n")
       for (i = 1; i <= nr; i++) { t = RL[i]; if (substr(t, 1, 2) == "W\t") warn(substr(t, 3)); else if (substr(t, 1, 2) == "I\t" && K == "") print F ": " substr(t, 3) }
       # --field: the value of the key as read above, its lines joined into one
-      if (K != "" && !ne) { v = val(txt[K]); gsub(/[ \t]*\n[ \t]*/, " ", v); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit 0 }
+      if (K != "" && !ne) { v = K == "budget.cost" ? bval(b, "cost") : val(txt[K]); gsub(/[ \t]*\n[ \t]*/, " ", v); gsub(/^[ \t]+|[ \t]+$/, "", v); print v; exit 0 }
       print F ": " (ne ? "FAIL" : "OK") " (" ne+0 " errors, " nw+0 " warnings)"
       exit (ne ? 1 : 0)
     }'
@@ -285,6 +309,6 @@ EOF
     R="$(forecast "${ck:-$rkind}" "$cm" "$cc" "$ct")"
   fi
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" awk "$prog" "$f" || failed=1
+  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" IMP="$important" awk "$prog" "$f" || failed=1
 done
 exit $failed

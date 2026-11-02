@@ -3,7 +3,7 @@
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
 #       -ReportTo <coordinator session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>]
-#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]
+#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-DryRun]
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -64,9 +64,12 @@
 # <folder>/assistants/<name>, seen by no git working tree; a -Safety file inside the folder is refused. Folders are
 # compared by start-worker.sh's own bash code, run here through bash, so both scripts decide alike; after the
 # launch the attach command (the rules: start-worker.sh's top comment).
+# The round and money gate (#381; the rules: start-worker.sh's top comment): round 3 or later, or the task's rows summing
+# to at least twice budget.cost, is refused unless -OwnerOk <the owner's words>, printed. A mistyped -OwnerOk is swallowed by
+# param() and the gate still refuses. Limits: a round given by a message passes no gate; a running session has no row yet.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
-      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '')
+      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -91,12 +94,12 @@ if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - i
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
-                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir))) {
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
@@ -270,6 +273,7 @@ if ($cFile) {
     if ($cRc -eq 0 -and $crole -in @('worker', 'lead', '')) {
       $tfRc = 1
       $tfOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Field tests_first $cFile 2>&1 } | ForEach-Object { "$_" }); $tfRc = $LASTEXITCODE
+      $gId = (@(& (Join-Path $PSScriptRoot 'check-contract.ps1') -Field id $cFile) -join '').Trim(); $gCost = (@(& (Join-Path $PSScriptRoot 'check-contract.ps1') -Field budget.cost $cFile) -join '').Trim()
     }
   }
   catch { $cOut = @("$_") }
@@ -288,6 +292,22 @@ if ($Contract) {
   if ($want.Count -and -not @($want.Values | Where-Object { $have -ccontains $_ }).Count) {
     'WARN: -Contract only checks the contract - the session will not see it: its text (its id: and title: lines) is not in the brief; put the contract into the brief file (#331)'
   }
+}
+# the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
+$rl = Join-Path $root 'coordinator/RUNS.tsv'; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
+$rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
+       elseif (-not (Test-Path -LiteralPath $rl -PathType Leaf)) { 'no run log' } elseif ($gId.Contains('.')) { 'a sub-contract' } else { '' }
+if ($rno) { "round gate: $rno, no gate$okTail" }
+else {
+  $rs = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') task -Log $rl -Task $gId 2>&1 } | ForEach-Object { "$_" })
+  if ($LASTEXITCODE -ne 0) { Fail "refused: the run log cannot be read, the round gate cannot tell: $($rs -join ' ')" }
+  $rw, $rsp = "$($rs[0])" -split ' ', 2; $rn = [int]$rw + 1; $inv = [Globalization.CultureInfo]::InvariantCulture
+  $rline = "round $rn, task $gId, spent $rsp against estimate $(if ($gCost) { $gCost } else { 'none' }), API list price"
+  $est = if ($gCost -cmatch '^\$?([0-9]+(\.[0-9]+)?)') { [decimal]::Parse($Matches[1], $inv) } else { [decimal]0 }
+  if ($rn -ge 3 -or ($est -gt 0 -and [decimal]::Parse($rsp, $inv) -ge 2 * $est)) {
+    if (-not $OwnerOk) { Fail "refused: $rline - a third round or twice the estimate needs the owner's word: -OwnerOk <the owner's words> (CORE ${sect}6)" }
+    "round gate: $rline - passed on the owner's words: $OwnerOk"
+  } else { "round gate: $rline$okTail" }
 }
 if ($crole -eq 'lead' -and ($TesterCommit -or $TesterTests)) {
   Fail "refused: a lead's task gets no task-level tester - start the lead without -TesterCommit / -TesterTests; its contract has ``tests_first: no - the lead runs the tester per sub-contract`` (roles/lead.md step 3)"

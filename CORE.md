@@ -358,7 +358,17 @@ The continuous work:
    goes to a fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch
    with a short note instead of the same session when that session's context has grown long — each
    turn re-reads it (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292;
-   TOOLKIT *Pause and resume*).
+   TOOLKIT *Pause and resume*). **The finding split (#381):** a finding is `fix now` only if the PR
+   introduced it, or the PR fails its intent or a named criterion without it; anything else is an issue and a
+   FEATURES `not covered` line, and the PR merges. The guard being only strengthened, a partial strengthening
+   is never below main. **Round 3 is a fresh worker and the owner's word:** start-worker refuses a third
+   round, or a task whose rows sum to at least twice `budget.cost`, with the numbers, unless `--owner-ok <the
+   owner's words>`; the coordinator journals the words. A round given by a message to a live session passes no
+   gate, so a third round is always a fresh worker on the pushed branch. A session still running has no row
+   yet, so its spend is not in the sum. A contract on an important component carries `bounds:` and `wall:`
+   (CONTRACT.md); a PR over its bounds stops at the merge queue, past it only with `--over-bounds-ok <pr>:<the
+   owner's words>`, printed and journaled by the coordinator. The coordinator could pass either flag on its
+   own: only §1.14 and the journal hold that.
 6. **Accept:** batch what needs the owner, with order and time per item and how to check each (one
    question, steps, expected result, possible answers); read logs yourself where they answer it. Wishes
    voiced in acceptance are handled per `PROJECT.md`.
@@ -482,6 +492,11 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /
   Minor / Nit. Assume nothing works until you have seen it work; finding nothing is a
   valid result.
+- **Fix now or a new issue (#381):** the verifier also marks each finding `fix now` or `new issue`: `fix now`
+  only if the PR introduced it, or the PR fails its intent or a named criterion without it; anything else is an
+  issue and a FEATURES `not covered` line, and the PR merges. The guard being only strengthened, a partial
+  strengthening is never below main. It runs `scripts/check-bounds` on the contract and the PR as an oracle
+  (CONTRACT.md). Round 3 is a fresh worker and the owner's word (§4 step 5).
 - Re-review after fixes until approval with no Blocker or Major — **only what can have changed**: the
   failed criteria, the findings, and every criterion whose files the fix touched (`git diff <reviewed
   commit>..<new head>`); a criterion confirmed before and untouched since stays confirmed, with its

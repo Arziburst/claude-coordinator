@@ -6,6 +6,8 @@
 #     -Result <word> [-Date ...]   a subagent's row (a tester or verifier run as a subagent): no -Session
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runs.ps1 check -Log <RUNS.tsv> -Root <project root>
 #     [-Self <session id>] [-Since <YYYY-MM-DD>]   (or: pwsh -File ...)
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runs.ps1 task -Log <RUNS.tsv> -Task <id>   read-only (#381):
+#     one line `<worker rows> <spent>` (runs.sh's header)
 # A value `-` goes as -Estimate:- -EstimateTime:- (Windows PowerShell 5.1 -File refuses a bare `-` value).
 # add appends exactly one row (CORE 7) and prints it: its cells by the file's header, else CORE 7's order; tokens, cost,
 # start, wall and active from scripts/session-tokens <id>, never typed by hand; result one of approved done pass
@@ -20,7 +22,7 @@ param([Parameter(Position = 0)][string]$Command, [string]$Log, [string]$Session,
   [string]$Date, [string]$In, [string]$Tokens, [string]$Root, [string]$Self, [string]$Since)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 17| ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 19| ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
 function Die([int]$Code, [string]$Msg) { [Console]::Error.WriteLine("runs: $Msg"); exit $Code }
 $Names = @('date', 'task', 'role', 'kind', 'model', 'effort', 'estimate', 'tokens', 'cost', 'result', 'start', 'wall', 'active', 'wait', 'estimate_time')
 # Plain <file>: its lines without the BOM and the CRs
@@ -67,9 +69,18 @@ function TimeKv([string]$tl, [string]$w) {
   ''
 }
 $bound = @($PSBoundParameters.Keys | Where-Object { $_ -ne 'Command' })
-if ($Command -cne 'add' -and $Command -cne 'check') { Show-Usage }
+if ($Command -cne 'add' -and $Command -cne 'check' -and $Command -cne 'task') { Show-Usage }
 if (-not $Log) { Show-Usage }
 $inv = [Globalization.CultureInfo]::InvariantCulture
+if ($Command -ceq 'task') {
+  foreach ($b in $bound) { if ('Log', 'Task' -cnotcontains $b) { Show-Usage } }
+  if (-not $Task) { Show-Usage }
+  CanOpen $Log 'Read'; $lines = Plain $Log; $c = Cols $lines; $nt = ColNo $c 'task'; $nr = ColNo $c 'role'; $nc = ColNo $c 'cost'
+  $w = 0; $sum = [decimal]0; $p = ($Task -split '\.')[0]; $rows = RowsOf $lines
+  foreach ($r in $rows) { if ((Cell $r $nt) -ceq $Task -and (Cell $r $nr) -ceq 'worker') { $w++ }
+    if (((Cell $r $nt) -split '\.')[0] -ceq $p -and (Cell $r $nc) -cmatch '^\$?([0-9]+(\.[0-9]+)?)') { $sum += [decimal]::Parse($Matches[1], $inv) } }
+  "$w $([Math]::Round($sum, 2, [MidpointRounding]::AwayFromZero).ToString('F2', $inv))"; exit 0
+}
 
 if ($Command -ceq 'add') {
   foreach ($b in $bound) { if ('Root', 'Self', 'Since' -contains $b) { Show-Usage } }

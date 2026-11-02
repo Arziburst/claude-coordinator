@@ -17,6 +17,7 @@ name: check-core
 #need guard      ^scripts/hooks/ ^tests/safety-guard/  # the guard's cases in every shell (the step without jq also runs selftest's settings: selftest's line too)
 #need workers    ^scripts/start-worker\. ^scripts/cleanup-worker\. ^scripts/check-contract\. ^scripts/merge-queue\. ^scripts/hooks/ ^roles/ ^settings\.example ^tests/workers/ ^tests/check-contract/  # start-worker and cleanup-worker: the scripts they run, the guard and its settings examples, the role files, the contract fixtures
 #need mergequeue ^scripts/merge-queue\. ^tests/merge-queue/  # merge-queue against a stub gh
+#need bounds     ^scripts/check-bounds\. ^tests/check-bounds/  # check-bounds on a throwaway repository
 #need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need watch      ^scripts/watch-sessions\. ^tests/watch-sessions/  # watch-sessions against a stub claude
 #need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
@@ -376,6 +377,17 @@ jobs:
         run: |
           bash tests/merge-queue/run.sh sh
           bash tests/merge-queue/run.sh ps powershell
+      - name: check-bounds on a throwaway repository (bash)
+        if: runner.os != 'Windows' && steps.need.outputs.bounds == 'true'
+        run: bash tests/check-bounds/run.sh sh
+      - name: check-bounds on a throwaway repository (PowerShell 7, Linux)
+        if: runner.os == 'Linux' && steps.need.outputs.bounds == 'true'
+        run: bash tests/check-bounds/run.sh ps pwsh
+      - name: check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
+        if: runner.os == 'Windows' && steps.need.outputs.bounds == 'true'
+        run: |
+          bash tests/check-bounds/run.sh sh
+          bash tests/check-bounds/run.sh ps powershell
       - name: report-issue against a stub gh (bash)
         if: runner.os != 'Windows' && steps.need.outputs.reportissue == 'true'
         run: bash tests/report-issue/run.sh sh
