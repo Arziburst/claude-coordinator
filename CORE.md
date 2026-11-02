@@ -496,7 +496,9 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
   only if the PR introduced it, or the PR fails its intent or a named criterion without it; anything else is an
   issue and a FEATURES `not covered` line, and the PR merges. The guard being only strengthened, a partial
   strengthening is never below main. It runs `scripts/check-bounds` on the contract and the PR as an oracle
-  (CONTRACT.md). Round 3 is a fresh worker and the owner's word (§4 step 5).
+  (CONTRACT.md). Round 3 is a fresh worker and the owner's word (§4 step 5). The verdict counts the findings
+  marked fix now. A Blocker or Major marked new issue does not hold the merge, and the coordinator reports it to
+  the owner before the merge.
 - Re-review after fixes until approval with no Blocker or Major — **only what can have changed**: the
   failed criteria, the findings, and every criterion whose files the fix touched (`git diff <reviewed
   commit>..<new head>`); a criterion confirmed before and untouched since stays confirmed, with its

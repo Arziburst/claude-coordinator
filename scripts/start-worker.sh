@@ -113,6 +113,7 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
+case "$owok" in *[![:space:]]*) ;; *) owok="" ;; esac   # words of blanks only are no words (#381)
 # an assistant (#281): a session beside the coordinator, no worktree and no branch - a worker's flags are refused
 asst=""; case "$name" in "assistant:"*) asst=1 ;; esac
 if [ -n "$asst" ] && [ -n "$given" ]; then

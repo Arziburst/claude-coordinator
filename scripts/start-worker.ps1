@@ -294,13 +294,16 @@ if ($Contract) {
   }
 }
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
+if (-not "$OwnerOk".Trim()) { $OwnerOk = '' }   # words of blanks only are no words
 $rl = Join-Path $root 'coordinator/RUNS.tsv'; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
 $rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
        elseif (-not (Test-Path -LiteralPath $rl -PathType Leaf)) { 'no run log' } elseif ($gId.Contains('.')) { 'a sub-contract' } else { '' }
 if ($rno) { "round gate: $rno, no gate$okTail" }
 else {
-  $rs = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') task -Log $rl -Task $gId 2>&1 } | ForEach-Object { "$_" })
-  if ($LASTEXITCODE -ne 0) { Fail "refused: the run log cannot be read, the round gate cannot tell: $($rs -join ' ')" }
+  # runs.ps1 writes its reason straight to the console's error stream: caught here, so the refusal carries it as the .sh does
+  $err0 = [Console]::Error; $errW = New-Object IO.StringWriter; [Console]::SetError($errW)
+  try { $rs = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') task -Log $rl -Task $gId 2>&1 } | ForEach-Object { "$_" }); $rrc = $LASTEXITCODE } finally { [Console]::SetError($err0) }
+  if ($rrc -ne 0) { Fail "refused: the run log cannot be read, the round gate cannot tell: $(("$errW".Trim() + ' ' + ($rs -join ' ')).Trim())" }
   $rw, $rsp = "$($rs[0])" -split ' ', 2; $rn = [int]$rw + 1; $inv = [Globalization.CultureInfo]::InvariantCulture
   $rline = "round $rn, task $gId, spent $rsp against estimate $(if ($gCost) { $gCost } else { 'none' }), API list price"
   $est = if ($gCost -cmatch '^\$?([0-9]+(\.[0-9]+)?)') { [decimal]::Parse($Matches[1], $inv) } else { [decimal]0 }

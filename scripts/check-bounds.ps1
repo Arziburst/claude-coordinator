@@ -1,7 +1,8 @@
 # A contract's bounds against the real diff (#381; Windows; macOS / Linux: check-bounds.sh - the rules in its header).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-bounds.ps1 <contract> <base>...<head>
 # Lines: `<glob> <added>/<max>` per bound, `binary: <path> counts as 0`, `check-bounds: OK`, `check-bounds: OVER <glob>
-# <added>/<max>`, `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, unreadable, a malformed bound.
+# <added>/<max>`, `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, unreadable, a malformed bound
+# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound).
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 function Stop2([string]$m) { $m; exit 2 }
@@ -19,6 +20,7 @@ for ($i = $s; $i -le $e; $i++) { $t = $L[$i]
   if ($t -cmatch '^[a-z_]+:') { $on = $false; if ($t -cmatch '^bounds:[ \t]*(.*)$') { $on = $true; if ($Matches[1] -cnotmatch '^(#.*)?$') { Stop2 "check-bounds: a malformed bound (- <glob> <max added lines>): $t" } }; continue }
   if (-not $on -or $t -cmatch '^[ \t]*(#.*)?$') { continue }
   if ($t -cnotmatch '^[ \t]*-[ \t]+([^ \t]+)[ \t]+([0-9]+)([ \t]+#.*)?[ \t]*$') { Stop2 "check-bounds: a malformed bound (- <glob> <max added lines>): $t" }
+  $mx = [long]0; if (-not [long]::TryParse($Matches[2], [ref]$mx) -or ($Matches[1] -creplace '\[[^\]]+\]', '').Contains('[')) { Stop2 "check-bounds: a malformed bound (- <glob> <max added lines>): $t" }
   $b += , @($Matches[1], $Matches[2]) }
 if (-not $b.Count) { 'check-bounds: no bounds'; exit 0 }
 $nums = @(& { $ErrorActionPreference = 'Continue'; & git -c core.quotePath=false diff --numstat --no-renames $range 2>&1 } | ForEach-Object { "$_" })
@@ -30,4 +32,4 @@ foreach ($x in $b) { $g = $x[0]; $a = [long]0
   "$g $a/$($x[1])"; if ($a -gt [long]$x[1]) { $over += "check-bounds: OVER $g $a/$($x[1])" } }
 if ($over.Count) { $over; exit 1 }
 'check-bounds: OK'
-} finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
+} catch { "check-bounds: $_"; exit 2 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

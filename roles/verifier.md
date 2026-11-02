@@ -91,7 +91,8 @@ used and skipped, and every known gap. A rule, script or check of the coordinato
 your way is listed apart, as `core_findings` with its evidence, for the coordinator.
 
 Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherwise **request
-changes**. The verdict holds for that commit only: anything pushed after it is reviewed again, only
+changes**. The verdict counts the findings marked fix now. A Blocker or Major marked new issue does not hold
+the merge, and the coordinator reports it to the owner before the merge. The verdict holds for that commit only: anything pushed after it is reviewed again, only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria, the
 findings and every criterion whose files changed since the reviewed commit; the others stay confirmed
 with their evidence and the commit they were confirmed on — a CI oracle only from the CI run on the

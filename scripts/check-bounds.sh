@@ -7,7 +7,8 @@
 # matches (a file in two globs counts in both; a rename by its new path, all its lines added; a file no bound matches
 # is not limited): `<glob> <added>/<max>`, a binary file it matches named before it, `binary: <path> counts as 0`.
 # Then `check-bounds: OK`, or one `check-bounds: OVER <glob> <added>/<max>` per bound over. No bound: the one line
-# `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, an unreadable contract or range, a malformed bound.
+# `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, an unreadable contract or range, a malformed bound
+# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound).
 usage() { sed -n '2,3s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 [ $# -eq 2 ] || usage
 c="$1" range="$2"; case "$range" in *...*) ;; *) usage ;; esac
@@ -24,7 +25,9 @@ b="$(LC_ALL=C awk '
       if (l ~ /^[a-z_]+:/) { on = 0; if (l ~ /^bounds:/) { on = 1; sub(/^bounds:[ \t]*/, "", l); if (l !~ /^(#.*)?$/) print " " L[i] }; continue }
       if (!on || l ~ /^[ \t]*(#.*)?$/) continue
       if (l !~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) { print " " l; continue }
-      sub(/^[ \t]*-[ \t]+/, "", l); split(l, a, /[ \t]+/); print a[1] " " a[2] } }' "$c")"
+      sub(/^[ \t]*-[ \t]+/, "", l); split(l, a, /[ \t]+/); x = a[2]; sub(/^0+/, "", x); y = a[1]; gsub(/\[[^]]+\]/, "", y)
+      if (length(x) > 19 || (length(x) == 19 && x > "9223372036854775807") || index(y, "[")) { print " " L[i]; continue }
+      print a[1] " " a[2] } }' "$c")"
 bad="$(printf '%s\n' "$b" | sed -n 's/^ //p' | head -n 1)"
 [ -z "$bad" ] || { echo "check-bounds: a malformed bound (- <glob> <max added lines>): $bad"; exit 2; }
 [ -n "$b" ] || { echo "check-bounds: no bounds"; exit 0; }
