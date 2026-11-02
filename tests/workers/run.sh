@@ -277,6 +277,14 @@ mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/sa
 sed "s#$core/scripts/hooks/#$mtmp/silent/#g" "$tmp/safety.json" > "$tmp/safety-silent.json"
 check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/repo" --name "#33 worker: a" --branch 33-a "${W[@]}" --safety "$tmp/safety-silent.json"
 expect_in "printed nothing"
+# #344: the guard's self-test entry is told by its argument, not by the path: a core under a folder whose name holds
+# -selftest / --self-test (any case) finds its guard hook and starts as anywhere else (dry run, not refused)
+for d in x-selftest y--self-test Z-SELFTEST; do
+  mkdir -p "$tmp/$d"; cp "$core"/scripts/hooks/safety-guard.* "$tmp/$d/"
+  sed "s#$core/scripts/hooks/#$mtmp/$d/#g" "$tmp/safety.json" > "$tmp/safety-$d.json"
+  check 0 "start: the guard under a folder named $d" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a "${W[@]}" --safety "$tmp/safety-$d.json" --dry-run
+  expect_in "[dry-run]"
+done
 # bypassPermissions in any letter case, and a flag where a value belongs
 check 1 "start: BypassPermissions" -- start "${S[@]}" --mode BypassPermissions --dry-run
 expect_in "refusing bypassPermissions"
