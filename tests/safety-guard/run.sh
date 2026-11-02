@@ -126,6 +126,22 @@ CMD=("$@")
 jobs="${SG_JOBS:-${NUMBER_OF_PROCESSORS:-}}"
 [ -n "$jobs" ] || jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)"
 case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
+# bounded <file>: the hook with that file as its stdin, killed with what it started after SG_CASE_LIMIT seconds
+# (default 20, far above a hook's second or two and far below a hang), exit 124 then; for a case marked timed:
+# in the branch column (#345), the rest run as they always did. set -m gives the hook a process group of its
+# own, so a hung awk under it dies with it; in Git Bash a native PowerShell is taken down by taskkill.
+bounded() {
+  local p w=0 lim=$((${SG_CASE_LIMIT:-20} * 5)) r
+  {
+    set -m; "${CMD[@]}" < "$1" >/dev/null 2>&1 & p=$!; set +m
+    while kill -0 "$p" 2>/dev/null && [ "$w" -lt "$lim" ]; do sleep 0.2; w=$((w + 1)); done
+    if kill -0 "$p" 2>/dev/null; then
+      [ ! -r "/proc/$p/winpid" ] || MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' taskkill /F /T /PID "$(cat "/proc/$p/winpid")" >/dev/null 2>&1
+      kill -9 -- "-$p" 2>/dev/null; kill -9 "$p" 2>/dev/null; wait "$p"; r=124
+    else wait "$p"; r=$?; fi
+  } 2>/dev/null
+  return "$r"
+}
 shard() {   # shard <k> <shards>
   local ln=0 i=0
   n=0 fail=0
@@ -142,6 +158,8 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
   # the command column as its file path; the project (CLAUDE_PROJECT_DIR) is the cwd's first folder
+  # a timed: before all that: the answer within SG_CASE_LIMIT seconds is part of the case (bounded, above)
+  timed=""; case "$branch" in timed:*) timed=1; branch="${branch#timed:}" ;; esac
   tool=Bash
   case "$branch" in
     ps:*) tool=PowerShell ;; edit:*) tool=Edit ;; write:*) tool=Write ;; multiedit:*) tool=MultiEdit ;; notebook:*) tool=NotebookEdit ;; send:*) tool=SendMessage ;;
@@ -172,13 +190,17 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
   adir="$(printf '%s' "$adir" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')"
-  if [ -n "$adir" ]; then
+  if [ -n "$timed" ]; then
+    printf '%s' "$json" > "$tmp/timed.$1.json"
+    CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" bounded "$tmp/timed.$1.json"
+  elif [ -n "$adir" ]; then
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
   else
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
   fi
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
+  [ "$rc" = 124 ] && got="no answer within ${SG_CASE_LIMIT:-20}s"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
   [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
