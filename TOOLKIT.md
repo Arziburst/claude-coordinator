@@ -430,12 +430,21 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   command after `find -exec` / `-execdir` / `-ok` / `-okdir` (up to `\;` or `{} +`) as a command of its
   own; a quoted brace, `{main}`, `{}`, `${var}` and `@{u}` stay as written. A word making more than 64
   words is not expanded, and the command is refused when the guard reads it (git, gh, rm, find, cd …)
-  or the word is its command word. Still out: other expansions (a glob such as `ma?n`, `${x/…}`), and
-  braces in a PowerShell command (PowerShell has no brace expansion).
-  An ordinary PowerShell line is read as PowerShell runs it, in both scripts (#374): an assignment (`$x = `,
-  `$x += `, `$x=`, `$env:X = `, `[string]$x = `, `$a = $b = `) and a dot-source (`. git …`) get the verdict of the
-  command they run, in the PowerShell tool and inside `pwsh -c`. A quoted right side stays a string
-  (`$x = 'git push origin main'`), and a Bash line's own `$x = git push`, `x=…` and `. git push` keep theirs.
+  or the word is its command word. A range with a bound past 2^53 - 1 is never counted (#345): the same
+  number as both bounds makes that one word, any other such range counts as more than 64 words; the answer
+  comes at once on any range. A backslash in a brace word is read as bash reads it (#345): quoted it is text
+  (`{'a\',main}` is `a\` and `main`), `{main,x\\}` is `main` and `x\`, `{main,x\}` stays one word, and after the
+  closing brace it belongs to the word (`{main,x}\}`, `{main,x}\ y`); `$'…'` in a brace word ends where bash
+  ends it (`{main,$'x\''}`), its `\NNN` and `\xHH` not decoded. Still out: other expansions (a glob such as
+  `ma?n`, `${x/…}`), and braces in a PowerShell command (PowerShell has no brace expansion).
+  An ordinary PowerShell line is read as PowerShell runs it, in both scripts (#374, #345): an assignment (`$x = `,
+  `$x += `, `$x=`, `$env:X = `, `[string]$x = `, `$a = $b = `), also with a target of more than one word (`$x, $y = `,
+  `$x , $y = `, `[int]$x, [int]$y = `, `$a[0], $a[1] = `, `$x[$i + 1] = `, `$x[ 0 ] = `, `$x[(1)] = `, `$x.y().z = `,
+  `${a b} = `), `return ` and a dot-source (`. git …`) get the verdict of the command they run, in the PowerShell
+  tool and inside `pwsh -c`. A quoted right side stays a string (`$x = 'git push origin main'`), and a Bash
+  line's own `$x = git push`, `x=…` and `. git push` keep theirs. A heredoc into `pwsh` is read with its quotes
+  ignored, so there a quoted right side naming a guarded command (`pwsh <<X`, then `$x = 'git push origin main'`)
+  is judged as that command: it fails closed. Still out: `throw ` before a command, which runs it too.
   Hooks see only the tools their matcher names (the guard: the shell tools, the edit tools — next
   bullet — and SendMessage, *Own sessions only* below) — **MCP tools are covered by deny rules only**
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
