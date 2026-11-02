@@ -7,6 +7,7 @@ set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
 unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
+unset COORD_ASSISTANT_HOSTS   # #345: the assistant's network hosts: set per case by the 8th column, or left unset
 unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
@@ -147,7 +148,7 @@ bounded() {
 shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
   local ln=0 i=0 hung=""
   n=0 fail=0
-while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
+while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir hosts; do
   ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
   i=$((i + 1))
@@ -160,6 +161,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"; adir="${adir%"$cr"}"   # a checkout with CRLF line ends
   [ "$pbr" = - ] && pbr=""   # the 6th column: COORD_PROTECTED_BRANCHES; none or -: unset (main master)
   [ "$adir" = - ] && adir=""   # the 7th column: COORD_ASSISTANT_DIR; none or -: unset
+  hosts="${hosts%"$cr"}"   # the 8th column: COORD_ASSISTANT_HOSTS; none: unset; @EMPTY@: set and empty
   n=$((n + 1))
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
@@ -202,6 +204,9 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   elif [ -n "$timed" ]; then
     printf '%s' "$json" > "$tmp/timed.$1.json"
     CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" bounded "$tmp/timed.$1.json"
+  elif [ -n "$hosts" ]; then
+    [ "$hosts" = @EMPTY@ ] && hosts=""
+    printf '%s' "$json" | COORD_ASSISTANT_HOSTS="$hosts" CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
   elif [ -n "$adir" ]; then
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
   else
