@@ -176,7 +176,9 @@ the report notes the interruption and the resume time.
      worker file without the denies that block those two things, with its guard hook, its protected
      branches and every other deny kept. A broad deny such as `Bash(gh pr*)` or `Bash(git push*)` is
      **narrowed**, never just removed, so the denies the test does not need (`gh pr merge*`,
-     `gh pr ready*`) still stand in the file. Never a file with no guard, never `--dangerously` anything.
+     `gh pr ready*`) still stand in the file. A worker file that sets `COORD_NO_PUSH` (TOOLKIT *Safety*,
+     #367) blocks the same test's pushes: this file leaves that one setting out too, under the same owner's
+     yes. Never a file with no guard, never `--dangerously` anything.
      Steps 4 and 5 pass it to every start-worker as `--safety`. The project's real worker file stays as
      it is; a project whose worker file blocks neither needs nothing new, and BINDINGS names no such file.
    - **A worker file that blocks them with no such file named:** the coordinator proposes the file to the

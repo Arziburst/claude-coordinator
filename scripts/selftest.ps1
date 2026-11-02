@@ -519,6 +519,10 @@ switch ($Step) {
   }
   if (-not $h) { Fail 'no safety-guard hook in the file'; Finish }
   Pass 'a safety-guard hook'
+  # env.COORD_NO_PUSH: a never-push project (TOOLKIT Safety, #367); the key in its exact case, as selftest.sh reads it
+  if ($cfg.env -is [Management.Automation.PSCustomObject] -and @($cfg.env.PSObject.Properties | Where-Object { $_.Name -ceq 'COORD_NO_PUSH' -and $_.Value -is [string] -and $_.Value -ceq '1' }).Count -gt 0) {
+    "NOTE ${Step}: this file turns pushes off (env COORD_NO_PUSH=1): the guard blocks every git push it can read, on any branch"
+  }
   # one line, as selftest.sh reads it: line breaks and tabs count as spaces
   $cmd = $h.command -replace '[\r\n\t]', ' '
   # after JSON decoding a path backslash is a single \ (an escaped quote is just ")

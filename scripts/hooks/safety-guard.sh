@@ -3,6 +3,7 @@
 # set, also Edit / Write / MultiEdit / NotebookEdit: no edit under that folder outside its
 # .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*). With COORD_ASSISTANT_DIR set (the
 # assistant mode, #281): the edit tools only inside that folder, git only to read, gh only a known read.
+# With COORD_NO_PUSH=1 (a never-push project, #367): every git push it reads is blocked, on any branch.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only — the real enforcement is branch protection on the code host (CORE §2); deliberate
 # obfuscation (eval, quoting tricks, aliases ...) is out of scope (TOOLKIT.md *Safety*).
@@ -26,9 +27,10 @@ set +f; shopt -u nocasematch
 if [ "${1:-}" = "--self-test" ]; then
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
   # everything (a syntax error also exits 2) is not working either. Both with the assistant mode off (it
-  # refuses every push); in an assistant's session (#281) also its own: a commit blocks, a log passes
-  out=$(printf '%s' '{"tool_input":{"command":"git push --force origin main"}}' | COORD_ASSISTANT_DIR= bash "$0" 2>/dev/null; echo $?)
-  ok=$(printf '%s' '{"tool_input":{"command":"git push origin 12-fix"}}' | COORD_ASSISTANT_DIR= bash "$0" 2>/dev/null; echo $?)
+  # refuses every push) and COORD_NO_PUSH cleared (#367: so does it); in an assistant's session (#281) also
+  # its own: a commit blocks, a log passes
+  out=$(printf '%s' '{"tool_input":{"command":"git push --force origin main"}}' | COORD_ASSISTANT_DIR= COORD_NO_PUSH= bash "$0" 2>/dev/null; echo $?)
+  ok=$(printf '%s' '{"tool_input":{"command":"git push origin 12-fix"}}' | COORD_ASSISTANT_DIR= COORD_NO_PUSH= bash "$0" 2>/dev/null; echo $?)
   if [ -n "${COORD_ASSISTANT_DIR:-}" ]; then
     [ "$(printf '%s' '{"tool_input":{"command":"git commit -m x"}}' | bash "$0" 2>/dev/null; echo $?)" = 2 ] || ok=x
     [ "$(printf '%s' '{"tool_input":{"command":"git log -1"}}' | bash "$0" 2>/dev/null; echo $?)" = 0 ] || ok=x
@@ -897,6 +899,8 @@ is_current() { case "$1" in ''|HEAD|@|*'$'*) return 0 ;; esac; return 1; }
 push_seg() {
   local d="$1" remote=0 refs=0 cur=0 tags=0 skip=0 t r dst br
   shift
+  # a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
+  if [ "${COORD_NO_PUSH:-}" = 1 ]; then block "this project allows no push (COORD_NO_PUSH): every git push is blocked, on any branch"; fi
   for t in "$@"; do
     if [ $skip = 1 ]; then skip=0; continue; fi
     case "$t" in

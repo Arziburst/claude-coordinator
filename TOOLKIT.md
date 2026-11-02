@@ -534,6 +534,16 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   A deny rule matches the start of a command only: `Bash(git push*)` misses `git -C <dir> push` and
   `cd <dir> && git push` (seen, #202), so deny rules cannot say "no push at all"; the guard's own
   rules, which read every form, block pushes to the protected branches only.
+- **A never-push project (`COORD_NO_PUSH`, #367):** deny rules alone cannot say it, the guard can.
+  `"COORD_NO_PUSH": "1"` in the `env` of the worker safety file (beside `COORD_PROTECTED_ROOT`) blocks every
+  `git push` the guard reads, on any branch and in every form above (`git -C`, `git -c`, after `cd`, inside
+  `bash -c`, brace expansion, `find -exec`), with a message naming the setting; only the value `1` turns it
+  on, any other value or none leaves today's verdicts, and no other git command changes. The guard's
+  self-test clears it for its own run, so it still proves a work-branch push passes. `selftest hooks
+  --settings <file>` prints one line when a file sets it. **Still open:** what the guard cannot read — an
+  alias (`git -c alias.x=push x`, one in the git config), a script that pushes (`bash deploy.sh`) — and the
+  MCP write tools, which only deny rules cover; branch protection on the code host stays the real wall.
+  No example settings file and no preset sets it: a project that wants it sets it itself.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in
   bypass mode — no allow rule pre-approves them. Write memory files with the Write / Edit tools, not
   shell commands.
