@@ -193,5 +193,26 @@ hce nonblock 1 'FAIL hookcheck: the guard blocked, but Claude Code got it as a n
 usage hookcheck --session editblk0 --expect other
 usage hooks --settings tests/selftest/hooks/good.json --expect edit
 
+# #344: the guard's SessionStart self-test entry is told by its argument (-SelfTest / --self-test after the script
+# name), never by a substring of the path. A guard under a folder named x-selftest, y--self-test or Z-SELFTEST (any
+# case) is found: the output is good.json's, exit 0. A file whose only hook is the self-test entry - in PreToolUse,
+# under such a folder or not - is still "no safety-guard hook", exit 1.
+tr -d '\r' < tests/selftest/hooks/good.json > "$fx/g344-base.json"
+st hooks --settings "$fx/g344-base.json" 2>&1 | tr -d '\r' > "$tmp/g344-base"
+for d in x-selftest y--self-test Z-SELFTEST; do
+  n=$((n + 1))
+  sed "s#C:/core/scripts#C:/core/$d/scripts#; s#bash /core/scripts#bash /core/$d/scripts#" "$fx/g344-base.json" > "$fx/g344-$d.json"
+  st hooks --settings "$fx/g344-$d.json" > "$tmp/one" 2>&1; rc=$?
+  { [ "$rc" = 0 ] && tr -d '\r' < "$tmp/one" | cmp -s "$tmp/g344-base" -; } ||
+    { echo "FAIL (hooks guard under $d): expected exit 0 and good.json's output, got exit $rc:"; tr -d '\r' < "$tmp/one" | diff "$tmp/g344-base" - | sed 's/^/    /'; fail=1; }
+done
+for d in x-selftest plain; do
+  n=$((n + 1))
+  printf '{ "hooks": { "PreToolUse": [ { "matcher": "Bash|PowerShell", "hooks": [ { "type": "command", "command": "bash C:/core/%s/scripts/hooks/safety-guard.sh --self-test", "timeout": 30, "onFailure": "block" } ] } ] } }\n' "$d" > "$fx/g344-only-$d.json"
+  st hooks --settings "$fx/g344-only-$d.json" > "$tmp/one" 2>&1; rc=$?
+  { [ "$rc" = 1 ] && tr -d '\r' < "$tmp/one" | grep -qxF 'FAIL hooks: no safety-guard hook in the file'; } ||
+    { echo "FAIL (hooks only the self-test entry, $d): expected exit 1 and 'no safety-guard hook in the file', got exit $rc:"; sed 's/^/    /' "$tmp/one"; fail=1; }
+done
+
 echo "selftest hooks ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

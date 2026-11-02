@@ -202,7 +202,7 @@ $hook = HookPath $hookCmd
 if ($hookCmd -match '\\') { Fail 'safety settings: write the hook path with forward slashes (C:/...): hooks run through Git Bash on Windows, which drops backslashes, and a hook that fails to run blocks nothing' }
 # a PowerShell shell around the hook turns its exit 2 (block) into 1 (a non-blocking error), unless the
 # command passes the code through
-$hookObj = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'safety-guard\.(ps1|sh)' -and $_.command -notmatch '-SelfTest|--self-test' })[0]
+$hookObj = @($cfg.hooks.PreToolUse | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'safety-guard\.(ps1|sh)' -and $_.command -notmatch 'safety-guard\.(ps1|sh).{0,2}\s+(-SelfTest|--self-test)' })[0]
 if ($hookObj -and $hookObj.shell -eq 'powershell' -and -not ([string]$hookObj.command).Contains('exit $LASTEXITCODE')) {
   Fail 'safety settings: the hook runs under a PowerShell shell without "; exit $LASTEXITCODE": its block (exit 2) would reach Claude Code as a non-blocking error (1)'
 }

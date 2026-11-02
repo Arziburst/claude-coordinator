@@ -189,7 +189,7 @@ if grep 'safety-guard\.' "$safety" | sed 's/\\"//g' | grep -q '\\'; then
   echo "safety settings: write the hook path with forward slashes (C:/...): hooks run through Git Bash on Windows, which drops backslashes, and a hook that fails to run blocks nothing" >&2; exit 1
 fi
 # the guard's PreToolUse line (the SessionStart self-test line carries --self-test / -SelfTest)
-n="$(grep -n 'safety-guard\.' "$safety" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1 || true)"
+n="$(grep -n 'safety-guard\.' "$safety" | grep -v -i -E 'safety-guard\.(sh|ps1).{0,2}[[:space:]]+(-SelfTest|--self-test)' | head -n 1 | cut -d: -f1 || true)"
 [ -n "$n" ] || { echo "safety settings: no PreToolUse safety-guard hook in $safety" >&2; exit 1; }
 # a PowerShell shell around the hook turns its exit 2 (block) into 1 (a non-blocking error), unless the
 # command passes the code through; the shell field sits in the same hook object, between its braces
