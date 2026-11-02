@@ -4,6 +4,13 @@
 #   tests/merge-queue/run.sh sh                    # merge-queue.sh, with the bash running this file
 #   tests/merge-queue/run.sh ps pwsh               # merge-queue.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
+# Access points of the bounds (#381): land, run from the repository's root, reads the PR's contract by the id its
+# branch starts with (`<id>-...`: coordinator/briefs/<id>-contract.md) and runs check-bounds on it and
+# <base>...<head>. An OVER: the line of its own `OVER BOUNDS <pr> <glob> <added>/<max>`, no merge, in the summary as
+# `left: #<pr> (OVER BOUNDS)`, the queue goes on, exit 3. No contract, or a branch with no id: one line
+# `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok <pr>:<the owner's words> (.ps1: -OverBoundsOk): that PR
+# passes and one line holds the words; another PR's stays stopped; no words, or no number before the colon: a usage
+# error, exit 1.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -84,7 +91,8 @@ case "$kind" in
           [ "$nx" = value ] && { a+=("$x"); nx=""; continue; }
           case "$x" in
           land|status) a+=("$x") ;; --method) a+=(-Method); nx=value ;; --shared) nx=shared ;; --touches) nx=touches ;;
-          --poll) a+=(-Poll); nx=value ;; --timeout) a+=(-Timeout); nx=value ;; --dry-run) a+=(-DryRun) ;; --*) a+=("$x") ;;
+          --poll) a+=(-Poll); nx=value ;; --timeout) a+=(-Timeout); nx=value ;; --dry-run) a+=(-DryRun) ;;
+          --over-bounds-ok) a+=(-OverBoundsOk); nx=value ;; --*) a+=("$x") ;;
           [0-9]*) prs="${prs:+$prs,}$x" ;; *) a+=("$x") ;; esac; done
         [ -n "$prs" ] && a+=(-Pr "$prs"); [ -n "$sh" ] && a+=(-Shared "$sh"); [ -n "$tc" ] && a+=(-Touches "$tc")
         "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" "${a[@]}"; } ;;
@@ -252,6 +260,58 @@ run status --touches messages --touches src/c.ts
 code 0; has "TOUCHES #31: 31-a - messages/en.json"; hasnt "TOUCHES #32"; has ", 2 touching the task"
 run status --touches src/a
 code 0; hasnt "TOUCHES"; has ", 0 touching the task"
+
+# the bounds (#381, the header): a real repository beside the stub - the PR's head is a real commit, the contract a file
+qg() { git -C "$tmp/q" -c user.email=t@t -c user.name=t "$@"; }
+git init -q --bare "$tmp/q.git"; git init -q -b main "$tmp/q"; qg config core.autocrlf false
+mkdir -p "$tmp/q/src" "$tmp/q/coordinator/briefs"; echo base > "$tmp/q/README"
+qg add README; qg commit -q -m base; qg remote add origin "$tmp/q.git"; qg push -q origin main 2>/dev/null
+qbranch() {   # qbranch <branch> <lines>: a pushed branch of main adding that many lines to src/, its head in QH
+  local i=0; qg checkout -q -b "$1" main; mkdir -p "$tmp/q/src"
+  while [ $i -lt "$2" ]; do echo "line $i"; i=$((i + 1)); done > "$tmp/q/src/$1.txt"
+  qg add src; qg commit -q -m "$1"; QH="$(qg rev-parse HEAD)"; qg push -q origin "$1" 2>/dev/null; qg checkout -q main; }
+qbranch 15-over 5; H15=$QH; qbranch 16-fine 2; H16=$QH; qbranch 17-none 2; H17=$QH; qbranch nameless 1; H18=$QH
+# the fixture itself, so a red case never means a wrong repository
+[ "$(qg diff --numstat "main...$H15" | tr '\t' ' ')$(qg diff --numstat "main...$H16" | tr '\t' ' ')" = "5 0 src/15-over.txt2 0 src/16-fine.txt" ] ||
+  { echo "FAIL: the fixture repository's branches do not add the lines the cases count"; exit 1; }
+for id in 15 16; do printf -- '---\nid: %s\ntitle: t\nbounds:\n  - src/* 3\nwall: only a test\n---\n' "$id" > "$tmp/q/coordinator/briefs/$id-contract.md"; done
+qpr() { pr "$1" "$2" "$3"; echo pass > "$STUB_D/checks-$2"; }
+hasline() { printf '%s\n' "$out" | grep -qxF -- "$1" && ok || bad "expected exactly the line: $1"; }
+oneline() { [ "$(printf '%s\n' "$out" | grep -c -- "$1")" = 1 ] && ok || bad "expected exactly one line matching: $1"; }
+qback="$(pwd)"; cd "$tmp/q" || exit 1
+
+fresh "over its bound: stopped with a line of its own, the next PR, within its bound, still lands, exit 3"
+qpr 15 "$H15" 15-over; qpr 16 "$H16" 16-fine
+run land 15 16 --poll 0
+code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"; hasnt "MERGED #15"; hasnt "OVER BOUNDS 16"
+has "MERGED #16"; called "pr merge 16 --squash --match-head-commit $H16"; has "merge-queue: 1 merged, left: #15 (OVER BOUNDS)"
+
+fresh "no contract for the branch's id: one line, no stop"
+qpr 17 "$H17" 17-none
+run land 17 --poll 0
+code 0; oneline "no contract"; has "BOUNDS #17: no contract"; has "MERGED #17"; hasnt "OVER BOUNDS"
+
+fresh "a branch with no id: one line, no stop"
+qpr 18 "$H18" nameless
+run land 18 --poll 0
+code 0; oneline "no contract"; has "BOUNDS #18: no contract"; has "MERGED #18"
+
+fresh "--over-bounds-ok: that PR passes, the owner's words printed"
+qpr 15 "$H15" 15-over
+run land 15 --poll 0 --over-bounds-ok "15:the owner said yes, merge it"
+code 0; has "the owner said yes, merge it"; has "MERGED #15"; called "pr merge 15 --squash"; has "merge-queue: 1 merged"
+
+fresh "--over-bounds-ok for another PR passes nothing"
+qpr 15 "$H15" 15-over
+run land 15 --poll 0 --over-bounds-ok "16:the owner said yes"
+code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"
+
+fresh "--over-bounds-ok without its words or its PR: a usage error"
+qpr 15 "$H15" 15-over
+for v in 15 "15:" "x:the owner said yes" ":the owner said yes"; do
+  run land 15 --poll 0 --over-bounds-ok "$v"; code 1; notcalled "pr merge 15"
+done
+cd "$qback" || exit 1
 
 fresh "usage errors and a failing gh: exit 1"
 run land; code 1
