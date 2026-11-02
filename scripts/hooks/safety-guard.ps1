@@ -2,6 +2,7 @@
 # rules, checked against the same cases: tests/safety-guard/cases.txt).
 # With COORD_ASSISTANT_DIR set (the assistant mode, #281): the edit tools only inside that folder, git and
 # gh only a known read (an allowlist).
+# With COORD_NO_PUSH=1 (a never-push project, #367): every git push it reads is blocked, on any branch.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only - the real enforcement is branch protection on the code host (CORE section 2);
 # deliberate obfuscation (iex, cmd /c, quoting tricks ...) is out of scope (TOOLKIT.md *Safety*).
@@ -22,8 +23,10 @@ foreach ($b in @("$env:COORD_PROTECTED_BRANCHES" -split '[ \t\n,]+' | Where-Obje
 if ($SelfTest) {
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
   # everything is not working either. Both with the assistant mode off (it refuses every push); in an
-  # assistant's session (#281) also its own: a commit blocks, a log passes
+  # assistant's session (#281) also its own: a commit blocks, a log passes. COORD_NO_PUSH is cleared
+  # (#367: it refuses every push too)
   $exe = (Get-Process -Id $PID).Path
+  $env:COORD_NO_PUSH = $null
   $ad = $env:COORD_ASSISTANT_DIR; $env:COORD_ASSISTANT_DIR = $null
   '{"tool_input":{"command":"git push --force origin main"}}' |
     & $exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath 2>$null | Out-Null
@@ -717,6 +720,8 @@ function IsCurrent([string]$x) { $x -eq '' -or $x -eq 'HEAD' -or $x -eq '@' -or 
 # --- git push: protected targets, every-branch pushes, pushes resolving to a protected current branch ---
 # Work branches may be pushed, force-pushed (e.g. after a rebase) and deleted freely.
 function PushSeg([string]$dd, [string[]]$a) {
+  # a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
+  if ($env:COORD_NO_PUSH -ceq '1') { Block 'this project allows no push (COORD_NO_PUSH): every git push is blocked, on any branch' }
   $remote = $false; $refs = 0; $cur = $false; $tags = $false; $skip = $false
   foreach ($t in $a) {
     if ($skip) { $skip = $false; continue }

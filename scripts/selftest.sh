@@ -432,6 +432,7 @@ hooks)
     m = split(path, P, SUBSEP)
     if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_ROOT") { R = v; return }
     if (m == 3 && P[2] == "env" && P[3] == "COORD_PROTECTED_BRANCHES") { B = v; return }
+    if (m == 3 && P[2] == "env" && P[3] == "COORD_NO_PUSH") { N = num ? "" : v; return }
     if (m < 5 || P[2] != "hooks" || P[3] != "PreToolUse" || substr(P[4], 1, 1) != "\001") return
     e = substr(P[4], 2) + 0
     if (num) { if (m == 7 && P[5] == "hooks" && substr(P[6], 1, 1) == "\001" && P[7] == "timeout") T[e, substr(P[6], 2) + 0] = v; return }
@@ -472,14 +473,14 @@ hooks)
   }
   { all = (NR > 1) ? all "\n" $0 : $0 }
   END {
-    s = all; n = length(s); i = 1; ge = ""; R = ""; B = ""
+    s = all; n = length(s); i = 1; ge = ""; R = ""; B = ""; N = ""
     ws(); if (substr(s, i, 1) != "{" || !val("")) exit 3
     ws(); if (i <= n) exit 3
-    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R; print B; print T[ge, gh] }
+    if (ge != "") { print C[ge, gh]; print S[ge, gh]; print F[ge, gh]; print M[ge]; print R; print B; print T[ge, gh]; print N }
   }'
   # a UTF-8 BOM before the JSON is dropped
   json="$(B="$(printf '\357\273\277')" awk 'NR == 1 && index($0, ENVIRON["B"]) == 1 { $0 = substr($0, length(ENVIRON["B"]) + 1) } { print }' "$file")"
-  ok="" g="" root="" pbs="" to=""
+  ok="" g="" root="" pbs="" to="" nopush=""
   if command -v jq >/dev/null 2>&1; then
     printf '%s\n' "$json" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1 &&
       g="$(printf '%s\n' "$json" | jq -r "$hook_jq")" && ok=1 && to="$(printf '%s\n' "$g" | sed -n 5p)"
@@ -487,13 +488,16 @@ hooks)
     [ -n "$ok" ] && root="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_ROOT | strings | gsub("[\n\r\t]"; " ")')"
     # env.COORD_PROTECTED_BRANCHES: the branches the guard protects (TOOLKIT Safety)
     [ -n "$ok" ] && pbs="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_PROTECTED_BRANCHES | strings | gsub("[\n\r\t]"; " ")')"
+    # env.COORD_NO_PUSH: a never-push project (TOOLKIT Safety, #367)
+    [ -n "$ok" ] && nopush="$(printf '%s\n' "$json" | jq -r '.env | objects | .COORD_NO_PUSH | strings | gsub("[\n\r\t]"; " ")')"
   else
     g="$(printf '%s\n' "$json" | awk "$hook_awk")" && ok=1 && root="$(printf '%s\n' "$g" | sed -n 5p)" &&
-      pbs="$(printf '%s\n' "$g" | sed -n 6p)" && to="$(printf '%s\n' "$g" | sed -n 7p)"
+      pbs="$(printf '%s\n' "$g" | sed -n 6p)" && to="$(printf '%s\n' "$g" | sed -n 7p)" && nopush="$(printf '%s\n' "$g" | sed -n 8p)"
   fi
   [ -n "$ok" ] || { fail "the settings file is not valid JSON (Claude Code would not load it)"; finish; }
   [ -n "$g" ] || { fail "no safety-guard hook in the file"; finish; }
   pass "a safety-guard hook"
+  [ "$nopush" != 1 ] || echo "NOTE $step: this file turns pushes off (env COORD_NO_PUSH=1): the guard blocks every git push it can read, on any branch"
   cmd="$(printf '%s\n' "$g" | sed -n 1p)"; shell="$(printf '%s\n' "$g" | sed -n 2p)"
   onfail="$(printf '%s\n' "$g" | sed -n 3p)"; m="$(printf '%s\n' "$g" | sed -n 4p)"
   # after JSON decoding a path backslash is a single \ (an escaped quote is just ")

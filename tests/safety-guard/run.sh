@@ -7,6 +7,7 @@ set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
 unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
+unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
 here="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 acl=""   # a deny file whose read an NTFS permission denies (Git Bash): the permission is taken back first
@@ -376,6 +377,15 @@ if [ -n "$flag" ]; then
     out="$(COORD_ASSISTANT_DIR="$adm" "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
     case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_ASSISTANT_DIR set, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
   fi
+  # with COORD_NO_PUSH=1 in the settings (#367) a guard that blocks every call still does not say OK; this
+  # hook's own OK with it: no-push.sh
+  if [ -f "$broken" ]; then
+    n=$((n + 1))
+    out="$(COORD_NO_PUSH=1 "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
+    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_NO_PUSH=1, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
+  fi
 fi
+# COORD_NO_PUSH (#367): tests/safety-guard/no-push.txt, in a file of its own that also runs alone
+bash "$here/no-push.sh" "$@" || fail=1
 echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
