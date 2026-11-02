@@ -101,3 +101,4 @@ allow	allow	PowerShell	$x = 'git push origin 12-fix'
 allow	allow	PowerShell	$x = "text git push origin 12-fix"
 allow	allow	PowerShell	$x = git subtree split --prefix=a
 allow	allow	PowerShell	. ./setup.ps1
+block	block	Bash	git send-pack origin

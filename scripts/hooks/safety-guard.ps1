@@ -563,7 +563,30 @@ function BExp([string]$w) {
 }
 # the commands the guard reads (and the shells and Start-Process, which run others)
 function Judged([string]$b) { $b -match '^(git|gh|claude|cd|pushd|chdir|set-location|sl|push-location|rm|remove-item|ri|del|erase|rd|rmdir|find|get-childitem|gci|ls|dir|get-item|gi|bash|sh|zsh|dash|ksh|pwsh|powershell|start-process|saps|start)$' }
-function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx) {
+# PsStrip $w $qw: a PowerShell line (#374): the index of the first word of the command an assignment or a
+# dot-source runs ($x = git ..., $x += ..., $x=git ..., [string]$x = ..., $a = $b = ..., . git ...), 0 for none.
+# A glued right side is cut out of its word. $qw: the first word opened by a quote, or by one right after a = :
+# a quoted right side is a string, never a command, and the line stays as written; after a dot it is the command.
+function PsStrip([string[]]$w, [int]$qw) {
+  $j = 0; $n = $w.Count
+  while ($j -lt $n) {
+    $t = $w[$j]; $o = if ($j + 1 -lt $n) { $w[$j + 1] } else { '' }
+    if ($t -eq '.') { $j++ }
+    elseif ($t -match '^(\[[^\]]+\]+)+$' -and $o.StartsWith('$')) { $j++ }
+    elseif ($t -match '^(\[[^\]]+\]+)*\$[^=]+$') {
+      if ($o -match '^([-+*/%]|\?\?)?=$') { if ($j + 2 -eq $qw) { return 0 }; $j += 2 }
+      elseif ($o -match '^([-+*/%]|\?\?)?=') { if ($j + 1 -eq $qw) { return 0 }; $w[$j + 1] = $o.Substring($o.IndexOf('=') + 1); $j++ }
+      else { break }
+    }
+    elseif ($t -match '^(\[[^\]]+\]+)*\$[^=]+=') {
+      if ($j -eq $qw) { return 0 }
+      $r = $t.Substring($t.IndexOf('=') + 1); if ($r -eq '') { $j++ } else { $w[$j] = $r }
+    }
+    else { break }
+  }
+  if ($j -ge $n) { 0 } else { $j }
+}
+function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx, [int]$qw = -1) {
   # each word with [char]2 [char]3 as the words bash makes of it (an empty one dropped); a word of more
   # than BMAX words stays as written, and the command is refused when that word is its command word (or
   # before it) or the command is one the guard reads
@@ -580,6 +603,8 @@ function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx) {
     if ($big -le $j -or ($j -lt $toks.Count -and (Judged (BaseName $toks[$j])))) { Block 'a brace expansion to more than 64 words in a command the guard reads (#345): write the words out' }
   }
   if ($toks.Count -eq 0) { return }
+  # bx off: PowerShell reads this line (the PowerShell tool, pwsh -c); a Bash line keeps its own words
+  if (-not $bx) { $j = PsStrip $toks $qw; if ($j -gt 0) { $toks = [string[]]@($toks[$j..($toks.Count - 1)]) } }
   $clean = New-Object string[] $toks.Count
   for ($j = 0; $j -lt $toks.Count; $j++) { $clean[$j] = $toks[$j] -replace '[\t\r\n]', ' ' }
   $script:segs.Add($clean); $script:pipes.Add($pp)
@@ -615,7 +640,7 @@ function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx) {
 }
 function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
   if ($depth -gt 8) { return }
-  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $bm = ''; $hbx = $false; $pp = $false
+  $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $bm = ''; $hbx = $false; $pp = $false; $qw = -1
   $toks = New-Object System.Collections.Generic.List[string]
   for ($i = 0; $i -lt $n; $i++) {
     $set = if ($q -eq "'") { $RUN_SQ } elseif ($q) { $RUN_DQ } else { $RUN_UQ }
@@ -635,7 +660,7 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
     if ($bx -and $c -eq '\' -and $bd -gt 0 -and $d) { $tok += $c + $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '\' -and ($d -eq '"' -or $d -eq "'" -or $d -eq '\')) { $tok += $d; $st = $true; $i++; continue }
     if ($qm -and $c -eq '$' -and $d -eq "'") { continue }   # $'...' (ANSI-C quoting): its text, as '...'
-    if ($c -eq "'" -or $c -eq '"') { if ($qm) { $q = $c; $st = $true }; continue }
+    if ($c -eq "'" -or $c -eq '"') { if ($qm) { if (-not $bx -and $qw -lt 0 -and ($tok -eq '' -or $tok.EndsWith('='))) { $qw = $toks.Count }; $q = $c; $st = $true }; continue }
     if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
     if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
     if ($c -eq ' ' -or $c -eq "`t" -or $c -eq "`r") { if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $bm = ''; continue }
@@ -664,7 +689,7 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
     if ($c -eq '}' -and $bd -gt 0) { $bd--; $tok += $c; continue }
     if ($c -eq "`n" -or $c -eq ';' -or $c -eq '|' -or $c -eq '&' -or $c -eq '(' -or $c -eq ')' -or $c -eq '{' -or $c -eq '}') {
       if ($tok) { $toks.Add($tok) }; $tok = ''; $st = $false; $bd = 0; $bm = ''; $e = ($toks.Count -eq 0)
-      Seg $toks $depth $qm $pp $bx; $toks = New-Object System.Collections.Generic.List[string]
+      Seg $toks $depth $qm $pp $bx $qw; $qw = -1; $toks = New-Object System.Collections.Generic.List[string]
       $pp = ($c -eq '|' -and $d -ne '|' -and $p -ne '|') -or ($e -and $pp)
       if ($c -eq "`n" -and $hd) { $k = HereEnd $s ($i + 1) $hd $hdd; $body = $script:hdBody; $hd = ''; if ($hdsh) { Scan $body ($depth + 1) $false $hbx }; $i = $k }
       continue
@@ -673,7 +698,7 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
   }
   if ($q) { $script:fail = $true }
   if ($tok) { $toks.Add($tok) }
-  Seg $toks $depth $qm $pp $bx
+  Seg $toks $depth $qm $pp $bx $qw
 }
 $joined = $cmd
 $bx0 = $tool -ne 'PowerShell'; Scan $joined 0 $true $bx0
@@ -719,9 +744,12 @@ function IsCurrent([string]$x) { $x -eq '' -or $x -eq 'HEAD' -or $x -eq '@' -or 
 
 # --- git push: protected targets, every-branch pushes, pushes resolving to a protected current branch ---
 # Work branches may be pushed, force-pushed (e.g. after a rebase) and deleted freely.
-function PushSeg([string]$dd, [string[]]$a) {
-  # a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
+# a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
+function NoPush {
   if ($env:COORD_NO_PUSH -ceq '1') { Block 'this project allows no push (COORD_NO_PUSH): every git push is blocked, on any branch' }
+}
+function PushSeg([string]$dd, [string[]]$a) {
+  NoPush
   $remote = $false; $refs = 0; $cur = $false; $tags = $false; $skip = $false
   foreach ($t in $a) {
     if ($skip) { $skip = $false; continue }
@@ -741,11 +769,33 @@ function PushSeg([string]$dd, [string[]]$a) {
     if (IsProtected $dst) { Block "push to a protected branch ($dst)" }
     if (IsCurrent $dst) { $cur = $true }
   }
+  $script:pushBare = $remote -and $refs -eq 0
   if ($refs -eq 0 -and $tags) { return }   # tags only: not a branch push
   if ($refs -eq 0 -or $cur) {
     $br = BranchIn $dd
     if (IsProtected $br) { Block "push while on $br" }
   }
+}
+# --- what else pushes (#374). git subtree push <remote> <ref> pushes that ref; its other commands do not ---
+function SubtreeSeg([string]$dd, [string[]]$a) {
+  $what = ''; $skip = $false; $r = New-Object System.Collections.Generic.List[string]
+  foreach ($t in $a) {
+    if ($skip) { $skip = $false; continue }
+    if ($t -match '^(-P|--prefix|-m|--message|--onto|--annotate|-b|--branch)$') { $skip = $true; continue }
+    if ($t.StartsWith('-')) { continue }
+    if ($what -eq '') { $what = $t } else { $r.Add($t) }
+  }
+  if ($what -eq 'push') { PushSeg $dd ($r.ToArray()) }
+}
+# git send-pack: judged as a push, after PushSeg; with no ref it updates every branch both sides have, and
+# --stdin takes its refs where the guard does not read them
+function SendPackSeg([string[]]$a) {
+  foreach ($t in $a) { if ($t -eq '--stdin') { Block 'git send-pack --stdin (the refs it pushes cannot be read here)' } }
+  if ($script:pushBare) { Block 'git send-pack without a ref (updates every branch both sides have, incl. protected ones)' }
+}
+# git lfs push sends objects and names no ref: only a never-push project stops it
+function LfsSeg([string[]]$a) {
+  foreach ($t in $a) { if ($t.StartsWith('-')) { continue }; if ($t -eq 'push') { NoPush }; return }
 }
 # --- deleting a protected branch (any delete flag, the name anywhere in the arguments) ---
 function BranchSeg([string[]]$a) {
@@ -813,6 +863,9 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
   if ($asst) { AsstGit $sub $rest }
   switch ($sub.ToLowerInvariant()) {
     'push' { PushSeg $eff $rest }
+    'subtree' { SubtreeSeg $eff $rest }
+    'send-pack' { PushSeg $eff $rest; SendPackSeg $rest }
+    'lfs' { LfsSeg $rest }
     'branch' { BranchSeg $rest }
     'update-ref' { UpdRefSeg $rest }
     'checkout' { DiscardSeg $deff 'checkout' $rest; CheckoutSeg $eff $rest }

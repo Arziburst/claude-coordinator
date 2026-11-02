@@ -245,7 +245,8 @@ scripts)
   out="$(CLAUDE_CONFIG_DIR="$core/tests/session-tokens/claude" bash "$core/scripts/session-tokens.sh" s1)"
   if [ "$out" = "$(tr -d '\r' < "$core/tests/session-tokens/expected.txt")" ]; then pass "session-tokens"
   else fail "session-tokens: differs from tests/session-tokens/expected.txt"; fi
-  hook() { printf '{"tool_input":{"command":"%s"}}' "$1" | bash "$core/scripts/hooks/safety-guard.sh" >/dev/null 2>&1; echo $?; }
+  # a caller's own COORD_NO_PUSH=1 (#367) is cleared for the probes: they prove the guard's push verdicts (#374)
+  hook() { printf '{"tool_input":{"command":"%s"}}' "$1" | COORD_NO_PUSH= bash "$core/scripts/hooks/safety-guard.sh" >/dev/null 2>&1; echo $?; }
   [ "$(bash "$core/scripts/hooks/safety-guard.sh" --self-test)" = "safety-guard: OK" ] &&
     pass "safety-guard self-test" || fail "safety-guard self-test"
   [ "$(hook 'git push -u origin selftest/task-1')" = 0 ] && pass "safety-guard allows selftest/*" ||
@@ -574,7 +575,7 @@ hooks)
     nd="$(mktemp -d)"; ndj="$nd"; command -v cygpath >/dev/null 2>&1 && ndj="$(cygpath -m "$nd")"
     for b in "${names[@]}"; do
       err="$(cd "$nd" && printf '{"tool_input":{"command":"git push origin %s"},"cwd":"%s"}' "$b" "$ndj" |
-        COORD_PROTECTED_BRANCHES="$pbs" bash "$core/scripts/hooks/safety-guard.sh" 2>&1 >/dev/null)"; rc=$?
+        COORD_NO_PUSH= COORD_PROTECTED_BRANCHES="$pbs" bash "$core/scripts/hooks/safety-guard.sh" 2>&1 >/dev/null)"; rc=$?
       case "$rc:$err" in
         "2:Blocked by safety-guard: push to a protected branch ($b)."*) pass "the guard blocks a push to $b" ;;
         *) fail "the guard does not block a push to $b as a protected branch (exit $rc)" ;;

@@ -742,7 +742,30 @@ function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, 
 }
 # the commands the guard reads (and the shells and Start-Process, which run others)
 function judged(b) { return b ~ /^(git|gh|claude|cd|pushd|chdir|set-location|sl|push-location|rm|remove-item|ri|del|erase|rd|rmdir|find|get-childitem|gci|ls|dir|get-item|gi|bash|sh|zsh|dash|ksh|pwsh|powershell|start-process|saps|start)$/ }
-function seg(toks, nt, depth, qm, pp, bx,    j, t, line, k, m, inner, lt, line2, ex, ne, r, big, fx, nf) {
+# psstrip(toks, nt, qw): a PowerShell line (#374): the first word of the command an assignment or a dot-source
+# runs ($x = git ..., $x += ..., $x=git ..., [string]$x = ..., $a = $b = ..., . git ...), 1 for none. A glued
+# right side is cut out of its word. qw: the first word opened by a quote, or by one right after a = : a
+# quoted right side is a string, never a command, and the line stays as written; after a dot it is the command.
+function psstrip(toks, nt, qw,    j, t, o, r) {
+  j = 1
+  while (j <= nt) {
+    t = toks[j]; o = (j < nt) ? toks[j + 1] : ""
+    if (t == ".") j++
+    else if (t ~ /^(\[[^]]+\]+)+$/ && o ~ /^\$/) j++
+    else if (t ~ /^(\[[^]]+\]+)*\$[^=]+$/) {
+      if (o ~ /^([-+*\/%]|\?\?)?=$/) { if (j + 2 == qw) return 1; j += 2 }
+      else if (o ~ /^([-+*\/%]|\?\?)?=/) { if (j + 1 == qw) return 1; toks[j + 1] = substr(o, index(o, "=") + 1); j++ }
+      else break
+    }
+    else if (t ~ /^(\[[^]]+\]+)*\$[^=]+=/) {
+      if (j == qw) return 1
+      r = substr(t, index(t, "=") + 1); if (r == "") j++; else toks[j] = r
+    }
+    else break
+  }
+  return (j > nt) ? 1 : j
+}
+function seg(toks, nt, depth, qm, pp, bx, qw,    j, t, line, k, m, inner, lt, line2, ex, ne, r, big, fx, nf) {
   if (nt == 0) return
   # each word with \002 \003 as the words bash makes of it (an empty one dropped); a word of more than BMAX
   # words stays as written, and the command is refused when that word is its command word (or before it)
@@ -757,6 +780,8 @@ function seg(toks, nt, depth, qm, pp, bx,    j, t, line, k, m, inner, lt, line2,
   if (big) { j = cmdidx(ex, ne); if (big <= j || judged(base(ex[j]))) { OUT = OUT "\001!\n"; return } }
   for (j = 1; j <= ne; j++) toks[j] = ex[j]
   nt = ne; if (nt == 0) return
+  # bx off: PowerShell reads this line (the PowerShell tool, pwsh -c); a Bash line keeps its own words
+  if (!bx) { j = psstrip(toks, nt, qw); if (j > 1) { for (k = j; k <= nt; k++) toks[k - j + 1] = toks[k]; nt -= j - 1 } }
   line = ""; line2 = ""
   for (j = 1; j <= nt; j++) { t = toks[j]; gsub(/[\t\r\n]/, " ", t); line = line ((j > 1) ? "\t" : "") t; line2 = line2 ((j > 1) ? "\t" : "") unesc(t) }
   OUT = OUT (pp ? "\001|\t" : "") line "\n"   # a first word \001| : this command reads the previous one through |
@@ -784,7 +809,7 @@ function seg(toks, nt, depth, qm, pp, bx,    j, t, line, k, m, inner, lt, line2,
   inner = toks[k + 1]; for (m = k + 2; m <= nt; m++) inner = inner " " toks[m]
   scan(inner, depth + 1, qm, base(toks[j]) !~ /^(pwsh|powershell)$/)
 }
-function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, hbx, body, bd, bm, bk, pp, e) {
+function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, hbx, body, bd, bm, bk, pp, e, qw) {
   if (depth > 8) return
   n = length(s); q = ""; tok = ""; st = 0; nt = 0; hd = ""; bd = 0; bm = ""; pp = 0
   for (i = 1; i <= n; i++) {
@@ -804,7 +829,7 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
     if (bx && c == "\\" && bd > 0 && d != "") { tok = tok c d; st = 1; i++; continue }
     if (qm && c == "\\" && (d == "\"" || d == "\047" || d == "\\")) { tok = tok d; st = 1; i++; continue }
     if (qm && c == "$" && d == "\047") continue   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
-    if (c == "\047" || c == "\"") { if (qm) { q = c; st = 1 }; continue }
+    if (c == "\047" || c == "\"") { if (qm) { if (!bx && !qw && (tok == "" || tok ~ /=$/)) qw = nt + 1; q = c; st = 1 }; continue }
     if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
     if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
     if (c == " " || c == "\t" || c == "\r") { if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; bm = ""; continue }
@@ -832,7 +857,7 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
     if (c == "}" && bd > 0) { bd--; tok = tok c; continue }
     if (c == "\n" || c == ";" || c == "|" || c == "&" || c == "(" || c == ")" || c == "{" || c == "}") {
       if (tok != "") toks[++nt] = tok; tok = ""; st = 0; bd = 0; bm = ""; e = (nt == 0)
-      seg(toks, nt, depth, qm, pp, bx); nt = 0
+      seg(toks, nt, depth, qm, pp, bx, qw); nt = 0; qw = 0
       pp = (c == "|" && d != "|" && p != "|") || (e && pp)
       if (c == "\n" && hd != "") { k = hdend(s, i + 1, hd, hdd); body = HDBODY; hd = ""; if (hdsh) scan(body, depth + 1, 0, hbx); i = k }
       continue
@@ -841,7 +866,7 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
   }
   if (q != "") FAIL = 1
   if (tok != "") toks[++nt] = tok
-  seg(toks, nt, depth, qm, pp, bx)
+  seg(toks, nt, depth, qm, pp, bx, qw)
 }
 { all = (NR > 1) ? all "\n" $0 : $0 }
 END {
@@ -896,11 +921,14 @@ is_current() { case "$1" in ''|HEAD|@|*'$'*) return 0 ;; esac; return 1; }
 
 # --- git push: protected targets, every-branch pushes, pushes resolving to a protected current branch ---
 # Work branches may be pushed, force-pushed (e.g. after a rebase) and deleted freely.
+# a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
+no_push() {
+  if [ "${COORD_NO_PUSH:-}" = 1 ]; then block "this project allows no push (COORD_NO_PUSH): every git push is blocked, on any branch"; fi
+}
 push_seg() {
   local d="$1" remote=0 refs=0 cur=0 tags=0 skip=0 t r dst br
   shift
-  # a never-push project (#367): every push the guard reads comes through here; only the value 1 turns it on
-  if [ "${COORD_NO_PUSH:-}" = 1 ]; then block "this project allows no push (COORD_NO_PUSH): every git push is blocked, on any branch"; fi
+  no_push
   for t in "$@"; do
     if [ $skip = 1 ]; then skip=0; continue; fi
     case "$t" in
@@ -921,11 +949,38 @@ push_seg() {
     is_protected "$dst" && block "push to a protected branch ($dst)"
     is_current "$dst" && cur=1
   done
+  push_bare=0; [ $remote = 1 ] && [ $refs = 0 ] && push_bare=1
   [ $refs = 0 ] && [ $tags = 1 ] && return   # tags only: not a branch push
   if [ $refs = 0 ] || [ $cur = 1 ]; then
     br=$(branch_in "$d")
     is_protected "$br" && block "push while on $br"
   fi
+}
+# --- what else pushes (#374). git subtree push <remote> <ref> pushes that ref; its other commands do not ---
+subtree_seg() {
+  local d="$1" what="" skip=0 t; local a=()
+  shift
+  for t in "$@"; do
+    if [ $skip = 1 ]; then skip=0; continue; fi
+    case "$t" in
+      -P|--prefix|-m|--message|--onto|--annotate|-b|--branch) skip=1 ;;
+      -*) ;;
+      *) if [ -z "$what" ]; then what="$t"; else a+=("$t"); fi ;;
+    esac
+  done
+  [ "$what" = push ] && push_seg "$d" "${a[@]}"
+}
+# git send-pack: judged as a push, after push_seg; with no ref it updates every branch both sides have, and
+# --stdin takes its refs where the guard does not read them
+sendpack_seg() {
+  local t
+  for t in "$@"; do [ "$t" = --stdin ] && block "git send-pack --stdin (the refs it pushes cannot be read here)"; done
+  [ "$push_bare" = 1 ] && block "git send-pack without a ref (updates every branch both sides have, incl. protected ones)"
+}
+# git lfs push sends objects and names no ref: only a never-push project stops it
+lfs_seg() {
+  local t
+  for t in "$@"; do case "$t" in -*) ;; push) no_push; return ;; *) return ;; esac; done
 }
 # --- deleting a protected branch (any delete flag, the name anywhere in the arguments) ---
 branch_seg() {
@@ -996,6 +1051,9 @@ git_seg() {
   [ -n "$asst" ] && asst_git "$sub" "$@"
   case "$sub" in
     push) push_seg "$eff" "$@" ;;
+    subtree) subtree_seg "$eff" "$@" ;;
+    send-pack) push_seg "$eff" "$@"; sendpack_seg "$@" ;;
+    lfs) lfs_seg "$@" ;;
     branch) branch_seg "$@" ;;
     update-ref) updref_seg "$@" ;;
     checkout) discard_seg "$deff" checkout "$@"; checkout_seg "$eff" "$@" ;;

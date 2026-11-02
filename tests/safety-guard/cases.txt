@@ -1443,3 +1443,34 @@ allow	work	x=1
 allow	work	x='git push origin main'
 block	work	x=1 git push origin main
 block	work	x=$(git push origin main)
+# ... the worker's lines beside the tester's: git send-pack with no ref updates every branch both sides have, and
+# --stdin hides its refs; subtree's options before its command; a quoted right side stays a string, also glued
+# and in pieces; after a dot a quoted word is the command; other assignment targets; pwsh -c reads as PowerShell
+block	work	git send-pack origin
+block	work	git send-pack --stdin origin
+block	ps:work	git send-pack origin
+block	ps:work	git send-pack --stdin origin
+block	work	git subtree --prefix=a push origin main
+block	work	git subtree -P push push origin main
+allow	work	git subtree --prefix=a push origin 12-fix
+block	ps:work	git subtree --prefix=a push origin main
+allow	ps:work	$x='git push origin main'
+allow	ps:work	$x=''
+allow	ps:work	$x = 'rm' , '-rf' , '/'
+allow	ps:work	$x='rm' , '-rf' , '/'
+allow	ps:work	$a = $b = 'rm' , '-rf' , '/'
+block	ps:work	. 'git' push origin main
+block	ps:work	$x = . 'git' push origin main
+block	ps:work	[string] $x = git push origin main
+block	ps:work	[int[]]$x = git push origin main
+block	ps:work	$x.y = git push origin main
+block	ps:work	$x['a'] = git push origin main
+block	ps:work	${x} = git push origin main
+block	ps:work	$x =git push origin main
+block	ps:work	$x= git push origin main
+block	ps:work	$x = git push origin main --foo='bar'
+block	ps:work	$x = bash -c 'git push origin main'
+block	work	pwsh -c '$x = git push origin main'
+block	ps:work	pwsh -c '$x = git push origin main'
+allow	work	bash -c '$x = git push origin main'
+allow	ps:work	bash -c '$x = git push origin main'
