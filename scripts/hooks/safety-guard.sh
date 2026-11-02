@@ -1594,6 +1594,9 @@ asst_write() {
   while [ $# -gt 0 ]; do
     t="$1"; shift
     if [ $e = 1 ]; then P+=("$t"); continue; fi
+    if [ "$w" = truncate ]; then   # a size or a reference file is no path it writes
+      case "$t" in -s|-r|--size|--reference) [ $# -gt 0 ] && shift; continue ;; esac
+    fi
     case "$t" in
       --) e=1 ;;
       --t*=*) d="${t#*=}" ;;
@@ -1847,19 +1850,21 @@ asst_path() {
 }
 # asst_cmd <the command word, no folder, no .exe>: one simple command (A, i, n)
 asst_cmd() {
-  local w="$1" k=0 t xa=0 re='^([-+*/%]|[?][?])?='
+  local w="$1" k=0 t xa=0
+  t="${A[$i]}"
+  # In Bash a variable or a command's output as the command word runs it. Under PowerShell a bare variable only
+  # gives its value; what runs one is & $x , . $x (read as text, below) and iex
+  if [ "$tool" = PowerShell ]; then
+    case "$t" in '$'*) return 0 ;; esac
+  else
+    case "$t" in *'$'*) block "an assistant runs no command from a variable ($t) $ASST_M" ;; esac
+  fi
   while [ $k -le $i ]; do
     t="${A[$k]}"; k=$((k + 1))
     [[ $t =~ $RE_ASSIGN ]] && continue
     case "$t" in -*) continue ;; */*|*\\*) asst_path "$t" ;; esac
     t="${t##*/}"; t="${t##*\\}"; case "$t" in xargs|xargs.exe) xa=1 ;; esac
   done
-  t="${A[$i]}"
-  # a variable or a command's output as the command word; in PowerShell $x = 'a' (kept as written) is no command
-  case "$t" in
-    *'$'*) if [ "$tool" = PowerShell ] && { case "$t" in *=*) true ;; *) false ;; esac || [[ ${A[$((i + 1))]:-} =~ $re ]]; }; then :
-           else block "an assistant runs no command from a variable ($t) $ASST_M"; fi ;;
-  esac
   case "$w" in
     *'[environment]::setenvironmentvariable'*|*'[system.environment]::setenvironmentvariable'*|setx)
       block "an assistant sets no variable for good ($w) $ASST_M" ;;
@@ -1877,7 +1882,7 @@ asst_cmd() {
       block "an assistant reaches the network only by curl, wget or Invoke-WebRequest, at a listed host ($w) $ASST_M" ;;
     curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)
       asst_net "$w" "${A[@]:$((i + 1))}" ;;
-    tee|tee-object|cp|copy|cpi|copy-item|mv|move|mi|move-item|rename|ren|rni|rename-item|rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln|mkdir|md|new-item|ni|set-content|sc|add-content|ac|clear-content|clc|out-file)
+    tee|tee-object|cp|copy|cpi|copy-item|mv|move|mi|move-item|rename|ren|rni|rename-item|rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln|mkdir|md|new-item|ni|set-content|sc|add-content|ac|clear-content|clc|out-file|export-csv|epcsv)
       [ $xa = 0 ] || block "an assistant writes no file through xargs ($w): the paths come from its input $ASST_M"
       asst_write "$w" "${A[@]:$((i + 1))}" ;;
     sed) asst_sed "${A[@]:$((i + 1))}" ;;
@@ -2008,11 +2013,16 @@ find_seg() {
 
 PIPE=$'\001|'; BIG=$'\001!'; cur_tg=()
 # what the words of a command no longer show: an environment variable set in PowerShell (its right side is cut off as
-# a command, #374) and a script block run by the call operator; as text, so a quoted one is refused too
+# a command, #374) and what the call operator or a dot runs: & { ... } , & (...) , & $x , . $x ; as text, so a quoted
+# one is refused too (2>&1 is a redirection)
 if [ -n "$asst" ]; then
   [[ $cmd =~ $ASST_ENV_RE ]] && block "an assistant sets no such variable (${BASH_REMATCH[0]}): one can make a read run a command or reach another host $ASST_M"
-  amp='(^|[^&])&[[:space:]]*[{]'
-  [ "$tool" = PowerShell ] && [[ $cmd =~ $amp ]] && block "an assistant runs no script block (& { ... }) $ASST_M"
+  if [ "$tool" = PowerShell ]; then
+    amp='(^|[^&>])&[[:space:]]*([{(]|["'\'']?[$])'
+    dot="(^|[;|({$nl])[[:space:]]*[.][[:space:]]*[\"']?[\$]"
+    [[ $cmd =~ $amp ]] && block "an assistant runs no script block and no variable by the call operator (${BASH_REMATCH[0]}) $ASST_M"
+    [[ $cmd =~ $dot ]] && block "an assistant dot-sources no variable (${BASH_REMATCH[0]}) $ASST_M"
+  fi
 fi
 while IFS="$tab" read -r -a T; do
   prev_tg=("${cur_tg[@]}"); cur_tg=()

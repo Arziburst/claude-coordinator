@@ -2431,3 +2431,21 @@ block	ps:work	Invoke-Expression $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistant
 block	ps:work	Import-Csv a.csv | Export-Csv C:/x.csv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work	$x log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	truncate -s 0 @PROJECT@/coordinator/assistants/a1/t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... the same rules at their edges (the worker's lines)
+block	ps:work	& "$x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	&$x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	& (Get-Command x)	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	. "$x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	ls; . $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls 2>&1; $x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$a . $b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	$x.sh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	"$x" log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Export-Csv a.csv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Export-Csv -Path a.csv -NoTypeInformation	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	epcsv a.csv	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	truncate -s 0 a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	truncate --size 0 @PROJECT@/coordinator/assistants/a1/t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	truncate --size=0 @PROJECT@/coordinator/assistants/a1/t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	& $x
+allow	ps:work	Export-Csv a.csv

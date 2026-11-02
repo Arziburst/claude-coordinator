@@ -523,10 +523,10 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   folder>` before a read; `GIT_…`, `GH_…` (but `GH_REPO`, `GH_HOST`), the proxy variables, `CURL_HOME`, `WGETRC`,
   `PATH`, `HOME` set anywhere; a script or inline code (`bash x.sh`, `sh -c`, `python -c`, `node -e`, `perl`,
   `ruby`, `pwsh -File`, `cmd /c`, `eval`, `source`, `. ./x`, `iex`, `Invoke-Command`, `Start-Process`, `& { … }`,
-  `./x.sh`, a program by a path it does not know, a pipe into any of them, a command word from a variable); a
+  `./x.sh`, a program by a path it does not know, a pipe into any of them, in Bash a command word from a variable, under PowerShell `& $x` and `. $x`); a
   shell write outside its folder (`>` `>>` `2>` `&>`, `tee`, `cp` to, `mv`, `rm`, `touch`, `mkdir`, `sed -i`, `dd
   of=`, `find -delete`, `Set-Content`, `Add-Content`, `Out-File`, `New-Item`, `Copy-Item` to, `Move-Item`,
-  `Remove-Item`, `Tee-Object`), its own folder and `/dev/null` allowed, a path it cannot read counted as outside;
+  `Remove-Item`, `Tee-Object`, `Export-Csv`), its own folder and `/dev/null` allowed, a path it cannot read counted as outside;
   `[Environment]::SetEnvironmentVariable`, `setx`.
   **The network is closed by default (the owner's decision, 2026-11-02):** `curl`, `wget`, `Invoke-WebRequest`,
   `Invoke-RestMethod` and their aliases pass only for a host in the hook's environment,
@@ -534,7 +534,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `COORD_ASSISTANT_DIR` (the examples set none: unset or empty, no host; a change reaches the assistant through a
   fresh start). A host compares exactly, any letter case, a port ignored, a word with no scheme read as a host;
   listed, it may be read; with `:write` also data and write methods. A URL the guard cannot read (a variable, a
-  command's output, a list, a user before the host), a host not listed, a config file (`-K`, `-i`), a proxy, an
+  command's output, a list, a user before the host), a host not listed, a config file (curl's `-K`), a list of URLs (wget's `-i`), a proxy, an
   option it does not read and an output outside the folder stay blocked. `-L` is allowed on a read-only host and
   blocked on `:write`, so a redirect does not carry data elsewhere; `--next` is one more URL, judged like any.
   `nc`, `ncat`, `ssh`, `scp`, `sftp`, `ftp`, `telnet`, `certutil`, `bitsadmin`, `Start-BitsTransfer`,
@@ -548,7 +548,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   routes not named (`Add-Type`, `[IO.File]::WriteAllText`, `awk`'s `system()`, `sed`'s `w` and `e`, `make`, `npm
   run`, a program installed on the machine), data on a read-only host in its URL or headers (read only means
   no write method, not no data), a redirect of `wget` or `Invoke-WebRequest`, which follow one by default. A word
-  in quotes that starts with `>` reads as a redirection and may be refused. MCP tools pass the hook: the write
+  in quotes that starts with `>` reads as a redirection and may be refused, and `$env:X =` and `& {` are matched as text, so they are refused inside quotes too. MCP tools pass the hook: the write
   tools of a connector the brief does not name go into the settings' deny list. A real wall is a sandbox, an
   open question (#375). This file only, never the coordinator's own settings: the coordinator edits its state repository and
   more.

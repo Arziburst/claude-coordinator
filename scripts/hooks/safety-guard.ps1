@@ -1356,6 +1356,7 @@ function AsstWrite([string]$w, [string[]]$a) {
   while ($k -lt $a.Count) {
     $t = $a[$k]; $k++
     if ($e) { $p += $t; continue }
+    if ($w -eq 'truncate' -and $t -cin '-s', '-r', '--size', '--reference') { $k++; continue }   # a size or a reference file is no path it writes
     if ($t -ceq '--') { $e = $true }
     elseif ($t -clike '--t*=*') { $d = $t.Substring($t.IndexOf('=') + 1) }
     elseif ($t -clike '--t*') { if ($ct) { $d = if ($k -lt $a.Count) { $a[$k] } else { '' }; $k++ } }
@@ -1582,17 +1583,16 @@ function AsstPath([string]$t) {
 # AsstCmd <the words> <the index of the command word> <its base name>: one simple command
 function AsstCmd([string[]]$w, [int]$ix, [string]$c) {
   $xa = $false
+  $t = $w[$ix]; $a = @(if ($ix + 1 -lt $w.Count) { $w[($ix + 1)..($w.Count - 1)] })
+  # In Bash a variable or a command's output as the command word runs it. Under PowerShell a bare variable only
+  # gives its value; what runs one is & $x , . $x (read as text, below) and iex
+  if ($tool -ceq 'PowerShell') { if ($t.StartsWith('$')) { return } }
+  elseif ($t.Contains('$')) { Block "an assistant runs no command from a variable ($t) $ASST_M" }
   for ($k = 0; $k -le $ix; $k++) {
     $t = $w[$k]
     if ($t -match $ASSIGN -or $t.StartsWith('-')) { continue }
     if ($t -match '[/\\]') { AsstPath $t }
     if ((BaseName $t) -eq 'xargs') { $xa = $true }
-  }
-  $t = $w[$ix]; $a = @(if ($ix + 1 -lt $w.Count) { $w[($ix + 1)..($w.Count - 1)] })
-  # a variable or a command's output as the command word; in PowerShell $x = 'a' (kept as written) is no command
-  if ($t.Contains('$')) {
-    $asg = ($tool -ceq 'PowerShell') -and ($t.Contains('=') -or ($a.Count -gt 0 -and $a[0] -match '^([-+*/%]|\?\?)?='))
-    if (-not $asg) { Block "an assistant runs no command from a variable ($t) $ASST_M" }
   }
   if ($c -eq 'setx' -or $c.Contains('[environment]::setenvironmentvariable') -or $c.Contains('[system.environment]::setenvironmentvariable')) { Block "an assistant sets no variable for good ($c) $ASST_M" }
   $net = 'an assistant reaches the network only by curl, wget or Invoke-WebRequest, at a listed host'
@@ -1602,7 +1602,7 @@ function AsstCmd([string[]]$w, [int]$ix, [string]$c) {
   if ($c -match '\.(sh|bash|ps1|psm1|py|js|mjs|rb|pl|php|bat|cmd|vbs)$') { Block "an assistant runs no script ($c) $ASST_M" }
   if ($c -match '^(nc|ncat|netcat|socat|ssh|scp|sftp|ftp|telnet|rsync|certutil|bitsadmin|start-bitstransfer)$') { Block "$net ($c) $ASST_M" }
   if ($c -match '^(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)$') { AsstNet $w $ix $c $a }
-  if ($c -match '^(tee|tee-object|cp|copy|cpi|copy-item|mv|move|mi|move-item|rename|ren|rni|rename-item|rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln|mkdir|md|new-item|ni|set-content|sc|add-content|ac|clear-content|clc|out-file)$') {
+  if ($c -match '^(tee|tee-object|cp|copy|cpi|copy-item|mv|move|mi|move-item|rename|ren|rni|rename-item|rm|rmdir|rd|del|erase|ri|remove-item|touch|truncate|ln|mkdir|md|new-item|ni|set-content|sc|add-content|ac|clear-content|clc|out-file|export-csv|epcsv)$') {
     if ($xa) { Block "an assistant writes no file through xargs ($c): the paths come from its input $ASST_M" }
     AsstWrite $c $a
   }
@@ -1732,10 +1732,14 @@ function FindSeg([string[]]$a) {
 
 $script:curTg = @()
 # what the words of a command no longer show: an environment variable set in PowerShell (its right side is cut off as
-# a command, #374) and a script block run by the call operator; as text, so a quoted one is refused too
+# a command, #374) and what the call operator or a dot runs: & { ... } , & (...) , & $x , . $x ; as text, so a quoted
+# one is refused too (2>&1 is a redirection)
 if ($asst) {
   if ($cmd -match $ASST_ENV_RE) { Block "an assistant sets no such variable ($($Matches[0])): one can make a read run a command or reach another host $ASST_M" }
-  if ($tool -ceq 'PowerShell' -and $cmd -match '(^|[^&])&\s*\{') { Block "an assistant runs no script block (& { ... }) $ASST_M" }
+  if ($tool -ceq 'PowerShell') {
+    if ($cmd -match '(^|[^&>])&\s*([{(]|["'']?\$)') { Block "an assistant runs no script block and no variable by the call operator ($($Matches[0])) $ASST_M" }
+    if ($cmd -match '(^|[;|({\n])\s*\.\s*["'']?\$') { Block "an assistant dot-sources no variable ($($Matches[0])) $ASST_M" }
+  }
 }
 for ($si = 0; $si -lt $script:segs.Count; $si++) {
   $segT = $script:segs[$si]
