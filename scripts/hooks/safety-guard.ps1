@@ -1,11 +1,11 @@
 # PreToolUse safety hook for coordinator projects (Windows; macOS / Linux: safety-guard.sh - the same
 # rules, checked against the same cases: tests/safety-guard/cases.txt).
 # With COORD_ASSISTANT_DIR set (the assistant mode, #281): the edit tools only inside that folder, git and
-# gh only a known read (an allowlist).
+# gh only a known read (an allowlist); the deliberate-evasion routes and the network closed too (#345).
 # With COORD_NO_PUSH=1 (a never-push project, #367): every git push it reads is blocked, on any branch.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only - the real enforcement is branch protection on the code host (CORE section 2);
-# deliberate obfuscation (iex, cmd /c, quoting tricks ...) is out of scope (TOOLKIT.md *Safety*).
+# deliberate obfuscation (iex, cmd /c, quoting tricks ...) is out of scope but in the assistant mode (TOOLKIT.md *Safety*).
 # Extra project patterns (one regular expression per line, '#' comments; a pattern that cannot be read
 # blocks every call): .claude/coordinator-deny.txt
 # Self-test: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\hooks\safety-guard.ps1 -SelfTest

@@ -2,7 +2,7 @@
 # PreToolUse safety hook for coordinator projects (Bash / PowerShell tools; with COORD_PROTECTED_ROOT
 # set, also Edit / Write / MultiEdit / NotebookEdit: no edit under that folder outside its
 # .claude/worktrees/ - the owner's working copy, TOOLKIT.md *Safety*). With COORD_ASSISTANT_DIR set (the
-# assistant mode, #281): the edit tools only inside that folder, git only to read, gh only a known read.
+# assistant mode, #281): the edit tools only inside that folder, git only to read, gh only a known read; the deliberate-evasion routes and the network closed too (#345).
 # With COORD_NO_PUSH=1 (a never-push project, #367): every git push it reads is blocked, on any branch.
 # Reads the tool call JSON on stdin; exit 2 blocks the call and shows the reason to Claude.
 # A safety net only — the real enforcement is branch protection on the code host (CORE §2); deliberate
