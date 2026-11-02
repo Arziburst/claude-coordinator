@@ -1022,6 +1022,7 @@ function AsstGvar([string[]]$w) {
     $t = $w[$k]
     $set = $t -match '^(GIT_.+=|env:([/\\])?GIT_|\$env:GIT_.*=)'
     if (-not $set -and $t -match '^\$env:GIT_' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('=')) { $set = $true }
+    if ($t -match '^(GH_BROWSER=|BROWSER=|env:([/\\])?(GH_)?BROWSER|\$env:(GH_)?BROWSER.*=)' -or ($t -match '^\$env:(GH_)?BROWSER' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('='))) { Block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" }
     if ($set) { Block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)" }
   }
 }
@@ -1123,7 +1124,13 @@ function AsstGh([string[]]$a) {
     if (-not $grp) { $grp = $t; if ($grp -cin 'api', 'help', 'version', 'status', 'browse') { break }; continue }
     $sub = $t; break
   }
-  if ($grp -ceq 'api') { AsstApi @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] }); return }
+  $rest = @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] })
+  if ($grp -ceq 'api') { AsstApi $rest; return }
+  # no browser route (#345): --web, -w (run list -w is a workflow), browse without --no-browser
+  $web = ($grp -ceq 'browse') -and ($rest -cnotcontains '--no-browser')
+  foreach ($t in $rest) { if ($t -clike '--web*' -and ($t -ceq '--web' -or $t -clike '--web=*') -or ($t -ceq '-w' -and "$grp $sub" -cne 'run list')) { $web = $true } }
+  if ($web) { Block "an assistant opens no browser (gh $grp $sub with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)" }
+  if ($grp -ceq 'project' -and $sub -ceq 'item-list') { return }
   if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }
   if (($grp -ceq 'auth' -and $sub -cin '', 'status') -or ($grp -cin 'alias', 'org' -and $sub -cin '', 'list') -or ($grp -ceq 'config' -and $sub -cin '', 'get', 'list')) { return }
   if ($grp -cin 'pr', 'issue', 'release', 'repo', 'label', 'gist', 'workflow', 'secret', 'variable', 'run', 'cache', 'ruleset', 'project', 'codespace', 'ssh-key', 'gpg-key' -and $sub -cin '', 'list', 'view', 'status', 'diff', 'checks', 'watch') { return }
@@ -1154,13 +1161,10 @@ function AsstApi([string[]]$a) {
     elseif (-not $ep) { $ep = $t }
     if ($v -like '*=@*') { $at = $true }
   }
-  if ($ep -match '^https?://') { $ep = $ep -replace '^https?://[^/]*/?', '' }
+  $url = $ep -match '^https?://'
+  if ($url) { $ep = $ep -replace '^https?://[^/]*/?', '' }
   $ep = $ep.TrimStart('/')   # /graphql and https://<host>/graphql are graphql
-  if ($ep -ceq 'graphql') {
-    if ($mu) { Block 'an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
-    if ($at) { Block 'an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)' }
-    return
-  }
+  if ($ep -eq 'graphql' -or ($url -and $ep -like '*/graphql')) { Block 'an assistant reaches no graphql (gh api graphql): read boards with gh project (COORD_ASSISTANT_DIR is set, #345)' }
   if (-not $m) { if ($fl) { Block 'an assistant writes nothing to GitHub (gh api with fields and no -X GET, which is a POST): it reads only (COORD_ASSISTANT_DIR is set, #281)' }; return }
   if ($m -notmatch '^(get|head)$') { Block "an assistant writes nothing to GitHub (gh api -X $m): it reads only (COORD_ASSISTANT_DIR is set, #281)" }
 }

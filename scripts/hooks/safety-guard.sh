@@ -1222,7 +1222,8 @@ asst_gvar() {
     t="${A[$k]}"; k=$((k + 1))
     case "$t" in
       GIT_?*=*|env:GIT_*|env:[/\\]GIT_*|'$env:GIT_'*=*) ;;
-      '$env:GIT_'*) case "${A[$k]:-}" in =*) ;; *) continue ;; esac ;;
+      GH_BROWSER=*|BROWSER=*|env:GH_BROWSER*|env:BROWSER*|'$env:GH_BROWSER'*=*|'$env:BROWSER'*=*) block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" ;;
+      '$env:GIT_'*|'$env:GH_BROWSER'*|'$env:BROWSER'*) case "${A[$k]:-}" in =*) ;; *) continue ;; esac ;;
       *) continue ;;
     esac
     block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)"
@@ -1330,13 +1331,19 @@ asst_gh() {
     if [ -z "$grp" ]; then grp="$t"; case "$grp" in api|help|version|status|browse) break ;; esac; continue; fi
     sub="$t"; break
   done
+  if [ "$grp" != api ]; then   # no browser route (#345): --web, -w (run list -w is a workflow), browse without --no-browser
+    nx=0; [ "$grp" = browse ] && nx=1
+    for t in "$@"; do case "$t" in --web|--web=*) nx=2 ;; -w) [ "$grp $sub" = "run list" ] || nx=2 ;; --no-browser) [ $nx = 1 ] && nx=0 ;; esac; done
+    [ $nx != 0 ] && { eval "$ci"; block "an assistant opens no browser (gh $grp${sub:+ $sub} with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)"; }
+  fi
   case "$grp" in
     api) ok=2 ;;
     ''|help|version|status|browse|search) ok=1 ;;
+    project) case "$sub" in ''|list|view|status|diff|checks|watch|item-list) ok=1 ;; esac ;;
     auth) case "$sub" in ''|status) ok=1 ;; esac ;;
     alias|org) case "$sub" in ''|list) ok=1 ;; esac ;;
     config) case "$sub" in ''|get|list) ok=1 ;; esac ;;
-    pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|project|codespace|ssh-key|gpg-key)
+    pr|issue|release|repo|label|gist|workflow|secret|variable|run|cache|ruleset|codespace|ssh-key|gpg-key)
       case "$sub" in ''|list|view|status|diff|checks|watch) ok=1 ;; esac ;;
   esac
   eval "$ci"
@@ -1350,7 +1357,7 @@ asst_gh() {
 # comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
 # /, an http(s)://<host>/ prefix)
 asst_api() {
-  local t v m="" fl=0 ep="" mu=0 at=0 ci
+  local t v m="" fl=0 ep="" mu=0 at=0 gq=0 url=0 ci
   ci=$(shopt -p nocasematch); shopt -u nocasematch   # -f is a field, -F a typed one; -h is not -H
   for t in "$@"; do case "$t" in *[Mm][Uu][Tt][Aa][Tt][Ii][Oo][Nn]*) mu=1 ;; esac; done
   while [ $# -gt 0 ]; do
@@ -1371,13 +1378,11 @@ asst_api() {
     case "$v" in *=@*) at=1 ;; esac
   done
   eval "$ci"
-  case "$ep" in http://*|https://*) ep="${ep#*://}"; case "$ep" in */*) ep="${ep#*/}" ;; *) ep="" ;; esac ;; esac
+  case "$ep" in http://*|https://*) url=1; ep="${ep#*://}"; case "$ep" in */*) ep="${ep#*/}" ;; *) ep="" ;; esac ;; esac
   while [ "${ep#/}" != "$ep" ]; do ep="${ep#/}"; done   # /graphql and https://<host>/graphql are graphql
-  if [ "$ep" = graphql ]; then
-    [ $mu = 1 ] && block "an assistant writes nothing to GitHub (gh api graphql with a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)"
-    [ $at = 1 ] && block "an assistant writes nothing to GitHub (gh api graphql with its query from a file, which may be a mutation): it reads only (COORD_ASSISTANT_DIR is set, #281)"
-    return 0
-  fi
+  case "$ep" in [Gg][Rr][Aa][Pp][Hh][Qq][Ll]) gq=1 ;; esac
+  [ $url = 1 ] && case "$ep" in */[Gg][Rr][Aa][Pp][Hh][Qq][Ll]) gq=1 ;; esac
+  [ $gq = 1 ] && block "an assistant reaches no graphql (gh api graphql): read boards with gh project (COORD_ASSISTANT_DIR is set, #345)"
   case "$m" in
     '') [ $fl = 1 ] && block "an assistant writes nothing to GitHub (gh api with fields and no -X GET, which is a POST): it reads only (COORD_ASSISTANT_DIR is set, #281)" ;;
     [Gg][Ee][Tt]|[Hh][Ee][Aa][Dd]) ;;
