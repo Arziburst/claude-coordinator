@@ -127,7 +127,7 @@ ast() {   # ast <assistant example> <worker example> <placeholder of the project
   for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" > "$tmp/$s.deny"; done
   cmp -s "$tmp/a.deny" "$tmp/w.deny" || bad="$bad; the deny list differs from $w's"
   for s in a w; do awk '/"PreToolUse"/ { f = 1 } f' "$tmp/$s.json" > "$tmp/$s.pre"; done
-  grep '"matcher"' "$tmp/w.pre" > "$tmp/w.m"; grep '"matcher"' "$tmp/a.pre" > "$tmp/a.m"
+  grep '"matcher"' "$tmp/w.pre" > "$tmp/w.m"; grep '"matcher"' "$tmp/a.pre" | head -n 1 > "$tmp/a.m"   # the guard's entry: the first (a second, net-guard's, #380, is optional)
   cmp -s "$tmp/a.m" "$tmp/w.m" || bad="$bad; the PreToolUse matcher differs from $w's"
   grep -q 'safety-guard\.' "$tmp/a.pre" || bad="$bad; no guard in PreToolUse"
   grep -q '"timeout": 30,' "$tmp/a.pre" || bad="$bad; the guard's timeout is not 30"

@@ -27,7 +27,10 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
    protected branches as in the worker safety file. MCP tools pass the guard: write tools of a connector
    the brief does not name go into its deny list. Keep the example's after-compact hook (`after-compact
    assistant`): right after each compaction it tells the assistant to read BRIEF.md, NOTES.md and its role
-   in full.
+   in full. If the job needs the network (a curl, wget or Invoke-WebRequest call), ask the owner which
+   hosts, and which of them may be written to (`:write`); fill env `COORD_ASSISTANT_HOSTS` with them and
+   keep the example's second hook (`net-guard`, no wall: TOOLKIT *Assistants*). No network need: delete
+   that hook and the value.
 4. Commit the folder and its settings in the state repository (CORE §12b). The assistant cannot commit:
    its folder, NOTES.md included, is committed by the coordinator together with every commit it makes in
    `coordinator/`, and at each sync and before a handoff (CORE §4).

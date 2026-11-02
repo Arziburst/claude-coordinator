@@ -260,6 +260,18 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   session. `selftest assistant` proves the frame on the machine with a throwaway assistant on the light
   model ([procedures/SELFTEST.md](procedures/SELFTEST.md)), in the system temp, never in
   `coordinator/assistants/`; it removes that throwaway session and folder at its end — the one exception.
+- **Its network, optional** (#380): an assistant reads outside data, and text it reads could try to send
+  data out through a network client. The assistant settings examples list a second PreToolUse hook,
+  `scripts/hooks/net-guard.{sh,ps1}`, for Bash and PowerShell, commented optional, with env
+  `COORD_ASSISTANT_HOSTS` empty (every client call blocked); no other role's settings carry it. A command
+  naming a client (curl, wget, Invoke-WebRequest, iwr, Invoke-RestMethod, irm, also `.exe`) may reach only
+  the http(s) hosts in `COORD_ASSISTANT_HOSTS=<host>[:write],...` (exact host, any case, port ignored, no
+  user part); a data or write form (`-d`, `--data*`, `-F`, `-T`, `-X` other than GET, `--json`, `-Method`
+  other than Get, `-Body`, `-InFile`, wget `--post-*`) needs `:write`; an address it cannot read (a
+  variable, a substitution, none, `-K` / `--config`) is blocked; `--help` / `-h` passes. **It is no wall**
+  (#375): it reads the command text, no shell parse; a client's name inside a quoted string may block
+  (fails closed), and .NET, scripts and other tools are out of its reach. It stops the slip and the typical
+  request. The coordinator asks the owner for the hosts when an assistant needs the network.
 - **Its spend** goes to the run log as rows of role and kind `assistant`, the assistant's name in the task
   column, apart from the tasks' and the coordinator's own (CORE §7: each row's cost is its session's
   `session-tokens` cost less the earlier rows of the same name and session `start`).

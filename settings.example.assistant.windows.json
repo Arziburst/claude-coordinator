@@ -3,8 +3,10 @@
   "env": {
     "COORD_PROTECTED_ROOT": "C:/ABSOLUTE/PROJECT",
     "COORD_ASSISTANT_DIR": "C:/ABSOLUTE/PROJECT/coordinator/assistants/NAME",
-    "COORD_PROTECTED_BRANCHES": ""
+    "COORD_PROTECTED_BRANCHES": "",
+    "COORD_ASSISTANT_HOSTS": ""
   },
+  "_net_guard": "OPTIONAL (#380): the second PreToolUse hook below, net-guard.ps1, limits a network client (curl, wget, Invoke-WebRequest, irm ...) in a command to the hosts in env COORD_ASSISTANT_HOSTS=<host>[:write],... (empty here: every client call is blocked); a data or write form needs :write. Keep it only for an assistant that needs the network and fill the list from the owner's words; delete the whole second entry (and this key and the env value) where it is not wanted. It is no wall (TOOLKIT.md Assistants).",
   "attribution": {
     "commit": "",
     "pr": "",
@@ -101,6 +103,17 @@
           {
             "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/ABSOLUTE/PATH/scripts/hooks/safety-guard.ps1",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/ABSOLUTE/PATH/scripts/hooks/net-guard.ps1",
             "timeout": 30,
             "onFailure": "block"
           }
