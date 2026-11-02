@@ -503,10 +503,12 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `--exec`, `--open-files-in-pager` (also abbreviated), grep's `-O`, ls-remote's `-u` are refused, while
   `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
   `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
-  graphql without a mutation). gh is an allowlist there: only these reads pass — a group's `list`, `view`,
+  no graphql since #345, boards through `gh project item-list` / `gh project view`). Nothing opens a browser there
+  (#345): no `--web`, no `-w` (except `gh run list -w`, a workflow), `gh browse` only with `--no-browser`, no `GH_BROWSER` /
+  `BROWSER`; a git command's help: `git <command> -h` in the terminal, `--help` opens a browser on Windows. gh is an allowlist there: only these reads pass — a group's `list`, `view`,
   `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
   `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh api` by the read rules above (GET or
-  HEAD, graphql without a mutation), `gh auth status`, `gh --version`, `gh help`; every other gh command is
+  HEAD, never graphql), `gh auth status`, `gh --version`, `gh help`; every other gh command is
   refused (`gh alias set` and a call of an alias, `gh extension install`, `gh auth login` / `logout` /
   `refresh` / `setup-git`, `gh config set`, `gh codespace create`, `gh ssh-key add`, an unknown group …).
   The examples also run the after-compact hook's `assistant` variant (*Assistants*); the guard's
