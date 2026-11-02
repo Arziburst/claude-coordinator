@@ -24,7 +24,6 @@ case "$kind" in sh) ;; ps) [ ${#PS[@]} -gt 0 ] || { echo "ps needs powershell or
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
-
 g() { git -C "$tmp/repo" -c user.email=t@t -c user.name=t "$@"; }
 lines() { i=1; while [ "$i" -le "$2" ]; do echo "line $i"; i=$((i + 1)); done > "$tmp/repo/$1"; }
 git init -q -b main "$tmp/repo"; g config core.autocrlf false
@@ -41,7 +40,6 @@ R='main...work'
 got="$(g diff --numstat --no-renames "$R" | tr '\t' ' ' | sort -k3)"
 want="$(printf '%s\n' '- - bin/blob.bin' '1 0 bin/note.txt' '50 0 docs/free.txt' '1 3 lib/old.txt' '2 0 src/sub/two.txt' '3 0 src/three.txt')"
 [ "$got" = "$want" ] || { echo "FAIL: the fixture repository's numstat is not the one the cases count:"; printf '%s\n' "$got" | sed 's/^/    /'; exit 1; }
-
 # mk <name> <bound line>...: a contract with these bounds
 mk() { local f="$tmp/c/$1.md" b; shift
   { printf -- '---\nid: 1\ntitle: t\nbounds:\n'; for b in "$@"; do printf '  - %s\n' "$b"; done; printf 'wall: only a test\n---\n'; } > "$f"; }
@@ -62,12 +60,10 @@ u() { local what="$1" out rc; shift; n=$((n + 1))
   { [ "$rc" = 2 ] && ! printf '%s\n' "$out" | grep -q 'check-bounds: OK'; } ||
     { echo "FAIL (usage, $what): want exit 2 and no OK, got exit $rc:"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1; }
 }
-
 mk within 'src/* 6';  t "within a bound" within 0 'src/* 5/6' 'check-bounds: OK'
 mk exact 'src/* 5';   t "exactly at the bound" exact 0 'src/* 5/5' 'check-bounds: OK'
 mk over 'src/* 4';    t "one over" over 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
-sed 's/$/\r/' "$tmp/c/over.md" > "$tmp/c/crlf.md"
-                      t "a CRLF contract reads the same" crlf 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
+sed 's/$/\r/' "$tmp/c/over.md" > "$tmp/c/crlf.md"; t "a CRLF contract reads the same" crlf 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
 mk nomatch 'nowhere/* 0'; t "files no bound matches are not limited" nomatch 0 'nowhere/* 0/0' 'check-bounds: OK'
 mk anchored 'three.txt 0'; t "a glob holds from the root" anchored 0 'three.txt 0/0' 'check-bounds: OK'
 mk casey 'SRC/* 0';   t "letter case counts" casey 0 'SRC/* 0/0' 'check-bounds: OK'
@@ -79,10 +75,8 @@ mk two 'src/* 5' 'lib/* 1'; t "two globs within" two 0 'src/* 5/5' 'lib/* 1/1' '
 mk twoone 'lib/* 0' 'src/* 5'; t "two globs, one over: the contract's order" twoone 1 'lib/* 1/0' 'src/* 5/5' 'check-bounds: OVER lib/* 1/0'
 mk twoover 'src/* 4' 'lib/* 0'; t "two globs, both over" twoover 1 'src/* 5/4' 'lib/* 1/0' 'check-bounds: OVER src/* 5/4' 'check-bounds: OVER lib/* 1/0'
 mk both 'src/three.txt 2' 'src/* 5'; t "a file in two globs counts in both" both 1 'src/three.txt 3/2' 'src/* 5/5' 'check-bounds: OVER src/three.txt 3/2'
-printf -- '---\nid: 1\ntitle: t\n---\n' > "$tmp/c/nob.md"
-                      t "no bounds" nob 0 'check-bounds: no bounds'
-printf -- '---\nid: 1\ntitle: t\n---\nbounds:\n  - src/* 0\n' > "$tmp/c/body.md"
-                      t "bounds in the body are no bounds" body 0 'check-bounds: no bounds'
+printf -- '---\nid: 1\ntitle: t\n---\n' > "$tmp/c/nob.md"; t "no bounds" nob 0 'check-bounds: no bounds'
+printf -- '---\nid: 1\ntitle: t\n---\nbounds:\n  - src/* 0\n' > "$tmp/c/body.md"; t "bounds in the body are no bounds" body 0 'check-bounds: no bounds'
 u "no argument"
 u "no range" ../c/within.md
 u "a range without three dots" ../c/within.md main
