@@ -337,10 +337,13 @@ switch ($Step) {
     $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     function Hook([string]$cmd) { [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"' + $cmd + '"}}'); $null = Feed $jf $hook; $LASTEXITCODE }
+    # a caller's own COORD_NO_PUSH=1 (#367) is cleared for the probes: they prove the guard's push verdicts (#374)
+    $oldNp = $env:COORD_NO_PUSH; $env:COORD_NO_PUSH = $null
     if ("$(& $exe -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest)".Trim() -eq 'safety-guard: OK') { Pass "safety-guard self-test$tag" } else { Fail "safety-guard self-test$tag" }
     if ((Hook 'git push -u origin selftest/task-1') -eq 0) { Pass "safety-guard allows selftest/*$tag" } else { Fail "safety-guard blocks selftest/*$tag" }
     if ((Hook 'git push origin main') -eq 2 -and (Hook 'git push origin master') -eq 2) { Pass "safety-guard blocks main and master$tag" }
     else { Fail "safety-guard lets a push to main or master through$tag" }
+    $env:COORD_NO_PUSH = $oldNp
     Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
   }
   Finish
@@ -598,6 +601,7 @@ switch ($Step) {
     $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     $oldPb = $env:COORD_PROTECTED_BRANCHES; $env:COORD_PROTECTED_BRANCHES = $pbs
+    $oldNp = $env:COORD_NO_PUSH; $env:COORD_NO_PUSH = $null   # a caller's own (#367): this probe reads the branch's message (#374)
     # a neutral folder outside any repository: the probe must not depend on the branch this test runs on
     # (on a protected branch the guard would block every push as "push while on <branch>")
     $nd = Join-Path ([IO.Path]::GetTempPath()) ('selftest-nd.' + [IO.Path]::GetRandomFileName())
@@ -611,7 +615,7 @@ switch ($Step) {
       if ($rc -eq 2 -and ($err -join "`n").StartsWith("Blocked by safety-guard: push to a protected branch ($b).", [StringComparison]::Ordinal)) { Pass "the guard blocks a push to $b" }
       else { Fail "the guard does not block a push to $b as a protected branch (exit $rc)" }
     }
-    $env:COORD_PROTECTED_BRANCHES = $oldPb; Pop-Location
+    $env:COORD_PROTECTED_BRANCHES = $oldPb; $env:COORD_NO_PUSH = $oldNp; Pop-Location
     Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $nd -ErrorAction SilentlyContinue
   }

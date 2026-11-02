@@ -359,6 +359,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `--mirror` and matching `:` pushes; a bare or `HEAD` push while the current branch is protected,
   following `git checkout` / `switch` (with `--track origin/main` and `-` too; `git checkout main
   <file>` restores a file and leaves the branch), `cd` / `Set-Location` and `git -C` in the same command;
+  `git subtree push` and `git send-pack` by the refs they name, and `git send-pack` with no ref or with
+  `--stdin`, which push what the command does not name (#374);
   `git branch` with any delete flag, `git update-ref -d`), and removing `/`, a drive, home or a folder
   that holds it, the project's folder or a folder that holds it, or a worktree by hand (also the
   worktrees' folder and `.claude`) (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find …
@@ -430,6 +432,10 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   words is not expanded, and the command is refused when the guard reads it (git, gh, rm, find, cd …)
   or the word is its command word. Still out: other expansions (a glob such as `ma?n`, `${x/…}`), and
   braces in a PowerShell command (PowerShell has no brace expansion).
+  An ordinary PowerShell line is read as PowerShell runs it, in both scripts (#374): an assignment (`$x = `,
+  `$x += `, `$x=`, `$env:X = `, `[string]$x = `, `$a = $b = `) and a dot-source (`. git …`) get the verdict of the
+  command they run, in the PowerShell tool and inside `pwsh -c`. A quoted right side stays a string
+  (`$x = 'git push origin main'`), and a Bash line's own `$x = git push`, `x=…` and `. git push` keep theirs.
   Hooks see only the tools their matcher names (the guard: the shell tools, the edit tools — next
   bullet — and SendMessage, *Own sessions only* below) — **MCP tools are covered by deny rules only**
   (the settings examples deny the GitHub MCP write tools; rename them to the server name connected on the machine and add
@@ -531,17 +537,23 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   (`mcp__<db>__execute_sql`, `apply_migration`, branch reset / merge / delete); function deploys and
   secrets; production deploys (`vercel --prod*`, `vercel promote*`, `vercel rollback*`, `vercel env *`);
   code-host settings and workflows (`gh workflow run*`, `gh secret set*`, `gh release*`, `gh api *`).
-  A deny rule matches the start of a command only: `Bash(git push*)` misses `git -C <dir> push` and
-  `cd <dir> && git push` (seen, #202), so deny rules cannot say "no push at all"; the guard's own
+  A deny rule matches the start of a command only: `Bash(git push*)` misses `git -C <dir> push`, so deny
+  rules cannot say "no push at all" (`cd <dir> && git push`, seen missed in #202, is split and denied on
+  Claude Code 2.1.316: measured, #374); the guard's own
   rules, which read every form, block pushes to the protected branches only.
 - **A never-push project (`COORD_NO_PUSH`, #367):** deny rules alone cannot say it, the guard can.
   `"COORD_NO_PUSH": "1"` in the `env` of the worker safety file (beside `COORD_PROTECTED_ROOT`) blocks every
   `git push` the guard reads, on any branch and in every form above (`git -C`, `git -c`, after `cd`, inside
-  `bash -c`, brace expansion, `find -exec`), with a message naming the setting; only the value `1` turns it
+  `bash -c`, brace expansion, `find -exec`, a PowerShell assignment or dot-source), and `git subtree push`,
+  `git send-pack` and `git lfs push` (objects, no ref: with the setting off it passes; #374), with a message
+  naming the setting; only the value `1` turns it
   on, any other value or none leaves today's verdicts, and no other git command changes. The guard's
-  self-test clears it for its own run, so it still proves a work-branch push passes. `selftest hooks
-  --settings <file>` prints one line when a file sets it. **Still open:** what the guard cannot read — an
-  alias (`git -c alias.x=push x`, one in the git config), a script that pushes (`bash deploy.sh`) — and the
+  self-test clears it for its own run, so it still proves a work-branch push passes; the probes of
+  `selftest scripts` and `selftest hooks` clear it too, so a caller's own value changes neither result
+  (#374). `selftest hooks
+  --settings <file>` prints one line when a file sets it. **Still open:** what the guard cannot read, for
+  example `eval`, `cmd /c`, a piped script (`… | bash`), an alias (`git -c alias.x=push x`, one in the git
+  config), `$(which git) push`, a script that pushes (`bash deploy.sh`) — and the
   MCP write tools, which only deny rules cover; branch protection on the code host stays the real wall.
   No example settings file and no preset sets it: a project that wants it sets it itself.
 - **Protected paths:** writes into `.git` and `.claude` (including `~/.claude`) always ask, except in

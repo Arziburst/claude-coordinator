@@ -41,3 +41,64 @@ allow	allow	Bash	git config push.default current
 allow	allow	Bash	git stash push -m x
 allow	allow	PowerShell	git status
 allow	allow	PowerShell	echo git push
+# --- #374: a PowerShell assignment or dot-source, git subtree push, git send-pack and git lfs push ---
+# Access points: as the header of no-push.sh says; a block with the setting on names COORD_NO_PUSH also here.
+block	block	PowerShell	$x = git push origin main
+block	block	PowerShell	. git push origin main
+block	block	PowerShell	$x = git push --all origin
+block	allow	PowerShell	$x = git push origin 12-fix
+block	allow	PowerShell	$x += git push origin 12-fix
+block	allow	PowerShell	$x=git push origin 12-fix
+block	allow	PowerShell	$env:X = git push origin 12-fix
+block	allow	PowerShell	[string]$x = git push origin 12-fix
+block	allow	PowerShell	$a = $b = git push origin 12-fix
+block	allow	PowerShell	. git push origin 12-fix
+block	allow	PowerShell	$x = git push --force origin 12-fix
+block	allow	PowerShell	$x = git push origin 12-fix | Out-Null
+block	allow	PowerShell	$x = git -C /x push origin 12-fix
+block	allow	PowerShell	if ($x = git push origin 12-fix) { 1 }
+block	block	Bash	git subtree push --prefix=a origin main
+block	block	Bash	git send-pack origin HEAD:main
+block	block	Bash	git send-pack origin main
+block	block	Bash	git send-pack --all origin
+block	block	Bash	git -C x subtree push --prefix=a origin main
+block	allow	Bash	git subtree push --prefix=a origin 12-fix
+block	allow	Bash	git subtree push -P a origin 12-fix
+block	allow	Bash	git -C x subtree push --prefix=a origin 12-fix
+block	allow	Bash	git send-pack origin HEAD:12-fix
+block	allow	Bash	git send-pack origin 12-fix
+block	allow	Bash	git send-pack --force origin HEAD:12-fix
+block	allow	Bash	git -C x send-pack origin HEAD:12-fix
+block	allow	Bash	bash -c 'git send-pack origin 12-fix'
+block	allow	Bash	git lfs push origin main
+block	allow	Bash	git lfs push origin 12-fix
+block	allow	Bash	git lfs push --all origin
+block	allow	Bash	git -C x lfs push origin main
+block	block	PowerShell	git subtree push --prefix=a origin main
+block	block	PowerShell	git send-pack origin HEAD:main
+block	block	PowerShell	git send-pack origin main
+block	block	PowerShell	git send-pack --all origin
+block	block	PowerShell	git -C x subtree push --prefix=a origin main
+block	block	PowerShell	$x = git send-pack origin HEAD:main
+block	allow	PowerShell	git subtree push --prefix=a origin 12-fix
+block	allow	PowerShell	git send-pack origin HEAD:12-fix
+block	allow	PowerShell	git send-pack --force origin HEAD:12-fix
+block	allow	PowerShell	git lfs push origin main
+block	allow	PowerShell	$x = git subtree push --prefix=a origin 12-fix
+block	allow	PowerShell	. git send-pack origin HEAD:12-fix
+block	allow	PowerShell	$x = git lfs push origin main
+allow	allow	Bash	git subtree split --prefix=a
+allow	allow	Bash	git subtree pull --prefix=a origin 12-fix
+allow	allow	Bash	git lfs ls-files
+allow	allow	Bash	git lfs pull origin 12-fix
+allow	allow	Bash	echo git send-pack origin 12-fix
+allow	allow	Bash	x=git push origin 12-fix
+allow	allow	PowerShell	git subtree split --prefix=a
+allow	allow	PowerShell	git lfs ls-files
+allow	allow	PowerShell	$x = git status
+allow	allow	PowerShell	$x = 1
+allow	allow	PowerShell	$x = 'git push origin 12-fix'
+allow	allow	PowerShell	$x = "text git push origin 12-fix"
+allow	allow	PowerShell	$x = git subtree split --prefix=a
+allow	allow	PowerShell	. ./setup.ps1
+block	block	Bash	git send-pack origin

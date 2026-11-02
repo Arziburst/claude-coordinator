@@ -1295,3 +1295,182 @@ block	work	git push origin {main,\|}
 block	work	{find,.,-exec,git,push,origin,main,\;}
 allow	work	git push origin {12-fix,x\}}
 allow	work	echo {a,b\}}
+# --- #374: a PowerShell assignment or dot-source, git subtree push and git send-pack as the pushes they are ---
+# Access points: nothing new. The hook reads its usual JSON on stdin and answers by its exit code alone: 2 block,
+# 0 allow; no message's wording is fixed here. Both scripts give the same verdict on every line. A PowerShell
+# assignment or a leading dot takes the plain command's verdict, so a force push to a work branch stays allowed
+# as `git push --force origin 12-fix` is (A8 above); the Bash tool's own assignment forms keep their verdict.
+# COORD_NO_PUSH's lines for the same forms: no-push.txt.
+block	ps:work	$x = git push origin main
+block	ps:work	$x += git push origin main
+block	ps:work	$x=git push origin main
+block	ps:work	$env:X = git push origin main
+block	ps:work	$global:x = git push origin main
+block	ps:work	[string]$x = git push origin main
+block	ps:work	$a = $b = git push origin main
+block	ps:work	. git push origin main
+block	ps:work	$x = git -C x push origin main
+block	ps:work	$x = git push --force origin main
+block	ps:work	$x = git push -f origin master
+block	ps:work	. git push --force origin main
+block	ps:work	$x = git push --all origin
+block	ps:work	$x = git push --mirror origin
+block	ps:work	. git push --all origin
+block	ps:work	$x = git push origin HEAD:main
+block	ps:work	$x = git push origin +main
+block	ps:work	$x = git push origin :main
+block	ps:work	$x = git push origin main | Out-Null
+block	ps:work	$x = git push origin main 2>&1
+block	ps:work	if ($x = git push origin main) { 1 }
+block	ps:main	$x = git push
+block	ps:main	. git push
+block	ps:work	$x = git reset --hard
+block	ps:work	. git reset --hard
+block	ps:work	$x = rm -rf /
+block	ps:work	. rm -rf /
+block	ps:work	$x = git branch -D main
+block	ps:work	$x = git push origin dev	-	@PROJECT@	dev
+# ... already read as the push they are (regression lines)
+block	ps:work	& git push origin main
+block	ps:work	$x = & git push origin main
+block	ps:work	$x = (git push origin main)
+block	ps:work	$x = $(git push origin main)
+block	ps:work	$x = git status; git push origin main
+block	ps:work	& git reset --hard
+allow	ps:work	$x = git push origin 12-fix
+allow	ps:work	$x += git push origin 12-fix
+allow	ps:work	$x=git push origin 12-fix
+allow	ps:work	$env:X = git push origin 12-fix
+allow	ps:work	[string]$x = git push origin 12-fix
+allow	ps:work	. git push origin 12-fix
+allow	ps:work	$x = git push --force origin 12-fix
+allow	ps:work	. git push --force origin 12-fix
+allow	ps:work	$x = git push
+allow	ps:work	$x = git status
+allow	ps:work	. git status
+allow	ps:work	$x = 1
+allow	ps:work	$x = 'git push origin main'
+allow	ps:work	$x = "text git push origin main"
+allow	ps:work	$x = "git push origin main"
+allow	ps:work	$env:X = 'git push origin main'
+allow	ps:work	[string]$x = 'git push origin main'
+allow	ps:work	$x = echo git push origin main
+allow	ps:work	$x = git log --grep main
+allow	ps:work	$x = rm -rf ./build
+allow	ps:work	. ./setup.ps1
+allow	ps:work	. $PROFILE
+allow	ps:main	$x = git push origin 12-fix
+allow	ps:main	$x = git status
+# ... git subtree push and git send-pack, both tools
+block	work	git subtree push --prefix=a origin main
+block	work	git subtree push -P a origin main
+block	work	git subtree push --prefix a origin main
+block	work	git subtree push --prefix=a origin HEAD:main
+block	work	git subtree push --prefix=a origin refs/heads/main
+block	work	git subtree push --prefix=a origin +main
+block	work	git -C x subtree push --prefix=a origin main
+block	work	git -c a=b subtree push --prefix=a origin main
+block	work	git subtree push --prefix=a origin dev	-	@PROJECT@	dev
+block	work	git send-pack origin HEAD:main
+block	work	git send-pack origin main
+block	work	git send-pack origin HEAD:refs/heads/main
+block	work	git send-pack origin +HEAD:main
+block	work	git send-pack --force origin HEAD:main
+block	work	git send-pack --all origin
+block	work	git send-pack --mirror origin
+block	work	git send-pack origin HEAD:12-fix HEAD:main
+block	work	git -C x send-pack origin HEAD:main
+block	work	git -c a=b send-pack origin main
+block	work	git send-pack origin HEAD:dev	-	@PROJECT@	dev
+block	work	cd /x && git subtree push --prefix=a origin main
+block	work	bash -c 'git send-pack origin main'
+block	work	sudo git send-pack origin main
+block	ps:work	git subtree push --prefix=a origin main
+block	ps:work	git subtree push -P a origin main
+block	ps:work	git -C x subtree push --prefix=a origin main
+block	ps:work	git subtree push --prefix=a origin dev	-	@PROJECT@	dev
+block	ps:work	git send-pack origin HEAD:main
+block	ps:work	git send-pack origin main
+block	ps:work	git send-pack origin +HEAD:main
+block	ps:work	git send-pack --force origin HEAD:main
+block	ps:work	git send-pack --all origin
+block	ps:work	git send-pack --mirror origin
+block	ps:work	git -C x send-pack origin HEAD:main
+block	ps:work	& git send-pack origin main
+block	ps:work	$x = git subtree push --prefix=a origin main
+block	ps:work	. git subtree push --prefix=a origin main
+block	ps:work	$x = git send-pack origin HEAD:main
+block	ps:work	. git send-pack origin main
+allow	work	git subtree push --prefix=a origin 12-fix
+allow	work	git subtree push -P a origin 12-fix
+allow	work	git subtree push --prefix a origin 12-fix
+allow	work	git -C x subtree push --prefix=a origin 12-fix
+allow	work	git send-pack origin HEAD:12-fix
+allow	work	git send-pack origin 12-fix
+allow	work	git send-pack --force origin HEAD:12-fix
+allow	work	git send-pack origin +HEAD:12-fix
+allow	work	git subtree split --prefix=a
+allow	work	git subtree pull --prefix=a origin main
+allow	work	git subtree add --prefix=a origin main
+allow	work	git subtree merge --prefix=a main
+allow	work	git lfs push origin main
+allow	work	git lfs push --all origin
+allow	work	git lfs pull origin main
+allow	work	git lfs ls-files
+allow	work	git log --grep send-pack
+allow	work	echo git send-pack origin main
+allow	work	git commit -m 'git subtree push origin main'
+allow	main	git subtree push --prefix=a origin 12-fix
+allow	main	git send-pack origin HEAD:12-fix
+allow	ps:work	git subtree push --prefix=a origin 12-fix
+allow	ps:work	git send-pack origin HEAD:12-fix
+allow	ps:work	git send-pack origin 12-fix
+allow	ps:work	git send-pack --force origin HEAD:12-fix
+allow	ps:work	git subtree split --prefix=a
+allow	ps:work	git lfs push origin main
+allow	ps:work	git lfs ls-files
+allow	ps:work	$x = git subtree push --prefix=a origin 12-fix
+allow	ps:work	$x = git send-pack origin HEAD:12-fix
+allow	ps:work	$x = git subtree split --prefix=a
+allow	ps:work	$x = git lfs push origin main
+allow	ps:work	echo git send-pack origin main
+# ... the Bash tool's own assignment forms stay as they are
+allow	work	$x = git push origin main
+allow	work	x=git push origin main
+allow	work	x = git push origin main
+allow	work	. git push origin main
+allow	work	x=1
+allow	work	x='git push origin main'
+block	work	x=1 git push origin main
+block	work	x=$(git push origin main)
+# ... the worker's lines beside the tester's: git send-pack with no ref updates every branch both sides have, and
+# --stdin hides its refs; subtree's options before its command; a quoted right side stays a string, also glued
+# and in pieces; after a dot a quoted word is the command; other assignment targets; pwsh -c reads as PowerShell
+block	work	git send-pack origin
+block	work	git send-pack --stdin origin
+block	ps:work	git send-pack origin
+block	ps:work	git send-pack --stdin origin
+block	work	git subtree --prefix=a push origin main
+block	work	git subtree -P push push origin main
+allow	work	git subtree --prefix=a push origin 12-fix
+block	ps:work	git subtree --prefix=a push origin main
+allow	ps:work	$x='git push origin main'
+allow	ps:work	$x=''
+allow	ps:work	$x = 'rm' , '-rf' , '/'
+allow	ps:work	$x='rm' , '-rf' , '/'
+allow	ps:work	$a = $b = 'rm' , '-rf' , '/'
+block	ps:work	. 'git' push origin main
+block	ps:work	$x = . 'git' push origin main
+block	ps:work	[string] $x = git push origin main
+block	ps:work	[int[]]$x = git push origin main
+block	ps:work	$x.y = git push origin main
+block	ps:work	$x['a'] = git push origin main
+block	ps:work	${x} = git push origin main
+block	ps:work	$x =git push origin main
+block	ps:work	$x= git push origin main
+block	ps:work	$x = git push origin main --foo='bar'
+block	ps:work	$x = bash -c 'git push origin main'
+block	work	pwsh -c '$x = git push origin main'
+block	ps:work	pwsh -c '$x = git push origin main'
+allow	work	bash -c '$x = git push origin main'
+allow	ps:work	bash -c '$x = git push origin main'
