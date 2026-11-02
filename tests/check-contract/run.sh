@@ -62,6 +62,8 @@
 # folder (a project's core copy: coordinator/core/scripts/ reads coordinator/PROJECT.md); the row by its name as the
 # retro reads Settings rows (before a "(", without ** and backticks), the value cell without its backticks; `<fill>` adds
 # nothing; no file or no row: the defaults alone. A project adds, never removes. Touching none: no new line.
+# A touches item that is a folder holding a glob of the list (`tests/`, `scripts/`, `scripts/hooks/`, `.github/`, the
+# item with its slash the start of the glob) counts as touching it, the ERROR naming that glob; `docs/` does not.
 set -u
 [ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -318,6 +320,14 @@ i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*' '.github/workflows/x.yml|.git
   imk "i-ok$i.md" "$it" "$B1$W1"; iname="$it with both"; inone "i-ok$i.md"
 done
 imk i-list.md '' 'touches:\n  - "scripts/hooks/x.sh"\n  - sort.sh\nwall: w\n'; iname="touches as a quoted list"; ierr i-list.md bounds 'scripts/hooks/*'
+# a folder holding an important glob counts as touching it; a folder holding none does not
+i=0; for v in 'tests/|tests/*/run.*' 'scripts/|scripts/hooks/*' 'scripts/hooks/|scripts/hooks/*' '.github/|.github/workflows/*'; do
+  i=$((i + 1)); it="${v%%|*}"; ig="${v#*|}"
+  imk "i-dirb$i.md" "$it" "$W1"; iname="the folder $it without bounds"; ierr "i-dirb$i.md" bounds "$ig"
+  imk "i-dirw$i.md" "$it" "$B1"; iname="the folder $it without wall"; ierr "i-dirw$i.md" wall "$ig"
+  imk "i-dirk$i.md" "$it" "$B1$W1"; iname="the folder $it with both"; inone "i-dirk$i.md"
+done
+imk i-dirn.md 'docs/, scripts/hooksy/' ''; iname="folders holding no important glob"; inone i-dirn.md
 # a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
 i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n  - scripts/hooks/* 1.5\n' 'bounds:\n' 'bounds: 90\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do
   i=$((i + 1)); imk "i-bad$i.md" scripts/hooks/x.sh "$b$W1"; iname="a malformed bound: $b"; ierr "i-bad$i.md" bounds 'scripts/hooks/*'

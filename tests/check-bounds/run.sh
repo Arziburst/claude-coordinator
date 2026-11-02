@@ -15,8 +15,8 @@
 #     bound over its maximum, in the contract's order.
 #   No bound in the header: the one line `check-bounds: no bounds`, exit 0.
 #   Exit 0 OK, 1 OVER, 2 a usage error: an argument missing, a second argument without `...`, a contract that
-#   cannot be read, a range git cannot read (never `check-bounds: OK`).
-# A file in two globs counts in both; a file no bound matches is not limited; removed lines do not count.
+#   cannot be read, a range git cannot read, a malformed bound line, also beside good ones (never `check-bounds: OK`).
+# A file in two globs counts in both; a file no bound matches is not limited; removed lines do not count; a renamed file counts by its new path, all its lines added (`git diff --numstat --no-renames`).
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -27,19 +27,21 @@ command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
 g() { git -C "$tmp/repo" -c user.email=t@t -c user.name=t "$@"; }
 lines() { i=1; while [ "$i" -le "$2" ]; do echo "line $i"; i=$((i + 1)); done > "$tmp/repo/$1"; }
 git init -q -b main "$tmp/repo"; g config core.autocrlf false
-mkdir -p "$tmp/repo/src/sub" "$tmp/repo/lib" "$tmp/repo/docs" "$tmp/repo/bin" "$tmp/c"
-lines lib/old.txt 4; g add -A; g commit -q -m base
+mkdir -p "$tmp/repo/src/sub" "$tmp/repo/lib" "$tmp/repo/docs" "$tmp/repo/bin" "$tmp/repo/old" "$tmp/repo/new" "$tmp/c"
+lines lib/old.txt 4; lines old/moved.txt 10; g add -A; g commit -q -m base
 g checkout -q -b work
 lines src/three.txt 3; lines src/sub/two.txt 2      # src/*: 5 added, 2 of them in a subfolder
 sed -n 1p "$tmp/repo/lib/old.txt" > "$tmp/lib-old"; printf 'new line\n' >> "$tmp/lib-old"; cp "$tmp/lib-old" "$tmp/repo/lib/old.txt"   # lib/*: 1 added, 3 removed
 lines docs/free.txt 50                              # no bound of these cases names it
 printf 'a\000b\001\n' > "$tmp/repo/bin/blob.bin"; lines bin/note.txt 1   # bin/*: a binary file and 1 added
+g mv old/moved.txt new/moved.txt; echo more >> "$tmp/repo/new/moved.txt"   # a rename, one line more
 g add -A; g commit -q -m work
 R='main...work'
 # the fixture itself, so a red case never means a wrong repository
 got="$(g diff --numstat --no-renames "$R" | tr '\t' ' ' | sort -k3)"
-want="$(printf '%s\n' '- - bin/blob.bin' '1 0 bin/note.txt' '50 0 docs/free.txt' '1 3 lib/old.txt' '2 0 src/sub/two.txt' '3 0 src/three.txt')"
+want="$(printf '%s\n' '- - bin/blob.bin' '1 0 bin/note.txt' '50 0 docs/free.txt' '1 3 lib/old.txt' '11 0 new/moved.txt' '0 10 old/moved.txt' '2 0 src/sub/two.txt' '3 0 src/three.txt')"
 [ "$got" = "$want" ] || { echo "FAIL: the fixture repository's numstat is not the one the cases count:"; printf '%s\n' "$got" | sed 's/^/    /'; exit 1; }
+g diff --numstat "$R" | grep -qF '{old => new}/moved.txt' || { echo "FAIL: git does not see the fixture's rename as a rename"; exit 1; }
 # mk <name> <bound line>...: a contract with these bounds
 mk() { local f="$tmp/c/$1.md" b; shift
   { printf -- '---\nid: 1\ntitle: t\nbounds:\n'; for b in "$@"; do printf '  - %s\n' "$b"; done; printf 'wall: only a test\n---\n'; } > "$f"; }
@@ -77,11 +79,11 @@ mk twoover 'src/* 4' 'lib/* 0'; t "two globs, both over" twoover 1 'src/* 5/4' '
 mk both 'src/three.txt 2' 'src/* 5'; t "a file in two globs counts in both" both 1 'src/three.txt 3/2' 'src/* 5/5' 'check-bounds: OVER src/three.txt 3/2'
 printf -- '---\nid: 1\ntitle: t\n---\n' > "$tmp/c/nob.md"; t "no bounds" nob 0 'check-bounds: no bounds'
 printf -- '---\nid: 1\ntitle: t\n---\nbounds:\n  - src/* 0\n' > "$tmp/c/body.md"; t "bounds in the body are no bounds" body 0 'check-bounds: no bounds'
-u "no argument"
-u "no range" ../c/within.md
-u "a range without three dots" ../c/within.md main
-u "a contract that cannot be read" ../c/absent.md "$R"
-u "a range git cannot read" ../c/within.md main...no-such-branch
+mk renamed 'new/* 10' 'old/* 0'; t "a renamed file counts by its new path" renamed 1 'new/* 11/10' 'old/* 0/0' 'check-bounds: OVER new/* 11/10'
+u "no argument"; u "no range" ../c/within.md; u "a range without three dots" ../c/within.md main
+u "a contract that cannot be read" ../c/absent.md "$R"; u "a range git cannot read" ../c/within.md main...no-such-branch
+mk bad1 'src/* lots'; u "a malformed bound" ../c/bad1.md "$R"
+mk bad2 'src/* 5' 'lib/*'; u "a malformed bound beside a good one" ../c/bad2.md "$R"
 
 echo "check-bounds ($kind): $n cases, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

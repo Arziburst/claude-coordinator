@@ -8,7 +8,9 @@
 # branch starts with (`<id>-...`: coordinator/briefs/<id>-contract.md) and runs check-bounds on it and
 # <base>...<head>. An OVER: the line of its own `OVER BOUNDS <pr> <glob> <added>/<max>`, no merge, in the summary as
 # `left: #<pr> (OVER BOUNDS)`, the queue goes on, exit 3. No contract, or a branch with no id: one line
-# `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok <pr>:<the owner's words> (.ps1: -OverBoundsOk): that PR
+# `BOUNDS #<pr>: no contract ...` (nothing at that path), no stop. check-bounds exiting 2 (a folder at that path, a
+# malformed bound, a head git cannot read) stops that PR, fail-closed: the line `BOUNDS #<pr>: check-bounds ...`, no
+# merge, in the summary as `left: #<pr> (BOUNDS)`, the queue goes on, exit 3. --over-bounds-ok <pr>:<the owner's words> (.ps1: -OverBoundsOk): that PR
 # passes and one line holds the words; another PR's stays stopped; no words, or no number before the colon: a usage
 # error, exit 1.
 set -u
@@ -295,6 +297,17 @@ fresh "a branch with no id: one line, no stop"
 qpr 18 "$H18" nameless
 run land 18 --poll 0
 code 0; oneline "no contract"; has "BOUNDS #18: no contract"; has "MERGED #18"
+
+fresh "check-bounds cannot read it: each PR stopped with its own line, fail-closed, the next still lands, exit 3"
+qbranch 20-dir 1; H20=$QH; qbranch 21-bad 1; H21=$QH; H19=f191919191919191919191919191919191919191   # a head git does not have
+mkdir -p coordinator/briefs/20-contract.md
+sed 's/^  - src.*/  - src\/* lots/' coordinator/briefs/16-contract.md > coordinator/briefs/21-contract.md
+cp coordinator/briefs/16-contract.md coordinator/briefs/19-contract.md
+qpr 19 "$H19" 19-gone; qpr 20 "$H20" 20-dir; qpr 21 "$H21" 21-bad; qpr 16 "$H16" 16-fine
+run land 19 20 21 16 --poll 0
+code 3; has "BOUNDS #19: check-bounds"; has "BOUNDS #20: check-bounds"; has "BOUNDS #21: check-bounds"
+notcalled "pr merge 19"; notcalled "pr merge 20"; notcalled "pr merge 21"; hasnt "no contract"
+has "MERGED #16"; has "merge-queue: 1 merged, left: #19 (BOUNDS), #20 (BOUNDS), #21 (BOUNDS)"
 
 fresh "--over-bounds-ok: that PR passes, the owner's words printed"
 qpr 15 "$H15" 15-over

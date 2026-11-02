@@ -13,8 +13,8 @@
 # least twice budget.cost, is refused, exit 1, before the [dry-run] lines: one line starting `refused: ` holding
 # `round <n>`, `task <id>`, `spent <sum, two decimals> against estimate <budget.cost as written>` and
 # `API list price`. A cell without a number (`in <parent>`) adds nothing; another task's rows (5010 is not 501) neither.
-# With --owner-ok the start goes on and one line holds the words. No log, or an assistant: no gate, exactly one line
-# starting `round gate: `.
+# With --owner-ok the start goes on and one line holds the words. No log, a lead's sub-contract (an id `<task>.<n>`,
+# roles/lead.md step 2) or an assistant: no gate, exactly one line starting `round gate: `.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -1135,6 +1135,7 @@ rg="$tmp/rgrepo"; git init -q -b main "$rg"; git -C "$rg" config core.autocrlf f
   rgl worker 5010 90; rgl worker 5010 90; rgl worker 5010 90                # a longer id: not task 501
   rgl tester 502 'in a1b2c3d4'; rgl worker 502 2.00; rgl verifier 502 0.50; rgl worker 502 2.50
   rgl tester 503 2.00; rgl worker 503 7.00; rgl verifier 503 3.00           # one worker row, exactly twice 6
+  rgl worker 504.1 1.00; rgl worker 504.1 1.00                              # a sub-contract's own two rounds
 } > "$rg/coordinator/RUNS.tsv"
 g -C "$rg" add -A; g -C "$rg" commit -q -m init
 rgr="$tmp/rgnolog"; git init -q -b main "$rgr"; g -C "$rgr" commit -q --allow-empty -m init
@@ -1157,6 +1158,9 @@ check 0 "gate: --owner-ok passes and prints the words" -- start --name "#502 wor
 expect_in "the owner said go on"; expect_in "[dry-run]"
 check 0 "gate: no log, no gate" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: no log"
+rgc 504.1 14 > "$tmp/rg504.md"
+check 0 "gate: a lead's sub-contract has no gate" -- start --name "#504.1 worker: G" "${RG[@]}" --branch 504-1-g --brief-file "$tmp/brief.md" --contract "$tmp/rg504.md" --dry-run
+expect_in "[dry-run]"; rgone "gate: a lead's sub-contract"
 cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"; mkas rg
 check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
 expect_in "[dry-run]"; rgone "gate: an assistant"
