@@ -2064,3 +2064,76 @@ block	work	gh project field-create 1 --name n --data-type TEXT	-	@PROJECT@	-	@PR
 block	work	gh project field-delete --id x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh project item-edit --id x --project-id y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh project delete 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... the coordinator's decisions on the tester's report (#345): -w is refused where it means web, and gh run list's -w is --workflow
+block	work	gh repo view o/x -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue list -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr list -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... GH_PAGER / PAGER on a gh or git command, set for a later one too
+block	work	GH_PAGER=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	PAGER=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_PAGER=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	PAGER=x git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	env GH_PAGER=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export GH_PAGER=x; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	export PAGER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_PAGER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:GH_PAGER='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:PAGER = 'x'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:PAGER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	echo PAGER=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep -rn PAGER= scripts	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	ls env:PAGER	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... sed -i, dd of=, touch, mkdir, New-Item outside its folder (the unknown one too); inside it each allowed
+block	work	sed -i s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sed -i.bak s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sed --in-place s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sed -i s/a/b/ @PROJECT@/coordinator/assistants/a1/a.txt a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	sed -i s/a/b/ $X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	dd if=a.txt of=b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	dd of=../b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	dd of=$X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	touch a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	touch ../a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	touch $X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mkdir x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mkdir -p src/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	mkdir $X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	touch ../a2/x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	mkdir ../y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	New-Item a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	New-Item -Path x -ItemType Directory	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	New-Item $X	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	ni a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	mkdir x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	sed -i s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	sed -i s/a/b/ @PROJECT@/coordinator/assistants/a1/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	dd if=a.txt of=@PROJECT@/coordinator/assistants/a1/b.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	touch @PROJECT@/coordinator/assistants/a1/a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	mkdir @PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	mkdir -p @PROJECT@/coordinator/assistants/a1/sub/y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	sed -i s/a/b/ x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	dd if=x.txt of=y.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	touch x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work/coordinator/assistants/a1	mkdir y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	sed s/a/b/ a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	sed -n 1,5p a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	dd if=a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	grep touch a.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	New-Item @PROJECT_W@ordinatorssistants1\x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	New-Item -Path @PROJECT_W@ordinatorssistants1\x -ItemType Directory	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	mkdir @PROJECT_W@ordinatorssistants1\x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work/coordinator/assistants/a1	New-Item x.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# ... git fetch and git ls-remote from its own folder, with the rest of git there
+block	work	git fetch @PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git fetch coordinator/assistants/a1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git ls-remote @PROJECT@/coordinator/assistants/a1/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	git ls-remote ./coordinator/assistants/a1/sub	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work/coordinator/assistants/a1	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git fetch @PROJECT_W@ordinatorssistants1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	git ls-remote @PROJECT_W@ordinatorssistants1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	git ls-remote origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
