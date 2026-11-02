@@ -679,14 +679,20 @@ function startproc(toks, nt,    j, b, k, lt, prog, args) {
 # --- brace expansion as bash does it (#345): the scanner keeps the unquoted braces of a word as \002 and
 # \003 (a Bash command only: PowerShell has none) ---
 function isrange(x) { return x ~ /^(-?[0-9]+\.\.-?[0-9]+|[A-Za-z]\.\.[A-Za-z])(\.\.-?[0-9]+)?$/ }
+# inorm(x): a whole number as digits, its sign kept, no leading zeros; ibig(x): past 2^53 - 1, where adding to a
+# number no longer moves it, so such a number is compared as text and never counted
+function inorm(x,    g) { g = ""; if (substr(x, 1, 1) == "-") { g = "-"; x = substr(x, 2) }; sub(/^0+/, "", x); return g x }
+function ibig(x) { x = inorm(x); sub(/^-/, "", x); return length(x) > 16 || (length(x) == 16 && (x "") > "9007199254740991") }
 # bword(s, i): the { at i, at the start of a word, opens an expansion: a comma at its top level or a range,
 # closed before the word ends (else it is a group: { git push; })
 function bword(s, i,    n, j, c, dep, q, cm) {
   n = length(s); dep = 0; q = ""; cm = 0
   for (j = i; j <= n; j++) {
     c = substr(s, j, 1)
+    if (q == "A") { if (c == "\047") q = ""; else if (c == "\\") j++; continue }   # q A: ANSI-C quoting (a dollar before a single quote), a backslash escapes there
     if (q != "") { if (c == q) q = ""; else if (c == "\\" && q == "\"") j++; continue }
     if (c == "\\") { j++; continue }
+    if (c == "$" && substr(s, j + 1, 1) == "\047") { q = "A"; j++; continue }
     if (c == "\047" || c == "\"") { q = c; continue }
     if (c ~ /[ \t\r\n;|&()<>]/) return 0
     if (c == "{") dep++
@@ -699,7 +705,8 @@ function bword(s, i,    n, j, c, dep, q, cm) {
 function infind(toks, nt,    j) { if (nt == 0) return 0; j = cmdidx(toks, nt); return j <= nt && base(toks[j]) == "find" }
 # bexp(w): the words bash makes of w into BX[1..n], as bash does it: the first brace with a comma at its
 # top level or a range, each alternative with the text before and after it, again; returns n, or -1 for
-# more than BMAX words (or too much work)
+# more than BMAX words (or too much work). A range with a bound past 2^53 - 1 is never counted: its two bounds
+# the same number make one word, that number; any other is too big, the same -1
 function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, st, k, v, wd, lt) {
   n = 0; nw = 1; W[1] = w; it = 0
   if (ASC == "") for (k = 32; k < 127; k++) ASC = ASC sprintf("%c", k)
@@ -729,8 +736,14 @@ function bexp(w,    W, nw, n, it, x, a, b, c, dep, cm, body, AL, na, R, lo, hi, 
       }
     } else {
       split(body, R, /\.\./); lt = (R[1] ~ /^[A-Za-z]$/)
+      if (!lt && (ibig(R[1]) || ibig(R[2]))) {
+        if (inorm(R[1]) "" != inorm(R[2]) "") return -1
+        W[++nw] = substr(x, 1, a - 1) ((length(R[2]) > length(R[1])) ? R[2] : R[1]) substr(x, b + 1)
+        continue
+      }
       if (lt) { lo = index(ASC, R[1]); hi = index(ASC, R[2]) } else { lo = R[1] + 0; hi = R[2] + 0 }
       st = (R[3] == "") ? 1 : R[3] + 0; if (st < 0) st = -st; if (st == 0) st = 1
+      if (ibig(R[3])) st = 4e16   # above any span of two bounds that are not big: the first word only
       if (((hi > lo) ? hi - lo : lo - hi) / st >= BMAX) return -1
       wd = (R[1] ~ /^-?0[0-9]/ || R[2] ~ /^-?0[0-9]/) ? ((length(R[1]) > length(R[2])) ? length(R[1]) : length(R[2])) : 0
       for (v = lo; (lo <= hi) ? (v <= hi) : (v >= hi); v += (lo <= hi) ? st : -st)
@@ -746,24 +759,47 @@ function judged(b) { return b ~ /^(git|gh|claude|cd|pushd|chdir|set-location|sl|
 # runs ($x = git ..., $x += ..., $x=git ..., [string]$x = ..., $a = $b = ..., . git ...), 1 for none. A glued
 # right side is cut out of its word. qw: the first word opened by a quote, or by one right after a = : a
 # quoted right side is a string, never a command, and the line stays as written; after a dot it is the command.
+# return runs the command after it (#345), and a target may be more than one word: pstarget.
 function psstrip(toks, nt, qw,    j, t, o, r) {
   j = 1
   while (j <= nt) {
     t = toks[j]; o = (j < nt) ? toks[j + 1] : ""
     if (t == ".") j++
+    else if (tolower(t) == "return") { if (j + 1 == qw) return 1; j++ }
     else if (t ~ /^(\[[^]]+\]+)+$/ && o ~ /^\$/) j++
-    else if (t ~ /^(\[[^]]+\]+)*\$[^=]+$/) {
-      if (o ~ /^([-+*\/%]|\?\?)?=$/) { if (j + 2 == qw) return 1; j += 2 }
-      else if (o ~ /^([-+*\/%]|\?\?)?=/) { if (j + 1 == qw) return 1; toks[j + 1] = substr(o, index(o, "=") + 1); j++ }
-      else break
-    }
-    else if (t ~ /^(\[[^]]+\]+)*\$[^=]+=/) {
-      if (j == qw) return 1
-      r = substr(t, index(t, "=") + 1); if (r == "") j++; else toks[j] = r
+    else if (t ~ /^(\[|\$|]|,|\.[A-Za-z_]|([-+*\/%]|\?\?)?=|[-+*%]|\/([0-9$]|$))/) {
+      r = pstarget(toks, nt, j, qw); if (r < 0) return 1; if (r == 0) break; j = r
     }
     else break
   }
   return (j > nt) ? 1 : j
+}
+# pstarget(toks, nt, j, qw): the words from j are the target of an assignment ($x, $y; $x , $y; $x[$i + 1]; $x[ 0 ];
+# the rest of $x[(1)] or $x.y().z after their parentheses, which end a command here: ] , .z , + 1] ; the = of
+# ${a b}): the index of the first word of the right side, a glued one cut out of its word; 0 when they are no
+# target, -1 when the right side is quoted. Inside [ ] any word belongs; outside, only a list goes on to a next word.
+function pstarget(toks, nt, j, qw,    t, m, dep, i, c, o) {
+  dep = (toks[j] ~ /^([-+*%]|\/)/ && toks[j] !~ /^[-+*\/%]=/) ? 1 : 0   # the rest of an index: + 1] , -1]
+  for (; j <= nt; j++) {
+    t = toks[j]; m = length(t)
+    for (i = 1; i <= m; i++) {
+      c = substr(t, i, 1)
+      if (c == "[") dep++
+      else if (c == "]") { if (dep > 0) dep-- }
+      else if (c == "=" && dep == 0) {
+        if (j == qw) return -1
+        if (i == m) return (j + 1 == qw) ? -1 : j + 1
+        toks[j] = substr(t, i + 1); return j
+      }
+    }
+    if (dep > 0) continue
+    o = (j < nt) ? toks[j + 1] : ""
+    if (o ~ /^([-+*\/%]|\?\?)?=/) continue
+    if ((t ~ /,$/ || o ~ /^,/) && o ~ /^(\[|\$|,)/) continue
+    if (t ~ /^(\[[^]]+\]+)+$/ && o ~ /^\$/) continue
+    return 0
+  }
+  return 0
 }
 function seg(toks, nt, depth, qm, pp, bx, qw,    j, t, line, k, m, inner, lt, line2, ex, ne, r, big, fx, nf) {
   if (nt == 0) return
@@ -809,15 +845,19 @@ function seg(toks, nt, depth, qm, pp, bx, qw,    j, t, line, k, m, inner, lt, li
   inner = toks[k + 1]; for (m = k + 2; m <= nt; m++) inner = inner " " toks[m]
   scan(inner, depth + 1, qm, base(toks[j]) !~ /^(pwsh|powershell)$/)
 }
-function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, hbx, body, bd, bm, bk, pp, e, qw) {
+function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, hdd, hdsh, hbx, body, bd, bm, bk, pp, e, qw, ib) {
   if (depth > 8) return
   n = length(s); q = ""; tok = ""; st = 0; nt = 0; hd = ""; bd = 0; bm = ""; pp = 0
   for (i = 1; i <= n; i++) {
-    k = (q == "\047") ? runto(s, i, "\047", "") : (q == "\"") ? runto(s, i, "", "[\"\\\\$`]") : runto(s, i, "\047", "[ \t\r\n;|&()<>{}\"\\\\$`#]")
+    # in a brace word (ib) a backslash stays an escape for bexp, so a quoted one (a single-quoted a\ before a comma) goes in doubled
+    ib = bx && (bd > 0 || index(tok, "\002"))
+    k = (q == "\047") ? runto(s, i, "\047", ib ? "\\\\" : "") : (q == "A") ? runto(s, i, "\047", "\\\\") : (q == "\"") ? runto(s, i, "", "[\"\\\\$`]") : runto(s, i, "\047", "[ \t\r\n;|&()<>{}\"\\\\$`#]")
     if (k > 0) { tok = tok substr(s, i, k); i += k - 1; continue }
     c = substr(s, i, 1); d = substr(s, i + 1, 1); p = (i > 1) ? substr(s, i - 1, 1) : ""
-    if (q == "\047") { if (c == "\047") q = ""; else tok = tok c; continue }
+    if (q == "\047") { if (c == "\047") q = ""; else tok = tok c (c == "\\" ? c : ""); continue }
+    if (q == "A") { if (c == "\047") q = ""; else { tok = tok c d; i++ }; continue }   # ANSI-C quoting in a brace word: \x stays an escape for bexp
     if (q == "\"") {
+      if (ib && c == "\\" && d == "\\") { tok = tok c d; i++; continue }
       if (c == "\\" && (d == "\"" || d == "\\" || d == "$" || d == "`")) { tok = tok d; i++; continue }
       if (c == "\"") { q = ""; continue }
       if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm, bx); tok = tok "$SUBST"; i = k; continue }
@@ -825,10 +865,11 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
       tok = tok c; continue
     }
     if (bx && c == "\\" && d == ";" && infind(toks, nt)) { tok = tok c d; st = 1; i++; continue }   # \; of find is a word
-    # inside a brace of a word an escaped character is text: no brace, no word end ({main,x\}}, {main,\;})
-    if (bx && c == "\\" && bd > 0 && d != "") { tok = tok c d; st = 1; i++; continue }
+    # inside a brace of a word, or later in a word that holds one, an escaped character is text: no brace, no word
+    # end ({main,x\}}, {main,\;}, {main,x}\}, {main,x}\ y), and a backslash before a line end is no character at all
+    if (bx && c == "\\" && d != "" && (bd > 0 || (ib && d != "{"))) { if (d != "\n") tok = tok c d; st = 1; i++; continue }
     if (qm && c == "\\" && (d == "\"" || d == "\047" || d == "\\")) { tok = tok d; st = 1; i++; continue }
-    if (qm && c == "$" && d == "\047") continue   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
+    if (qm && c == "$" && d == "\047") { if (ib) { q = "A"; st = 1; i++ }; continue }   # ANSI-C quoting, a dollar before a single quote: its text as in single quotes
     if (c == "\047" || c == "\"") { if (qm) { if (!bx && !qw && (tok == "" || tok ~ /=$/)) qw = nt + 1; q = c; st = 1 }; continue }
     if (c == "$" && d == "(") { k = closep(s, i + 2); scan(substr(s, i + 2, k - i - 2), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
     if (c == "`") { k = closet(s, i + 1); scan(substr(s, i + 1, k - i - 1), depth + 1, qm, bx); tok = tok "$SUBST"; st = 1; i = k; continue }
@@ -851,7 +892,7 @@ function scan(s, depth, qm, bx,    n, i, c, d, p, q, tok, st, toks, nt, k, hd, h
       bd++; bk = (p == "$" || p == "\\") ? "0" : "1"; bm = bm bk; tok = tok (bk == "1" ? "\002" : c); continue
     }
     if (bx && c == "}" && bd > 0) {
-      bd--; bk = substr(bm, length(bm)); bm = substr(bm, 1, length(bm) - 1); tok = tok (bk == "1" && p != "\\" ? "\003" : c); continue
+      bd--; bk = substr(bm, length(bm)); bm = substr(bm, 1, length(bm) - 1); tok = tok (bk == "1" ? "\003" : c); continue
     }
     if (c == "{" && tok != "") { bd++; tok = tok c; continue }
     if (c == "}" && bd > 0) { bd--; tok = tok c; continue }
@@ -980,7 +1021,7 @@ sendpack_seg() {
 # git lfs push sends objects and names no ref: only a never-push project stops it
 lfs_seg() {
   local t
-  for t in "$@"; do case "$t" in -*) ;; push) no_push; return ;; *) return ;; esac; done
+  for t in "$@"; do case "$t" in -*) ;; *) [ "$t" = push ] && no_push; return ;; esac; done
 }
 # --- deleting a protected branch (any delete flag, the name anywhere in the arguments) ---
 branch_seg() {

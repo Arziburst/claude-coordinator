@@ -102,3 +102,16 @@ allow	allow	PowerShell	$x = "text git push origin 12-fix"
 allow	allow	PowerShell	$x = git subtree split --prefix=a
 allow	allow	PowerShell	. ./setup.ps1
 block	block	Bash	git send-pack origin
+# --- #345: an assignment whose target is more than one word, and return, run the command on their right ---
+block	allow	PowerShell	$x, $y = git push origin 12-fix
+block	allow	PowerShell	[int]$x, [int]$y = git push origin 12-fix
+block	allow	PowerShell	$a[0], $a[1] = git push origin 12-fix
+block	allow	PowerShell	$x[$i + 1] = git push origin 12-fix
+block	allow	PowerShell	$x[ 0 ] = git push origin 12-fix
+block	allow	PowerShell	$x[(1)] = git push origin 12-fix
+block	allow	PowerShell	$x.y().z = git push origin 12-fix
+block	allow	PowerShell	${a b} = git push origin 12-fix
+block	allow	PowerShell	return git push origin 12-fix
+block	allow	Bash	pwsh -c '$x, $y = git push origin 12-fix'
+block	allow	Bash	git push origin {x,y\\}
+block	allow	Bash	git push origin {'a\',x}

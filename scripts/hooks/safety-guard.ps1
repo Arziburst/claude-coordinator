@@ -415,6 +415,7 @@ $SHELLS = '^(bash|sh|zsh|dash|ksh|pwsh|powershell)$'
 function BaseName([string]$t) { $b = ($t.ToLowerInvariant().TrimStart('=') -split '[/\\]')[-1]; if ($b.EndsWith('.exe')) { $b = $b.Substring(0, $b.Length - 4) }; $b }
 # characters that end a run of ordinary text: in single quotes, in double quotes, unquoted, in ClosePar
 $RUN_SQ = [char[]]@([char]39)
+$RUN_SQB = [char[]]@([char]39, [char]92)
 $RUN_DQ = [char[]]@([char]34, [char]92, [char]36, [char]96)
 $RUN_UQ = [char[]]@(32, 9, 13, 10, 59, 124, 38, 40, 41, 60, 62, 39, 34, 92, 36, 96, 35, 123, 125)
 $RUN_CP = [char[]]@(39, 34, 40, 41, 60, 10)
@@ -494,14 +495,20 @@ function StartProc($toks) {
 # [char]3 (a Bash command only: PowerShell has none) ---
 $B1 = [string][char]2; $B2 = [string][char]3; $BMAX = 64
 function IsRange([string]$x) { $x -match '^(-?[0-9]+\.\.-?[0-9]+|[A-Za-z]\.\.[A-Za-z])(\.\.-?[0-9]+)?$' }
+# INorm: a whole number as digits, its sign kept, no leading zeros; IBig: past 2^53 - 1, where adding to a number
+# no longer moves it, so such a number is compared as text and never counted
+function INorm([string]$x) { $g = ''; if ($x.StartsWith('-')) { $g = '-'; $x = $x.Substring(1) }; $g + $x.TrimStart('0') }
+function IBig([string]$x) { $d = (INorm $x).TrimStart('-'); ($d.Length -gt 16) -or ($d.Length -eq 16 -and [string]::CompareOrdinal($d, '9007199254740991') -gt 0) }
 # BWord: the { at i, at the start of a word, opens an expansion: a comma at its top level or a range,
 # closed before the word ends (else it is a group: { git push; })
 function BWord([string]$s, [int]$i) {
   $dep = 0; $q = ''; $cm = $false
   for ($j = $i; $j -lt $s.Length; $j++) {
     $c = [string]$s[$j]
+    if ($q -eq 'A') { if ($c -eq "'") { $q = '' } elseif ($c -eq '\') { $j++ }; continue }   # $'...': a backslash escapes there
     if ($q) { if ($c -eq $q) { $q = '' } elseif ($c -eq '\' -and $q -eq '"') { $j++ }; continue }
     if ($c -eq '\') { $j++; continue }
+    if ($c -eq '$' -and $j + 1 -lt $s.Length -and $s[$j + 1] -eq [char]39) { $q = 'A'; $j++; continue }
     if ($c -eq "'" -or $c -eq '"') { $q = $c; continue }
     if (" `t`r`n;|&()<>".Contains($c)) { return $false }
     if ($c -eq '{') { $dep++ }
@@ -514,7 +521,8 @@ function BWord([string]$s, [int]$i) {
 function InFind($toks) { if ($toks.Count -eq 0) { return $false }; $j = CmdIdx $toks; ($j -lt $toks.Count) -and ((BaseName $toks[$j]) -eq 'find') }
 # BExp: the words bash makes of w into $script:bxw, as bash does it: the first brace with a comma at its
 # top level or a range, each alternative with the text before and after it, again; returns their number,
-# or -1 for more than BMAX words (or too much work)
+# or -1 for more than BMAX words (or too much work). A range with a bound past 2^53 - 1 is never counted: its
+# two bounds the same number make one word, that number; any other is too big, the same -1
 function BExp([string]$w) {
   $script:bxw = New-Object System.Collections.Generic.List[string]
   $todo = New-Object System.Collections.Generic.List[string]; $todo.Add($w); $it = 0
@@ -545,8 +553,15 @@ function BExp([string]$w) {
       $al.Add($cur)
     } else {
       $R = $body -split '\.\.'; $lt = $R[0] -match '^[A-Za-z]$'
+      if (-not $lt -and ((IBig $R[0]) -or (IBig $R[1]))) {
+        if ((INorm $R[0]) -cne (INorm $R[1])) { return -1 }
+        $todo.Add($x.Substring(0, $a) + $(if ($R[1].Length -gt $R[0].Length) { $R[1] } else { $R[0] }) + $x.Substring($b + 1))
+        continue
+      }
       if ($lt) { $lo = [double][int][char]$R[0]; $hi = [double][int][char]$R[1] } else { $lo = [double]$R[0]; $hi = [double]$R[1] }
-      $st = 1; if ($R.Count -gt 2) { $st = [Math]::Abs([double]$R[2]) }; if ($st -eq 0) { $st = 1 }
+      $st = 1
+      if ($R.Count -gt 2) { if (IBig $R[2]) { $st = 4e16 } else { $st = [Math]::Abs([double]$R[2]) } }   # 4e16: above any span of two bounds that are not big, the first word only
+      if ($st -eq 0) { $st = 1 }
       if ([Math]::Abs($hi - $lo) / $st -ge $BMAX) { return -1 }
       $wd = 0; if ($R[0] -match '^-?0[0-9]' -or $R[1] -match '^-?0[0-9]') { $wd = [Math]::Max($R[0].Length, $R[1].Length) }
       for ($v = $lo; ($lo -le $hi -and $v -le $hi) -or ($lo -gt $hi -and $v -ge $hi); $v += $(if ($lo -le $hi) { $st } else { -$st })) {
@@ -567,24 +582,48 @@ function Judged([string]$b) { $b -match '^(git|gh|claude|cd|pushd|chdir|set-loca
 # dot-source runs ($x = git ..., $x += ..., $x=git ..., [string]$x = ..., $a = $b = ..., . git ...), 0 for none.
 # A glued right side is cut out of its word. $qw: the first word opened by a quote, or by one right after a = :
 # a quoted right side is a string, never a command, and the line stays as written; after a dot it is the command.
+# return runs the command after it (#345), and a target may be more than one word: PsTarget.
 function PsStrip([string[]]$w, [int]$qw) {
   $j = 0; $n = $w.Count
   while ($j -lt $n) {
     $t = $w[$j]; $o = if ($j + 1 -lt $n) { $w[$j + 1] } else { '' }
     if ($t -eq '.') { $j++ }
+    elseif ($t -eq 'return') { if ($j + 1 -eq $qw) { return 0 }; $j++ }
     elseif ($t -match '^(\[[^\]]+\]+)+$' -and $o.StartsWith('$')) { $j++ }
-    elseif ($t -match '^(\[[^\]]+\]+)*\$[^=]+$') {
-      if ($o -match '^([-+*/%]|\?\?)?=$') { if ($j + 2 -eq $qw) { return 0 }; $j += 2 }
-      elseif ($o -match '^([-+*/%]|\?\?)?=') { if ($j + 1 -eq $qw) { return 0 }; $w[$j + 1] = $o.Substring($o.IndexOf('=') + 1); $j++ }
-      else { break }
-    }
-    elseif ($t -match '^(\[[^\]]+\]+)*\$[^=]+=') {
-      if ($j -eq $qw) { return 0 }
-      $r = $t.Substring($t.IndexOf('=') + 1); if ($r -eq '') { $j++ } else { $w[$j] = $r }
+    elseif ($t -match '^(\[|\$|]|,|\.[A-Za-z_]|([-+*/%]|\?\?)?=|[-+*%]|/([0-9$]|$))') {
+      $r = PsTarget $w $j $qw; if ($r -eq -1) { return 0 }; if ($r -eq -2) { break }; $j = $r
     }
     else { break }
   }
   if ($j -ge $n) { 0 } else { $j }
+}
+# PsTarget $w $j $qw: the words from j are the target of an assignment ($x, $y; $x , $y; $x[$i + 1]; $x[ 0 ]; the
+# rest of $x[(1)] or $x.y().z after their parentheses, which end a command here: ] , .z , + 1] ; the = of
+# ${a b}): the index of the first word of the right side, a glued one cut out of its word; -2 when they are no
+# target, -1 when the right side is quoted. Inside [ ] any word belongs; outside, only a list goes on to a next word.
+function PsTarget([string[]]$w, [int]$j, [int]$qw) {
+  $n = $w.Count
+  $dep = if ($w[$j] -match '^([-+*%]|/)' -and $w[$j] -notmatch '^[-+*/%]=') { 1 } else { 0 }   # the rest of an index: + 1] , -1]
+  for (; $j -lt $n; $j++) {
+    $t = $w[$j]; $m = $t.Length
+    for ($i = 0; $i -lt $m; $i++) {
+      $c = $t[$i]
+      if ($c -eq [char]'[') { $dep++ }
+      elseif ($c -eq [char]']') { if ($dep -gt 0) { $dep-- } }
+      elseif ($c -eq [char]'=' -and $dep -eq 0) {
+        if ($j -eq $qw) { return -1 }
+        if ($i -eq $m - 1) { if ($j + 1 -eq $qw) { return -1 }; return ($j + 1) }
+        $w[$j] = $t.Substring($i + 1); return $j
+      }
+    }
+    if ($dep -gt 0) { continue }
+    $o = if ($j + 1 -lt $n) { $w[$j + 1] } else { '' }
+    if ($o -match '^([-+*/%]|\?\?)?=') { continue }
+    if (($t.EndsWith(',') -or $o.StartsWith(',')) -and $o -match '^(\[|\$|,)') { continue }
+    if ($t -match '^(\[[^\]]+\]+)+$' -and $o.StartsWith('$')) { continue }
+    return -2
+  }
+  -2
 }
 function Seg($list, [int]$depth, [bool]$qm, [bool]$pp, [bool]$bx, [int]$qw = -1) {
   # each word with [char]2 [char]3 as the words bash makes of it (an empty one dropped); a word of more
@@ -643,12 +682,16 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
   $n = $s.Length; $q = ''; $tok = ''; $st = $false; $hd = ''; $hdd = $false; $hdsh = $false; $bd = 0; $bm = ''; $hbx = $false; $pp = $false; $qw = -1
   $toks = New-Object System.Collections.Generic.List[string]
   for ($i = 0; $i -lt $n; $i++) {
-    $set = if ($q -eq "'") { $RUN_SQ } elseif ($q) { $RUN_DQ } else { $RUN_UQ }
+    # in a brace word ($ib) a backslash stays an escape for BExp, so a quoted one goes in doubled: {'a\',main}
+    $ib = $bx -and ($bd -gt 0 -or $tok.Contains($B1))
+    $set = if ($q -eq "'") { if ($ib) { $RUN_SQB } else { $RUN_SQ } } elseif ($q -ceq 'A') { $RUN_SQB } elseif ($q) { $RUN_DQ } else { $RUN_UQ }
     $k = RunTo $s $i $set
     if ($k -gt 0) { $tok += $s.Substring($i, $k); $i += $k - 1; continue }
     $c = [string]$s[$i]; $d = if ($i + 1 -lt $n) { [string]$s[$i + 1] } else { '' }; $p = if ($i -gt 0) { [string]$s[$i - 1] } else { '' }
-    if ($q -eq "'") { if ($c -eq "'") { $q = '' } else { $tok += $c }; continue }
+    if ($q -eq "'") { if ($c -eq "'") { $q = '' } else { $tok += $c; if ($c -eq '\') { $tok += $c } }; continue }
+    if ($q -ceq 'A') { if ($c -eq "'") { $q = '' } else { $tok += $c + $d; $i++ }; continue }   # $'...' in a brace word: \x stays an escape for BExp
     if ($q -eq '"') {
+      if ($ib -and $c -eq '\' -and $d -eq '\') { $tok += $c + $d; $i++; continue }
       if ($c -eq '\' -and ($d -eq '"' -or $d -eq '\' -or $d -eq '$' -or $d -eq '`')) { $tok += $d; $i++; continue }
       if ($c -eq '"') { $q = ''; continue }
       if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm $bx; $tok += '$SUBST'; $i = $k; continue }
@@ -656,10 +699,11 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
       $tok += $c; continue
     }
     if ($bx -and $c -eq '\' -and $d -eq ';' -and (InFind $toks)) { $tok += $c + $d; $st = $true; $i++; continue }   # \; of find is a word
-    # inside a brace of a word an escaped character is text: no brace, no word end ({main,x\}}, {main,\;})
-    if ($bx -and $c -eq '\' -and $bd -gt 0 -and $d) { $tok += $c + $d; $st = $true; $i++; continue }
+    # inside a brace of a word, or later in a word that holds one, an escaped character is text: no brace, no word
+    # end ({main,x\}}, {main,\;}, {main,x}\}, {main,x}\ y), and a backslash before a line end is no character at all
+    if ($bx -and $c -eq '\' -and $d -and ($bd -gt 0 -or ($ib -and $d -ne '{'))) { if ($d -ne "`n") { $tok += $c + $d }; $st = $true; $i++; continue }
     if ($qm -and $c -eq '\' -and ($d -eq '"' -or $d -eq "'" -or $d -eq '\')) { $tok += $d; $st = $true; $i++; continue }
-    if ($qm -and $c -eq '$' -and $d -eq "'") { continue }   # $'...' (ANSI-C quoting): its text, as '...'
+    if ($qm -and $c -eq '$' -and $d -eq "'") { if ($ib) { $q = 'A'; $st = $true; $i++ }; continue }   # $'...' (ANSI-C quoting): its text, as '...'
     if ($c -eq "'" -or $c -eq '"') { if ($qm) { if (-not $bx -and $qw -lt 0 -and ($tok -eq '' -or $tok.EndsWith('='))) { $qw = $toks.Count }; $q = $c; $st = $true }; continue }
     if ($c -eq '$' -and $d -eq '(') { $k = ClosePar $s ($i + 2); Scan $s.Substring($i + 2, $k - $i - 2) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
     if ($c -eq '`') { $k = CloseTick $s ($i + 1); Scan $s.Substring($i + 1, $k - $i - 1) ($depth + 1) $qm $bx; $tok += '$SUBST'; $st = $true; $i = $k; continue }
@@ -683,7 +727,7 @@ function Scan([string]$s, [int]$depth, [bool]$qm, [bool]$bx) {
     }
     if ($bx -and $c -eq '}' -and $bd -gt 0) {
       $bd--; $bk = '0'; if ($bm) { $bk = $bm.Substring($bm.Length - 1); $bm = $bm.Substring(0, $bm.Length - 1) }
-      $tok += $(if ($bk -eq '1' -and $p -ne '\') { $B2 } else { $c }); continue
+      $tok += $(if ($bk -eq '1') { $B2 } else { $c }); continue
     }
     if ($c -eq '{' -and $tok) { $bd++; $tok += $c; continue }
     if ($c -eq '}' -and $bd -gt 0) { $bd--; $tok += $c; continue }
@@ -785,17 +829,17 @@ function SubtreeSeg([string]$dd, [string[]]$a) {
     if ($t.StartsWith('-')) { continue }
     if ($what -eq '') { $what = $t } else { $r.Add($t) }
   }
-  if ($what -eq 'push') { PushSeg $dd ($r.ToArray()) }
+  if ($what -ceq 'push') { PushSeg $dd ($r.ToArray()) }   # git is case-sensitive: subtree PUSH is refused, as in the .sh
 }
 # git send-pack: judged as a push, after PushSeg; with no ref it updates every branch both sides have, and
 # --stdin takes its refs where the guard does not read them
 function SendPackSeg([string[]]$a) {
-  foreach ($t in $a) { if ($t -eq '--stdin') { Block 'git send-pack --stdin (the refs it pushes cannot be read here)' } }
+  foreach ($t in $a) { if ($t -ceq '--stdin') { Block 'git send-pack --stdin (the refs it pushes cannot be read here)' } }
   if ($script:pushBare) { Block 'git send-pack without a ref (updates every branch both sides have, incl. protected ones)' }
 }
 # git lfs push sends objects and names no ref: only a never-push project stops it
 function LfsSeg([string[]]$a) {
-  foreach ($t in $a) { if ($t.StartsWith('-')) { continue }; if ($t -eq 'push') { NoPush }; return }
+  foreach ($t in $a) { if ($t.StartsWith('-')) { continue }; if ($t -ceq 'push') { NoPush }; return }
 }
 # --- deleting a protected branch (any delete flag, the name anywhere in the arguments) ---
 function BranchSeg([string[]]$a) {

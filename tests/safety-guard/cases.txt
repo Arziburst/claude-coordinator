@@ -5,7 +5,9 @@
 # worktree of work, detached; work-wt/14-x: a repository of its own under work's declared worktree root;
 # work/.claude/worktrees/13-clone: a repository of its own in work's worktrees' folder); a ps: prefix
 # makes it a PowerShell tool call (Bash otherwise); edit:, write:, multiedit: and notebook: make it a call
-# of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path.
+# of the Edit, Write, MultiEdit or NotebookEdit tool, with the command column as its file path. A timed: before
+# all that (timed:work, timed:ps:work) fails the case when the hook gives no answer within SG_CASE_LIMIT seconds (default 10);
+# those cases run one at a time after all the others, and the first with no answer ends them (run.sh: bounded).
 # expect fold: block where letter case in paths is ignored (Windows, macOS), allow elsewhere (Linux).
 # expect fold8: the same for a non-ASCII letter (Ü / ü); own8: the other way round - allow on Windows and macOS,
 # block on Linux. The project Üw (on work) is reached as @PROJECT_UML@: @PROJECT@ with Ü written ü.
@@ -1474,3 +1476,188 @@ block	work	pwsh -c '$x = git push origin main'
 block	ps:work	pwsh -c '$x = git push origin main'
 allow	work	bash -c '$x = git push origin main'
 allow	ps:work	bash -c '$x = git push origin main'
+# #345, the parser's leftovers (the reviews of PR #349 and PR #376). PowerShell: an assignment whose target is more
+# than one word, and return, run the command on their right side (checked in pwsh and powershell); in bash those lines run no git
+block	ps:work	$x, $y = git push origin main
+allow	ps:work	$x, $y = git push origin 12-fix
+block	work	pwsh -c '$x, $y = git push origin main'
+block	ps:work	pwsh -c '$x, $y = git push origin main'
+allow	work	pwsh -c '$x, $y = git push origin 12-fix'
+allow	work	$x, $y = git push origin main
+block	ps:work	$x , $y = git push origin main
+allow	ps:work	$x , $y = git push origin 12-fix
+block	work	pwsh -c '$x , $y = git push origin main'
+block	ps:work	pwsh -c '$x , $y = git push origin main'
+allow	work	pwsh -c '$x , $y = git push origin 12-fix'
+allow	work	$x , $y = git push origin main
+block	ps:work	[int]$x, [int]$y = git push origin main
+allow	ps:work	[int]$x, [int]$y = git push origin 12-fix
+block	work	pwsh -c '[int]$x, [int]$y = git push origin main'
+block	ps:work	pwsh -c '[int]$x, [int]$y = git push origin main'
+allow	work	pwsh -c '[int]$x, [int]$y = git push origin 12-fix'
+allow	work	[int]$x, [int]$y = git push origin main
+block	ps:work	$a[0], $a[1] = git push origin main
+allow	ps:work	$a[0], $a[1] = git push origin 12-fix
+block	work	pwsh -c '$a[0], $a[1] = git push origin main'
+block	ps:work	pwsh -c '$a[0], $a[1] = git push origin main'
+allow	work	pwsh -c '$a[0], $a[1] = git push origin 12-fix'
+allow	work	$a[0], $a[1] = git push origin main
+block	ps:work	$x[$i + 1] = git push origin main
+allow	ps:work	$x[$i + 1] = git push origin 12-fix
+block	work	pwsh -c '$x[$i + 1] = git push origin main'
+block	ps:work	pwsh -c '$x[$i + 1] = git push origin main'
+allow	work	pwsh -c '$x[$i + 1] = git push origin 12-fix'
+allow	work	$x[$i + 1] = git push origin main
+block	ps:work	$x[ 0 ] = git push origin main
+allow	ps:work	$x[ 0 ] = git push origin 12-fix
+block	work	pwsh -c '$x[ 0 ] = git push origin main'
+block	ps:work	pwsh -c '$x[ 0 ] = git push origin main'
+allow	work	pwsh -c '$x[ 0 ] = git push origin 12-fix'
+allow	work	$x[ 0 ] = git push origin main
+block	ps:work	$x[(1)] = git push origin main
+allow	ps:work	$x[(1)] = git push origin 12-fix
+block	work	pwsh -c '$x[(1)] = git push origin main'
+block	ps:work	pwsh -c '$x[(1)] = git push origin main'
+allow	work	pwsh -c '$x[(1)] = git push origin 12-fix'
+allow	work	$x[(1)] = git push origin main
+block	ps:work	$x.y().z = git push origin main
+allow	ps:work	$x.y().z = git push origin 12-fix
+block	work	pwsh -c '$x.y().z = git push origin main'
+block	ps:work	pwsh -c '$x.y().z = git push origin main'
+allow	work	pwsh -c '$x.y().z = git push origin 12-fix'
+allow	work	$x.y().z = git push origin main
+block	ps:work	${a b} = git push origin main
+allow	ps:work	${a b} = git push origin 12-fix
+block	work	pwsh -c '${a b} = git push origin main'
+block	ps:work	pwsh -c '${a b} = git push origin main'
+allow	work	pwsh -c '${a b} = git push origin 12-fix'
+allow	work	${a b} = git push origin main
+block	ps:work	return git push origin main
+allow	ps:work	return git push origin 12-fix
+block	work	pwsh -c 'return git push origin main'
+block	ps:work	pwsh -c 'return git push origin main'
+allow	work	pwsh -c 'return git push origin 12-fix'
+allow	work	return git push origin main
+block	ps:work	$x,$y=git push origin main
+block	ps:work	$x[ 0 ]=git push origin main
+block	ps:work	$x, $y += git push origin main
+block	ps:work	$x, $y = rm -rf /
+block	ps:work	$x[ 0 ] = git reset --hard
+block	ps:work	return rm -rf /
+block	ps:work	echo 1; return git push origin main
+allow	work	bash -c '$x, $y = git push origin main'
+allow	work	bash -c 'return git push origin main'
+# ... and every plain assignment, comparison and return stays allowed: a quoted right side is a string
+allow	ps:work	$x = 1
+allow	work	pwsh -c '$x = 1'
+allow	ps:work	$a = @{ b = 1 }
+allow	work	pwsh -c '$a = @{ b = 1 }'
+allow	ps:work	$x -eq "git push"
+allow	work	pwsh -c '$x -eq "git push"'
+allow	ps:work	$x -eq "git push origin main"
+allow	work	pwsh -c '$x -eq "git push origin main"'
+allow	ps:work	$x[0] = "git push origin main"
+allow	work	pwsh -c '$x[0] = "git push origin main"'
+allow	ps:work	$x, $y = 1, 2
+allow	work	pwsh -c '$x, $y = 1, 2'
+allow	ps:work	$x, $y = "git push origin main", 2
+allow	work	pwsh -c '$x, $y = "git push origin main", 2'
+allow	ps:work	$a[0], $a[1] = 1, 2
+allow	work	pwsh -c '$a[0], $a[1] = 1, 2'
+allow	ps:work	[int]$x, [int]$y = 1, 2
+allow	work	pwsh -c '[int]$x, [int]$y = 1, 2'
+allow	ps:work	$x[ 0 ] = "git push origin main"
+allow	work	pwsh -c '$x[ 0 ] = "git push origin main"'
+allow	ps:work	$x[$i + 1] = "git push origin main"
+allow	work	pwsh -c '$x[$i + 1] = "git push origin main"'
+allow	ps:work	$x[(1)] = "git push origin main"
+allow	work	pwsh -c '$x[(1)] = "git push origin main"'
+allow	ps:work	$x.y().z = "git push origin main"
+allow	work	pwsh -c '$x.y().z = "git push origin main"'
+allow	ps:work	${a b} = "git push origin main"
+allow	work	pwsh -c '${a b} = "git push origin main"'
+allow	ps:work	return "git push origin main"
+allow	work	pwsh -c 'return "git push origin main"'
+allow	ps:work	return 1
+allow	work	pwsh -c 'return 1'
+allow	ps:work	return
+allow	work	pwsh -c 'return'
+allow	ps:work	$x = 1
+allow	ps:work	$a = @{ b = 1 }
+allow	ps:work	$x -eq 'git push'
+allow	ps:work	$x -eq 'git push origin main'
+allow	ps:work	$x[0] = 'git push origin main'
+allow	ps:work	$x, $y = 'git push origin main', 2
+allow	ps:work	$x[ 0 ] = 'git push origin main'
+allow	ps:work	$x[$i + 1] = 'git push origin main'
+allow	ps:work	$x[(1)] = 'git push origin main'
+allow	ps:work	$x.y().z = 'git push origin main'
+allow	ps:work	${a b} = 'git push origin main'
+allow	ps:work	return 'git push origin main'
+# a backslash in a brace word, as bash reads it (printf <%s>): {'a\',main} is a\ and main, {main,x\\} is main and x\, {main,x\} is one word
+block	work	git push origin {main,x\\}
+block	ps:work	bash -c "git push origin {main,x\\\\}"
+block	work	git push origin {main,\\}
+block	ps:work	bash -c "git push origin {main,\\\\}"
+block	work	git push origin {'a\',main}
+block	work	git push origin {main,'x\'}
+block	work	git push origin {"a\\",main}
+block	work	git push origin {main,"x\\"}
+block	work	git push origin {"a\\\\",main}
+block	work	git push origin {main,"x\\\\"}
+block	work	git push origin {main,$'x\''}
+block	work	sh -c "git push origin {'a\',main}"
+block	work	sh -c "git push origin {main,'x\'}"
+block	work	sh -c "git push origin {main,x\\\\}"
+block	work	sh -c "git push origin {main,\\\\}"
+block	work	sh -c "git push origin {main,\$'x\''}"
+block	work	sh -c 'git push origin {"a\\",main}'
+block	work	sh -c 'git push origin {main,"x\\"}'
+block	work	sh -c 'git push origin {"a\\\\",main}'
+block	work	sh -c 'git push origin {main,"x\\\\"}'
+block	work	sh -c 'git push origin {main,x\\}'
+block	work	sh -c 'git push origin {main,\\}'
+allow	work	git push origin {main,x}\}
+allow	work	git push origin {main,x}\ y
+allow	work	git push origin {main,x\}
+allow	work	git push origin {main,\}
+allow	work	git push origin {'a\',x}
+allow	work	git push origin {x,'y\'}
+allow	work	git push origin {"a\\",x}
+allow	work	git push origin {x,"y\\"}
+allow	work	git push origin {x,y\\}
+allow	work	git push origin {x,\\}
+allow	work	git push origin {x,$'y\''}
+allow	work	echo {'a\',main}
+allow	work	echo {main,x\\}
+# a range with huge bounds (above 2^53 the guard cannot count): an answer within the time limit (timed:). bash makes one word of
+# it, a number (or, past its integers, keeps it as written), so no protected name comes of it: the line's other words decide
+allow	timed:work	git push origin {9007199254740993..9007199254740993}
+block	timed:work	git push origin main {9007199254740993..9007199254740993}
+allow	timed:work	echo {9007199254740993..9007199254740993}
+allow	timed:work	git push origin {99999999999999999999..99999999999999999999}
+block	timed:work	git push origin main {99999999999999999999..99999999999999999999}
+allow	timed:work	echo {99999999999999999999..99999999999999999999}
+allow	timed:work	git push origin {-9007199254740993..-9007199254740993}
+block	timed:work	git push origin main {-9007199254740993..-9007199254740993}
+allow	timed:work	echo {-9007199254740993..-9007199254740993}
+allow	timed:work	git push origin {-99999999999999999999..-99999999999999999999}
+block	timed:work	git push origin main {-99999999999999999999..-99999999999999999999}
+allow	timed:work	echo {-99999999999999999999..-99999999999999999999}
+block	timed:work	bash -c "git push origin main {9007199254740993..9007199254740993}"
+block	timed:work	sh -c "git push origin main {99999999999999999999..99999999999999999999}"
+block	timed:ps:work	bash -c 'git push origin main {9007199254740993..9007199254740993}'
+allow	timed:ps:work	echo {9007199254740993..9007199254740993}
+allow	timed:ps:work	echo {99999999999999999999..99999999999999999999}
+block	timed:work	git push origin main {9007199254740992..9007199254740992}
+allow	timed:work	echo {9007199254740992..9007199254740992}
+allow	timed:work	echo {9007199254740993..9007199254740993..2}
+allow	timed:work	echo {1..3..9007199254740993}
+allow	timed:work	echo {1..9007199254740993}
+allow	timed:work	echo {9007199254740991..9007199254740991}
+allow	timed:work	git push origin {9007199254740991..9007199254740991}
+# git is case-sensitive: git subtree PUSH and git send-pack --STDIN are refused by git, so nothing is pushed; the same verdict in both scripts
+allow	work	git subtree --prefix=a PUSH origin main
+allow	ps:work	git subtree --prefix=a PUSH origin main
+allow	work	git send-pack --STDIN origin 12-fix
+allow	ps:work	git send-pack --STDIN origin 12-fix

@@ -126,13 +126,35 @@ CMD=("$@")
 jobs="${SG_JOBS:-${NUMBER_OF_PROCESSORS:-}}"
 [ -n "$jobs" ] || jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)"
 case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
-shard() {   # shard <k> <shards>
-  local ln=0 i=0
+# bounded <file>: the hook with that file as its stdin, killed after SG_CASE_LIMIT seconds (default 10, far above
+# a hook's second or two and far below a hang), exit 124 then; for a case marked timed: in the branch column
+# (#345). Those cases run one at a time after all the others, and the first with no answer ends them: the rest
+# fail unrun (a guard whose range loop never ends also collects words, so its memory grows; never at once).
+# Only the started process and the group set -m made for it are killed (Git Bash too: measured, a child there
+# has the group and dies with it, so the guard's hung awk does not go on growing), never a process found by a
+# tree walk or a looked-up PID. That happens only on a broken guard; output goes to /dev/null, so no pipe is held.
+bounded() {
+  local p w=0 lim=$((${SG_CASE_LIMIT:-10} * 5)) r
+  {
+    set -m; "${CMD[@]}" < "$1" >/dev/null 2>&1 & p=$!; set +m
+    while kill -0 "$p" 2>/dev/null && [ "$w" -lt "$lim" ]; do sleep 0.2; w=$((w + 1)); done
+    if kill -0 "$p" 2>/dev/null; then
+      kill -9 -- "-$p" 2>/dev/null; kill -9 "$p" 2>/dev/null; wait "$p"; r=124
+    else wait "$p"; r=$?; fi
+  } 2>/dev/null
+  return "$r"
+}
+shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
+  local ln=0 i=0 hung=""
   n=0 fail=0
 while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
-  i=$((i + 1)); [ $(((i - 1) % $2)) = "$1" ] || continue
+  i=$((i + 1))
+  case "$branch" in
+    timed:*) [ "${3:-}" = timed ] || continue ;;
+    *) [ -z "${3:-}" ] && [ $(((i - 1) % $2)) = "$1" ] || continue ;;
+  esac
   [ "$expect" = fold ] && expect=$fold
   [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8; [ "$expect" = own ] && expect=$own
   cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"; adir="${adir%"$cr"}"   # a checkout with CRLF line ends
@@ -142,6 +164,9 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
   # the command column as its file path; the project (CLAUDE_PROJECT_DIR) is the cwd's first folder
+  # a timed: before all that: the answer within SG_CASE_LIMIT seconds is part of the case (bounded, above)
+  # (the check above sent it to the one run of the timed cases)
+  timed=""; case "$branch" in timed:*) timed=1; branch="${branch#timed:}" ;; esac
   tool=Bash
   case "$branch" in
     ps:*) tool=PowerShell ;; edit:*) tool=Edit ;; write:*) tool=Write ;; multiedit:*) tool=MultiEdit ;; notebook:*) tool=NotebookEdit ;; send:*) tool=SendMessage ;;
@@ -172,13 +197,20 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
       printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
   adir="$(printf '%s' "$adir" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')"
-  if [ -n "$adir" ]; then
+  if [ -n "$hung" ]; then
+    (exit 125)
+  elif [ -n "$timed" ]; then
+    printf '%s' "$json" > "$tmp/timed.$1.json"
+    CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" bounded "$tmp/timed.$1.json"
+  elif [ -n "$adir" ]; then
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
   else
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
   fi
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
+  [ "$rc" = 124 ] && { got="no answer within ${SG_CASE_LIMIT:-10}s"; hung=1; }
+  [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
   [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
 done < "$here/cases.txt"
@@ -187,12 +219,12 @@ done < "$here/cases.txt"
 k=0
 while [ $k -lt "$jobs" ]; do shard $k "$jobs" > "$tmp/shard.$k.out" 2>&1 & k=$((k + 1)); done
 wait
-ran=0; total=""; k=0
-while [ $k -lt "$jobs" ]; do
+shard timed 1 timed > "$tmp/shard.timed.out" 2>&1
+ran=0; total=""
+for k in $(seq 0 $((jobs - 1))) timed; do
   if [ -f "$tmp/shard.$k.done" ]; then
     read -r sn sf total < "$tmp/shard.$k.done"; ran=$((ran + sn)); [ "$sf" = 0 ] || fail=1
   else echo "FAIL (cases) shard $k of $jobs did not finish"; fail=1; fi
-  k=$((k + 1))
 done
 cat "$tmp"/shard.*.out | sort -n -k1,1 | sed 's/^[0-9]* //'
 [ -n "$total" ] && [ "$ran" = "$total" ] || { echo "FAIL (cases) $ran of ${total:-?} cases of cases.txt ran"; fail=1; }
