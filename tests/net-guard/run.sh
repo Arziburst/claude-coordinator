@@ -65,5 +65,6 @@ done <<'CASES'
 0 @@ api.example.com:write @@ irm -Method Post -Body x -Uri https://api.example.com/
 2 @@ api.example.com @@ Invoke-WebRequest -InFile f -Uri https://api.example.com/
 2 @@ api.example.com @@ echo "curl is a tool"
+2 @@ api.example.com @@ curl -XPOST https://api.example.com/x
 CASES
 echo "net-guard ($mode): $pass passed, $fail failed"; [ "$fail" = 0 ]

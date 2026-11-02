@@ -8,7 +8,9 @@
 # address it cannot read (variable, substitution, none), -K / --config: blocked. --help / -h allowed.
 # Unset or empty list: every client call blocked. A command with no client word passes at once.
 # NOT A WALL: it reads text, no shell parse. A client's name inside a quoted string may block (fails
-# closed); .NET, scripts and other tools are out of reach (no wall: #375). Same verdicts as net-guard.ps1.
+# closed), also one that only names a client (grep curl file, git log --grep curl): refused, the way out
+# is to read that file another way; a short-flag cluster (curl -sd x) is not read as data; .NET, scripts
+# and other tools are out of reach (no wall: #375). Same verdicts as net-guard.ps1.
 j=$(cat)
 echo "$j" | grep -qiE "(^|[^A-Za-z0-9_.-])(curl|wget|invoke-webrequest|iwr|invoke-restmethod|irm)(\.exe)?([^A-Za-z0-9_-]|$)" || exit 0
 echo "$j" | grep -qE '(^|[[:space:]])(-h|--help)([[:space:]"]|\\|$)' && exit 0
@@ -17,7 +19,7 @@ echo "$j" | grep -qE '(^|[[:space:]])(-K|--config)([[:space:]=]|$)' && no "a con
 w=0
 echo "$j" | grep -qE '(^|[[:space:]])(-d|-F|-T|--data[a-z-]*|--form|--upload-file|--json|--post-[a-z]*)([[:space:]=]|\\|$)' && w=1
 echo "$j" | grep -qiE '(^|[[:space:]])(-Body|-InFile)([[:space:]]|\\|$)' && w=1
-m=$(echo "$j" | grep -oiE '(^|[[:space:]])(-X|-Method|--request)[ =]+[A-Za-z]+' | head -n1 | sed -E 's/.*[ =]//' | tr 'A-Z' 'a-z')
+m=$(echo "$j" | grep -oiE '(^|[[:space:]])(-X|-Method|--request)[ =]*[A-Za-z]+' | head -n1 | tr 'A-Z' 'a-z' | sed -E 's/^.*(-x|-method|--request)[ =]*//')
 [ -n "$m" ] && [ "$m" != get ] && w=1
 urls=$(echo "$j" | grep -oiE "https?://[^[:space:]\"'\\\\<>|;&)]*")
 [ -n "$urls" ] || no "no address it can read"

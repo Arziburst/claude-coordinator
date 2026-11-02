@@ -270,7 +270,10 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   other than Get, `-Body`, `-InFile`, wget `--post-*`) needs `:write`; an address it cannot read (a
   variable, a substitution, none, `-K` / `--config`) is blocked; `--help` / `-h` passes. **It is no wall**
   (#375): it reads the command text, no shell parse; a client's name inside a quoted string may block
-  (fails closed), and .NET, scripts and other tools are out of its reach. It stops the slip and the typical
+  (fails closed): so does a command that only names a client (`grep curl file`, `git log --grep curl`,
+  `Select-String wget`), whose way out is that the owner lists nothing for it and the assistant reads the
+  file another way; a short-flag cluster (`curl -sd x`) is not read as data; and .NET, scripts and other
+  tools are out of its reach. It stops the slip and the typical
   request. The coordinator asks the owner for the hosts when an assistant needs the network.
 - **Its spend** goes to the run log as rows of role and kind `assistant`, the assistant's name in the task
   column, apart from the tasks' and the coordinator's own (CORE §7: each row's cost is its session's
