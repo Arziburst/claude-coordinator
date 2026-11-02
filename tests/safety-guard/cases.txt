@@ -998,12 +998,14 @@ allow	work	gh api repos/o/x/issues/281/comments --paginate	-	@PROJECT@	-	@PROJEC
 allow	work	gh api -X GET repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh api -X GET search/issues -f q=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh api --method GET repos/o/x/issues -F per_page=100	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
+block	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh issue view 281	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh api repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
+block	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # without the folder the shell verdicts are unchanged
 allow	work	git commit -m x	-	@PROJECT@	-	-
 allow	work	git push origin 12-fix	-	@PROJECT@	-	-
@@ -1033,8 +1035,9 @@ block	work	gh api /graphql --method GET -f query='mutation { x }'	-	@PROJECT@	-	
 block	work	gh api graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh api https://api.github.com/graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
+block	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	git reflog show HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
@@ -1134,14 +1137,16 @@ allow	work	gh alias list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh config get git_protocol	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
+block	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh --hostname h.example pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh search repos x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh config list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	ps:work	gh version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
+block	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 block	ps:work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 # --- 281.6: gh's own command line read exactly in the assistant mode - before the group and before the
@@ -1661,3 +1666,37 @@ allow	work	git subtree --prefix=a PUSH origin main
 allow	ps:work	git subtree --prefix=a PUSH origin main
 allow	work	git send-pack --STDIN origin 12-fix
 allow	ps:work	git send-pack --STDIN origin 12-fix
+# --- #345: the assistant's gh - no browser routes (GH_BROWSER / BROWSER, gh browse, --web / -w), no graphql; boards through gh project
+block	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	GH_BROWSER=echo git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue view 281 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo view o/x -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api /graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api https://api.github.com/graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api GraphQL -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh api graphql --paginate -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list && gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	BROWSER=echo git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh issue view 281 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh api /graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	$env:GH_BROWSER='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh browse --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh run list --workflow ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list --search graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh browse	-	@PROJECT@	-	-
+allow	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	-
+allow	work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	-
