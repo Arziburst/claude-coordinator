@@ -15,7 +15,7 @@
 #     bound over its maximum, in the contract's order.
 #   No bound in the header: the one line `check-bounds: no bounds`, exit 0.
 #   Exit 0 OK, 1 OVER, 2 a usage error: an argument missing, a second argument without `...`, a contract that
-#   cannot be read, a range git cannot read, a malformed bound line, also beside good ones (never `check-bounds: OK`).
+#   cannot be read, a range git cannot read, a malformed bound line, also beside good ones (never `check-bounds: OK`); malformed too, also on an empty diff, a line holding its `<glob> <max>`: a max too large for a long, an unbalanced `[`.
 # A file in two globs counts in both; a file no bound matches is not limited; removed lines do not count; a renamed file counts by its new path, all its lines added (`git diff --numstat --no-renames`).
 set -u
 [ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
@@ -84,6 +84,7 @@ u "no argument"; u "no range" ../c/within.md; u "a range without three dots" ../
 u "a contract that cannot be read" ../c/absent.md "$R"; u "a range git cannot read" ../c/within.md main...no-such-branch
 mk bad1 'src/* lots'; u "a malformed bound" ../c/bad1.md "$R"
 mk bad2 'src/* 5' 'lib/*'; u "a malformed bound beside a good one" ../c/bad2.md "$R"
+for v in 'src/* 99999999999999999999' 'src/[* 1'; do mk bad3 "$v"; for r in "$R" main...main; do n=$((n + 1)); o="$(cb ../c/bad3.md "$r")"; rc=$?; { [ "$rc" = 2 ] && printf '%s\n' "$o" | grep -qF "$v" && ! printf '%s\n' "$o" | grep -q 'check-bounds: OK'; } || { echo "FAIL (a bad bound, $v on $r): want exit 2 and a line naming it, got exit $rc:"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }; done; done
 
 echo "check-bounds ($kind): $n cases, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

@@ -64,6 +64,7 @@
 # nothing; no file or no row: the defaults alone. A project adds, never removes. Touching none: no new line.
 # A touches item that is a folder holding a glob of the list (`tests/`, `scripts/`, `scripts/hooks/`, `.github/`, the
 # item with its slash the start of the glob) counts as touching it, the ERROR naming that glob; `docs/` does not.
+# So does a folder under a glob's wildcard, where a file of that folder could match it: `tests/retro/` for `tests/*/run.*`.
 set -u
 [ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -321,12 +322,17 @@ i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*' '.github/workflows/x.yml|.git
 done
 imk i-list.md '' 'touches:\n  - "scripts/hooks/x.sh"\n  - sort.sh\nwall: w\n'; iname="touches as a quoted list"; ierr i-list.md bounds 'scripts/hooks/*'
 # a folder holding an important glob counts as touching it; a folder holding none does not
-i=0; for v in 'tests/|tests/*/run.*' 'scripts/|scripts/hooks/*' 'scripts/hooks/|scripts/hooks/*' '.github/|.github/workflows/*'; do
+i=0; for v in 'tests/|tests/*/run.*' 'tests/retro/|tests/*/run.*' 'scripts/|scripts/hooks/*' 'scripts/hooks/|scripts/hooks/*' '.github/|.github/workflows/*'; do
   i=$((i + 1)); it="${v%%|*}"; ig="${v#*|}"
   imk "i-dirb$i.md" "$it" "$W1"; iname="the folder $it without bounds"; ierr "i-dirb$i.md" bounds "$ig"
   imk "i-dirw$i.md" "$it" "$B1"; iname="the folder $it without wall"; ierr "i-dirw$i.md" wall "$ig"
   imk "i-dirk$i.md" "$it" "$B1$W1"; iname="the folder $it with both"; inone "i-dirk$i.md"
 done
+# a folder under a glob's wildcard, neither field: the two ERRORs, each naming the glob
+imk i-dir2.md 'tests/retro/' ''; iname="the folder tests/retro/ with neither field"; crun i-dir2.md
+[ "$CRC" = 1 ] || ifail "exit $CRC, want 1"
+for w in bounds wall; do printf '%s\n' "$CO" | grep -F -- "i-dir2.md: ERROR " | grep -F -- "$w" | grep -qF -- 'tests/*/run.*' || ifail "no line 'i-dir2.md: ERROR ...$w...tests/*/run.*...'"; done
+printf '%s\n' "$CO" | grep -qxF -- "i-dir2.md: FAIL (2 errors, 0 warnings)" || ifail "the summary is not 'i-dir2.md: FAIL (2 errors, 0 warnings)'"
 imk i-dirn.md 'docs/, scripts/hooksy/' ''; iname="folders holding no important glob"; inone i-dirn.md
 # a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
 i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n  - scripts/hooks/* 1.5\n' 'bounds:\n' 'bounds: 90\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do

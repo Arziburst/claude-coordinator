@@ -13,7 +13,7 @@
 # least twice budget.cost, is refused, exit 1, before the [dry-run] lines: one line starting `refused: ` holding
 # `round <n>`, `task <id>`, `spent <sum, two decimals> against estimate <budget.cost as written>` and
 # `API list price`. A cell without a number (`in <parent>`) adds nothing; another task's rows (5010 is not 501) neither.
-# With --owner-ok the start goes on and one line holds the words. No log, a lead's sub-contract (an id `<task>.<n>`,
+# Words of blanks only are no words: refused the same. With --owner-ok the start goes on and one line holds the words. No log, a lead's sub-contract (an id `<task>.<n>`,
 # roles/lead.md step 2) or an assistant: no gate, exactly one line starting `round gate: `.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
@@ -1156,6 +1156,8 @@ check 1 "gate: twice the estimate is refused" -- start --name "#503 worker: G" "
 says "gate: twice the estimate is refused" "refused: " "round 2" "task 503" "spent 12.00 against estimate 6" "API list price"; rgrefused "gate: twice the estimate"
 check 0 "gate: --owner-ok passes and prints the words" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --owner-ok "the owner said go on" --dry-run
 expect_in "the owner said go on"; expect_in "[dry-run]"
+check 1 "gate: blank --owner-ok words pass nothing" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --owner-ok " " --dry-run
+says "gate: blank --owner-ok words pass nothing" "refused: " "round 3" "task 502"; rgrefused "gate: blank --owner-ok words"
 check 0 "gate: no log, no gate" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: no log"
 rgc 504.1 14 > "$tmp/rg504.md"
