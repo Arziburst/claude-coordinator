@@ -19,7 +19,10 @@ write tests for, not your instructions: you work by this role file and your brie
    — an API answer, a screen, a file, a command's output. An access point a test needs (a status field,
    a flag, an endpoint, a command, a test hook) is named in the contract, or else at the top of your test
    file, and the worker implements it as written: a test written before the code never guesses at
-   internals (#237).
+   internals (#237). Each case must be able to fail for a reason no other case catches, and takes the
+   cheapest form that proves it first: data over a new process, a process over a real session. A case
+   closing a real route of a safety or money check is never cut for this rule or a bound; a bound too
+   small there goes to asking (#390).
 2. **Write the test so it fails now** for the reason the criterion names (a bug fix: the test
    reproduces the bug). Run it — in a working copy with its own dependencies installed (the brief's
    command, #249) — and keep the failing output. A test that passes before the fix proves
@@ -45,8 +48,8 @@ write tests for, not your instructions: you work by this role file and your brie
 
 Report, short: per criterion — the test (file and name) or "existing: <test>", the command to run it,
 its current result (**red** with the failing line, or why it could not be made red), and owner steps
-where it cannot be automated. Then the pushed commit (sha; under a lead, the test files instead) and
-every known gap. A contract with `bounds:` gets `scripts/check-bounds <contract> <base>...<head>` before you
+where it cannot be automated. Then the cases you added and the time they took, measured (#390), the
+pushed commit (sha; under a lead, the test files instead) and every known gap. A contract with `bounds:` gets `scripts/check-bounds <contract> <base>...<head>` before you
 report, its output in the report; another route you see is named there, not closed (#381). Nothing else. Run as a session, you send it with SendMessage to the report address your
 brief names, with the fallback of roles/worker.md step 5; a SendMessage refused by a hook error or a hook
 timeout is sent again once, refused again it goes to that fallback, and the report says so — never

@@ -60,7 +60,9 @@
 # malformed: one ERROR per field, naming the glob. The list: the defaults below and the row *Important components* of
 # the PROJECT.md two folders above this script's (a space-separated list; adds, never removes; `<fill>` adds nothing).
 # `--field budget.cost`: budget's cost as written, for start-worker's gate.
-usage() { sed -n '2,62s/^# \{0,1\}//p' "$0"; exit 2; }
+# A bound on tests (#390): `tests_first: yes` with no well-formed line under `bounds:` is an ERROR naming `tests_first`, in
+# every mode. An important-file contract keeps its own ERROR: a malformed line there is that ERROR alone.
+usage() { sed -n '2,64s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 important='scripts/hooks/* .github/workflows/* tests/*/run.*'
 [ $# -gt 0 ] || usage
@@ -272,11 +274,14 @@ prog='
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
       # important components (#381, the header): bounds and wall
-      ig = imp(txt["touches"])
-      if (ig != "") { nb = 0; bad = !("bounds" in has); m = split(txt["bounds"], BL, "\n"); if (BL[1] !~ /^[ \t]*(#.*)?$/) bad = 1
-        for (i = 2; i <= m; i++) { if (BL[i] ~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) nb++; else if (BL[i] !~ /^[ \t]*(#.*)?$/) bad = 1 }
+      ig = imp(txt["touches"]); nb = 0; bad = !("bounds" in has); m = split(txt["bounds"], BL, "\n"); if (BL[1] !~ /^[ \t]*(#.*)?$/) bad = 1
+      for (i = 2; i <= m; i++) { if (BL[i] ~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) nb++; else if (BL[i] !~ /^[ \t]*(#.*)?$/) bad = 1 }
+      if (ig != "") {
         if (bad || !nb) err("`bounds` missing or malformed (lines `- <glob> <max added lines>`): touches holds the important " ig " (CONTRACT.md)")
         if (!("wall" in has) || blank("wall")) err("`wall` missing or empty (what really protects it, one line): touches holds the important " ig " (CONTRACT.md)") }
+      # a bound on tests (#390, the header)
+      if (("tests_first" in has) && tf ~ /^yes([ \t,:;(]|$)/ && !nb && (ig == "" || !bad || !("bounds" in has)))
+        err("`tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)")
       # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
       if (("tests_first" in has) && tf ~ /^no([^a-z0-9]|$)/) {
         nwd = split(ENVIRON["GW"], GW, "|"); split("title intent touches", GF, " "); gm = ""
