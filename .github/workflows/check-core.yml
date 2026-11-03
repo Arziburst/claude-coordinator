@@ -727,7 +727,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-ubuntu.result }}
-          SHARD_LIMIT: 900   # TEMPORARY, the proof of the warning, 1500 by the next commit; # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
+          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=ubuntu '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
@@ -745,7 +745,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-macos.result }}
-          SHARD_LIMIT: 900   # TEMPORARY, the proof of the warning, 1500 by the next commit; # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
+          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=macos '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
@@ -763,7 +763,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-windows.result }}
-          SHARD_LIMIT: 900   # TEMPORARY, the proof of the warning, 1500 by the next commit; # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
+          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=windows '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"

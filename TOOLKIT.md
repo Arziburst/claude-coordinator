@@ -787,8 +787,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   PowerShell 7, the longest step of all; 2 report-issue, retro, session-insights and the selftest probes; 4
   watch-sessions, compaction, run-stats and the workers' bash and assistant checks. Windows: 3 report-issue; 4
   start-worker and run-stats; 2 watch-sessions, retro and the selftest sandbox checks; 5 runs, compaction and
-  merge-queue); a new step goes where the shard's sum stays under the longest step (about 16 minutes), never on a
-  shard that would then pass it. **How a case lands in a shard:** a set too long for one shard runs in parts by its
+  merge-queue); a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit is
+  rebalanced at the next CI audit. **How a case lands in a shard:** a set too long for one shard runs in parts by its
   data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in three parts on
   Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/3 bash tests/safety-guard/run.sh ...` - case i of
   cases.txt is in part (i - 1) mod n + 1, so a case added at the end lands in one part by itself; the sections after the
@@ -803,8 +803,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>` and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
-  failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (1500 s
-  in the workflow, about 25 minutes) as a `::warning::`, never a failure. The baseline is the median of the last three
+  failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (1200 s
+  in the workflow, 20 minutes) as a `::warning::`, never a failure. The baseline is the median of the last three
   main runs per step and OS (`<os><TAB><seconds><TAB><name>`, a split set's parts a row each), raised only by a pull
   request's own diff: ci-times on three main runs, the new medians in the file. A worker's `ci_seconds` is the number
   ci-times measures on its PR's run (roles/worker.md).
