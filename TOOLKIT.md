@@ -784,14 +784,16 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
   stale runs on its next push, never a run on main. **How a step lands in a shard:** `<os>-1` holds the common steps,
   the heavy sets have shards of their own and the split follows the measured seconds (Ubuntu: 3 start-worker under
-  PowerShell 7, the longest step of all; 2 report-issue, retro and the selftest probes; 4 watch-sessions, compaction and
-  the workers' bash and assistant checks. Windows: 3 report-issue; 4 start-worker; 2 watch-sessions and merge-queue; 5
-  runs, compaction and retro); a new step goes where the shard's sum stays under the longest step (about 16 minutes),
-  never on a shard that would then pass it. **How a case lands in a shard:** a set too long for one shard runs in parts
-  by its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in three parts on
+  PowerShell 7, the longest step of all; 2 report-issue, retro, session-insights and the selftest probes; 4
+  watch-sessions, compaction, run-stats and the workers' bash and assistant checks. Windows: 3 report-issue; 4
+  start-worker and run-stats; 2 watch-sessions, retro and the selftest sandbox checks; 5 runs, compaction and
+  merge-queue); a new step goes where the shard's sum stays under the longest step (about 16 minutes), never on a
+  shard that would then pass it. **How a case lands in a shard:** a set too long for one shard runs in parts by its
+  data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in three parts on
   Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/3 bash tests/safety-guard/run.sh ...` - case i of
   cases.txt is in part (i - 1) mod n + 1, so a case added at the end lands in one part by itself; the sections after the
-  cases (sessions, the self-test, no-push.sh) run in part 1; `SG_LIST=1` prints a part's line numbers with no hook run,
+  cases (sessions, the self-test, no-push.sh) run in part 1, about 200 s more than another part, so its shard holds
+  less of the rest; `SG_LIST=1` prints a part's line numbers with no hook run,
   and the summary names the file it read and its part. start-worker and report-issue are scripted sequences, not case
   files, so they are not split: the longest of them is the floor of the wall until they are. The step's line goes into
   `tests/ci-times/steps-main.txt` (`<os> <shell> <name>`, a part under its whole name) and `bash tests/ci-times/run.sh
