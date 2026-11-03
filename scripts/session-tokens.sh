@@ -28,10 +28,17 @@
 #            person (a name ending in AskUserQuestion) is idle at any length, the owner's time; any other
 #            gap over 5 minutes is idle (a limit, an answer, a sleeping machine); minutes rounded to the
 #            nearest, a half up; start and end to the second; absent when no record has a timestamp
+#   context  under100k=<requests>/<tokens> 100-200k=… 200-400k=… 400-700k=… over700k=…   — the last line wherever
+#            a transcript is read (#342): the requests (each message id once) by their context, input + cache read +
+#            cache write (100000 is in 100-200k, 700000 in 400-700k), tokens as the total line sums them; with
+#            --prices <file> (coordinator/prices.txt's format, as run-stats reads it; unreadable: exit 2) each bucket
+#            adds /$<list-price cost> and the line ends unpriced=<requests of a model not in the file: counted, no cost>
 # The status file's token fields are the LAST request's usage, not the session's, so they are ignored.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text.
 set -eu
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 2; }
+pr=""; a=(); while [ $# -gt 0 ]; do case "$1" in --prices) [ $# -ge 2 ] || exit 2; pr="$2"; shift ;; *) a+=("$1") ;; esac; shift; done
+set -- ${a[@]+"${a[@]}"}; [ -z "$pr" ] || [ -r "$pr" ] || { echo "cannot read the prices file $pr" >&2; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,37s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 # an empty or blank id would match every session as a prefix (#209)
 [ -n "$(printf '%s' "$arg" | tr -d ' \t')" ] || {
@@ -48,8 +55,9 @@ rects='function rects(s,   p, ts, r) { p = index(s, "\"message\":"); ts = ""
 # sums assistant messages from stdin per model, each message id once (its largest output count);
 # with SINCE set, only messages whose timestamp is at or after it (compared to the second, UTC)
 count() {
-  SINCE="${SINCE:-}" LC_ALL=C awk "$rects"'
-    BEGIN { since = substr(ENVIRON["SINCE"], 1, 19) }
+  SINCE="${SINCE:-}" PRICES="$pr" LC_ALL=C awk "$rects"'
+    BEGIN { since = substr(ENVIRON["SINCE"], 1, 19); pf = ENVIRON["PRICES"]   # the prices: `<model> <in> <out> <read> <write>…`, $ and / as blanks
+      while (pf != "" && (getline l < pf) > 0) { gsub(/\r/, "", l); if (l ~ /^[ \t]*(#|$)/) continue; gsub(/[$\/]/, " ", l); $0 = l; if (NF >= 5) { PI[$1] = $2; PO[$1] = $3; PR[$1] = $4; PW[$1] = $5 } } }
     function num(k,   t) { if (!match(u, "\"" k "\":[ \t]*[0-9]+")) return 0
                            t = substr(u, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); return t + 0 }
     /"type":[ \t]*"assistant"/ && /"usage":[ \t]*[{]/ {
@@ -73,10 +81,17 @@ count() {
     function line(n, i, o, r, w) { return sprintf("%s\t%.0f\tin=%.0f out>=%.0f cache_read=%.0f cache_write=%.0f", n, i + o + r + w, i, o, r, w) }
     END { for (id in out) { m = mod[id]; seen[m] = 1
             MI[m] += inp[id]; MO[m] += out[id]; MR[m] += rd[id]; MW[m] += wr[id]
-            I += inp[id]; O += out[id]; R += rd[id]; W += wr[id] }
+            I += inp[id]; O += out[id]; R += rd[id]; W += wr[id]
+            # the context bucket (#342), and the cost at the model line - exact, else the longest prefix of the model
+            c = inp[id] + rd[id] + wr[id]; b = c < 100000 ? 1 : c < 200000 ? 2 : c < 400000 ? 3 : c <= 700000 ? 4 : 5; BN[b]++; BT[b] += c + out[id]
+            k = ""; for (p in PI) if (p == m || (index(m, p) == 1 && length(p) > length(k))) { k = p; if (p == m) break }
+            if (k == "") np++; else BC[b] += inp[id] * PI[k] + out[id] * PO[k] + rd[id] * PR[k] + wr[id] * PW[k] }
           for (m in seen) print line(m, MI[m], MO[m], MR[m], MW[m]) | "LC_ALL=C sort"
           close("LC_ALL=C sort")
-          print line("total", I, O, R, W) }'
+          print line("total", I, O, R, W)
+          split("under100k 100-200k 200-400k 400-700k over700k", N, " "); s = "context"
+          for (b = 1; b <= 5; b++) s = s (b > 1 ? " " : "\t") N[b] "=" BN[b] + 0 "/" sprintf("%.0f", BT[b]) (pf != "" ? sprintf("/$%.4f", BC[b] / 1e6 + 1e-12) : "")
+          print s (pf != "" ? " unpriced=" np + 0 : "") }'
 }
 # the time line from the records on stdin: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff],
 # read as UTC) to milliseconds since 1970, and each tool call from its tool_use to its own tool_result
@@ -213,9 +228,9 @@ rec=""
 if [ -n "$main" ] && [ -f "$main" ]; then
   sub="${main%.jsonl}/subagents"
   # the session's own record (its subagents included) when it has stopped since it last ran; else the sums
-  rec="$(record < "$main")"
-  if [ -n "$rec" ]; then printf '%s\n' "$rec"
-  else { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | count; fi
+  rec="$(record < "$main")"   # the sums always: the context line (the last) comes from the transcript, never the record
+  all="$({ cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | count)"
+  if [ -n "$rec" ]; then printf '%s\n' "$rec"; else printf '%s\n' "$all" | sed '$d'; fi
 elif [ ! -f "$status" ]; then
   echo "no transcript or status file for $arg" >&2; exit 1
 fi
@@ -228,4 +243,5 @@ if [ -f "$status" ] && ! printf '%s\n' "$rec" | grep -q '^cost'; then
 fi
 if [ -n "$main" ] && [ -f "$main" ]; then
   { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | span
+  printf '%s\n' "$all" | sed -n '$p'
 fi

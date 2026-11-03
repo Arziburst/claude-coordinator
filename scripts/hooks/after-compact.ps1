@@ -12,9 +12,10 @@
 # questions under the session's folder, then the running sessions and the open PRs; silent in a session
 # that is a worker (a kept brief, or a folder in .claude/worktrees) or an assistant (COORD_ASSISTANT_DIR
 # set): the project's settings, where this variant sits, load in sessions launched from the same root
-# too (#217).
+# too (#217). Then the checkpoint before-compact.ps1 wrote (coordinator/CHECKPOINT.md, #342), as it is, and a
+# note when it is stale (written over 60 minutes ago, or no moment) or missing - a note, never a loss.
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
-# does not reach the model), always exits 0.
+# does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0.
 param([string]$Role)
 if ($Role -notmatch '^(coordinator|worker|assistant)$') { [Console]::Error.WriteLine('usage: after-compact.ps1 coordinator|worker|assistant'); exit 0 }
 $in = ''; try { $in = [Console]::In.ReadToEnd() } catch { }
@@ -49,7 +50,18 @@ if ($Role -eq 'worker') {
   if ($wd -like '*/.claude/worktrees/*' -or $wd -like '*/.claude/worktrees') { exit 0 }
   $p = if ($cwd) { "$cwd/coordinator" } else { 'coordinator' }
   $msg = "$lead Before your next step, re-read in full with the Read tool: $p/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
+  # the checkpoint before-compact wrote (#342), as it is; stale (written: over 60 minutes ago, or none) is a note, never a loss
+  $ck = $null; try { $ck = [IO.File]::ReadAllText("$p/CHECKPOINT.md", (New-Object System.Text.UTF8Encoding $false)) } catch { }
+  if ($null -eq $ck) { $msg += " checkpoint is missing: $p/CHECKPOINT.md is absent or unreadable (the PreCompact hook before-compact writes it: TOOLKIT, After a compaction)." }
+  else {
+    $lim = [DateTime]::UtcNow.AddMinutes(-60).ToString('yyyy-MM-ddTHH:mm:ssZ'); $m = [regex]::Match($ck, '^written: ([0-9T:-]*Z)'); $wr = if ($m.Success) { $m.Groups[1].Value } else { '' }
+    $note = if ($wr -and [string]::CompareOrdinal($wr, $lim) -ge 0) { "fresh, written $wr" } else { 'checkpoint is stale (written ' + $(if ($wr) { $wr } else { 'at an unknown moment' }) + ', the limit 60 minutes): a note, never a loss - read it, then the files' }
+    $msg += "`nCheckpoint written before this compaction ($p/CHECKPOINT.md; $note):`n" + $ck.TrimEnd("`r", "`n")
+  }
 }
-$esc = $msg.Replace('\', '\\').Replace('"', '\"')
+# the JSON string: \ " tab and newline escaped, other control characters dropped; at most 9600 bytes, then `truncated`
+$U = New-Object System.Text.UTF8Encoding $false; $esc = ''; $n = 0; $k = 0
+foreach ($l in ($msg -replace "`r", '') -split "`n") { $x = $l.Replace('\', '\\').Replace('"', '\"').Replace("`t", '\t') -replace '[\x00-\x08\x0b-\x1f\x7f]', ''; $k++
+  $n += $U.GetByteCount($x) + 2; if ($n -gt 9600) { $esc += $(if ($k -gt 1) { '\n' } else { '' }) + 'truncated'; break }; $esc += $(if ($k -gt 1) { '\n' } else { '' }) + $x }
 [Console]::Out.Write('{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"' + $esc + '"}}' + "`n")
 exit 0
