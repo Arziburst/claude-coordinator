@@ -24,7 +24,8 @@ if ($Role -notmatch '^(coordinator|worker|assistant)$') { [Console]::Error.Write
 $in = ''; try { [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }; try { $in = [Console]::In.ReadToEnd() } catch { }
 function Str([string]$k) { $m = [regex]::Match(($in -replace "[`r`n]", ''), '"' + $k + '" *: *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
 $sid = Str 'session_id'; $cwd = (Str 'cwd').Replace('\\', '\')
-$cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+function Win([string]$p) { if ($p -match '^/([A-Za-z])(/.*)?$') { $matches[1].ToUpper() + ':' + $(if ($matches[2]) { $matches[2] } else { '/' }) } else { $p } }   # /c/x -> C:/x, as cygpath -m in the .sh
+$cfg = Win $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' })
 $lead = 'The conversation was just compacted: what you knew is now a summary, and a summary loses rules and state.'
 if ($Role -eq 'worker') {
   $b = ''
@@ -36,7 +37,7 @@ if ($Role -eq 'worker') {
   }
 } elseif ($Role -eq 'assistant') {
   $core = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).ProviderPath.Replace('\', '/').TrimEnd('/')
-  $ad = [string]$env:COORD_ASSISTANT_DIR
+  $ad = Win ([string]$env:COORD_ASSISTANT_DIR)
   if ($ad) {
     $ad = $ad.Replace('\', '/'); if ($ad.TrimEnd('/')) { $ad = $ad.TrimEnd('/') }   # E:/a/ -> E:/a, never / -> ''
     $msg = "$lead Before your next step, read in full with the Read tool: $ad/BRIEF.md (your brief: your job, your limits, your report address), $ad/NOTES.md (your own notes) and $core/roles/assistant.md (your role). Follow them as written, not the summary."
