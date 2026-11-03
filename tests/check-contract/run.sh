@@ -65,6 +65,10 @@
 # A touches item that is a folder holding a glob of the list (`tests/`, `scripts/`, `scripts/hooks/`, `.github/`, the
 # item with its slash the start of the glob) counts as touching it, the ERROR naming that glob; `docs/` does not.
 # So does a folder under a glob's wildcard, where a file of that folder could match it: `tests/retro/` for `tests/*/run.*`.
+# A bound on tests (#390), the access point: `tests_first` is `yes` (with a reason or not) and no line `- <glob> <max>` stands
+# under `bounds:` (an empty key or a comment alone is no line): in every mode (plain, --field, --runs) one ERROR, this text:
+#   <file>: ERROR `tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)
+# `tests_first: no ...`: nothing new. A contract touching an important file keeps its own ERROR, beside this one.
 set -u
 [ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -311,7 +315,7 @@ inone() {   # inone <file>: exit 0 and only today's clean summary, byte for byte
   [ "$CO" = "$1: OK (0 errors, 0 warnings)" ] || ifail "want only '$1: OK (0 errors, 0 warnings)'"
 }
 imk() {   # imk <file> <touches items, empty: no touches line> <lines to add, as a printf format>
-  { sed -e '$d' -e 's#^touches: .*#touches: ['"$2"']#' runs-lf.md | { [ -n "$2" ] && cat || sed '/^touches: /d'; }; printf "$3"; printf -- '---\n'; } > "$1"
+  { sed -e '$d' -e '/^bounds:/,/^  - /d' -e "s#^tests_first: .*#tests_first: ${tfv:-no - tests/sort.sh checks it}#" -e 's#^touches: .*#touches: ['"$2"']#' runs-lf.md | { [ -n "$2" ] && cat || sed '/^touches: /d'; }; printf "$3"; printf -- '---\n'; } > "$1"
 }
 B1='bounds:\n  - some/glob/* 10\n'; W1='wall: the guard stops it\n'
 i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*' '.github/workflows/x.yml|.github/workflows/*' 'tests/a/run.sh|tests/*/run.*' 'tests/a/run.ps1|tests/*/run.*'; do
@@ -361,6 +365,18 @@ ccore="$(pwd)/fillp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$cc
 iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hooks/*'
 iname="a row still <fill>: adds nothing"; inone i-none3.md
 ccore=""
+# tests_first: yes names a bound (#390, the header); `no` with none stays today's: quoted.md in expected.txt, i-none1..3 above
+tfm='`tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)'
+tfv=yes imk i-tf1.md sort.sh ''; tfv='yes - a reason' imk i-tf2.md sort.sh ''; tfv=yes imk i-tf3.md sort.sh 'bounds:\n'; tfv=yes imk i-tf4.md sort.sh 'bounds:\n  # - sort.sh 10\n'
+for f in 1 2 3 4; do iname="tests_first: yes and no bound ($f)"; ierr "i-tf$f.md" "$tfm" tests_first; done
+tfv=yes imk i-tfk.md sort.sh "$B1"; iname="tests_first: yes with a bound"; inone i-tfk.md
+tfv=yes imk i-tfi.md scripts/hooks/x.sh "$W1"; iname="tests_first: yes, an important file, no bound"; crun i-tfi.md; [ "$CRC" = 1 ] || ifail "exit $CRC, want 1"
+printf '%s\n' "$CO" | grep -qxF -- "i-tfi.md: ERROR $tfm" || ifail "no tests_first ERROR"
+printf '%s\n' "$CO" | grep -F -- 'i-tfi.md: ERROR ' | grep -F -- 'bounds' | grep -qF -- 'scripts/hooks/*' || ifail "its own ERROR is gone"
+printf '%s\n' "$CO" | grep -qxF -- 'i-tfi.md: FAIL (2 errors, 0 warnings)' || ifail "the summary is not 2 errors"
+rname="tests_first: yes and no bound, --runs"; crun i-tf1.md --runs runs.tsv; rexit 1; rhas "i-tf1.md: ERROR $tfm"
+cfield i-tf1.md; [ "$FRC" = 1 ] && case "$FO" in *"i-tf1.md: ERROR $tfm"*) true ;; *) false ;; esac ||
+  { echo "FAIL: $fopt tests_first i-tf1.md: expected exit 1 and the ERROR, got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
 # the same output and exit codes from both versions, on every contract above at once
 if [ "$kind" = ps ]; then
   set -- i-*.md

@@ -9,6 +9,8 @@ acceptance:
     how: tests/sort.sh passes
 tests_first: 'yes, because
   it is cheap'
+bounds:
+  - sort.sh 10
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances
