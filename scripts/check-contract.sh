@@ -63,7 +63,7 @@
 # A bound on tests (#390): `tests_first: yes` with no well-formed line under `bounds:` is an ERROR naming `tests_first`, in
 # every mode. An important-file contract keeps its own ERROR: a malformed line there is that ERROR alone.
 # `--important`, alone (#419): read-only, the list above (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
-usage() { sed -n '2,64s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,65s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 important='scripts/hooks/* .github/workflows/* tests/*/run.*'
 [ $# -gt 0 ] || usage
