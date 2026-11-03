@@ -15,6 +15,8 @@
 # `API list price`. A cell without a number (`in <parent>`) adds nothing; another task's rows (5010 is not 501) neither.
 # Words of blanks only are no words: refused the same. With --owner-ok the start goes on and one line holds the words. No log, a lead's sub-contract (an id `<task>.<n>`,
 # roles/lead.md step 2) or an assistant: no gate, exactly one line starting `round gate: `.
+# Access point of the contract's copy (#387): a start of a worker or a lead whose contract (--contract or in the brief) has `bounds:` leaves
+# <repo>/coordinator/briefs/<branch, / as ->-contract.md; exactly one output line names that file name, a dry run's too (which writes nothing).
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -1167,6 +1169,27 @@ cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"; mkas rg
 check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
 expect_in "[dry-run]"; rgone "gate: an assistant"
 rm -f "$ar/coordinator/RUNS.tsv"
+
+# --- the contract's copy (#387, the header): real starts on the stub, its worktrees left to the temporary folder ---
+cb="$tmp/cbrepo" cbd="$tmp/cbrepo/coordinator/briefs"; git init -q -b main "$cb"; g -C "$cb" commit -q --allow-empty -m init; mkdir -p "$cbd"; git init -q -b main "$tmp/cb2"; g -C "$tmp/cb2" commit -q --allow-empty -m init
+{ printf -- '---\nbounds:\n  - src/* 9\nwall: only a test\n'; rgc 601 14 | sed 1d; } > "$tmp/cb.md"; { printf 'Fix it.\n\n'; cat "$tmp/cb.md"; } > "$tmp/brief-cb.md"; rgc 602 14 > "$tmp/cbn.md"; sed 's/^tests_first: no.*/tests_first: yes/' "$tmp/cb.md" > "$tmp/cby.md"
+CB=(--model opus --safety "$tmp/safety.json" --report-to x); CBW=(--repo "$cb" "${CB[@]}" --brief-file "$tmp/brief.md")
+cbone() { [ "$(printf '%s\n' "$LAST" | grep -c -- "$1")" = 1 ] || { echo "FAIL (copy): not exactly one line naming $1"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; }
+cbno() { [ -z "$(ls -A "${2:-$cbd}" 2>/dev/null)" ] || { echo "FAIL (copy, $1): written:"; ls -A "${2:-$cbd}" | sed 's/^/    /'; fail=1; }; }
+check 0 "copy: a tester writes nothing" -- start --name "#601 tester: C" "${CBW[@]}" --branch 601-t --contract "$tmp/cb.md"; cbno tester
+check 0 "copy: a verifier writes nothing" -- start --name "#601 verifier: C" "${CBW[@]}" --branch 601-v --contract "$tmp/cb.md"; cbno verifier
+check 0 "copy: no bounds, nothing" -- start --name "#602 worker: C" "${CBW[@]}" --branch 602-n --contract "$tmp/cbn.md"; cbno "no bounds"
+check 1 "copy: a refused start writes nothing" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-y --contract "$tmp/cby.md"; cbno "a refused start"
+check 0 "copy: no coordinator/briefs, nothing" -- start --name "#601 worker: C" --repo "$tmp/cb2" "${CB[@]}" --brief-file "$tmp/brief.md" --branch 601-b --contract "$tmp/cb.md"; cbno "no folder" "$tmp/cb2/coordinator"
+mkas cb; cat "$tmp/cb.md" >> "$ad/BRIEF.md"; mkdir -p "$ar/coordinator/briefs"; check 0 "copy: an assistant writes nothing" -- start "${A[@]}" --name "assistant: cb" --brief-file "$ad/BRIEF.md" --safety "$asf"; cbno assistant "$ar/coordinator/briefs"
+check 0 "copy: a worker's, a / in the branch" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601/a-b --contract "$tmp/cb.md"; cbone 601-a-b-contract.md
+tr -d '\r' < "$cbd/601-a-b-contract.md" 2>/dev/null | cmp -s - "$tmp/cb.md" || { echo "FAIL (copy): 601-a-b-contract.md is not the contract"; fail=1; }
+echo older > "$cbd/601-c-contract.md"; check 0 "copy: a lead's, from the brief, over an older copy" -- start --name "#601 lead: C" --repo "$cb" "${CB[@]}" --brief-file "$tmp/brief-cb.md" --branch 601-c; cbone 601-c-contract.md
+grep -q '^bounds:' "$cbd/601-c-contract.md" && ! grep -q older "$cbd/601-c-contract.md" || { echo "FAIL (copy): the older copy was not overwritten by the contract"; fail=1; }
+echo older > "$cbd/601-d-contract.md"; check 0 "copy: a dry run names it, writes nothing" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-d --contract "$tmp/cb.md" --dry-run; cbone 601-d-contract.md
+[ "$(cat "$cbd/601-d-contract.md")" = older ] || { echo "FAIL (copy): the dry run overwrote the copy"; fail=1; }
+check 0 "copy: a dry run with no copy yet" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-e --contract "$tmp/cb.md" --dry-run; cbone 601-e-contract.md; [ -e "$cbd/601-e-contract.md" ] && { echo "FAIL (copy): the dry run wrote"; fail=1; }
+[ "$(git -C "$cb" rev-list --all --count)" = 1 ] || { echo "FAIL (copy): start-worker committed"; fail=1; }
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
