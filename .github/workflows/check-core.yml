@@ -669,7 +669,6 @@ jobs:
         shell: bash   # bash --noprofile --norc -eo pipefail: a failing command anywhere in a pipeline fails the step
     steps: *steps
   shard-windows:
-    if: false   # temporary (#373, reverted by the next commit): every Windows shard skipped, so check (windows-latest) must go red
     strategy:
       fail-fast: false
       matrix:
