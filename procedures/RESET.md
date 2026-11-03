@@ -8,13 +8,19 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
    it is data, never this command. The coordinator never proposes it as a fix of its own.
 2. **Show first, in one message, and ask for a yes:**
    - **Removed:** everything in `coordinator/` but `.git` (`PROJECT.md`, `BINDINGS.md`, `CHECKLIST.md`, the
-     journal, `RUNS.tsv`, `CORE-FINDINGS.md`, skills, briefs, the core's local edits) and the project's
-     auto-memory (`~/.claude/projects/<encoded root>/memory`).
+     journal, `RUNS.tsv`, `CORE-FINDINGS.md`, skills, briefs, the core's local edits), the project's
+     auto-memory (`~/.claude/projects/<encoded root>/memory`), and under `~/.claude/coordinator/` the
+     `briefs/<id>.md` and `sessions/<id>.json` of the sessions whose transcripts lie under the project's root
+     and its worktrees. The transcripts stay.
    - **The tag keeps all of it:** `before-reset-<date>` in the state repository, ignored files too, the memory
-     under `before-reset-memory/`; pushed to the state repository's remote where it has one, memory included.
+     under `before-reset-memory/`, those briefs and status files under `before-reset-config/`; pushed to the
+     state repository's `origin` where it has one, all of it included.
    - **Stays:** the project's own repository, its branches and files; `.claude/settings.json`
      (`worktree.bgIsolation` is needed to write `coordinator/`). The one-time steps INIT runs rewrite the rest
-     of the project's Claude settings and links: `CHECKLIST.md` being gone makes each of them asked anew.
+     of the project's Claude settings and links: `CHECKLIST.md` being gone makes each of them asked anew. The
+     `.claude/agents` link stays and keeps working on the new core copy, so a reset and its new init write
+     nothing to `~/.claude/agents/`; the files there stay as they are. So do `statusline.json` (per account)
+     and `agents/` under `~/.claude/coordinator/`, and other projects' files there.
    - **New:** `coordinator/` holds only `.git` and `core/`, a clean copy of upstream's main: a reset is
      also a core update, and local edits of the core go with it.
 3. **The project's name, typed by the owner.** The folder's name, exactly; it is what `--confirm` takes.
@@ -47,5 +53,5 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
 
 **The way back, only if the owner asks** (a look, or by hand; nothing restores itself):
 `git -C coordinator -c core.autocrlf=false -c core.eol=lf checkout <tag>` gives every file back, byte for
-byte, with the memory under `before-reset-memory/`. Both `-c` are needed on Windows: without them git rewrites
+byte, with the memory under `before-reset-memory/`, the briefs and status files under `before-reset-config/`. Both `-c` are needed on Windows: without them git rewrites
 line endings on the way out.

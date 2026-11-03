@@ -2,8 +2,9 @@
 # A real reset of a project's coordinator (#446; macOS / Linux; Windows: reset-coordinator.ps1 - the same arguments, messages, codes).
 #   scripts/reset-coordinator.sh --root <project root> --confirm <the project folder's name> --core-from <a clean clone of claude-coordinator>
 # Only on the owner's own words: procedures/RESET.md. Every check comes before anything changes. Then all of coordinator/ (ignored files
-# too, raw bytes) and the project's auto-memory go behind the tag before-reset-<date>, pushed where there is a remote; coordinator/ then
-# holds only .git and core/, a copy of the clone; the memory folder is emptied. The project's own repository is never touched.
+# too, raw bytes), the project's auto-memory and its sessions' briefs and status files under <config>/coordinator/ go behind the tag
+# before-reset-<date>, pushed where there is an origin; coordinator/ then holds only .git and core/, a copy of the clone; the memory
+# folder is emptied, those files removed. The project's own repository is never touched.
 # Exit 0 with `reset-coordinator: done tag=<tag> core=<sha>`; 1 a refusal, nothing changed, or a failed step, named; 2 a usage error.
 set -u
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
@@ -46,7 +47,7 @@ running="$(printf '%s\n' "$sess" | grep -v '^ *"name":' | tr -d '\r\n' | tr '}' 
 tag="before-reset-$(date +%Y-%m-%d)"
 parent="$(git -C "$st" rev-parse -q --verify HEAD)" || no "the state repository has no commit: $st"
 git -C "$st" rev-parse -q --verify "refs/tags/$tag" >/dev/null && no "the tag $tag already exists: one reset a day"
-remote="$(git -C "$st" remote | grep -x origin || git -C "$st" remote | head -n 1)"
+remote="$(git -C "$st" remote | grep -x origin)"
 [ -z "$remote" ] || git -C "$st" push --dry-run -q "$remote" HEAD >/dev/null 2>&1 || no "the state repository's remote $remote cannot be reached or does not take its branch"
 [ -z "$remote" ] || [ -z "$(git -C "$st" ls-remote --tags "$remote" "refs/tags/$tag" 2>/dev/null)" ] || no "the tag $tag already exists on the remote: one reset a day"
 # The tag's commit, on no branch until pushed. Raw bytes: a throwaway git dir's info/attributes beats core/'s `* text=auto`, a new index reads a stat-clean CRLF file again.
@@ -55,11 +56,17 @@ gd="$(git -C "$st" rev-parse --absolute-git-dir)" && git init -q --template= "$t
 mkdir -p "$t/g/.git/info"; echo '* -text' > "$t/g/.git/info/attributes"
 tree_of() { GIT_DIR="$t/g/.git" GIT_WORK_TREE="$1" GIT_OBJECT_DIRECTORY="$gd/objects" GIT_INDEX_FILE="$2" git -C "$1" -c core.autocrlf=false add -A -f . >/dev/null 2>&1 &&
   GIT_DIR="$t/g/.git" GIT_OBJECT_DIRECTORY="$gd/objects" GIT_INDEX_FILE="$2" git write-tree; }
+behind() { [ -n "$(ls -A "$1" 2>/dev/null)" ] || return 0; mt="$(tree_of "$1" "$2")" && GIT_INDEX_FILE="$t/i" git -C "$st" read-tree --prefix="$3/" "$mt" || no "the tag $tag: cannot read $1"; }
 tree_of "$st" "$t/i" >/dev/null || no "the tag $tag: cannot read coordinator/"
-pdir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$root" | sed 's/[^A-Za-z0-9]/-/g')"; mem="$pdir/memory"
-if [ -n "$(ls -A "$mem" 2>/dev/null)" ]; then
-  mt="$(tree_of "$mem" "$t/m")" && GIT_INDEX_FILE="$t/i" git -C "$st" read-tree --prefix=before-reset-memory/ "$mt" || no "the tag $tag: cannot read the memory folder $mem"
-fi
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; pdir="$cfg/projects/$(printf '%s' "$root" | sed 's/[^A-Za-z0-9]/-/g')"; mem="$pdir/memory"
+behind "$mem" "$t/m" before-reset-memory
+# The briefs and status files of the sessions whose transcripts lie at the root's folder or its worktrees': exact names, proj never takes proj-2's
+for j in "$pdir"/*.jsonl "$pdir--claude-worktrees-"*/*.jsonl; do i="${j##*/}"; i="${i%.jsonl}"
+  for f in "briefs/$i.md" "sessions/$i.json"; do [ -f "$cfg/coordinator/$f" ] || continue
+    mkdir -p "$t/c/${f%/*}" && cp "$cfg/coordinator/$f" "$t/c/$f" || no "the tag $tag: cannot read $cfg/coordinator/$f"
+  done
+done
+behind "$t/c" "$t/n" before-reset-config
 tree="$(GIT_INDEX_FILE="$t/i" git -C "$st" write-tree)" && commit="$(git -C "$st" commit-tree "$tree" -p "$parent" -m "before reset: $tag")" || no "the tag $tag: cannot commit (git's user set?)"
 git -C "$st" tag "$tag" "$commit" || no "the tag $tag cannot be made"
 [ -z "$remote" ] || git -C "$st" push -q "$remote" "refs/tags/$tag" >/dev/null 2>&1 || { git -C "$st" tag -d "$tag" >/dev/null 2>&1; no "the tag $tag cannot be pushed to $remote"; }
@@ -75,6 +82,7 @@ $(ls -A "$st")
 EOF
 git -C "$st" update-ref HEAD "$commit" || failed "cannot move the state branch; everything is in $old and behind the tag $tag"
 rm -rf "$old" && rm -rf "$mem" || failed "cannot remove $old or $mem; everything is behind the tag $tag"; [ ! -d "$pdir" ] || mkdir -p "$mem"
+for f in "$t"/c/*/*; do [ -f "$f" ] || continue; f="${f#"$t"/c/}"; rm -f "$cfg/coordinator/$f" || failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag"; done
 mkdir "$st/core" && find "$from" -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name CLAUDE.md -exec cp -R {} "$st/core/" \; || failed "cannot copy the core from $from; everything is behind the tag $tag"
 git -C "$st" read-tree --empty && git -C "$st" add -A >/dev/null 2>&1 && tree="$(git -C "$st" write-tree)" && c2="$(git -C "$st" commit-tree "$tree" -p "$commit" -m "reset of the coordinator: tag=$tag core=$sha")" &&
   git -C "$st" update-ref HEAD "$c2" || failed "cannot commit the new state in $st; everything is behind the tag $tag"

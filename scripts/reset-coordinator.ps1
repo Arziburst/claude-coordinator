@@ -48,7 +48,7 @@ function G { $o = & git -C $st @args 2>$null; $script:rc = $LASTEXITCODE; "$o".T
 $tag = "before-reset-$(Get-Date -Format 'yyyy-MM-dd')"
 $parent = G rev-parse -q --verify HEAD; if ($script:rc -ne 0) { No "the state repository has no commit: $st" }
 $null = G rev-parse -q --verify "refs/tags/$tag"; if ($script:rc -eq 0) { No "the tag $tag already exists: one reset a day" }
-$rs = @(& git -C $st remote 2>$null); $remote = if ($rs -ccontains 'origin') { 'origin' } elseif ($rs.Count) { "$($rs[0])" } else { '' }
+$rs = @(& git -C $st remote 2>$null); $remote = if ($rs -ccontains 'origin') { 'origin' } else { '' }
 if ($remote) { $null = G push --dry-run -q $remote HEAD; if ($script:rc -ne 0) { No "the state repository's remote $remote cannot be reached or does not take its branch" }
   if (G ls-remote --tags $remote "refs/tags/$tag") { No "the tag $tag already exists on the remote: one reset a day" } }
 # The tag's commit, on no branch until the push went through; raw bytes as in the .sh: a throwaway git dir's info/attributes, a new index
@@ -58,12 +58,19 @@ $null = New-Item -ItemType Directory -Force -Path "$t/g/.git/info"; [IO.File]::W
 function TreeOf([string]$wt, [string]$ix) { $env:GIT_DIR = "$t/g/.git"; $env:GIT_WORK_TREE = $wt; $env:GIT_OBJECT_DIRECTORY = "$gd/objects"; $env:GIT_INDEX_FILE = $ix; $x = ''
   & git -C $wt -c core.autocrlf=false add -A -f . *> $null; if ($LASTEXITCODE -eq 0) { $x = "$(& git write-tree 2>$null)".Trim() }
   Remove-Item Env:GIT_DIR, Env:GIT_WORK_TREE, Env:GIT_OBJECT_DIRECTORY, Env:GIT_INDEX_FILE; $x }
+function Behind([string]$dir, [string]$ix, [string]$pre) { if (@(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue).Count -eq 0) { return }
+  $mt = TreeOf $dir $ix; $env:GIT_INDEX_FILE = "$t/i"; $null = G read-tree "--prefix=$pre/" $mt; $rm = $script:rc; Remove-Item Env:GIT_INDEX_FILE
+  if (-not $mt -or $rm -ne 0) { No "the tag ${tag}: cannot read $dir" } }
 if (-not (TreeOf $st "$t/i")) { No "the tag ${tag}: cannot read coordinator/" }
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } elseif ($env:USERPROFILE) { "$env:USERPROFILE/.claude" } else { "$env:HOME/.claude" }
-$pdir = "$cfg/projects/$($root -creplace '[^A-Za-z0-9]', '-')"; $mem = "$pdir/memory"
-if (@(Get-ChildItem -LiteralPath $mem -Force -ErrorAction SilentlyContinue).Count -gt 0) {
-  $mt = TreeOf $mem "$t/m"; $env:GIT_INDEX_FILE = "$t/i"; $null = G read-tree --prefix=before-reset-memory/ $mt; $rm = $script:rc; Remove-Item Env:GIT_INDEX_FILE
-  if (-not $mt -or $rm -ne 0) { No "the tag ${tag}: cannot read the memory folder $mem" } }
+$enc = $root -creplace '[^A-Za-z0-9]', '-'; $pdir = "$cfg/projects/$enc"; $mem = "$pdir/memory"
+Behind $mem "$t/m" 'before-reset-memory'
+# The briefs and status files of the sessions whose transcripts lie at the root's folder or its worktrees': exact names, proj never takes proj-2's
+$taken = @(); $dirs = @(Get-ChildItem -LiteralPath "$cfg/projects" -Directory -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $enc -or $_.Name -like "$enc--claude-worktrees-*" })
+foreach ($j in @($dirs | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Force -Filter '*.jsonl' })) {
+  foreach ($f in "briefs/$($j.BaseName).md", "sessions/$($j.BaseName).json") { if (-not (IsFile "$cfg/coordinator/$f")) { continue }
+    try { $null = New-Item -ItemType Directory -Force -Path "$t/c/$($f.Split('/')[0])" -ErrorAction Stop; Copy-Item -LiteralPath "$cfg/coordinator/$f" -Destination "$t/c/$f" -ErrorAction Stop; $taken += $f } catch { No "the tag ${tag}: cannot read $cfg/coordinator/$f" } } }
+Behind "$t/c" "$t/n" 'before-reset-config'
 $env:GIT_INDEX_FILE = "$t/i"; $tree = G write-tree; $rc1 = $script:rc; Remove-Item Env:GIT_INDEX_FILE
 $commit = G commit-tree $tree -p $parent -m "before reset: $tag"; if ($rc1 -ne 0 -or $script:rc -ne 0 -or -not $commit) { No "the tag ${tag}: cannot commit (git's user set?)" }
 $null = G tag $tag $commit; if ($script:rc -ne 0) { No "the tag $tag cannot be made" }
@@ -77,6 +84,7 @@ foreach ($e in @(Get-ChildItem -LiteralPath $st -Force | ForEach-Object { $_.Nam
     No "coordinator/$e is held by another process: nothing removed, the tag taken back" } }
 $null = G update-ref HEAD $commit; if ($script:rc -ne 0) { Failed "cannot move the state branch; everything is in $old and behind the tag $tag" }
 try { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction Stop; if (Test-Path -LiteralPath $mem) { Remove-Item -LiteralPath $mem -Recurse -Force -ErrorAction Stop } } catch { Failed "cannot remove $old or $mem; everything is behind the tag $tag" }; if (Test-Path -LiteralPath $pdir) { $null = New-Item -ItemType Directory -Force -Path $mem }
+foreach ($f in $taken) { try { Remove-Item -LiteralPath "$cfg/coordinator/$f" -Force -ErrorAction Stop } catch { Failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag" } }
 try { $null = New-Item -ItemType Directory -Path "$st/core" -ErrorAction Stop
   Get-ChildItem -LiteralPath $from -Force | Where-Object { $_.Name -cne '.git' -and $_.Name -cne '.github' -and $_.Name -cne 'CLAUDE.md' } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "$st/core" -Recurse -Force -ErrorAction Stop } } catch { Failed "cannot copy the core from $from; everything is behind the tag $tag" }
 $null = G read-tree --empty; $b = $script:rc; $null = G add -A; $b += $script:rc; $tree = G write-tree; $b += $script:rc; $c2 = G commit-tree $tree -p $commit -m "reset of the coordinator: tag=$tag core=$sha"; $b += $script:rc; $null = G update-ref HEAD $c2; $b += $script:rc
