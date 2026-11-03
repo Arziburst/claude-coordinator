@@ -1126,11 +1126,11 @@ function AsstGh([string[]]$a) {
   }
   $rest = @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] })
   if ($grp -ceq 'api') { AsstApi $rest; return }
-  # no browser route (#345, #385): --web, -w also as -w=x, -wb x, -cw (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
+  # no browser route (#345, #385): --web, any short cluster holding w: -w, -w=x, -wb x, -cw, -Rowner/repo (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
   $web = ($grp -ceq 'browse') -and ($rest -cnotcontains '--no-browser')
   $val = $false; $p = ''
   foreach ($t in $rest) { if ($t -ceq '--web' -or $t -clike '--web=*') { $web = $true }
-    if ($val) { $val = $false } elseif ("$grp $sub $t" -ceq 'pr list --search' -and -not $p.StartsWith('-')) { $val = $true } elseif ("$grp $sub" -cne 'run list' -and $t -cmatch '^-c?w') { $web = $true }; $p = $t }
+    if ($val) { $val = $false } elseif ("$grp $sub $t" -ceq 'pr list --search' -and -not $p.StartsWith('-')) { $val = $true } elseif ("$grp $sub" -cne 'run list' -and $t -cmatch '^-[a-zA-Z]*w') { $web = $true }; $p = $t }
   if ($web) { Block "an assistant opens no browser (gh $grp $sub with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)" }
   if ($grp -ceq 'project' -and $sub -ceq 'item-list') { return }
   if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }

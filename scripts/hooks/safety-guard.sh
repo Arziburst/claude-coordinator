@@ -1222,7 +1222,7 @@ asst_gvar() {
     t="${A[$k]}"; k=$((k + 1))
     case "$t" in
       GIT_?*=*|env:GIT_*|env:[/\\]GIT_*|'$env:GIT_'*=*) ;;
-      GH_BROWSER=*|BROWSER=*|BROWSER+=*|env:GH_BROWSER*|env:/GH_BROWSER*|env:BROWSER*|'$env:GH_BROWSER'*=*|'$env:BROWSER'*=*|'${env:GH_BROWSER}'=*) block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" ;;
+      GH_BROWSER=*|BROWSER=*|BROWSER+=*|env:GH_BROWSER*|env:[/\\]GH_BROWSER*|env:BROWSER*|env:[/\\]BROWSER*|'$env:GH_BROWSER'*=*|'$env:BROWSER'*=*|'${env:GH_BROWSER}'=*) block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" ;;
       '$env:GIT_'*|'$env:GH_BROWSER'*|'$env:BROWSER'*) case "${A[$k]:-}" in =*) ;; *) continue ;; esac ;;
       *) continue ;;
     esac
@@ -1331,10 +1331,10 @@ asst_gh() {
     if [ -z "$grp" ]; then grp="$t"; case "$grp" in api|help|version|status|browse) break ;; esac; continue; fi
     sub="$t"; break
   done
-  if [ "$grp" != api ]; then   # no browser route (#345, #385): --web, -w also as -w=x, -wb x, -cw (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
+  if [ "$grp" != api ]; then   # no browser route (#345, #385): --web, any short cluster holding w: -w, -w=x, -wb x, -cw, -Rowner/repo (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
     nx=0; [ "$grp" = browse ] && nx=1
     for t in "$@"; do case "$t" in --web|--web=*) nx=2 ;; --no-browser) [ $nx = 1 ] && nx=0 ;; esac
-      if [ $val = 1 ]; then val=0; elif [ "$grp $sub $t" = "pr list --search" ] && [ "${p#-}" = "$p" ]; then val=1; elif [ "$grp $sub" != "run list" ] && [[ $t =~ ^-c?w ]]; then nx=2; fi; p="$t"; done
+      if [ $val = 1 ]; then val=0; elif [ "$grp $sub $t" = "pr list --search" ] && [ "${p#-}" = "$p" ]; then val=1; elif [ "$grp $sub" != "run list" ] && [[ $t =~ ^-[a-zA-Z]*w ]]; then nx=2; fi; p="$t"; done
     [ $nx != 0 ] && { eval "$ci"; block "an assistant opens no browser (gh $grp${sub:+ $sub} with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)"; }
   fi
   case "$grp" in

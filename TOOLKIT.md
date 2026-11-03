@@ -511,7 +511,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
   `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
   no graphql since #345, boards through `gh project item-list` / `gh project view`). Nothing opens a browser there
-  (#345): no `--web`, no `-w` (except `gh run list -w`, a workflow), `gh browse` only with `--no-browser`, no `GH_BROWSER` /
+  (#345): no `--web`, no short option cluster holding `w` (`-w`, `-cw`, `-w=true`, `-Rowner/repo`; except under `gh run list`, where `-w` is a workflow, and as the value of `gh pr list --search`), `gh browse` only with `--no-browser`, no `GH_BROWSER` /
   `BROWSER`; a git command's help: `git <command> -h` in the terminal, `--help` opens a browser on Windows. gh is an allowlist there: only these reads pass — a group's `list`, `view`,
   `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
   `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh api` by the read rules above (GET or
@@ -524,7 +524,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   nothing changes. **The limit:** shell writes (a
   redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
   brief hold it to its folder there, and the write tools of a connector its brief does not name go into
-  its settings' deny list. Nor does the guard's reading of git and gh see `GH_BROWSER` / `BROWSER`, `gh --help <extension>`, abbreviated options of
+  its settings' deny list. Nor does the guard's reading of git and gh see `gh --help <extension>`, abbreviated options of
   `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
   git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
   more.
