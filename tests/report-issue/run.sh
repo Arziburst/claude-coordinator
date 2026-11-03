@@ -187,6 +187,17 @@ if [ "$kind" = ps ]; then
   sh_sig="$(bash "$core/scripts/report-issue.sh" signature --source "$SA" --step "read the run log" --exit 1 --error "$EA" 2>&1 | tr -d '\r')"
   [ -n "$s1" ] && [ "$s1" = "$sh_sig" ] && ok || bad ".ps1 [$s1] .sh [$sh_sig]"
 fi
+# #441: a reader that closes early (`grep -q`) under a `tr` still writing: a stub tr holds back its last byte
+if [ "$kind" = sh ]; then rtr="$(command -v tr)"; mkdir -p "$tmp/trbin"; cat > "$tmp/trbin/tr" <<EOF
+#!/bin/bash
+[ "\$1" = A-Z ] || exec "$rtr" "\$@"
+o="\$("$rtr" "\$@"; echo x)"; o="\${o%x}"; n=\${#o}; [ "\$n" -gt 999 ] || { printf %s "\$o"; exit 0; }
+printf %s "\${o:0:n-1}"; sleep 0.3; printf %s "\${o:n-1}"
+EOF
+  chmod +x "$tmp/trbin/tr"; fresh "signature: a pipe's early close leaves no error line and keeps a core path (#441)"
+  PATH="$tmp/trbin:$PATH" run signature --source CORE.md --step s --exit 1 --error "cannot connect now"; code 0
+  [ "$out" = "CORE.md: s: exit 1: cannot connect now" ] && ok || bad "another line than the core path's own"
+fi
 
 # --- signature, round 3 of #338: quoted paths with spaces, scp remotes, negative exit codes ---
 # (the signature goes to a public issue: a path's tail and the names in it never reach it). Unquoted paths
