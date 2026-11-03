@@ -1,0 +1,14 @@
+wall 1250
+total ubuntu 10
+total macos 7
+total windows 1710
+step ubuntu 10 Done step
+step macos 7 Old form step
+step windows 70 Which step
+step windows 390 At the line, 1.3 times
+step windows 391 Over the line, 1.3 times
+step windows 160 At the line, 60 s
+step windows 161 Over the line, 60 s
+step windows 266 At the line, floored
+step windows 267 Over the line, floored
+step windows 5 No baseline

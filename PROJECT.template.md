@@ -127,7 +127,7 @@ Walked end to end at init (CORE §3, topic d); revise as the project changes.
 | Definition-of-done checks per task | `<fill>` | lint + typecheck + build + unit tests (+ DB tests with a migration) |
 | End-to-end check of the task | `<fill>` | a headless-browser scenario that clicks through the changed pages on a database seeded with test data |
 | CI layout | `<fill>` | a fast set on every PR, heavy checks by path filter, caching; a full suite over about 10 minutes: a fast selection on PRs (the changed paths and the PR's own tests, stopping at the first failure), the full suite once before the merge on the updated head; long scenario tests cut to their asserted moments or moved to a manual set |
-| CI time budget | `<fill>` | a change adding more than 30 seconds to the full suite asks the coordinator first; every worker report states it (roles/worker.md) |
+| CI time budget | `<fill>` | a change adding more than 30 seconds to the full suite asks the coordinator first; every worker report states it, measured with `scripts/ci-times` on the PR's run when one is at hand (roles/worker.md); a suite that outgrows one job runs in parallel shards under the same required checks, with a committed baseline of step times that warns on growth (TOOLKIT *CI*) |
 | Improvements | `<fill>` | the coordinator proposes checks that save time or owner attention (CORE §4b); the owner decides |
 
 ## Voice in artifacts

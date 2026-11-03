@@ -1,0 +1,19 @@
+wall 3444
+total ubuntu 44
+total macos 76
+total windows 741
+step ubuntu 1 Set up job
+step ubuntu 0 Which heavy steps run (a pull request - by the files it changes; any other run - all)
+step ubuntu 1 Links and section references (bash)
+step ubuntu 42 safety-guard blocks and allows the shared cases (bash, with jq)
+step ubuntu 0 Complete job
+step macos 0 Set up job
+step macos 0 Which heavy steps run (a pull request - by the files it changes; any other run - all)
+step macos 1 Links and section references (bash)
+step macos 73 safety-guard blocks and allows the shared cases (bash, with jq)
+step macos 2 Complete job
+step windows 0 Set up job
+step windows 1 Which heavy steps run (a pull request - by the files it changes; any other run - all)
+step windows 4 Links and section references (PowerShell)
+step windows 736 safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
+step windows 0 Complete job

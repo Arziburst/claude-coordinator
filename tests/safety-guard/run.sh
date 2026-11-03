@@ -2,9 +2,10 @@
 # Run tests/safety-guard/cases.txt against a safety hook (macOS / Linux; Windows: run.ps1).
 #   tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
 #   tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-# Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores).
+# Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores). SG_CASES=<file>: that file
+# for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384).
 set -u
-[ $# -gt 0 ] || { sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
 unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
 unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
@@ -132,11 +133,11 @@ case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
 # fail unrun (a guard whose range loop never ends also collects words, so its memory grows; never at once).
 # Only the started process and the group set -m made for it are killed (Git Bash too: measured, a child there
 # has the group and dies with it, so the guard's hung awk does not go on growing), never a process found by a
-# tree walk or a looked-up PID. That happens only on a broken guard; output goes to /dev/null, so no pipe is held.
+# tree walk or a looked-up PID. That happens only on a broken guard; stdout goes to /dev/null and stderr to the shard's file, so no pipe is held.
 bounded() {
   local p w=0 lim=$((${SG_CASE_LIMIT:-10} * 5)) r
   {
-    set -m; "${CMD[@]}" < "$1" >/dev/null 2>&1 & p=$!; set +m
+    set -m; "${CMD[@]}" < "$1" >/dev/null 2>"$e" & p=$!; set +m
     while kill -0 "$p" 2>/dev/null && [ "$w" -lt "$lim" ]; do sleep 0.2; w=$((w + 1)); done
     if kill -0 "$p" 2>/dev/null; then
       kill -9 -- "-$p" 2>/dev/null; kill -9 "$p" 2>/dev/null; wait "$p"; r=124
@@ -145,7 +146,7 @@ bounded() {
   return "$r"
 }
 shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
-  local ln=0 i=0 hung=""
+  local ln=0 i=0 hung="" e="$tmp/err.$1"   # e: the hook's stderr of the case at hand (printed when it fails)
   n=0 fail=0
 while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   ln=$((ln + 1))
@@ -203,17 +204,17 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
     printf '%s' "$json" > "$tmp/timed.$1.json"
     CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" bounded "$tmp/timed.$1.json"
   elif [ -n "$adir" ]; then
-    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>&1
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>"$e"
   else
-    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>&1
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>"$e"
   fi
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
   [ "$rc" = 124 ] && { got="no answer within ${SG_CASE_LIMIT:-10}s"; hung=1; }
   [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; fail=1; }
-done < "$here/cases.txt"
+  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || head -n 20 "$e" | sed "s/^/$ln     /"; fail=1; }
+done < "${SG_CASES:-$here/cases.txt}"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
 }
 k=0
@@ -226,9 +227,10 @@ for k in $(seq 0 $((jobs - 1))) timed; do
     read -r sn sf total < "$tmp/shard.$k.done"; ran=$((ran + sn)); [ "$sf" = 0 ] || fail=1
   else echo "FAIL (cases) shard $k of $jobs did not finish"; fail=1; fi
 done
-cat "$tmp"/shard.*.out | sort -n -k1,1 | sed 's/^[0-9]* //'
+cat "$tmp"/shard.*.out | sort -s -n -k1,1 | sed 's/^[0-9]* //'
 [ -n "$total" ] && [ "$ran" = "$total" ] || { echo "FAIL (cases) $ran of ${total:-?} cases of cases.txt ran"; fail=1; }
 n=$((n + ran))
+[ -z "${SG_CASES:-}" ] || { echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"; exit $fail; }
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
 # (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
