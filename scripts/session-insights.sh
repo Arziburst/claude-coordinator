@@ -42,10 +42,13 @@
 #   reread  files=<n> reads=<n>   — files the Read tool read 3+ times in one transcript, and those reads;
 #          --detail adds "reread_file <path> reads=<n>" lines: file names, for this machine only
 #   turns  assistant=<n> tool_calls=<n>   — distinct messages and tool calls
+#   origin  human=<n> peer=<n> task_notification=<n> system=<n> other=<n> unknown=<n>   — the last line (#342): the
+#          prompts by who started the turn, a user record's top-level turnOrigin (any other value: other; a compact
+#          summary never counts); unknown = a user record with none that is no tool result and not isMeta (an old transcript)
 # A result whose call is not in the files read (or before --since) is skipped; so is a line that is no
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
-usage() { sed -n '2,46s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,49s/^# \{0,1\}//p' "$0"; exit 2; }
 arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -201,6 +204,12 @@ insights() {
       }
       if ($0 ~ /"stop_reason":[ \t]*"end_turn"/) resolve("stopped")
     }
+    # the record outside its message object (a prompt s own fields), and a prompt counted by its turnOrigin (#342)
+    function top(   p, e) { if (!match($0, /"message":[ \t]*[{]/)) return $0
+      p = RSTART; e = objend($0, p + RLENGTH - 1); return substr($0, 1, p - 1) (e ? substr($0, e + 1) : "") }
+    function prompt(t,   o) { if (t ~ /"isCompactSummary":[ \t]*true/) return
+      if (match(t, /"turnOrigin":[ \t]*"[^"]*"/)) { o = substr(t, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*"/, "", o); sub(/"$/, "", o); PO[o ~ /^(human|peer|task_notification|system)$/ ? o : "other"]++ }
+      else if (t !~ /"isMeta":[ \t]*true/) PO["unknown"]++ }
     function result(   id, nm, st, a, r, body, g, e) {
       if (!match($0, /"tool_use_id":[ \t]*"[^"]*"/)) return
       st = RSTART; id = substr($0, RSTART, RLENGTH); sub(/^"tool_use_id":[ \t]*"/, "", id); sub(/"$/, "", id)
@@ -232,13 +241,14 @@ insights() {
     { sub(/\r$/, "")
       if ($0 == NO) { endfile(); next }
       if (substr($0, 1, 3) == "\357\273\277") $0 = substr($0, 4)   # a BOM
-      isR = $0 ~ /"type":[ \t]*"tool_result"/
-      if (!isR && $0 !~ /"type":[ \t]*"assistant"/) next
+      isR = $0 ~ /"type":[ \t]*"tool_result"/; t = ""
+      if (!isR && $0 ~ /"type":[ \t]*"user"/) { t = top(); if (t !~ /"type":[ \t]*"user"/) t = "" }
+      if (!isR && t == "" && $0 !~ /"type":[ \t]*"assistant"/) next
       ts = rects($0)
       if (since != "" && (ts == "" || substr(ts, 1, 19) < since)) next
       if (until != "" && substr(ts, 1, 19) >= until) next
       ms = tms(ts)
-      if (isR) result(); else assistant() }
+      if (isR) result(); else if (t != "") prompt(t); else assistant() }
     END { endfile()
       if (!na && !nc) exit
       for (r in BC) printf "%s\tcount=%d changed=%d retried=%d around=%d stopped=%d\n", r, BC[r], BK[r, "changed"], BK[r, "retried"], BK[r, "around"], BK[r, "stopped"] | "LC_ALL=C sort"
@@ -251,7 +261,8 @@ insights() {
       printf "reread\tfiles=%d reads=%d\n", rf, rr
       for (i = 1; i <= nd; i++) print DL[i] | "LC_ALL=C sort"
       close("LC_ALL=C sort")
-      printf "turns\tassistant=%d tool_calls=%d\n", na, nc }'
+      printf "turns\tassistant=%d tool_calls=%d\n", na, nc
+      printf "origin\thuman=%d peer=%d task_notification=%d system=%d other=%d unknown=%d\n", PO["human"], PO["peer"], PO["task_notification"], PO["system"], PO["other"], PO["unknown"] }'
 }
 # every file, then the \001 line (after a newline: a last line without one stays its own)
 feed() { while IFS= read -r f; do [ -n "$f" ] || continue; cat "$f"; printf '\n\001\n'; done; }
