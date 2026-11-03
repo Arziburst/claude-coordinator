@@ -49,7 +49,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - **Not done yet:** every row of the new core's [ONE-TIME.md](../ONE-TIME.md) with no line in
      `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
      by `hostname`), and every row whose newest line is `failed`. A setting is asked with its default
-     first; a check is offered as "run now? yes/no".
+     first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
+     report (`coordinator window 500000, workers keep <n>`, the number `PROJECT.md` names where it names
+     one), and the owner's yes to step 4 runs it, as the settings files above when auto mode refuses the edit.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -82,10 +84,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    evidence that this commit works here; its CHECKLIST line names the commit. A declined full self-test
    still runs `selftest probes` when they are due (the same due-rule as SELFTEST step 2a), so they never
    stay due (#331). Then
-   install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) and refresh the core's skills — every
+   install the roles (TOOLKIT *Workers*, Roles: the one-time step `roles-link` first, when it is *Not done yet* and the owner said yes; then a project with the link has them at the new commit, one without gets them in `~/.claude/agents/`) and refresh the core's skills — every
    `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
    removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
-   Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*
+   Run the one-time checks the owner said yes to and `coordinator-window`; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git

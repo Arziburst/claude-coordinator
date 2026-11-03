@@ -41,7 +41,7 @@ expect() {
   [ "$rc" = "$want_rc" ] || { bad "$name: exit $rc, want $want_rc"; sed 's/^/  err: /' "$tmp/err"; return; }
   if [ "$want_out" = any ]; then :
   elif [ "$want_out" = - ]; then [ ! -s "$tmp/out" ] || { bad "$name: printed"; sed 's/^/  got: /' "$tmp/out"; return; }
-  elif ! [ "$(cat "$tmp/out")" = "$(tr -d '\r' < "$want_out")" ]; then
+  elif ! [ "$(grep -v '^origin' "$tmp/out")" = "$(tr -d '\r' < "$want_out" | grep -v '^origin')" ]; then   # every older line, byte for byte; the origin line (#342): below
     bad "$name: differs from ${want_out#"$here"/}"; sed 's/^/  got: /' "$tmp/out"; return
   fi
   [ "$want_err" = - ] || [ "$(cat "$tmp/err")" = "$want_err" ] || { bad "$name: stderr"; sed 's/^/  got: /' "$tmp/err"; return; }
@@ -90,5 +90,11 @@ expect "--project with no session inside prints nothing" 0 - - -- "$rd" --since 
 expect "--until without --since is refused" 2 any - -- "$rd" b1 --until 2026-10-12T00:00:00Z
 expect "--skip-tests with a session is refused" 2 any - -- "$rd" c1 --skip-tests
 expect "--until with an offset other than Z is refused" 2 - - -- "$rd" --since 2026-10-05T00:00:00Z --until 2026-10-12T00:00:00+02:00
+# #342, the access point: the output's last line, `origin` and a tab, all six always in this order. A prompt: a record of type user with a top-level turnOrigin
+# (human, peer, task_notification, system; any other value: other), never one with isCompactSummary. unknown: a user record without one, no tool_result, no isMeta (an old transcript).
+org() { n=$((n + 1)); run "$here/origin" "${@:3}"; [ "$rc" = 0 ] && [ "$(tail -n 1 "$tmp/out")" = "$(printf 'origin\t%s' "$2")" ] && echo "ok   $1" || { bad "$1: want the last line origin $2"; sed 's/^/  got: /' "$tmp/out"; }; }
+org "origin: each kind; a tool result, a meta line, a tool input and a system record are no prompt" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=1' o1
+org "origin: an old transcript without the field" 'human=0 peer=0 task_notification=0 system=0 other=0 unknown=2' o0
+org "origin: --since sums the transcripts" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=3' --since 2026-10-01T00:00:00Z
 [ "$fail" = 0 ] && echo "session-insights: $n cases passed" || echo "session-insights: failures above ($n cases)"
 exit "$fail"

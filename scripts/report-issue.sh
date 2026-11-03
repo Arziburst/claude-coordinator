@@ -182,7 +182,7 @@ EOF
   # whose every word the allowlist keeps (it can carry no name), stays as it is; any other is the token PATH
   line="$(oneline "$source" | tr '\\' '/')"
   lc="$(printf '%s' "$line" | tr 'A-Z' 'a-z' | sed 's#/$##')"
-  if ! { [ -n "$lc" ] && printf '%s\n' "$paths" | tr 'A-Z' 'a-z' | grep -qxF -- "$lc"; }; then
+  if ! { [ -n "$lc" ] && printf '%s\n' "$paths" | tr 'A-Z' 'a-z' | grep -xF -- "$lc" >/dev/null; }; then
     case "$lc" in
       scripts/*|procedures/*|roles/*|skills/*|tests/*) case "${lc#*/}" in ''|*[!a-z._/-]*) line=PATH ;; *) rest="${lc#*/}" ;; esac ;;
       *) line=PATH ;;

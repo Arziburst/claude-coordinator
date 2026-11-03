@@ -26,6 +26,9 @@
 #   tests/run-stats/run.sh sh             # scripts/run-stats.sh, with the bash running this file
 #   tests/run-stats/run.sh ps pwsh         # scripts/run-stats.ps1 (or: ps powershell)
 # Exit 1 if any case fails.
+# --task with a verifier run as a subagent, the access point (#389): an approving verifier row with no start and no
+# wall (`runs add --in`) is no refusal: ready = the checks all green, and the row's result cell reads `merged checks`
+# (unmerged: `ready checks`). `checks` is the one word; a verifier with a start keeps `merged` / `ready`.
 set -u
 [ $# -gt 0 ] || { sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -216,6 +219,25 @@ expect "task: a task with no rows" 1 - "run-stats: task 99: no rows in task-runs
 expect "task: a malformed wait line" 1 - "run-stats: waits-bad.txt:2: not an owner wait (<asked UTC> <answered UTC>)" -- \
   task-runs.tsv --task 40 --pr-json pr-late.json --waits waits-bad.txt
 expect "task: a missing PR file" 1 - "run-stats: cannot read missing.json" -- task-runs.tsv --task 40 --pr-json missing.json
+# #389: a verifier run as a subagent: its rows as `runs add --in` writes them (no start, wall or active)
+{ printf 'date\ttask\trole\tkind\tmodel\teffort\testimate\ttokens\tcost\tresult\tstart\twall\tactive\twait\testimate_time\n'
+  for x in 50:approved '51:rework 1' 52:approved; do
+    printf '2026-10-06\t%s\tworker\tordinary\tsonnet\tmedium\t3\t1\t3.00\tapproved\t2026-10-06T08:12:00Z\t40\t30\t\t-\n' "${x%%:*}"
+    [ "${x%%:*}" != 52 ] || printf '2026-10-06\t52\tverifier\tordinary\thaiku\tlow\t-\t1\t0.20\trework 1\t2026-10-06T08:52:00Z\t4\t3\t\t-\n'
+    printf '2026-10-06\t%s\tverifier\tordinary\thaiku\tlow\t-\t4567\tin coordinator\t%s\t\t\t\t\t-\n' "${x%%:*}" "${x#*:}"
+  done; } > sub.tsv
+sr() { printf '2026-10-06\t%s\ttask\tordinary\tsonnet\t-\t-\t-\t-\t%s\t2026-10-06T08:12:00Z\t%s\t30\t%s\t\n' "$@"; }
+sr 50 'merged checks' 84 84 > sub-merged.txt; sr 50 'ready checks' 84 0+ > sub-open.txt; printf '2026-10-06\t52\ttask\tordinary\tsonnet\t-\t-\t-\t-\tmerged checks\t2026-10-06T08:12:00Z\t84\t33\t84\t\n' > sub-rework.txt
+cp sub.tsv sub-app.tsv
+expect "task: a subagent verifier - the row from the checks, written, says checks" 0 sub-merged.txt "run-stats: the task row appended to sub-app.tsv" -- \
+  sub-app.tsv --task 50 --pr-json pr-late.json --append
+n=$((n + 1)); if [ "$(tail -n 1 sub-app.tsv)" = "$(cat sub-merged.txt)" ]; then echo "ok   task: a subagent verifier's row is the file's last line"; else bad "task: a subagent verifier's row was not written"; fi
+expect "task: a subagent verifier, not merged - ready checks" 0 sub-open.txt - -- sub.tsv --task 50 --pr-json pr-open.json
+expect "task: a session verifier's rework, then a subagent's approval" 0 sub-rework.txt - -- sub.tsv --task 52 --pr-json pr-late.json
+expect "task: a subagent verifier, a check red - not ready" 1 - "run-stats: task 50: not ready - the check checks (windows-latest) is FAILURE" -- \
+  sub.tsv --task 50 --pr-json pr-red.json
+expect "task: a subagent verifier that did not approve - not ready" 1 - "run-stats: task 51: not ready - no verifier run approved it" -- \
+  sub.tsv --task 51 --pr-json pr-late.json
 expect "task: --pr-json without --task is a usage error" 2 '*' - -- task-runs.tsv --pr-json pr-late.json
 expect "task: --task with --per-run is a usage error" 2 '*' - -- task-runs.tsv --task 40 --per-run
 expect "task: the waits from stdin is a usage error" 2 '*' - -- task-runs.tsv --task 40 --waits -

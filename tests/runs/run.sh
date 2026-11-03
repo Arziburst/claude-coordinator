@@ -30,7 +30,8 @@
 #     Result words: approved done pass `rework <n>` (one argument, n a number) escalated failed dropped
 #     ready; any other: exit 2, the file byte-identical. No transcript for --session: exit 1, file
 #     unchanged. A row already there with the same start and role: refused, exit non-zero, file unchanged
-#     — except role `assistant`.
+#     — except roles `assistant` and `coordinator` (#389: `--role coordinator`, a row per day): its cost cell = the
+#     session's cost less the earlier rows' of the same start, task and role, four decimals.
 #   add / check: a log that cannot be written (add) or read (add, check; e.g. a directory in its place, a
 #     file held open without sharing): exit 1 with a line starting `runs:`, no row on stdout, never
 #     ALL LOGGED, the log unchanged.
@@ -241,6 +242,17 @@ run add --log "$L" --session $ASS "${B[@]}" --date 2026-10-30; code 0
 run add --log "$L" --session $ASS "${B[@]}" --date 2026-10-31; code 0
 [ "$(rows "$L")" = 2 ] && ok || bad "rows: $(rows "$L"), want 2"
 [ "$(cell "$L" start 1)" = "$(st $ASS start)" ] && [ "$(cell "$L" start 2)" = "$(st $ASS start)" ] && ok || bad "the assistant rows' start differs from session-tokens'"
+
+fresh "add: role coordinator, a row per day - each holds the cost since the previous, the same start (#389)"
+printf '%s\n' "$H" > "$L"
+B=(--task core --role coordinator --kind coordinator --model opus --effort high --estimate - --estimate-time - --result done)
+for x in 28:1.5:1.5 29:4:2.5 30:4.75:0.75; do IFS=: read -r d c w <<< "$x"
+  printf '{"session_id":"%s","cost":{"total_cost_usd":%s}}\n' $COS "$c" > "$CLAUDE_CONFIG_DIR/coordinator/sessions/$COS.json"
+  run add --log "$L" --session $COS "${B[@]}" --date 2026-10-$d; code 0
+  awk -v a="$(cell "$L" cost)" -v b="$w" 'BEGIN { exit !(a != "" && a + 0 == b + 0) }' && ok || bad "the row of day $d: cost '$(cell "$L" cost)', want $w"
+done
+[ "$(rows "$L")" = 3 ] && ok || bad "rows: $(rows "$L"), want 3"
+[ -n "$(cell "$L" start 1)" ] && [ "$(cell "$L" start 1)" = "$(cell "$L" start 3)" ] && ok || bad "the coordinator rows' start differs"
 
 fresh "add: a CRLF file with a BOM keeps both; the row ends CRLF"
 printf '\xEF\xBB\xBF%s\r\n%s\r\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"

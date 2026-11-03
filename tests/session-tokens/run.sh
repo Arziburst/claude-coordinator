@@ -20,7 +20,7 @@ run() {
   local cfg; cfg="$(winpath "$1")"; shift
   if [ "$kind" = ps ]; then
     local a=()
-    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --prune) a+=(-Prune) ;; *) a+=("$x") ;; esac; done
+    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --prune) a+=(-Prune) ;; --prices) a+=(-Prices) ;; *) a+=("$x") ;; esac; done
     CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/session-tokens.ps1")" "${a[@]}" > "$tmp/out.raw" 2> "$tmp/err.raw"
   else
     CLAUDE_CONFIG_DIR="$cfg" bash "$core/scripts/session-tokens.sh" "$@" > "$tmp/out.raw" 2> "$tmp/err.raw"
@@ -36,7 +36,7 @@ expect() {
   n=$((n + 1)); run "$@"
   [ "$rc" = "$want_rc" ] || { bad "$name: exit $rc, want $want_rc"; sed 's/^/  err: /' "$tmp/err"; return; }
   if [ "$want_out" = - ]; then [ ! -s "$tmp/out" ] || { bad "$name: printed"; sed 's/^/  got: /' "$tmp/out"; return; }
-  elif ! [ "$(cat "$tmp/out")" = "$(tr -d '\r' < "$want_out")" ]; then
+  elif ! [ "$(grep -v '^context' "$tmp/out")" = "$(tr -d '\r' < "$want_out" | grep -v '^context')" ]; then   # every older line, byte for byte; the context line (#342): below
     bad "$name: differs from ${want_out#"$here"/}"; sed 's/^/  got: /' "$tmp/out"; return
   fi
   [ "$want_err" = - ] || [ "$(cat "$tmp/err")" = "$want_err" ] || { bad "$name: stderr"; sed 's/^/  got: /' "$tmp/err"; return; }
@@ -134,5 +134,15 @@ left="$(ls "$d" | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$rc" = 0 ] && [ "$left" = "d6.json new.json " ]; then echo "ok   --prune at 7 x 24 hours"; else bad "--prune: exit $rc, left $left"; fi
 n=$((n + 1)); left="$(ls "$c" | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$left" = "sessions statusline.102.tmp statusline.json " ]; then echo "ok   --prune: the status line's temp files at 1 hour"; else bad "--prune temp files: left $left"; fi
+# #342, the access point: the last line, wherever a transcript is read, `context` and a tab, each bucket <requests>/<tokens, as the total line sums them>, by input + cache read + cache write of a request (each message id once, its largest output), 100000 in 100-200k, 700000 in 400-700k.
+# --prices <file> (-Prices; coordinator/prices.txt's format, as run-stats reads it; unreadable: exit 2): each bucket <requests>/<tokens>/$<cost, 4 places>, then unpriced=<n>: the requests of a model not in the file, counted, no cost.
+ctx() { n=$((n + 1)); run "$2" "${@:4}"; [ "$rc" = 0 ] && [ "$(tail -n 1 "$tmp/out")" = "$(printf 'context\t%s' "$3")" ] && echo "ok   $1" || { bad "$1: want the last line context $3"; sed 's/^/  got: /' "$tmp/out"; }; }
+PF="$(winpath "$here/context/prices.txt")"; K='under100k=1/100999/$0.4200 100-200k=2/299999/$0.4500 200-400k=3/799999/$0.1320 400-700k=3/1500000/$0.2600 over700k=2/1500001/$0.1400 unpriced=1'
+ctx "context: each bucket's edges, requests and tokens, no price needed" "$here/context" 'under100k=1/100999 100-200k=2/299999 200-400k=3/799999 400-700k=3/1500000 over700k=2/1500001' k1
+ctx "context: --prices, four models' costs, an unpriced model" "$here/context" "$K" k1 --prices "$PF"
+ctx "context: --since with --prices" "$here/context" "$K" --since 2026-10-01T00:00:00Z --prices "$PF"
+ctx "context: a session and its subagent (expected.txt, the self-test's fixture)" "$cl" "$(tail -n 1 "$t/expected.txt" | tr -d '\r' | cut -f2)" s1
+ctx "context: a stopped session, from its transcript, not its record" "$st" 'under100k=1/1013/$0.0002 100-200k=0/0/$0.0000 200-400k=0/0/$0.0000 400-700k=0/0/$0.0000 over700k=0/0/$0.0000 unpriced=0' c1 --prices "$PF"
+expect "context: --prices with no such file" 2 - - -- "$here/context" k1 --prices "$(winpath "$tmp/none.txt")"
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
 exit "$fail"

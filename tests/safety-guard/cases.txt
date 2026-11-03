@@ -256,6 +256,17 @@ allow	work	Invoke-Command -ScriptBlock { git push origin 12-fix }
 allow	work	git stash apply stash@{0}
 allow	work	git log --format=%H{x} origin/main..HEAD
 allow	work	echo ${HOME} && git push origin 12-fix
+# --- a Git Bash path on Windows (#425): /c/... names a real folder, in cd and in git -C; the cwd's branch is not the answer ---
+block	main	cd @PROJECT_U@ && git push
+block	main	git -C @PROJECT_U@ push
+block	main	git -C @PROJECT_U@ push origin HEAD
+allow	work	cd @PROJECT_U@ && git push
+allow	work	git -C @PROJECT_U@ push
+allow	work	git -C @PROJECT_U@ push origin HEAD
+block	work	git -C @PROJECT_U@/../main push
+allow	main	cd @PROJECT_U@/../work && git push
+allow	work	git -C @PROJECT_U@/../linked clean -ffdx
+block	work	git -C @PROJECT_U@ clean -ffdx
 # --- the branch after checkout --track / checkout - / a file restore; git -C . ---
 block	work	git checkout --track origin/main && git push
 block	work	git checkout -t origin/main && git push

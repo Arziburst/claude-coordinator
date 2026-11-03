@@ -19,12 +19,16 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   give each command per OS, and scripts meant for everyone are written to run on all of them (or say
   which they need). The core itself stays OS-neutral. Detect too whether the project has git, a code
   host and a tracker; anything missing → say so in one line and use the mode in
-  [SOURCES.md](SOURCES.md) §3. Then install the core's roles into
-  `~/.claude/agents/` (TOOLKIT *Workers*, Roles) — automatic, no question.
+  [SOURCES.md](SOURCES.md) §3. Then install the core's roles (TOOLKIT *Workers*, Roles) —
+  automatic, no question: a project with the link `.claude/agents` (3.4, one-time step `roles-link`) has
+  them already; one without gets them in `~/.claude/agents/`.
 - **Safety check:**
   - **The coordinator's own background session** — run in the background in the isolating mode, it is
     refused every Edit / Write into `coordinator/`; one-time step `coordinator-bg-isolation`
     (ONE-TIME.md, #283) asks the owner for the project's local `worktree.bgIsolation: "none"`.
+  - **The coordinator's compaction window** — one-time step `coordinator-window` (ONE-TIME.md, #421):
+    `autoCompactWindow` 500000, or the project's number, in the same local file; workers keep theirs in
+    the worker safety file; one line in the summary (3.5), run on its yes.
   - **Branch protection on the code host** — each protected branch (`PROJECT.md` *Protected
     branches*, question 14; not only the default branch) requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it
@@ -260,6 +264,9 @@ through "Coordinator, settings" (#237).
 - **`coordinator/skills/`** and its link `.claude/skills` (CORE §12b, one-time step `coordinator-skills`):
   where the coordinator's skills live: the core's `coord-*` skills copied from `coordinator/core/skills/`,
   and the project's own when the owner asks for one.
+- **The roles' link** `.claude/agents` -> `coordinator/core/roles` (TOOLKIT *Roles*, one-time step
+  `roles-link`): the project's subagents come from its own core copy. A real or tracked `.claude/agents`
+  is never overwritten: the owner is told and the step's nested link goes inside it.
 - **`coordinator/CORE-FINDINGS.md`** from [CORE-FINDINGS.template.md](../CORE-FINDINGS.template.md): the
   record of the core's own failures in this project ([CORE-FINDINGS.md](CORE-FINDINGS.md)).
 - **The workers' copies** live in `.claude/worktrees/` inside the project; that folder goes into the same
@@ -268,7 +275,7 @@ through "Coordinator, settings" (#237).
   `/.lead/`, where an older lead kept its notes inside its worktree (a lead's notes now live beside it,
   in `<worktree>.lead/` inside `.claude/worktrees/`, roles/lead.md). Never
   `.gitignore`: that is a project file its team and the client would see. Nothing else of the
-  coordinator is written into the project's tree but the `.claude/skills` link (excluded the same way) and, on the owner's yes, the local setting of the one-time step `coordinator-bg-isolation` (the roles go to `~/.claude/agents/`, the hook is
+  coordinator is written into the project's tree but the `.claude/skills` and `.claude/agents` links (excluded the same way) and, on the owner's yes, the local settings of the one-time steps `coordinator-bg-isolation` and `coordinator-window` (a project without the roles' link keeps them in `~/.claude/agents/`, the hook is
   referenced by its absolute path in `coordinator/core/`).
 - **The voice** is not asked: artifacts are always in the owner's voice, with no AI co-author lines
   (§11).

@@ -14,8 +14,13 @@
 # (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes, but a gap inside a tool call
 # is work up to 30 minutes and one inside only a question to a person, a tool named *AskUserQuestion, is idle at any
 # length; minutes rounded, a half up).
+# Last of all, wherever a transcript is read (#342): "context under100k=<requests>/<tokens> 100-200k=... 200-400k=... 400-700k=...
+# over700k=...", the requests (each message id once) by their context, input + cache read + cache write (100000 is in 100-200k,
+# 700000 in 400-700k), tokens as the total line sums them; with -Prices <file> (coordinator/prices.txt's format, as run-stats
+# reads it; unreadable: exit 2) each bucket adds /$<list-price cost> and the line ends unpriced=<requests of a model not in the
+# file: counted, no cost>.
 # Exit 1 when nothing is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
-param([string]$Session, [string]$Since, [switch]$Prune)
+param([string]$Session, [string]$Since, [switch]$Prune, [string]$Prices)
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -27,14 +32,17 @@ if ($PSBoundParameters.ContainsKey('Session') -and -not $Session.Trim()) {
   [Console]::Error.WriteLine('empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)'); exit 2
 }
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 17 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 22 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
+if ($Prices -and -not (Test-Path -LiteralPath $Prices -PathType Leaf)) { [Console]::Error.WriteLine("cannot read the prices file $Prices"); exit 2 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
 $dir = Join-Path $cfg 'coordinator/sessions'
 $projects = Join-Path $cfg 'projects'
 # numbers as RUNS.tsv expects them (1.23, not 1,23 on a Russian or German Windows)
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+# the prices: `<model> <in> <out> <read> <write>...`, $ and / as blanks, as the .sh reads them
+$PRICE = @{}; if ($Prices) { foreach ($l in [IO.File]::ReadAllLines($Prices)) { if ($l -match '^[ \t]*(#|$)') { continue }; $f = @(($l -replace '[$/]', ' ').Trim() -split '[ \t]+'); if ($f.Count -ge 5) { $PRICE[$f[0]] = [double[]]@([double]$f[1], [double]$f[2], [double]$f[3], [double]$f[4]) } } }
 if ($Prune) {
   if (Test-Path -LiteralPath $dir) {
     # older than exactly 7 x 24 hours, as the .sh
@@ -191,15 +199,22 @@ function CountUsage([string[]]$Files) {
     }
   }
   $per = New-Object 'System.Collections.Generic.Dictionary[string,long[]]' ([StringComparer]::Ordinal)
-  $t = [long[]]@(0, 0, 0, 0)
+  $t = [long[]]@(0, 0, 0, 0); $BN = [long[]]@(0, 0, 0, 0, 0, 0); $BT = [double[]]@(0, 0, 0, 0, 0, 0); $BC = [double[]]@(0, 0, 0, 0, 0, 0); $np = 0
   foreach ($b in $best.Values) {
     if (-not $per.ContainsKey($b.m)) { $per[$b.m] = [long[]]@(0, 0, 0, 0) }
     $p = $per[$b.m]
     for ($k = 0; $k -lt 4; $k++) { $p[$k] += $b.v[$k]; $t[$k] += $b.v[$k] }
+    # the context bucket (#342), and the cost at the model's line - exact, else the longest prefix of the model
+    $c = $b.v[0] + $b.v[2] + $b.v[3]; $i = if ($c -lt 100000) { 1 } elseif ($c -lt 200000) { 2 } elseif ($c -lt 400000) { 3 } elseif ($c -le 700000) { 4 } else { 5 }
+    $BN[$i]++; $BT[$i] += $c + $b.v[1]; $q = ''; foreach ($x in $PRICE.Keys) { if ($x -ceq $b.m -or ($b.m.StartsWith($x, $O) -and $x.Length -gt $q.Length)) { $q = $x; if ($x -ceq $b.m) { break } } }
+    if ($q) { $BC[$i] += $b.v[0] * $PRICE[$q][0] + $b.v[1] * $PRICE[$q][1] + $b.v[2] * $PRICE[$q][2] + $b.v[3] * $PRICE[$q][3] } else { $np++ }
   }
   $names = [string[]]@($per.Keys); [Array]::Sort($names, [StringComparer]::Ordinal)   # as LC_ALL=C sort
   foreach ($n in $names) { Line $n $per[$n] }
   Line 'total' $t
+  $N = 'under100k', '100-200k', '200-400k', '400-700k', 'over700k'; $s = 'context'
+  for ($i = 1; $i -le 5; $i++) { $s += $(if ($i -gt 1) { ' ' } else { "`t" }) + $N[$i - 1] + '=' + $BN[$i] + '/' + ('{0:0}' -f $BT[$i]) + $(if ($Prices) { '/$' + ('{0:0.0000}' -f ($BC[$i] / 1e6)) } else { '' }) }
+  $script:ctx = $s + $(if ($Prices) { " unpriced=$np" } else { '' })
 }
 function Line($n, $v) { "{0}`t{1}`tin={2} out>={3} cache_read={4} cache_write={5}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3] }
 # the session's own totals from its transcript: Claude Code appends a "cost-state" record (totalCostUSD, and
@@ -246,7 +261,7 @@ function RecLine($n, $v) { "{0}`t{1}`tin={2} out={3} cache_read={4} cache_write=
 if ($Since) {
   if (-not (Test-Path -LiteralPath $projects)) { [Console]::Error.WriteLine("no transcripts in $projects"); exit 1 }
   CountUsage @(Get-ChildItem -LiteralPath $projects -Filter '*.jsonl' -Recurse -File | ForEach-Object { $_.FullName })
-  exit 0
+  $script:ctx; exit 0
 }
 $main = $null
 if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } elseif (Test-Path -LiteralPath $projects) {
@@ -292,13 +307,13 @@ if ($main) {
   $sub = Join-Path ($main -replace '\.jsonl$', '') 'subagents'
   if (Test-Path -LiteralPath $sub) { $files += Get-ChildItem -LiteralPath $sub -Filter '*.jsonl' -File | ForEach-Object { $_.FullName } }
   # the session's own record (its subagents included) when it has stopped since it last ran; else the sums
-  $rec = Record $main
-  if ($null -ne $rec) { $rec } else { CountUsage $files }
+  $rec = Record $main; $sum = @(CountUsage $files)   # the sums always: the context line (the last) comes from the transcript, never the record
+  if ($null -ne $rec) { $rec } else { $sum }
 } elseif (-not (Test-Path -LiteralPath $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
 # the record's cost when it has one, else the status file's
 if ((Test-Path -LiteralPath $status) -and -not ($null -ne $rec -and @($rec | Where-Object { $_.StartsWith('cost') }).Count)) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
   if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
 }
-if ($main) { Span $files }
+if ($main) { Span $files; $script:ctx }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
