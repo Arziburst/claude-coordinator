@@ -1189,6 +1189,8 @@ grep -q '^bounds:' "$cbd/601-c-contract.md" && ! grep -q older "$cbd/601-c-contr
 echo older > "$cbd/601-d-contract.md"; check 0 "copy: a dry run names it, writes nothing" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-d --contract "$tmp/cb.md" --dry-run; cbone 601-d-contract.md
 [ "$(cat "$cbd/601-d-contract.md")" = older ] || { echo "FAIL (copy): the dry run overwrote the copy"; fail=1; }
 check 0 "copy: a dry run with no copy yet" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-e --contract "$tmp/cb.md" --dry-run; cbone 601-e-contract.md; [ -e "$cbd/601-e-contract.md" ] && { echo "FAIL (copy): the dry run wrote"; fail=1; }
+for cbx in "601-f|$cbd" "601-g|coordinator/briefs"; do cbb="${cbx%%|*}"; cbc="${cbx#*|}/$cbb-contract.md"; cp "$tmp/cb.md" "$cbd/$cbb-contract.md"; cd "$cb" || exit 1; check 0 "copy: --contract named as the copy itself, $cbb" -- start --name "#601 worker: $cbb" "${CBW[@]}" --branch "$cbb" --contract "$cbc"; cd - >/dev/null || exit 1
+  cmp -s "$tmp/cb.md" "$cbd/$cbb-contract.md" && grep -qxF "#601 worker: $cbb" "$STUB_LOG.names" || { echo "FAIL (copy, --contract named as the copy itself, $cbb): its bytes changed ($(wc -c < "$cbd/$cbb-contract.md") of $(wc -c < "$tmp/cb.md")), or claude was not started"; fail=1; }; done
 [ "$(git -C "$cb" rev-list --all --count)" = 1 ] || { echo "FAIL (copy): start-worker committed"; fail=1; }
 
 # --- cleanup-worker ---

@@ -341,6 +341,8 @@ for d in q/wrong-sub wrong-repo wrong-none; do for x in "" --dry-run; do
   fresh "the wrong folder: $d $x"; qpr 16 "$H16" 16-fine; cd "$tmp/$d" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
   code 1; has "${d##*/}"; notcalled "pr merge"; hasnt "MERGED #16"; hasnt "[dry-run] gh pr merge"; hasnt "no contract"
 done; done
+for x in "" --dry-run; do fresh "gh cannot read the PR from another repository: the refusal names the folder $x"; touch "$STUB_D/fail-view"; cd "$tmp/wrong-repo" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
+  code 1; has "wrong-repo"; has "Could not resolve to a PullRequest"; notcalled "pr merge"; hasnt "[dry-run] gh pr merge"; done
 fresh "one PR's branch is not in this repository: nothing merged, the first PR neither"
 qpr 16 "$H16" 16-fine; qpr 34 "$H19" 34-elsewhere; run land 16 34 --poll 0; code 1; notcalled "pr merge"; hasnt "MERGED #16"
 fresh "status runs anywhere"; cd "$tmp/wrong-none" || exit 1; run status; cd "$qback" || exit 1; code 0; has "merge-queue status: 0 open"
