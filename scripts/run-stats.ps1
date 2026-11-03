@@ -248,7 +248,7 @@ if ($Task) {
   $TaskId = $Task -creplace '[.].*$', ''
   function Fail([string]$m) { [Console]::Error.WriteLine("run-stats: task ${TaskId}: $m"); exit 1 }
   $ct = 1; $cr = 2; $ck = 3; $cm = 4; $cc = 8; $cs = 9; $cb = 10; $cw = 11; $ca = 12   # CORE 7's order, 0-based
-  $hd = @(); [long]$first = -1; [long]$ver = -1; $hv = $false; [long]$act = 0; $ha = $false; $n = 0; $pr = 0; $tk = ''; $tm = ''
+  $hd = @(); [long]$first = -1; [long]$ver = -1; $hv = $false; $sb = $false; [long]$act = 0; $ha = $false; $n = 0; $pr = 0; $tk = ''; $tm = ''
   foreach ($line in (Read-Lines $File)) {
     if ($line -cmatch '^[ \t]*\z' -or $line -cmatch '^#') { continue }
     $f = $line.Split("`t")
@@ -269,17 +269,21 @@ if ($Task) {
     # the verifier approved at its run's start + wall; the last approval counts
     if ($r -ceq 'verifier') {
       $hv = $true; $w = Minutes (& $col $cw)
-      if ((& $col $cs) -match '^[ \t]*(approved|done([^a-z]|\z)|pass([^a-z]|\z))' -and $s -ge 0 -and $w -ge 0 -and $s + (IDiv ($w * 6) 1000) -gt $ver) { $ver = $s + (IDiv ($w * 6) 1000) }
+      if ((& $col $cs) -match '^[ \t]*(approved|done([^a-z]|\z)|pass([^a-z]|\z))') {
+        if ($s -ge 0 -and $w -ge 0) { if ($s + (IDiv ($w * 6) 1000) -gt $ver) { $ver = $s + (IDiv ($w * 6) 1000) } }
+        elseif ($s -lt 0 -and $w -lt 0) { $sb = $true }   # a subagent's (#389): ready = the checks
+      }
     }
   }
   if ($n -eq 0) { Fail "no rows in $File" }
   if ($first -lt 0) { Fail 'no run has a start' }
-  if ($hv -and $ver -lt 0) { Fail 'not ready - no verifier run approved it' }
+  if ($hv -and $ver -lt 0 -and -not $sb) { Fail 'not ready - no verifier run approved it' }
   if ($chk -eq 'red') { Fail "not ready - the check $redName is $redState" }
   [long]$g = if ($chk -eq 'green') { $green } else { -1 }
   [long]$ready = [Math]::Max($ver, $g)
   if ($ready -lt 0) { Fail 'not ready - no approved verifier run and no green checks' }
   if ($ready -lt $first) { $ready = $first }
+  $how = if ($ver -lt 0 -and $sb) { ' checks' } else { '' }
   # the owner waits inside first start .. ready, overlaps once
   $iv = @(foreach ($x in $WL) { $lo = [Math]::Max($x[0], $first); $hi = [Math]::Min($x[1], $ready); if ($hi -gt $lo) { ,@($lo, $hi) } })
   $iv = @($iv | Sort-Object -Property { $_[0] })
@@ -287,8 +291,8 @@ if ($Task) {
   foreach ($x in $iv) { $lo = [Math]::Max($x[0], $e); if ($x[1] -gt $lo) { $wait += $x[1] - $lo }; if ($x[1] -gt $e) { $e = $x[1] } }
   $Row = @{ task = $TaskId; role = 'task'; kind = $tk; model = $tm; effort = '-'; estimate = '-'; tokens = '-'; cost = '-'
     start = (Iso $first); wall = "$(IDiv ($ready - $first - $wait + 30) 60)"; active = $(if ($ha) { "$(IDiv ($act + 5000) 10000)" } else { '-' }) }
-  if ($MergedAt -ge 0) { $Row.wait = "$(IDiv ([Math]::Max([long]0, $MergedAt - $ready) + $wait + 30) 60)"; $Row.result = 'merged'; $Row.date = (Iso $MergedAt).Substring(0, 10) }
-  else { $Row.wait = "$(IDiv ($wait + 30) 60)+"; $Row.result = 'ready'; $Row.date = (Iso $ready).Substring(0, 10) }
+  if ($MergedAt -ge 0) { $Row.wait = "$(IDiv ([Math]::Max([long]0, $MergedAt - $ready) + $wait + 30) 60)"; $Row.result = "merged$how"; $Row.date = (Iso $MergedAt).Substring(0, 10) }
+  else { $Row.wait = "$(IDiv ($wait + 30) 60)+"; $Row.result = "ready$how"; $Row.date = (Iso $ready).Substring(0, 10) }
   # the header's order (a column it does not name: empty), then the names it lacks in CORE 7's order
   $u = @{}; $out = New-Object 'System.Collections.Generic.List[string]'
   foreach ($h in $hd) { $v = ''; if ($Row.ContainsKey($h) -and -not $u.ContainsKey($h)) { $v = $Row[$h]; $u[$h] = 1 }; $out.Add($v) }

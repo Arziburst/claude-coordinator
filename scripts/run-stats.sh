@@ -45,11 +45,13 @@
 # --task <n> (CORE §7a: time to ready, owner wait): prints the task's `task` row to append to RUNS.tsv, in the
 #   header's order (a column it does not name stays empty), then the names it lacks in CORE §7's order, `wait`
 #   last: date (UTC: the merge, else ready) task role(`task`) kind model effort(-) estimate(-) tokens(-) cost(-)
-#   result(`merged` / `ready`) start wall active wait. The task's rows (before the first dot; `task` rows
+#   result(`merged` / `ready`, or `merged checks` / `ready checks`: below) start wall active wait. The task's rows (before the first dot; `task` rows
 #   aside): start = the earliest start; active = the work, its rows' active summed (a subagent's, `in
 #   <parent>`, aside); kind and model as above. Ready = the later of the last approval of a verifier row
 #   (result `approved…`, or `done` / `pass`: its start + wall) and the checks all green; a task with verifier rows none of which
-#   approved is not ready. --pr-json: `gh pr view <n> --json statusCheckRollup,mergedAt,createdAt` (- reads
+#   approved is not ready. An approving verifier row with no start and no wall (a subagent's, `runs add --in`, #389)
+#   and no other approval with a time: ready = the checks all green, the result says `checks`; no green checks: not
+#   ready. --pr-json: `gh pr view <n> --json statusCheckRollup,mergedAt,createdAt` (- reads
 #   stdin), read as text: per check (its type, workflow and name) the run started last counts - a rerun
 #   replaces a red run -, green = a CheckRun COMPLETED with SUCCESS / NEUTRAL / SKIPPED or a StatusContext
 #   SUCCESS, the checks' time the last completedAt (else startedAt); one not green: not ready; no checks: the
@@ -89,7 +91,7 @@
 # Exit 1 when a file cannot be read, the JSON has no rate limits (an API key, an older Claude Code), a price
 # line is malformed or a spend model has no price; in --task when the task has no rows or no start, is not
 # ready or a wait line is malformed; 2 on a usage error.
-usage() { sed -n '2,91s/^# \{0,1\}//p' "$0"; exit 2; }
+usage() { sed -n '2,93s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
@@ -287,11 +289,13 @@ taskrow() {
       if (s >= 0 && (first < 0 || s < first)) first = s
       # the verifier approved at its run'"'"'s start + wall; the last approval counts
       if (r == "verifier") { hv = 1; w = minutes(col(cw))
-        if (tolower(col(cs)) ~ /^[ \t]*(approved|done([^a-z]|$)|pass([^a-z]|$))/ && s >= 0 && w >= 0 && s + idiv(w * 6, 1000) > ver) ver = s + idiv(w * 6, 1000) } }
+        if (tolower(col(cs)) ~ /^[ \t]*(approved|done([^a-z]|$)|pass([^a-z]|$))/) {
+          if (s >= 0 && w >= 0) { if (s + idiv(w * 6, 1000) > ver) ver = s + idiv(w * 6, 1000) }
+          else if (s < 0 && w < 0) sb = 1 } } }
     END { if (bad) exit 1
       if (!n) fail("no rows in " ENVIRON["F"])
       if (first < 0) fail("no run has a start")
-      if (hv && ver < 0) fail("not ready - no verifier run approved it")
+      if (hv && ver < 0 && !sb) fail("not ready - no verifier run approved it")
       split(ENVIRON["C"], c, " "); g = -1
       if (c[2] == "red") { x = ENVIRON["C"]; sub(/^checks red [^ ]* /, "", x); fail("not ready - the check " x " is " c[3]) }
       if (c[2] == "green") g = c[3] + 0
@@ -305,9 +309,9 @@ taskrow() {
         q++; for (j = q; j > 1 && A[j - 1] > lo; j--) { A[j] = A[j - 1]; Z[j] = Z[j - 1] }; A[j] = lo; Z[j] = hi }
       wait = 0; e = -1
       for (i = 1; i <= q; i++) { lo = A[i] > e ? A[i] : e; if (Z[i] > lo) wait += Z[i] - lo; if (Z[i] > e) e = Z[i] }
-      mg = ENVIRON["G"]
-      if (mg != "-") { o = mg - ready; if (o < 0) o = 0; V["wait"] = idiv(o + wait + 30, 60); V["result"] = "merged"; V["date"] = substr(iso(mg + 0), 1, 10) }
-      else { V["wait"] = idiv(wait + 30, 60) "+"; V["result"] = "ready"; V["date"] = substr(iso(ready), 1, 10) }
+      mg = ENVIRON["G"]; how = (ver < 0 && sb) ? " checks" : ""
+      if (mg != "-") { o = mg - ready; if (o < 0) o = 0; V["wait"] = idiv(o + wait + 30, 60); V["result"] = "merged" how; V["date"] = substr(iso(mg + 0), 1, 10) }
+      else { V["wait"] = idiv(wait + 30, 60) "+"; V["result"] = "ready" how; V["date"] = substr(iso(ready), 1, 10) }
       V["task"] = T; V["role"] = "task"; V["kind"] = k; V["model"] = m; V["effort"] = V["estimate"] = V["tokens"] = V["cost"] = "-"
       V["start"] = iso(first); V["wall"] = idiv(ready - first - wait + 30, 60); V["active"] = ha ? idiv(act + 5000, 10000) : "-"
       # the header'"'"'s order (a column it does not name: empty), then the names it lacks in CORE 7'"'"'s order
