@@ -736,6 +736,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   failure - the owner and the verifier read them. The baseline is the median of the last three main runs per step and
   OS (`<os><TAB><seconds><TAB><name>`), raised only by a pull request's own diff: ci-times on three main runs, the new
   medians in the file. A worker's `ci_seconds` is the number ci-times measures on its PR's run (roles/worker.md).
+  After a merge a coordinator on GitHub Actions reads the main run's times the same way (CORE §4, #390).
 - **A self-hosted runner and a public repository.** On a public repository a fork's pull request runs
   its code on the runner once a person approves the contributor's first run (GitHub's default
   `first_time_contributors`). Either the repository stays private, or both hold: fork PRs never reach
@@ -757,11 +758,13 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`
   per step past `max(floor(baseline × 1.3), baseline + 60)`; exit 0 also with over lines, 2 usage, 1 `ci-times:
-  cannot read <what>`. Run by the aggregator jobs on their own run (*CI* above), by a worker for its `ci_seconds`
-  and by the verifier to compare it.
+  cannot read <what>`. Run by the aggregator jobs on their own run (*CI* above), by a worker for its `ci_seconds`,
+  by the verifier to compare it and by the coordinator on the main run after a merge (CORE §4, #390). A run whose
+  jobs carry other names than the core's gives `wall` alone.
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. A contract whose `touches` holds an important component (the default list
   and `PROJECT.md` *Important components*) without `bounds:` and `wall:` is an ERROR naming the glob (#381);
+  `tests_first: yes` with no well-formed `bounds:` line is an ERROR naming `tests_first` (#390);
   `--field budget.cost` gives budget's cost as written. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,

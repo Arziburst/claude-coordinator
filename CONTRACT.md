@@ -46,7 +46,7 @@ budget:
   time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
-bounds:                            # only when touches holds an important component: the most lines a glob may add
+bounds:                            # with tests_first: yes, or when touches holds an important component: the most lines a glob may add
   - src/cart/* 120
 wall: the server checks the account on every read; the cart screen only filters  # what really protects it
 ---
@@ -97,6 +97,11 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   left off the list, slips through; `--over-bounds-ok` for two PRs goes in two runs (`.ps1 -File` does not
   repeat a parameter); and the coordinator could pass an owner-ok flag on its own: only CORE §1.14 and the
   journal hold that.
+- **A bound on tests** (#390): a contract with `tests_first: yes` names the size of the tests the task adds, test
+  data counted: its `bounds:` hold a line whose glob takes them in, chosen as above. check-contract refuses a `yes`
+  with no well-formed `bounds:` line, important component or not; `wall:` stays a rule of the important components,
+  and `tests_first: no ...` needs no bound for this. **What it does not stop:** the refusal holds only that a bound
+  exists, not that it is wise or that its glob covers the tests; the verifier and the owner hold the rest.
 - **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`), from
   `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract
   warns only when it is there and is neither; a contract without it is fine.

@@ -33,6 +33,7 @@
 #   Important components (#381; the rules: check-contract.sh): touches holding a glob of the list (the defaults below,
 #   and the row *Important components* of the PROJECT.md two folders above this script's) needs `bounds:` and `wall:`;
 #   missing or malformed: one ERROR per field, naming the glob. -Field budget.cost: budget's cost as written.
+#   A bound on tests (#390; the rules: check-contract.sh): `tests_first: yes` with no well-formed line under `bounds:`: an ERROR.
 $Important = @('scripts/hooks/*', '.github/workflows/*', 'tests/*/run.*')
 $pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT.md'
 if (Test-Path -LiteralPath $pf -PathType Leaf) {
@@ -269,11 +270,14 @@ foreach ($f in $Files) {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }
   # important components (#381, the header): bounds and wall
-  $ig = Imp ($txt['touches'] + '')
-  if ($ig) { $nb = 0; $bad = -not $txt.ContainsKey('bounds'); $BL = @(($txt['bounds'] + '') -split "`n"); if ($BL[0] -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true }
-    foreach ($x in @($BL | Select-Object -Skip 1)) { if ($x -cmatch '^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$') { $nb++ } elseif ($x -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true } }
+  $ig = Imp ($txt['touches'] + ''); $nb = 0; $bad = -not $txt.ContainsKey('bounds'); $BL = @(($txt['bounds'] + '') -split "`n"); if ($BL[0] -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true }
+  foreach ($x in @($BL | Select-Object -Skip 1)) { if ($x -cmatch '^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$') { $nb++ } elseif ($x -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true } }
+  if ($ig) {
     if ($bad -or -not $nb) { $out.Add("ERROR ``bounds`` missing or malformed (lines ``- <glob> <max added lines>``): touches holds the important $ig (CONTRACT.md)"); $ne++ }
     if (-not $txt.ContainsKey('wall') -or (Blank $txt['wall'])) { $out.Add("ERROR ``wall`` missing or empty (what really protects it, one line): touches holds the important $ig (CONTRACT.md)"); $ne++ } }
+  # a bound on tests (#390, the header)
+  if ($txt.ContainsKey('tests_first') -and $tf -cmatch '^yes([ \t,:;(]|$)' -and -not $nb -and (-not $ig -or -not $bad -or -not $txt.ContainsKey('bounds'))) {
+    $out.Add("ERROR ``tests_first`` is yes but ``bounds`` has no line (``- <glob> <max added lines>``): name the size of the tests this task adds (CONTRACT.md)"); $ne++ }
   # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
   if ($txt.ContainsKey('tests_first') -and $tf -cmatch '^no([^a-z0-9]|\z)') {
     $gm = ''

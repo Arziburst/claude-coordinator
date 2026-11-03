@@ -53,6 +53,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORK-15 | Who decides | owner, coordinator, worker and lead decisions are fixed | WORK |
 | F-WORK-16 | The merge queue | approved PRs land one at a time; each merges main once, at its turn | WORK |
 | F-WORK-17 | Bounds, the finding split and the round gate | a contract on an important file states a size bound and its wall; the diff is checked; round 3 or twice the estimate needs the owner's word | WORK |
+| F-WORK-18 | A measure for tests | a tester justifies its cases and reports their time; a verifier treats a repeated or needlessly dear case as a finding; a contract with tests first names a bound; CI's time is read at a merge | WORK |
 | F-WORKERS-01 | start-worker | a named background session in its own worktree with safety settings | WORKERS |
 | F-WORKERS-02 | Worker safety settings checked | no worker starts with a guard that would not block | WORKERS |
 | F-WORKERS-03 | Start from a trusted folder | the session starts in the trusted root and enters its worktree | WORKERS |
@@ -331,6 +332,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: such a contract without `bounds:` and `wall:` gets an ERROR naming the glob; a project adds to the default list, never removes; check-bounds compares the real diff with the bounds; an OVER or check-bounds exit 2 stops that PR at the queue, the queue goes on; a round 3 or twice the estimate is refused without the owner's words, which are printed; a finding is `fix now` only if the PR introduced it or the PR fails its intent or a named criterion without it
 - tested by: tests/check-contract/run.sh, tests/check-bounds/run.sh, tests/merge-queue/run.sh, tests/workers/run.sh, tests/runs/run.sh
 - not covered: a wrong bound or a component left off the list slips through; a round given by a message to a live session passes no gate; a running session has no row, so its spend is not in the sum; a mistyped `-OwnerOk` in .ps1 is swallowed by param() and the gate still refuses; `--over-bounds-ok` for two PRs goes in two runs; the coordinator could pass an owner-ok flag on its own, only CORE §1.14 and the journal hold that; the finding split rests on the verifier and the coordinator following it; the leftovers of #387: other `touches` spellings, wildcards read differently, `#need` coverage, a bound naming another file
+
+### F-WORK-18 A measure for tests
+- defined: roles/tester.md, roles/verifier.md, CONTRACT.md, CORE.md §4, scripts/check-contract.sh, scripts/check-contract.ps1, scripts/ci-times.sh, scripts/ci-times.ps1, PROJECT.template.md, procedures/SETTINGS.md, TOOLKIT.md
+- entry: a tester's cases; a verifier's review; a contract with `tests_first: yes`; a merge in a project on GitHub Actions
+- promises: each case of a tester can fail for a reason no other case catches and takes the cheapest form that proves it first, and its report names the cases added and their measured time; a case that repeats another or costs much more than what it proves needs is a finding of the PR that added it, a case closing a real route of a safety or money check is never counted as such, and a test is never removed to save time without the owner's yes; `tests_first: yes` with no well-formed `bounds:` line is an ERROR naming `tests_first` in every mode of check-contract, `tests_first: no ...` gets nothing new, and an important-file contract keeps its own ERROR; after a merge a project on GitHub Actions reads the main run's times by `scripts/ci-times` (with its baseline where it keeps one), one journal line, and growth past `CI time budget` goes to the owner, never a stop; no such CI, nothing (#390)
+- tested by: tests/check-contract/run.sh (`yes` with no key, an empty key, a comment alone, a reason; with a bound; an important file with both errors, a malformed bound there with its own alone; the same in `--runs` and `--field`, sh and both PowerShells)
+- not covered: the role lines and the merge row are read, not enforced; the refusal holds only that a bound exists, not that it is wise or that its glob covers the tests; `ci-times` names only the core's jobs, so a run with other job names gives `wall` alone; `- x lots` under `yes` with no important file has no test of its own
 
 ## WORKERS
 

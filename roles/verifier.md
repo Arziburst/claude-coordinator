@@ -73,7 +73,9 @@ it) would make that work look deleted.
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
      (#240, TOOLKIT Scripts).
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
-   non_goal or a do_not_decide item.
+   non_goal or a do_not_decide item. A test case that repeats another, or that costs much more than what
+   it proves needs, is a finding of the PR that added it. A case closing a real route of a safety or money
+   check is never counted as such, and a test is never removed to save time without the owner's yes (#390).
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
 
 **You publish nothing:** no PR comment, review, label or `gh pr ready` — Claude Code's auto-mode
