@@ -227,7 +227,7 @@ expect "task: a missing PR file" 1 - "run-stats: cannot read missing.json" -- ta
     printf '2026-10-06\t%s\tverifier\tordinary\thaiku\tlow\t-\t4567\tin coordinator\t%s\t\t\t\t\t-\n' "${x%%:*}" "${x#*:}"
   done; } > sub.tsv
 sr() { printf '2026-10-06\t%s\ttask\tordinary\tsonnet\t-\t-\t-\t-\t%s\t2026-10-06T08:12:00Z\t%s\t30\t%s\t\n' "$@"; }
-sr 50 'merged checks' 84 84 > sub-merged.txt; sr 50 'ready checks' 84 0+ > sub-open.txt; sr 52 'merged checks' 84 84 > sub-rework.txt
+sr 50 'merged checks' 84 84 > sub-merged.txt; sr 50 'ready checks' 84 0+ > sub-open.txt; printf '2026-10-06\t52\ttask\tordinary\tsonnet\t-\t-\t-\t-\tmerged checks\t2026-10-06T08:12:00Z\t84\t33\t84\t\n' > sub-rework.txt
 cp sub.tsv sub-app.tsv
 expect "task: a subagent verifier - the row from the checks, written, says checks" 0 sub-merged.txt "run-stats: the task row appended to sub-app.tsv" -- \
   sub-app.tsv --task 50 --pr-json pr-late.json --append
