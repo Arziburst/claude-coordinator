@@ -97,10 +97,11 @@ function LinkTarget([string]$p) {
   if (-not $t) { $t = @($it.Target)[0] }                                # Windows PowerShell 5.1
   ([string]$t).Replace('\', '/') -replace '^//\?/|^/\?\?/', ''
 }
+# a drive in its Git Bash, WSL or Cygwin form as Windows names it: /c/x, /mnt/c/x, /cygdrive/c/x -> c:/x
+function DriveForm([string]$p) { if ($isWin) { $p -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' } else { $p } }
 # @(<the existing folder, physical>, <the rest as written>), or $null
 function PhysDir([string]$p) {
-  $p = $p.Replace('\', '/')
-  if ($isWin) { $p = $p -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
+  $p = DriveForm $p.Replace('\', '/')
   if ($p -notmatch '^([A-Za-z]:|/)') { $p = (Get-Location).ProviderPath.Replace('\', '/') + '/' + $p }
   if ($p -match '^[A-Za-z]:') { $root = $p.Substring(0, 2) + '/'; $p = $p.Substring(2) }
   elseif ($isWin) { return $null } else { $root = '/' }
@@ -767,7 +768,7 @@ function Compose([string]$b, [string]$p) {
   if (-not $p) { return $b }
   if ($p.Contains('$') -or $p.Contains('%')) { return '?' }
   if ($p -eq '~' -or $p.StartsWith('~/') -or $p.StartsWith('~\')) { return $HOME + $p.Substring(1) }
-  if ($p -match '^([/\\]|[A-Za-z]:)') { return $p }
+  if ($p -match '^([/\\]|[A-Za-z]:)') { return DriveForm $p }   # native git does not read /c/x (#425)
   if ($b -eq '?') { return '?' }
   "$b/$p"
 }
