@@ -693,7 +693,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`, check-bounds exit 2 stops it fail-closed

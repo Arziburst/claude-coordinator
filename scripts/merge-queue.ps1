@@ -10,7 +10,7 @@
 # re-review of that merge; the checks of the current head waited for (all pass or skipped); a failure
 # re-runs the failed runs once, a second failure stops; then `gh pr merge --<method>
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
-# stays for cleanup-worker; a branch other open PRs are based on is kept, #229), and every open PR that
+# stays for cleanup-worker; a branch other open PRs are based on is kept, #229; a fork's PR deletes nothing there, #392), and every open PR that
 # changes a file the merged one changed is printed
 # as AFFECTED, then one AFTER MERGE line: the merge row of CORE section 4's event table, so its duties have
 # a trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
@@ -117,7 +117,7 @@ $merged = 0; $left = @()
 function Leave([string]$n, [string]$tag, [string]$m) { "$tag #${n}: $m"; $script:left += "#$n ($tag)" }
 foreach ($item in $prs) {
   $pr, $want = $item -split '@', 2; if ($want) { $want = $want.ToLowerInvariant() }
-  $state, $draft, $head, $branch, $base, $null = PrView $pr
+  $state, $draft, $head, $branch, $base, $fork = PrView $pr
   if ($state -ne 'OPEN') { Leave $pr 'SKIP' "$state, not open"; continue }
   if ($draft -eq 'true') { Leave $pr 'SKIP' 'a draft'; continue }
   if ($want -and -not $head.StartsWith($want)) {
@@ -207,7 +207,9 @@ foreach ($item in $prs) {
   $merged++; "MERGED #${pr}: $(Short $head)"
   # a branch other open PRs are based on stays: GitHub closes a PR whose base is deleted (#229)
   $deps = (@(& gh pr list --state open --base $branch --json number --template '{{range .}}#{{.number}} {{end}}' 2>$null) -join '').Trim()
-  if ($deps) { "kept the remote branch ${branch}: $deps use it as their base" }
+  # a fork's PR: its branch is not on origin, and that name there may be someone else's branch (#392)
+  if ($fork -eq 'true') { "left the fork's branch ${branch}: #$pr is a fork's PR, nothing deleted on origin" }
+  elseif ($deps) { "kept the remote branch ${branch}: $deps use it as their base" }
   elseif ((GhRc @('api', '-X', 'DELETE', "repos/{owner}/{repo}/git/refs/heads/$branch")) -eq 0) { "deleted the remote branch $branch" }
   # the open PRs that change a file this one changed (shared ones too): their workers merge main now
   foreach ($l in @(OpenPrs)) {
