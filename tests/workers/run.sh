@@ -1172,7 +1172,7 @@ rm -f "$ar/coordinator/RUNS.tsv"
 
 # --- the contract's copy (#387, the header): real starts on the stub, its worktrees left to the temporary folder ---
 cb="$tmp/cbrepo" cbd="$tmp/cbrepo/coordinator/briefs"; git init -q -b main "$cb"; g -C "$cb" commit -q --allow-empty -m init; mkdir -p "$cbd"; git init -q -b main "$tmp/cb2"; g -C "$tmp/cb2" commit -q --allow-empty -m init
-{ printf -- '---\nbounds:\n  - src/* 9\nwall: only a test\n'; rgc 601 14 | sed 1d; } > "$tmp/cb.md"; { printf 'Fix it.\n\n'; cat "$tmp/cb.md"; } > "$tmp/brief-cb.md"; rgc 602 14 > "$tmp/cbn.md"; sed 's/^tests_first: no.*/tests_first: yes/' "$tmp/cb.md" > "$tmp/cby.md"
+{ printf -- '---\nbounds:\n  - src/* 9\nwall: only a test\n'; rgc 601 14 | sed 1d; } > "$tmp/cb.md"; { printf 'Fix it.\n\n'; cat "$tmp/cb.md"; } > "$tmp/brief-cb.md"; rgc 602 14 | sed '/^bounds:/,/^  - /d' > "$tmp/cbn.md"; sed 's/^tests_first: no.*/tests_first: yes/' "$tmp/cb.md" > "$tmp/cby.md"
 CB=(--model opus --safety "$tmp/safety.json" --report-to x); CBW=(--repo "$cb" "${CB[@]}" --brief-file "$tmp/brief.md")
 cbone() { [ "$(printf '%s\n' "$LAST" | grep -c -- "$1")" = 1 ] || { echo "FAIL (copy): not exactly one line naming $1"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; }
 cbno() { [ -z "$(ls -A "${2:-$cbd}" 2>/dev/null)" ] || { echo "FAIL (copy, $1): written:"; ls -A "${2:-$cbd}" | sed 's/^/    /'; fail=1; }; }

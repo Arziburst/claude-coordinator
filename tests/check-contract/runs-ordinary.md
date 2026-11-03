@@ -9,6 +9,8 @@ acceptance:
     check: oracle
     how: tests/sort.sh passes
 tests_first: yes
+bounds:
+  - sort.sh 10
 non_goals:
   - no changes beyond this contract's acceptance, its diagnostics and its tests
   - do not weaken or loosen tests, timeouts or tolerances

@@ -10,6 +10,8 @@ acceptance:
   - check: review
     criterion: the code reads well
 tests_first: yes
+bounds:
+  - sort.sh 10
 non_goals:
   - no changes beyond the fix, its diagnostics and its test
   - do not weaken or loosen tests, timeouts or tolerances
