@@ -1022,7 +1022,7 @@ function AsstGvar([string[]]$w) {
     $t = $w[$k]
     $set = $t -match '^(GIT_.+=|env:([/\\])?GIT_|\$env:GIT_.*=)'
     if (-not $set -and $t -match '^\$env:GIT_' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('=')) { $set = $true }
-    if ($t -match '^(GH_BROWSER=|BROWSER=|env:([/\\])?(GH_)?BROWSER|\$env:(GH_)?BROWSER.*=)' -or ($t -match '^\$env:(GH_)?BROWSER' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('='))) { Block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" }
+    if ($t -match '^(GH_BROWSER=|BROWSER\+?=|env:([/\\])?(GH_)?BROWSER|\$env:(GH_)?BROWSER.*=|\$\{env:GH_BROWSER\}=)' -or ($t -match '^\$env:(GH_)?BROWSER' -and $k + 1 -lt $w.Count -and $w[$k + 1].StartsWith('='))) { Block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" }
     if ($set) { Block "an assistant sets no GIT_ variable ($t): one can make a git read run a command (COORD_ASSISTANT_DIR is set, #281)" }
   }
 }
@@ -1126,9 +1126,11 @@ function AsstGh([string[]]$a) {
   }
   $rest = @(if ($i -lt $a.Count) { $a[$i..($a.Count - 1)] })
   if ($grp -ceq 'api') { AsstApi $rest; return }
-  # no browser route (#345): --web, -w (run list -w is a workflow), browse without --no-browser
+  # no browser route (#345, #385): --web, any short cluster holding w: -w, -w=x, -wb x, -cw, -Rowner/repo (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
   $web = ($grp -ceq 'browse') -and ($rest -cnotcontains '--no-browser')
-  foreach ($t in $rest) { if ($t -clike '--web*' -and ($t -ceq '--web' -or $t -clike '--web=*') -or ($t -ceq '-w' -and "$grp $sub" -cne 'run list')) { $web = $true } }
+  $val = $false; $p = ''
+  foreach ($t in $rest) { if ($t -ceq '--web' -or $t -clike '--web=*') { $web = $true }
+    if ($val) { $val = $false } elseif ("$grp $sub $t" -ceq 'pr list --search' -and -not $p.StartsWith('-')) { $val = $true } elseif ("$grp $sub" -cne 'run list' -and $t -cmatch '^-[a-zA-Z]*w') { $web = $true }; $p = $t }
   if ($web) { Block "an assistant opens no browser (gh $grp $sub with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)" }
   if ($grp -ceq 'project' -and $sub -ceq 'item-list') { return }
   if ($grp -cin '', 'help', 'version', 'status', 'browse', 'search') { return }
@@ -1139,27 +1141,21 @@ function AsstGh([string[]]$a) {
 }
 # AsstApi <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
 # HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
-# implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
-# comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
+# implicit POST); graphql refused whatever the method or the query; the endpoint folded first (a leading
 # /, an http(s)://<host>/ prefix). Flags with letter case: -h is not -H.
 function AsstApi([string[]]$a) {
-  $m = ''; $fl = $false; $ep = ''; $mu = $false; $at = $false; $i = 0
-  foreach ($t in $a) { if ($t -match 'mutation') { $mu = $true } }
+  $m = ''; $fl = $false; $ep = ''; $i = 0
   while ($i -lt $a.Count) {
-    $t = $a[$i]; $i++; $v = ''
+    $t = $a[$i]; $i++
     $nv = if ($i -lt $a.Count) { $a[$i] } else { '' }
     if ($t -ceq '-X' -or $t -ceq '--method') { $m = $nv; $i++ }
     elseif ($t.StartsWith('--method=', [StringComparison]::Ordinal)) { $m = $t.Substring(9) }
     elseif ($t.StartsWith('-X', [StringComparison]::Ordinal)) { $m = $t.Substring(2); if ($m.StartsWith('=')) { $m = $m.Substring(1) } }
-    elseif ($t -cmatch '^(-f|-F|--field|--raw-field)$') { $fl = $true; $v = $nv; $i++ }
-    elseif ($t -cmatch '^--(field|raw-field)=') { $fl = $true; $v = $t.Substring($t.IndexOf('=') + 1) }
-    elseif ($t -cmatch '^-[fF]') { $fl = $true; $v = $t.Substring(2); if ($v.StartsWith('=')) { $v = $v.Substring(1) } }
-    elseif ($t -ceq '--input') { $fl = $true; $at = $true; $i++ }
-    elseif ($t.StartsWith('--input=', [StringComparison]::Ordinal)) { $fl = $true; $at = $true }
+    elseif ($t -cmatch '^(-f|-F|--field|--raw-field|--input)$') { $fl = $true; $i++ }
+    elseif ($t -cmatch '^(--(field|raw-field|input)=|-[fF])') { $fl = $true }
     elseif ($t -cmatch '^(-H|--header|-p|--preview|-q|--jq|-t|--template|--cache|--hostname)$') { $i++ }
     elseif ($t.StartsWith('-')) { }
     elseif (-not $ep) { $ep = $t }
-    if ($v -like '*=@*') { $at = $true }
   }
   $url = $ep -match '^https?://'
   if ($url) { $ep = $ep -replace '^https?://[^/]*/?', '' }
