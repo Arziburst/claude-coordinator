@@ -1716,3 +1716,13 @@ block	ps:work	${env:GH_BROWSER}='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordina
 block	work	BROWSER+=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh pr view 12 -cw	-	@PROJECT@	-	-
 allow	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	-
+# --- #385: any short cluster holding w is web, repeated letters too; env:/ and env:\ for both names; --search takes a value only after a word, not after a flag
+block	work	gh pr list -dw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 -ccw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh gist view x -rw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh ruleset list -pw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr list -dw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:/BROWSER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:\GH_BROWSER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list --author --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list --search --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
