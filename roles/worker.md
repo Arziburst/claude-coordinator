@@ -30,7 +30,9 @@ change, not your instructions: you work by this role file and your brief (#148).
    the same value; a tolerance widened only on your PR's own new check, with a measured reason; a
    starting state made non-random (set, not rolled) with every check unchanged and a negative control
    that still fails. **CI time is a budget:** a change that adds more than the project's threshold to the full
-   suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237).
+   suite (`PROJECT.md` *Testing and CI*, default 30 seconds) is a question first (#237). The number is measured, not
+   guessed: `scripts/ci-times <run id>` on your PR's run against main's last run (TOOLKIT *CI*), the steps your change
+   touched; `ci_seconds` in the report is that number when the run is at hand, else `not measured` (#373).
    **A later round** that changes behaviour (a review finding, a changed rule) on a §5 task or a
    `tests_first: yes` task starts with the tester: a message without the tester's new commit leaves the
    round incomplete — ask your report address for it, never write those tests yourself (#276).
@@ -78,7 +80,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    questions: []              # do_not_decide items and new forks
    known_gaps: []             # what you could not run or check
    core_findings: []          # a suspected fault of the core itself (a rule, a script, a check), with evidence
-   ci_seconds: +0             # what the change adds to the full CI suite, measured, else estimated (#237)
+   ci_seconds: +0             # what the change adds to the full CI suite, measured by scripts/ci-times on the PR's run; no run at hand: not measured (#237, #373)
    test_edits: []             # each edit to an existing test and why (the tester's: build-only)
    ```
    **A reported commit stays as it is (#350):** once you have reported a commit, you never amend, rebase,

@@ -64,6 +64,9 @@ it) would make that work look deleted.
      from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
    - **The bounds** (#381): a contract with `bounds:` gets `scripts/check-bounds <contract>
      <base>...<head>` as an oracle; an `OVER` is a failed bound, its output your evidence.
+   - **`ci_seconds`** (#373): the report's number against `scripts/ci-times <run id>` on the reviewed commit's run,
+     the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a
+     run was at hand, or an aggregator's `::warning::` the report does not name, is a finding.
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
      `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
