@@ -110,7 +110,6 @@ if [ "$mode" = status ]; then
   exit 0
 fi
 
-# the folder (#387, the header)
 here="$(pwd)"; rp="$(git rev-parse --show-prefix 2>/dev/null)" && [ -z "$rp" ] || { echo "land: folder $here is not the root of a repository (a subfolder, or no repository) - land runs from the root of the repository holding the PR's branch; $usage" >&2; exit 1; }
 for item in "${prs[@]}"; do pr="${item%%@*}"; v="$(pr_view "$pr")" || exit 1; read -r state _ _ branch _ fork <<< "$v"; [ "$state" = OPEN ] && [ "$fork" != true ] || continue
   e="$(git ls-remote -q --exit-code origin "refs/heads/$branch" 2>&1 >/dev/null)"; lrc=$?

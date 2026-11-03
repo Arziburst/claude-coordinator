@@ -107,7 +107,6 @@ if ($Mode -eq 'status') {
   exit 0
 }
 
-# the folder (#387, the header)
 $here = (Get-Location).Path; $rp = & { $ErrorActionPreference = 'Continue'; "$(& git rev-parse --show-prefix 2>$null)".Trim() }; if ($LASTEXITCODE -ne 0 -or $rp) { Usage "land: folder $here is not the root of a repository (a subfolder, or no repository) - land runs from the root of the repository holding the PR's branch" }
 foreach ($item in $prs) { $n = ($item -split '@')[0]; $st, $null, $null, $br, $null, $fork = PrView $n; if ($st -ne 'OPEN' -or $fork -eq 'true') { continue }
   $e = @(& { $ErrorActionPreference = 'Continue'; & git ls-remote -q --exit-code origin "refs/heads/$br" 2>&1 } | ForEach-Object { "$_" }); $lrc = $LASTEXITCODE
