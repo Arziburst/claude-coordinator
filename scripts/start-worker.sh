@@ -3,7 +3,7 @@
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
-#       [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]
+#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--dry-run]
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -77,10 +77,16 @@
 # --tester-commit and --tester-tests are refused; each refusal exits 1 before anything is created. Nothing is
 # written into the folder (the coordinator's skill writes BRIEF.md and NOTES.md). After the launch: the attach
 # command (`claude attach "assistant: <name>"`, and `claude attach <id>` when the launch printed the id).
+# The round and money gate (#381): for a worker or a lead, from <repo>/coordinator/RUNS.tsv through `scripts/runs task`:
+# rounds = the id's worker rows + this start; round 3 or later, or the task's rows summing to at least twice budget.cost,
+# is refused (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API list price`, exit 1, before
+# anything is created) unless --owner-ok <the owner's words>, printed. No log, no contract, a lead's sub-contract, another
+# role or an assistant: one `round gate:` line, no gate. Limits: a round given by a message to a live session passes no
+# gate (CORE §6: a third round is always a fresh worker); a running session has no row yet, its spend is not in the sum.
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -102,10 +108,12 @@ while [ $# -gt 0 ]; do
     --tester-commit) need "$@"; tcommit="$2"; shift 2 ;;
     --tester-tests) need "$@"; ttests="$2"; shift 2 ;;
     --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
+    --owner-ok) need "$@"; owok="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
+case "$owok" in *[![:space:]]*) ;; *) owok="" ;; esac   # words of blanks only are no words (#381)
 # an assistant (#281): a session beside the coordinator, no worktree and no branch - a worker's flags are refused
 asst=""; case "$name" in "assistant:"*) asst=1 ;; esac
 if [ -n "$asst" ] && [ -n "$given" ]; then
@@ -118,7 +126,7 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--dry-run]" >&2
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--dry-run]" >&2
   [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
@@ -282,6 +290,24 @@ if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
   tfv="$(bash "$(dirname "$0")/check-contract.sh" --field tests_first "$cfile" 2>&1)" ||
     { printf '%s\n' "$tfv" >&2; echo "refused: check-contract could not read tests_first (CORE §4 step 3)" >&2; exit 1; }
   printf '%s\n' "$tfv" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | grep -Eq '^yes([[:space:],:;(]|$)' && tfyes=1 ;; esac; fi
+# the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
+rl="$root/coordinator/RUNS.tsv" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
+[ -z "$cfile" ] || rid="$(bash "$sd/check-contract.sh" --field id "$cfile" 2>/dev/null | tr -d '\r' || true)"
+if [ -n "$asst" ]; then rno="an assistant"
+elif ! case "$crole" in worker|lead|"") true ;; *) false ;; esac; then rno="a $crole"
+elif [ -z "$rid" ]; then rno="no contract"
+elif [ ! -f "$rl" ]; then rno="no run log"
+else case "$rid" in *.*) rno="a sub-contract" ;; esac; fi
+if [ -n "$rno" ]; then echo "round gate: $rno, no gate$okt"
+else
+  rs="$(bash "$sd/runs.sh" task --log "$rl" --task "$rid" 2>&1 | tr -d '\r')" || { echo "refused: the run log cannot be read, the round gate cannot tell: $rs" >&2; exit 1; }
+  rn=$((${rs%% *} + 1)) rsp="${rs#* }" rest="$(bash "$sd/check-contract.sh" --field budget.cost "$cfile" 2>/dev/null | tr -d '\r' || true)"
+  rline="round $rn, task $rid, spent $rsp against estimate ${rest:-none}, API list price"
+  if [ "$rn" -ge 3 ] || awk -v s="$rsp" -v e="${rest#\$}" 'BEGIN { exit !(e + 0 > 0 && s + 0 >= 2 * e) }'; then
+    [ -n "$owok" ] || { echo "refused: $rline - a third round or twice the estimate needs the owner's word: --owner-ok <the owner's words> (CORE §6)" >&2; exit 1; }
+    echo "round gate: $rline - passed on the owner's words: $owok"
+  else echo "round gate: $rline$okt"; fi
+fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 if [ "$crole" = lead ] && { [ -n "$tcommit" ] || [ -n "$ttests" ]; }; then
   echo "refused: a lead's task gets no task-level tester - start the lead without --tester-commit / --tester-tests; its contract has \`tests_first: no - the lead runs the tester per sub-contract\` (roles/lead.md step 3)" >&2; exit 1

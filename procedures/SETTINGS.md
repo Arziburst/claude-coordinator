@@ -36,7 +36,9 @@ never from memory:
       the anonymous id and the last retro ([RETRO.md](RETRO.md)), the worktree roots, and the kinds map
       of `coordinator/ROUTING.md` (`## Kinds`) in one line;
   11. one-time steps — from `coordinator/CHECKLIST.md`: done *n* · not done *n* (their ids) ·
-      declined *n* ([ONE-TIME.md](../ONE-TIME.md)).
+      declined *n* ([ONE-TIME.md](../ONE-TIME.md));
+  12. important components — the core's default list and the project's row *Important components*, added to
+      it: a project adds, never removes a default ([CONTRACT.md](../CONTRACT.md), #381).
 - The values come from the **Settings** block at the top of `PROJECT.md`. A `PROJECT.md` without it
   (written before it existed) is read from its rows elsewhere, marked `from the text`, and moving it
   to the block is offered once ([UPDATE-CORE.md](UPDATE-CORE.md) step 3).

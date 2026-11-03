@@ -52,6 +52,19 @@
 #   tests/check-contract/run.sh sh                  # check-contract.sh, with the bash running this file
 #   tests/check-contract/run.sh ps pwsh             # check-contract.ps1 (or: ps powershell)
 # Exit 1 if the output or the exit code differs.
+# Important components (#381), the access point: a contract one of whose `touches` items (flow or block list, quotes
+# aside) a glob of the list matches - the whole path from the root, `*` crosses folders - must carry `bounds:` (lines
+# `- <glob> <max added lines>`, each a whole number, at least one; the bounds' globs need not be the important one)
+# and `wall:` (one non-empty line). Missing or malformed: one ERROR per missing or malformed field, its line
+# `<file>: ERROR ...` holding the word `bounds` or `wall` and the important glob; the exit and summary as any ERROR.
+# The list: the defaults `scripts/hooks/* .github/workflows/* tests/*/run.*` and the row *Important components* of
+# the project's PROJECT.md, a space-separated list; PROJECT.md is the file two folders above the script's own
+# folder (a project's core copy: coordinator/core/scripts/ reads coordinator/PROJECT.md); the row by its name as the
+# retro reads Settings rows (before a "(", without ** and backticks), the value cell without its backticks; `<fill>` adds
+# nothing; no file or no row: the defaults alone. A project adds, never removes. Touching none: no new line.
+# A touches item that is a folder holding a glob of the list (`tests/`, `scripts/`, `scripts/hooks/`, `.github/`, the
+# item with its slash the start of the glob) counts as touching it, the ERROR naming that glob; `docs/` does not.
+# So does a folder under a glob's wildcard, where a file of that folder could match it: `tests/retro/` for `tests/*/run.*`.
 set -u
 [ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -284,5 +297,77 @@ ccore="$(pwd)/onlyworker"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 gname="a core whose roles/ holds only worker.md: assistant.md"; gwarn g-core-role.md touches role
 gname="a core whose roles/ holds only worker.md: worker.md"; gnone g-core-worker.md
 ccore=""
+# important components (#381): `bounds:` and `wall:` on a contract touching one (the header)
+ifail() { echo "FAIL: important $iname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
+ierr() {   # ierr <file> <word> <glob>: exit 1, an ERROR line holding the word and the glob, one error counted
+  crun "$1"
+  [ "$CRC" = 1 ] || ifail "exit $CRC, want 1"
+  printf '%s\n' "$CO" | grep -F -- "$1: ERROR " | grep -F -- "$2" | grep -qF -- "$3" || ifail "no line '$1: ERROR ...$2...$3...'"
+  printf '%s\n' "$CO" | grep -qxF -- "$1: FAIL (1 errors, 0 warnings)" || ifail "the summary is not '$1: FAIL (1 errors, 0 warnings)'"
+}
+inone() {   # inone <file>: exit 0 and only today's clean summary, byte for byte
+  crun "$1"
+  [ "$CRC" = 0 ] || ifail "exit $CRC, want 0"
+  [ "$CO" = "$1: OK (0 errors, 0 warnings)" ] || ifail "want only '$1: OK (0 errors, 0 warnings)'"
+}
+imk() {   # imk <file> <touches items, empty: no touches line> <lines to add, as a printf format>
+  { sed -e '$d' -e 's#^touches: .*#touches: ['"$2"']#' runs-lf.md | { [ -n "$2" ] && cat || sed '/^touches: /d'; }; printf "$3"; printf -- '---\n'; } > "$1"
+}
+B1='bounds:\n  - some/glob/* 10\n'; W1='wall: the guard stops it\n'
+i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*' '.github/workflows/x.yml|.github/workflows/*' 'tests/a/run.sh|tests/*/run.*' 'tests/a/run.ps1|tests/*/run.*'; do
+  i=$((i + 1)); it="${v%%|*}"; ig="${v#*|}"
+  imk "i-nob$i.md" "$it" "$W1"; iname="$it without bounds"; ierr "i-nob$i.md" bounds "$ig"
+  imk "i-now$i.md" "$it" "$B1"; iname="$it without wall"; ierr "i-now$i.md" wall "$ig"
+  imk "i-ok$i.md" "$it" "$B1$W1"; iname="$it with both"; inone "i-ok$i.md"
+done
+imk i-list.md '' 'touches:\n  - "scripts/hooks/x.sh"\n  - sort.sh\nwall: w\n'; iname="touches as a quoted list"; ierr i-list.md bounds 'scripts/hooks/*'
+# a folder holding an important glob counts as touching it; a folder holding none does not
+i=0; for v in 'tests/|tests/*/run.*' 'tests/retro/|tests/*/run.*' 'scripts/|scripts/hooks/*' 'scripts/hooks/|scripts/hooks/*' '.github/|.github/workflows/*'; do
+  i=$((i + 1)); it="${v%%|*}"; ig="${v#*|}"
+  imk "i-dirb$i.md" "$it" "$W1"; iname="the folder $it without bounds"; ierr "i-dirb$i.md" bounds "$ig"
+  imk "i-dirw$i.md" "$it" "$B1"; iname="the folder $it without wall"; ierr "i-dirw$i.md" wall "$ig"
+  imk "i-dirk$i.md" "$it" "$B1$W1"; iname="the folder $it with both"; inone "i-dirk$i.md"
+done
+# a folder under a glob's wildcard, neither field: the two ERRORs, each naming the glob
+imk i-dir2.md 'tests/retro/' ''; iname="the folder tests/retro/ with neither field"; crun i-dir2.md
+[ "$CRC" = 1 ] || ifail "exit $CRC, want 1"
+for w in bounds wall; do printf '%s\n' "$CO" | grep -F -- "i-dir2.md: ERROR " | grep -F -- "$w" | grep -qF -- 'tests/*/run.*' || ifail "no line 'i-dir2.md: ERROR ...$w...tests/*/run.*...'"; done
+printf '%s\n' "$CO" | grep -qxF -- "i-dir2.md: FAIL (2 errors, 0 warnings)" || ifail "the summary is not 'i-dir2.md: FAIL (2 errors, 0 warnings)'"
+imk i-dirn.md 'docs/, scripts/hooksy/' ''; iname="folders holding no important glob"; inone i-dirn.md
+# a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
+i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n  - scripts/hooks/* 1.5\n' 'bounds:\n' 'bounds: 90\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do
+  i=$((i + 1)); imk "i-bad$i.md" scripts/hooks/x.sh "$b$W1"; iname="a malformed bound: $b"; ierr "i-bad$i.md" bounds 'scripts/hooks/*'
+done
+imk i-wall1.md scripts/hooks/x.sh "${B1}wall:\n"; iname="an empty wall"; ierr i-wall1.md wall 'scripts/hooks/*'
+imk i-wall2.md scripts/hooks/x.sh "${B1}wall: \"\"\n"; iname="a wall of empty quotes"; ierr i-wall2.md wall 'scripts/hooks/*'
+# touching none: today's output. The glob holds from the root and a `*` needs its folder
+imk i-none1.md 'sort.sh, src/x.sh' ''; iname="no important file"; inone i-none1.md
+imk i-none2.md 'scripts/hooks.sh, scripts/hooksy/x.sh, tests/run.sh, docs/tests/a/run.sh, tests/a/runner.sh, .github/workflows.yml' ''; iname="near misses"; inone i-none2.md
+imk i-none3.md 'src/pay/a.sh' ''; iname="a project's glob with no project row"; inone i-none3.md
+# the project's row: PROJECT.md two folders above the script's own (the header), from copies of the scripts
+for d in proj fillp; do
+  mkdir -p "$d/coordinator/core/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/coordinator/core/scripts/"
+done
+printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| Work mode | by task | owner | 2026-11-02 | - |\n| **Important components** (CONTRACT.md) | `src/pay/* lib/core/*` | owner | 2026-11-02 | added to the default list |\n' > proj/coordinator/PROJECT.md
+printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| **Important components** (CONTRACT.md) | `<fill>` | `<fill>` | `<date>` | added to the default list |\n' > fillp/coordinator/PROJECT.md
+imk i-p1.md src/pay/a.sh "$W1"; imk i-p2.md lib/core/x.sh "$B1"; imk i-p3.md src/pay/a.sh "$B1$W1"; imk i-p4.md scripts/hooks/x.sh "$W1"
+ccore="$(pwd)/proj/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+iname="the row adds its first glob"; ierr i-p1.md bounds 'src/pay/*'
+iname="the row adds its second glob"; ierr i-p2.md wall 'lib/core/*'
+iname="a project's glob with both"; inone i-p3.md
+iname="the row removes no default"; ierr i-p4.md bounds 'scripts/hooks/*'
+iname="the row, a file none of the lists holds"; inone i-none1.md
+ccore="$(pwd)/fillp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hooks/*'
+iname="a row still <fill>: adds nothing"; inone i-none3.md
+ccore=""
+# the same output and exit codes from both versions, on every contract above at once
+if [ "$kind" = ps ]; then
+  set -- i-*.md
+  crun "$@"; pso="$CO"; prc="$CRC"
+  sho="$(bash "$core/scripts/check-contract.sh" "$@" 2>&1)"; src=$?
+  [ "$prc" = "$src" ] && [ "$pso" = "$(printf '%s\n' "$sho" | tr -d '\r')" ] ||
+    { echo "FAIL: important: check-contract.sh and .ps1 differ (exit $src, $prc):"; diff <(printf '%s\n' "$sho" | tr -d '\r') <(printf '%s\n' "$pso") | sed 's/^/    /'; fail=1; }
+fi
 echo "check-contract ($kind): $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

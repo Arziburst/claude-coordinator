@@ -7,6 +7,14 @@
 # Access point of the `watch:` checks (#365): a started session's short id is the one the launch prints,
 # `backgrounded · <id> · <name>` (the stub below prints it; start-worker already reads that line); a dry run
 # has no id yet, so its line holds the session's name.
+# Access points of the round and money gate (#381): --owner-ok <the owner's words> (.ps1: -OwnerOk <words>); the log
+# is <repo>/coordinator/RUNS.tsv, columns by its header. For the contract's id (--contract, or the contract in the
+# brief): rounds = its worker rows + the session starting; round 3 or later, or its rows of every role summing to at
+# least twice budget.cost, is refused, exit 1, before the [dry-run] lines: one line starting `refused: ` holding
+# `round <n>`, `task <id>`, `spent <sum, two decimals> against estimate <budget.cost as written>` and
+# `API list price`. A cell without a number (`in <parent>`) adds nothing; another task's rows (5010 is not 501) neither.
+# Words of blanks only are no words: refused the same. With --owner-ok the start goes on and one line holds the words. No log, a lead's sub-contract (an id `<task>.<n>`,
+# roles/lead.md step 2) or an assistant: no gate, exactly one line starting `round gate: `.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -105,6 +113,7 @@ start() {
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
         --tester-commit) a+=(-TesterCommit "$2"); shift 2 ;; --tester-tests) a+=(-TesterTests "$2"); shift 2 ;;
+        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -1116,6 +1125,48 @@ for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
   asnothing "an assistant without $vf"
   expect_no_line "watch:"; expect_no_line "subscribe:"   # refused: neither line (#365)
 done
+
+# --- the round and money gate (#381, the header): dry runs on a fixture run log, its columns in their own order ---
+rg="$tmp/rgrepo"; git init -q -b main "$rg"; git -C "$rg" config core.autocrlf false; mkdir -p "$rg/coordinator"
+{ printf 'date\trole\ttask\tcost\tkind\tmodel\tresult\tstart\n'
+  rgl() { printf '2026-11-01\t%s\t%s\t%s\tordinary\topus\tdone\t2026-11-01T%02d:00:00Z\n' "$1" "$2" "$3" "$RGN"; RGN=$((RGN + 1)); }
+  RGN=1
+  rgl tester 501 1.00; rgl worker 501 3.00; rgl verifier 501 1.50
+  rgl worker 5010 90; rgl worker 5010 90; rgl worker 5010 90                # a longer id: not task 501
+  rgl tester 502 'in a1b2c3d4'; rgl worker 502 2.00; rgl verifier 502 0.50; rgl worker 502 2.50
+  rgl tester 503 2.00; rgl worker 503 7.00; rgl verifier 503 3.00           # one worker row, exactly twice 6
+  rgl worker 504.1 1.00; rgl worker 504.1 1.00                              # a sub-contract's own two rounds
+} > "$rg/coordinator/RUNS.tsv"
+g -C "$rg" add -A; g -C "$rg" commit -q -m init
+rgr="$tmp/rgnolog"; git init -q -b main "$rgr"; g -C "$rgr" commit -q --allow-empty -m init
+rgc() { tfno "$cc/budget-time-ok.md" | tr -d '\r' | sed -e "s/^id: .*/id: $1/" -e "s/^  cost: .*/  cost: $2/"; }   # rgc <id> <budget.cost>
+rgc 501 14 > "$tmp/rg501.md"; rgc 502 14 > "$tmp/rg502.md"; rgc 503 6 > "$tmp/rg503.md"
+{ printf 'Fix it.\n\n'; cat "$tmp/rg502.md"; } > "$tmp/brief-rg502.md"
+RG=(--repo "$rg" --model opus --safety "$tmp/safety.json" --report-to x)
+rgone() {   # rgone <what>: exactly one line starting `round gate: `
+  [ "$(printf '%s\n' "$LAST" | tr -d '\r' | grep -c '^round gate: ')" = 1 ] ||
+    { echo "FAIL ($1): not exactly one line starting 'round gate: '"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+}
+rgrefused() { case "$LAST" in *"[dry-run]"*) echo "FAIL ($1): the dry run went on after the refusal"; fail=1 ;; esac; }
+check 0 "gate: a second round starts, other tasks' spend aside" -- start --name "#501 worker: G" "${RG[@]}" --branch 501-g --brief-file "$tmp/brief.md" --contract "$tmp/rg501.md" --dry-run
+expect_in "[dry-run]"; case "$LAST" in *"refused"*) echo "FAIL (gate: a second round): refused"; fail=1 ;; esac
+check 1 "gate: a third round is refused" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
+says "gate: a third round is refused" "refused: " "round 3" "task 502" "spent 5.00 against estimate 14" "API list price"; rgrefused "gate: a third round"
+check 1 "gate: twice the estimate is refused" -- start --name "#503 worker: G" "${RG[@]}" --branch 503-g --brief-file "$tmp/brief.md" --contract "$tmp/rg503.md" --dry-run
+says "gate: twice the estimate is refused" "refused: " "round 2" "task 503" "spent 12.00 against estimate 6" "API list price"; rgrefused "gate: twice the estimate"
+check 0 "gate: --owner-ok passes and prints the words" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --owner-ok "the owner said go on" --dry-run
+expect_in "the owner said go on"; expect_in "[dry-run]"
+check 1 "gate: blank --owner-ok words pass nothing" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --owner-ok " " --dry-run
+says "gate: blank --owner-ok words pass nothing" "refused: " "round 3" "task 502"; rgrefused "gate: blank --owner-ok words"
+check 0 "gate: no log, no gate" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
+expect_in "[dry-run]"; rgone "gate: no log"
+rgc 504.1 14 > "$tmp/rg504.md"
+check 0 "gate: a lead's sub-contract has no gate" -- start --name "#504.1 worker: G" "${RG[@]}" --branch 504-1-g --brief-file "$tmp/brief.md" --contract "$tmp/rg504.md" --dry-run
+expect_in "[dry-run]"; rgone "gate: a lead's sub-contract"
+cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"; mkas rg
+check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
+expect_in "[dry-run]"; rgone "gate: an assistant"
+rm -f "$ar/coordinator/RUNS.tsv"
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"

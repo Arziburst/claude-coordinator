@@ -380,5 +380,20 @@ run check --log "$L" --root "$ROOT" --self $COS
 code 0; hasnt "$SI"; has "^ALL LOGGED\$"
 cp "$tmp/agents.main.json" "$STUB_D/agents.json"
 
+# task (#381), read-only: `<worker rows of the exact id> <the task's spend, before its first dot>`
+trow() { printf '2026-11-01\t%s\t%s\t%s\topus\n' "$1" "$2" "$3"; }
+fresh "task: columns by the header; another task, a cell without a number and a task row add nothing; nothing written"
+{ printf 'date\trole\ttask\tcost\tmodel\n'; trow tester 50 1.25; trow worker 50 '$2.50 prices'; trow verifier 50 'in a1b2'; trow worker 50 -; trow worker 500 9; trow worker 50.1 0.5; trow task 50 -; } > "$L"; cp "$L" "$L.before"
+run task --log "$L" --task 50; code 0; has '^2 4\.25$'; same "$L" "$L.before"
+run task --log "$L" --task 50.1; code 0; has '^1 4\.25$'
+fresh "task: no header, a BOM and CRLF read as plain; no row at all"
+{ printf '\357\273\277'; printf '2026-11-01\t50\tworker\tordinary\topus\thigh\t14\t100\t1.5\tdone\r\n'; } > "$L"
+run task --log "$L" --task 50; code 0; has '^1 1\.50$'
+run task --log "$L" --task 7; code 0; has '^0 0\.00$'
+fresh "task: a directory in place of the log, no --task, a flag of another command"
+mkdir "$L"; runio task --log "$L" --task 50; refused_io
+rmdir "$L"; : > "$L"; run task --log "$L"; code 2
+run task --log "$L" --task 50 --root x; code 2
+
 echo "runs ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" = 0 ]

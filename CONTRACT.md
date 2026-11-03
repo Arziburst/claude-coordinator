@@ -46,6 +46,9 @@ budget:
   time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
+bounds:                            # only when touches holds an important component: the most lines a glob may add
+  - src/cart/* 120
+wall: the server checks the account on every read; the cart screen only filters  # what really protects it
 ---
 Free text: context, known traps, parallel work nearby, launch and test limits, the report phrase.
 ```
@@ -77,6 +80,21 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   with an API key. Cost, not tokens: most tokens are cheap cache reads, so a token count measures
   context times turns, not spend. A lead fits its sub-contracts inside it and
   stops to ask when a run goes over twice its own estimate.
+- **`bounds` and `wall`** (#381): required when `touches` holds an **important component**: a path the
+  core's default list `scripts/hooks/* .github/workflows/* tests/*/run.*` or the project's `PROJECT.md` row
+  *Important components* matches, or a folder holding one (a project adds, never removes a default).
+  check-contract refuses such a contract without them. `bounds:` is lines `- <glob> <max added lines>`, each a
+  whole number; a file no bound matches is not limited, and a bound's glob need not be the important one.
+  `wall:` is one line: what really protects this component, and what this change only filters. **How a bound
+  is chosen:** the smallest that can hold the criteria. A bound that cannot carry the criteria is the signal
+  to ask what wall would hold, never to widen it silently. `scripts/check-bounds <contract> <base>...<head>`
+  compares the real diff with the bounds: the worker and the tester run it before reporting, the verifier as
+  an oracle, and `scripts/merge-queue land` on the contract it finds by the id the PR's branch starts with,
+  `coordinator/briefs/<id>-contract.md`. A contract written before this change is not rejected at a merge:
+  no `bounds:` is `check-bounds: no bounds`, exit 0. **What it does not stop:** a wrong bound, or a component
+  left off the list, slips through; `--over-bounds-ok` for two PRs goes in two runs (`.ps1 -File` does not
+  repeat a parameter); and the coordinator could pass an owner-ok flag on its own: only CORE §1.14 and the
+  journal hold that.
 - **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`), from
   `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract
   warns only when it is there and is neither; a contract without it is fine.

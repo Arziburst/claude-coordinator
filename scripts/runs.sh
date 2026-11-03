@@ -6,6 +6,8 @@
 #   scripts/runs.sh add --log <RUNS.tsv> --in <parent> --tokens <n> --task ... --result <word> [--date ...]
 #                   a subagent's row (a tester or verifier run as a subagent): no --session
 #   scripts/runs.sh check --log <RUNS.tsv> --root <project root> [--self <session id>] [--since <YYYY-MM-DD>]
+#   scripts/runs.sh task --log <RUNS.tsv> --task <id>   read-only (#381, start-worker's gate): one line `<worker rows> <spent>`,
+#                   the worker rows of exactly that id; spent, two decimals, the cost cells' leading numbers of the task's rows (before the first dot)
 # add appends exactly one row (CORE 7) and prints it. Its cells follow the file's header (a first line whose
 # fields include `date` and `role`; a column it does not name stays empty, the names it lacks follow in CORE
 # 7's order), else CORE 7's order: date task role kind model effort estimate tokens cost result start wall
@@ -36,11 +38,11 @@
 # Exit 0 (check: also when it lists some), 1 as above or when claude agents fails, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
-usage() { sed -n '2,36s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+usage() { sed -n '2,38s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 die() { echo "runs: $2" >&2; exit "$1"; }
 [ $# -ge 1 ] || usage
 cmd="$1"; shift
-case "$cmd" in add|check) ;; *) usage ;; esac
+case "$cmd" in add|check|task) ;; *) usage ;; esac
 log="" session="" task="" role="" kind="" model="" effort="" est="" estt="" result="" date="" in="" tokens=""
 root="" self="" since=""
 seen=""
@@ -133,6 +135,18 @@ if [ "$cmd" = add ]; then
   pre=""; if [ -s "$log" ] && [ "$(tail -c 1 "$log" | wc -l | tr -d ' ')" = 0 ]; then pre="$nl"; fi
   { printf '%s%s%s' "$pre" "$row" "$nl" >> "$log"; } 2>/dev/null || die 1 "cannot write the run log $log"
   printf '%s\n' "$row"
+  exit 0
+fi
+
+if [ "$cmd" = task ]; then
+  for o in $seen; do case "$o" in --log|--task) ;; *) usage ;; esac; done
+  [ -n "$task" ] || usage
+  canread "$log"; c="$(cols "$log")"
+  rowsof "$log" | LC_ALL=C awk -F'\t' -v t="$(colno "$c" task)" -v r="$(colno "$c" role)" -v c="$(colno "$c" cost)" -v T="$task" '
+    BEGIN { T = T ""; P = T; sub(/\..*/, "", P) }
+    t { id = $t ""; if (r && id == T && $r == "worker") w++; sub(/\..*/, "", id); v = c ? $c : ""
+      if (id == P && match(v, /^\$?[0-9]+(\.[0-9]+)?/)) { v = substr(v, RSTART, RLENGTH); sub(/^\$/, "", v); s += v } }
+    END { printf "%d %.2f\n", w, s + 1e-9 }'
   exit 0
 fi
 

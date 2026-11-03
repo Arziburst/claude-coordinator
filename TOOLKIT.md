@@ -153,7 +153,14 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   one line naming them. A lead is refused there too when its contract has `tests_first: yes` or it is
   given `--tester-commit` / `--tester-tests` (a lead's task gets no task-level tester: its contract says
   `tests_first: no - the lead runs the tester per sub-contract`, roles/lead.md step 3, #289). `tests_first` comes from check-contract itself (`--field tests_first`, *Checks*):
-  its contract block (the front matter, or a top-level `contract:`), never from the rest of the file. Its built-in alternative (`claude --worktree <name>`, branch
+  its contract block (the front matter, or a top-level `contract:`), never from the rest of the file. **The round
+  and money gate (#381):** for a worker or a lead, from `<repo>/coordinator/RUNS.tsv` through `scripts/runs task`:
+  rounds = the id's worker rows plus this start; round 3 or later, or the task's rows summing to at least twice
+  `budget.cost`, is refused with the numbers (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API
+  list price`) unless `--owner-ok <the owner's words>` / `-OwnerOk`, printed; no log, no contract, a lead's
+  sub-contract, another role or an assistant is one `round gate:` line and no gate. A mistyped `-OwnerOk` is swallowed
+  by param() and the gate still refuses. A round given by a message passes no gate (CORE §4 step 5); a running
+  session has no row yet, so its spend is not in the sum. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
@@ -642,7 +649,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `tests/merge-queue/run.sh` (a stub `gh` answering from a state folder: merged, behind and updated, a
   conflict, a merge of main that touched the PR's files with and without shared globs, a re-run once and
   a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
-  / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh),
+  / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh; the bounds: over, no
+  contract, exit 2 fail-closed, `--over-bounds-ok`), `tests/check-bounds/run.sh` (a throwaway repository: within,
+  at and over a bound, a binary file, two globs, a rename, a CRLF contract, bounds in the body, usage errors),
   `tests/report-issue/run.sh` (a stub `gh` that logs every call: one signature from two machines' errors,
   at most 120 characters, the `.ps1` line the `.sh` line, no path tail, e-mail or host in it; FIXED UPSTREAM
   (the newest fix), closed as not planned going on,
@@ -684,8 +693,13 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls only `gh`, never `git`: the owner's
-  checkout is left as it is, pulled after the merges as before.
+  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls `gh`, and `git` only to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  checkout is left as it is, pulled after the merges as before. **The bounds (#381):** run from the project's root, it
+  runs check-bounds on the contract found by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
+  an OVER stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`, check-bounds exit 2 stops it fail-closed
+  (`BOUNDS #<pr>: check-bounds ...`), no contract is one line and no stop, and the queue goes on.
+  `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's OVER, the words printed and
+  journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter).
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
   a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
   head (`gh pr view <n> --json headRefOid`, then `gh run list --commit <sha>`); on `cancelled`, look for
@@ -709,8 +723,14 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `branch-protection` and `state-private` checks (ONE-TIME).
 
 ## Checks
+- `scripts/check-bounds.sh|.ps1 <contract> <base>...<head>` (#381) — a contract's `bounds:` against `git diff
+  --numstat`: one line per bound, `<glob> <added>/<max>`, then `check-bounds: OK` or `check-bounds: OVER <glob>
+  <added>/<max>`; exit 0 / 1, usage 2; a binary file counts as 0 and is named; no `bounds:` is `check-bounds: no
+  bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md).
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
-  delegation, WARN goes into the brief. `--field <key>` / `-Field <key>` (read-only): when the contract
+  delegation, WARN goes into the brief. A contract whose `touches` holds an important component (the default list
+  and `PROJECT.md` *Important components*) without `bounds:` and `wall:` is an ERROR naming the glob (#381);
+  `--field budget.cost` gives budget's cost as written. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,
   the usage and exit 2 in both shells (#288). `--runs <RUNS.tsv> [--kind <k>]` (`-Runs <RUNS.tsv> [-Kind <k>]`,
@@ -836,7 +856,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   assistant's rows share their start and are allowed, their cost the session's since that assistant's
   previous row). The file keeps its BOM and line ends. A subagent's row: `add --log … --in <parent>
   --tokens <n> --task …` (`-In <parent> -Tokens <n>`), cost `in <parent>`, the time columns empty. Task rows
-  stay `run-stats --task … --append`. **The finished runs without a row:** `scripts/runs.sh check --log
+  stay `run-stats --task … --append`. **One task's numbers (#381):** `scripts/runs.sh task --log
+  coordinator/RUNS.tsv --task <id>` (`… runs.ps1 task -Log … -Task <id>`), read-only, prints `<worker rows>
+  <spent>`: the worker rows of exactly that id, and the cost cells' leading numbers of the task's rows (before the
+  first dot), two decimals; start-worker's gate reads the log through it. **The finished runs without a row:** `scripts/runs.sh check --log
   coordinator/RUNS.tsv --root <project root> --self "$CLAUDE_CODE_SESSION_ID" [--since <YYYY-MM-DD>]`
   (Windows: `… -File scripts/runs.ps1 check -Log coordinator/RUNS.tsv -Root <project root> -Self
   $env:CLAUDE_CODE_SESSION_ID [-Since <YYYY-MM-DD>]`) lists `MISSING <short id> <name> <start>` per finished

@@ -30,6 +30,24 @@
 #   The core's own role files (#362): in touches only, an item `roles/<file>` or `coordinator/core/roles/<file>`
 #   (also with a leading `./`) whose <file> exists in this script's own ..\roles\ folder (never the working
 #   directory's) is not read for the word list; other items, title and intent as above; no such folder: none.
+#   Important components (#381; the rules: check-contract.sh): touches holding a glob of the list (the defaults below,
+#   and the row *Important components* of the PROJECT.md two folders above this script's) needs `bounds:` and `wall:`;
+#   missing or malformed: one ERROR per field, naming the glob. -Field budget.cost: budget's cost as written.
+$Important = @('scripts/hooks/*', '.github/workflows/*', 'tests/*/run.*')
+$pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT.md'
+if (Test-Path -LiteralPath $pf -PathType Leaf) {
+  foreach ($ln in [IO.File]::ReadAllLines($pf)) { $x = $ln -split '\|'; if ($x.Count -lt 3) { continue }
+    if ((($x[1] -creplace '\(.*', '') -creplace '[*`]', '').Trim() -cne 'Important components') { continue }
+    $v = $x[2] -creplace '`', ''; if ($v -notmatch '<') { $Important += @(-split $v) }; break }
+}
+# the first glob of the list a touches item holds: a whole path, `*` the one wildcard; a folder item starting the glob or under its wildcard
+function Imp([string]$t) {
+  $its = @(($t -creplace '(^|[ \t\n])#[^\n]*', ' ') -split '[,\n]' | ForEach-Object { $_ -creplace ('^[ \t]*(\[[ \t]*)?(-[ \t]+)?["' + "'" + ']?|["' + "'" + ']?[ \t]*\]?[ \t]*\z'), '' } | Where-Object { $_ })
+  foreach ($g in $Important) { $re = '^' + ([regex]::Escape($g) -creplace '\\\*', '.*') + '\z'
+    $lit = $g.Substring(0, [Math]::Max(0, $g.IndexOf('*'))); $hasW = $g.Contains('*')
+    foreach ($s in $its) { if ($s -cmatch $re -or ($s.EndsWith('/') -and ($g.StartsWith($s, [StringComparison]::Ordinal) -or ($hasW -and $s.StartsWith($lit, [StringComparison]::Ordinal))))) { return $g } } }
+  ''
+}
 $CoreRoles = @{}
 $crd = Join-Path (Split-Path -Parent $PSScriptRoot) 'roles'
 if (Test-Path -LiteralPath $crd -PathType Container) {
@@ -58,7 +76,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 32 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 35 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -250,6 +268,12 @@ foreach ($f in $Files) {
   if ((($txt['touches'] + '') -creplace '#[^\n]*', '' -creplace '[ \t\n\[\]-]', '') -eq '') {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }
+  # important components (#381, the header): bounds and wall
+  $ig = Imp ($txt['touches'] + '')
+  if ($ig) { $nb = 0; $bad = -not $txt.ContainsKey('bounds'); $BL = @(($txt['bounds'] + '') -split "`n"); if ($BL[0] -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true }
+    foreach ($x in @($BL | Select-Object -Skip 1)) { if ($x -cmatch '^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$') { $nb++ } elseif ($x -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true } }
+    if ($bad -or -not $nb) { $out.Add("ERROR ``bounds`` missing or malformed (lines ``- <glob> <max added lines>``): touches holds the important $ig (CONTRACT.md)"); $ne++ }
+    if (-not $txt.ContainsKey('wall') -or (Blank $txt['wall'])) { $out.Add("ERROR ``wall`` missing or empty (what really protects it, one line): touches holds the important $ig (CONTRACT.md)"); $ne++ } }
   # the guard on tests_first: no (#334, the header): the first field, then the first word of the list in it
   if ($txt.ContainsKey('tests_first') -and $tf -cmatch '^no([^a-z0-9]|\z)') {
     $gm = ''
@@ -282,6 +306,7 @@ foreach ($f in $Files) {
   }
   # errors first, then warnings, as check-contract.sh prints them in order of the checks
   # -Field: the key's value as read above, its lines joined into one; warnings left out
+  if ($Field -ceq 'budget.cost' -and -not $ne) { if ($b -cmatch '\n[ \t]+cost:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }; continue }
   if ($Field -and -not $ne) { ((Val $txt[$Field]) -creplace '[ \t]*\r?\n[ \t]*', ' ').Trim(' ', "`t"); continue }
   foreach ($m in $out) { if (-not $Field -or $m.StartsWith('ERROR')) { "${f}: $m" } }
   "${f}: $(if ($ne) { 'FAIL' } else { 'OK' }) ($ne errors, $nw warnings)"

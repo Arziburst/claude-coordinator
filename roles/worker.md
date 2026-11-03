@@ -58,7 +58,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    cost): attach its raw output where the criterion's `how` says, with the commit it ran on — a summary
    alone is a claim. What you could not run is a known gap, never a pass. A long local run never runs
    under a short tool timeout (a killed run looks like a crash): start it in the background and wait for
-   it; what a test starts (a server, a browser, an app) ends with it (TOOLKIT *CI*).
+   it; what a test starts (a server, a browser, an app) ends with it (TOOLKIT *CI*). With `bounds:`, run `scripts/check-bounds` before reporting; another route: name it, do not close it (#381).
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is
    this project; neither → put the whole report in your final output with "NOT DELIVERED: <the
