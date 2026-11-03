@@ -113,6 +113,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-STATE-06 | Layout migration | an older layout moves to its own git only on the owner's yes | STATE |
 | F-STATE-07 | The journal and open questions | one dated line per event; open questions asked first on return | STATE |
 | F-STATE-08 | The core's skills | `coord-*` skills point the coordinator to the event table and the procedures | STATE |
+| F-STATE-09 | The reset | on the owner's own words everything the coordinator holds goes behind a tag and is removed, then a new init; never the core's own repository | STATE |
 | F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
 | F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
 | F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
@@ -762,6 +763,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: one dated line per event; unanswered questions are asked first, preferably as a quiz; no customer data or secrets in it
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-09 The reset
+- defined: procedures/RESET.md, skills/coord-reset/SKILL.md, scripts/reset-coordinator.sh, scripts/reset-coordinator.ps1, CORE.md §4, procedures/INIT.md
+- entry: the owner's own words asking for a reset (CORE §1.14), the `coord-reset` skill
+- promises: the core's own repository is refused first, read from files, a linked worktree too; a wrong `--confirm`, an open PR, another running session, anything in `coordinator/assistants/`, an unreachable remote, an unusable `--core-from` or a tag already there is a refusal with nothing changed; `gh` or `claude` failing is a refusal, but for a project with no git remote; all of `coordinator/` (ignored files too, raw bytes) and the auto-memory go behind `before-reset-<date>`, pushed before anything is removed; then `coordinator/` holds only `.git` and a clean core copy, `core=<sha>` in the commit's message; the project's own repository is untouched; a new session runs INIT's full quiz
+- tested by: tests/reset-coordinator/run.sh (scratch projects under a temp folder, stub `gh` and `claude`, in bash and PowerShell)
+- not covered: the words of the confirmation hold only through CORE §1.14; a file held on Windows and the restore's line endings there are proven by the verifier, not by a test on every run; a project on a host `gh` cannot read cannot be reset
 
 ## UPDATE
 
