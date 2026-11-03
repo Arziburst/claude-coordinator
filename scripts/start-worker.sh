@@ -516,7 +516,12 @@ fi
 cto="$root/coordinator/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"
 if [ -n "$cfile" ] && [ -d "$root/coordinator/briefs" ] && case "$crole" in worker|lead|"") [ -n "$(bash "$sd/check-contract.sh" --field bounds "$cfile" 2>/dev/null | tr -d '\r')" ] ;; *) false ;; esac; then
   if [ "$dry" = 1 ]; then echo "[dry-run] copy the contract to $cto"
-  else cat "$cfile" > "$cto" || { echo "cannot copy the contract to $cto. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }; echo "contract copied for the merge queue: $cto"; fi
+  else
+    # read first: --contract may be the copy itself, in any spelling (the x keeps the last line breaks through $(...))
+    cbytes="$(cat "$cfile" && printf x)" && printf '%s' "${cbytes%x}" > "$cto" ||
+      { echo "cannot copy the contract to $cto. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }
+    echo "contract copied for the merge queue: $cto"
+  fi
 fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 [ -z "$notice" ] || echo "$notice"

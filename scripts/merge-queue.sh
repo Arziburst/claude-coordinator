@@ -26,7 +26,7 @@
 # scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's OVER, its words printed; one per run, two PRs go in two runs.
 # The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
-# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: anywhere.
+# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
 # says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads (Windows: merge-queue.ps1).
 set -uo pipefail
@@ -74,7 +74,7 @@ T_CHECKS="{{range .}}{{.name}}$TAB{{.startedAt}}$TAB{{.bucket}}$NL{{end}}"
 T_RUNS="{{range .}}{{.url}} {{.headSha}} {{.status}} {{.conclusion}}$NL{{end}}"
 T_LIST="{{range .}}{{.number}}$TAB{{.mergeable}}$TAB{{.mergeStateStatus}}$TAB{{.headRefName}}{{range .files}}$TAB{{.path}}{{end}}$NL{{end}}"
 # q <gh args>: gh's output; a failed gh stops the run (exit 1), called as `x="$(q ...)" || exit 1`
-q() { local out; out="$(gh "$@" 2>&1)" || { printf 'gh %s %s failed: %s\n' "$1" "$2" "$out" >&2; return 1; }; printf '%s\n' "$out"; }
+q() { local out; out="$(gh "$@" 2>&1)" || { printf 'gh %s %s failed%s: %s\n' "$1" "$2" "${here:+ (folder $here)}" "$out" >&2; return 1; }; printf '%s\n' "$out"; }
 pr_view() { q pr view "$1" --json state,isDraft,headRefOid,headRefName,baseRefName,isCrossRepository --template "$T_PR"; }
 behind() { q api "repos/{owner}/{repo}/compare/$1...$2" --template "{{.behind_by}}"; }
 open_prs() { q pr list --state open --limit 200 --json number,mergeable,mergeStateStatus,headRefName,files --template "$T_LIST"; }
@@ -115,7 +115,7 @@ for item in "${prs[@]}"; do pr="${item%%@*}"; v="$(pr_view "$pr")" || exit 1; re
   e="$(git ls-remote -q --exit-code origin "refs/heads/$branch" 2>&1 >/dev/null)"; lrc=$?
   [ "$lrc" != 2 ] || { echo "land: folder $here - its origin has no branch $branch of #$pr: land runs from the root of the repository holding the PR's branch; $usage" >&2; exit 1; }
   [ "$lrc" = 0 ] || { echo "land: origin could not be read from folder $here for #$pr's branch $branch: $(printf '%s\n' "$e" | tr -d '\r' | head -n 1)" >&2; exit 1; }
-done
+done; here=""
 merged=0 left=""
 leave() { echo "$2 #$1: $3"; left="${left:+$left, }#$1 ($2)"; }
 for item in "${prs[@]}"; do

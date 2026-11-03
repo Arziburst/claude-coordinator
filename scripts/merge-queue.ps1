@@ -26,7 +26,7 @@
 # scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
 # The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
-# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: anywhere.
+# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
 # says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
@@ -68,7 +68,7 @@ $T_LIST = "{{range .}}{{.number}}`t{{.mergeable}}`t{{.mergeStateStatus}}`t{{.hea
 # Q <gh args>: gh's non-empty output lines; a failed gh stops the run (exit 1)
 function Q([string[]]$a) {
   $o = @(& gh @a 2>&1 | ForEach-Object { "$_" })
-  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("gh $($a[0]) $($a[1]) failed: $($o -join "`n")"); exit 1 }
+  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("gh $($a[0]) $($a[1]) failed$(if ($here) { " (folder $here)" }): $($o -join "`n")"); exit 1 }
   @($o | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -ne '' })
 }
 function GhRc([string[]]$a) { $null = & gh @a 2>&1; $LASTEXITCODE }
@@ -112,7 +112,7 @@ foreach ($item in $prs) { $n = ($item -split '@')[0]; $st, $null, $null, $br, $n
   $e = @(& { $ErrorActionPreference = 'Continue'; & git ls-remote -q --exit-code origin "refs/heads/$br" 2>&1 } | ForEach-Object { "$_" }); $lrc = $LASTEXITCODE
   if ($lrc -eq 2) { Usage "land: folder $here - its origin has no branch $br of #${n}: land runs from the root of the repository holding the PR's branch" }
   if ($lrc -ne 0) { [Console]::Error.WriteLine("land: origin could not be read from folder $here for #$n's branch ${br}: $(@($e)[0])"); exit 1 }
-}
+}; $here = ''
 $merged = 0; $left = @()
 function Leave([string]$n, [string]$tag, [string]$m) { "$tag #${n}: $m"; $script:left += "#$n ($tag)" }
 foreach ($item in $prs) {
