@@ -5,23 +5,21 @@
 # the files to re-read - which after-compact.sh coordinator puts back into the context: a summary is
 # precomputed hours before the swap and never holds it. Never blocks a compaction: exit 0 on any failure,
 # one line on stderr; silent without <cwd>/coordinator, in a worktree, with a kept brief (a worker) or
-# COORD_ASSISTANT_DIR (an assistant). The root is CLAUDE_PROJECT_DIR when set, whatever the cwd (a worktree
-# inside it stays a worker's); else the cwd, where one at or under <root>/coordinator with no coordinator/ of
-# its own acts as <root>. At most 8000 bytes: a section over its share keeps its first lines and says truncated.
+# COORD_ASSISTANT_DIR (an assistant). The root: CLAUDE_PROJECT_DIR when set, whatever the cwd (a worktree inside
+# it stays a worker's); else the cwd, one at or under <root>/coordinator with no coordinator/ of its own acting
+# as <root>. At most 8000 bytes: a section over its share keeps its first lines and says truncated.
 # Windows: before-compact.ps1, the same file.
 #   bash scripts/hooks/before-compact.sh          (reads the hook's JSON on stdin; the project is its cwd)
 in="$(cat 2>/dev/null)"
 str() { printf '%s' "$in" | tr -d '\r\n' | sed -n "s/.*\"$1\" *: *\"\\([^\"]*\\)\".*/\\1/p"; }
 sid="$(str session_id)"; wd="$(str cwd | sed 's/\\\\/\\/g' | tr '\\' '/')"; cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-# the root: CLAUDE_PROJECT_DIR when set (a /c/x form as cygpath -m reads it), whatever the cwd; else the cwd rule
-rt="$(printf '%s' "${CLAUDE_PROJECT_DIR:-}" | tr '\\' '/')"; [ -z "$rt" ] || ! command -v cygpath >/dev/null 2>&1 || rt="$(cygpath -m "$rt")"
+rt="$(printf '%s' "${CLAUDE_PROJECT_DIR:-}" | tr '\\' '/')"; [ -z "$rt" ] || ! command -v cygpath >/dev/null 2>&1 || rt="$(cygpath -m "$rt")"   # the root when set (/c/x as cygpath -m)
 [ -n "${rt:-$wd}" ] && [ -z "${COORD_ASSISTANT_DIR:-}" ] || exit 0
 case "${rt:-$wd}" in */.claude/worktrees/*|*/.claude/worktrees) exit 0 ;; esac
 case "$rt" in "") ;; *) case "$wd" in "$rt"/.claude/worktrees/*) exit 0 ;; esac ;; esac   # a worker's worktree inside the project
 case "$sid" in *[!0-9a-fA-F-]*|"") ;; *) [ ! -f "$cfg/coordinator/briefs/$sid.md" ] || exit 0 ;; esac
 if [ -n "$rt" ]; then wd="$rt"; else while [ ! -d "$wd/coordinator" ]; do case "$wd" in */coordinator) wd="${wd%/coordinator}"; break ;; */coordinator/*) wd="${wd%/*}" ;; *) break ;; esac; done; fi
-c="$wd/coordinator"; [ -d "$c" ] || exit 0
-fail() { echo "before-compact: $1" >&2; }
+c="$wd/coordinator"; [ -d "$c" ] || exit 0; fail() { echo "before-compact: $1" >&2; }
 # the lines under LOG.md's "## Open questions" up to its next heading; no such heading: `heading not found`
 if [ -f "$c/LOG.md" ] && q="$(LC_ALL=C awk '/^## / { on = /^## Open questions/; f = f || on; next } on; END { if (!f) print "heading not found" }' "$c/LOG.md" 2>/dev/null)"; then :
 else q="could not read coordinator/LOG.md"; fail "cannot read $c/LOG.md"; fi

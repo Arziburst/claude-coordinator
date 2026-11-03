@@ -4,27 +4,24 @@
 # the process this hook started is killed, by its own handle) and the files to re-read - which after-compact.ps1
 # coordinator puts back into the context: a summary is precomputed hours before the swap and never holds it.
 # Never blocks a compaction: exit 0 on any failure, one line on stderr; silent without <cwd>/coordinator, in a
-# worktree, with a kept brief (a worker) or COORD_ASSISTANT_DIR (an assistant). The root is CLAUDE_PROJECT_DIR
-# when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, where one at or under
-# <root>/coordinator with no coordinator/ of its own acts as <root>; a /c/... form of it or of CLAUDE_CONFIG_DIR reads
-# as cygpath -m reads it. Stdin is read as UTF-8 whatever the console's code page. At most 8000 bytes: a section
-# over its share keeps its first lines and says truncated.
+# worktree, with a kept brief (a worker) or COORD_ASSISTANT_DIR (an assistant). The root: CLAUDE_PROJECT_DIR when set,
+# whatever the cwd (a worktree inside it stays a worker's); else the cwd, one at or under <root>/coordinator with no
+# coordinator/ of its own acting as <root>; a /c/... form of it or of CLAUDE_CONFIG_DIR reads as cygpath -m reads it.
+# Stdin is read as UTF-8 whatever the code page. At most 8000 bytes: a section over its share keeps its first lines and says truncated.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/before-compact.ps1   (the hook's JSON on stdin)
 $in = ''; try { [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }; try { $in = [Console]::In.ReadToEnd() } catch { }
 function Str([string]$k) { $m = [regex]::Match(($in -replace "[`r`n]", ''), '"' + $k + '" *: *"([^"]*)"'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
 function Win([string]$p) { if ($p -match '^/([A-Za-z])(/.*)?$') { $matches[1].ToUpper() + ':' + $(if ($matches[2]) { $matches[2] } else { '/' }) } else { $p } }   # /c/x -> C:/x, as cygpath -m in the .sh
 $sid = Str 'session_id'; $wd = (Str 'cwd').Replace('\\', '\').Replace('\', '/')
 $cfg = Win $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' })
-# the root: CLAUDE_PROJECT_DIR when set, whatever the cwd; else the cwd rule below
-$rt = (Win ([string]$env:CLAUDE_PROJECT_DIR)).Replace('\', '/'); $x = if ($rt) { $rt } else { $wd }
+$rt = (Win ([string]$env:CLAUDE_PROJECT_DIR)).Replace('\', '/'); $x = if ($rt) { $rt } else { $wd }   # the root when set, else the cwd rule below
 if (-not $x -or $env:COORD_ASSISTANT_DIR -or $x -like '*/.claude/worktrees/*' -or $x -like '*/.claude/worktrees') { exit 0 }
 if ($rt -and $wd.StartsWith("$rt/.claude/worktrees/", [StringComparison]::OrdinalIgnoreCase)) { exit 0 }   # a worker's worktree inside the project
 if ($sid -match '^[0-9a-fA-F-]+$' -and (Test-Path -LiteralPath (Join-Path $cfg "coordinator/briefs/$sid.md") -PathType Leaf)) { exit 0 }
 if ($rt) { $wd = $rt } else { while (-not (Test-Path -LiteralPath "$wd/coordinator" -PathType Container)) {
   if ($wd -like '*/coordinator') { $wd = $wd.Substring(0, $wd.Length - 12); break } elseif ($wd -like '*/coordinator/*') { $wd = $wd.Substring(0, $wd.LastIndexOf('/')) } else { break } } }
 $c = "$wd/coordinator"; if (-not (Test-Path -LiteralPath $c -PathType Container)) { exit 0 }
-function Fail([string]$m) { [Console]::Error.WriteLine("before-compact: $m") }
-$U = New-Object System.Text.UTF8Encoding $false
+function Fail([string]$m) { [Console]::Error.WriteLine("before-compact: $m") }; $U = New-Object System.Text.UTF8Encoding $false
 # the lines under LOG.md's "## Open questions" up to its next heading; no such heading: `heading not found`
 $q = 'could not read coordinator/LOG.md'
 try { $on = $false; $f = $false; $q = (@(foreach ($l in [IO.File]::ReadAllLines("$c/LOG.md", $U)) { if ($l -clike '## *') { $on = $l -clike '## Open questions*'; if ($on) { $f = $true }; continue }; if ($on) { $l } }) -join "`n").TrimEnd("`n")

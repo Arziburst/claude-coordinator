@@ -14,11 +14,10 @@
 # set): the project's settings, where this variant sits, load in sessions launched from the same root
 # too (#217). Then the checkpoint before-compact.ps1 wrote (coordinator/CHECKPOINT.md, #342), as it is after
 # one fixed sentence naming it data, and a note when it is stale (written over 60 minutes ago, or no moment)
-# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. The root is
-# CLAUDE_PROJECT_DIR when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, where
-# one at or under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed
-# exists, and <root>/coordinator/core/CORE.md is said missing when it is not there. A /c/... form of
-# CLAUDE_PROJECT_DIR, COORD_ASSISTANT_DIR or CLAUDE_CONFIG_DIR reads as cygpath -m reads it (as the .sh).
+# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. The root: CLAUDE_PROJECT_DIR
+# when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, one at or under <root>/coordinator with
+# no coordinator/ of its own acting as <root>: every path printed exists, and <root>/coordinator/core/CORE.md is said missing.
+# A /c/... form of CLAUDE_PROJECT_DIR, COORD_ASSISTANT_DIR or CLAUDE_CONFIG_DIR reads as cygpath -m reads it (as the .sh).
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
 # does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Stdin is read as
 # UTF-8 (as safety-guard.ps1 does) and stdout written as UTF-8 bytes: under any code page, with no console.
@@ -54,8 +53,7 @@ if ($Role -eq 'worker') {
   if ($env:COORD_ASSISTANT_DIR) { exit 0 }
   if ($sid -match '^[0-9a-fA-F-]+$' -and (Test-Path -LiteralPath (Join-Path $cfg "coordinator/briefs/$sid.md") -PathType Leaf)) { exit 0 }
   $wd = $cwd.Replace('\', '/')
-  # the root: CLAUDE_PROJECT_DIR when set, whatever the cwd; else the cwd rule: a cwd at or under <root>/coordinator
-  # with no coordinator/ of its own acts as <root>. Every path printed exists, or is said missing
+  # the root: CLAUDE_PROJECT_DIR when set; else the cwd rule (a cwd under <root>/coordinator acts as <root>)
   $rt = (Win ([string]$env:CLAUDE_PROJECT_DIR)).Replace('\', '/'); $x = if ($rt) { $rt } else { $wd }
   if ($x -like '*/.claude/worktrees/*' -or $x -like '*/.claude/worktrees') { exit 0 }
   if ($rt -and $wd.StartsWith("$rt/.claude/worktrees/", [StringComparison]::OrdinalIgnoreCase)) { exit 0 }   # a worker's worktree inside the project

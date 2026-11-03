@@ -14,10 +14,9 @@
 # set): the project's settings, where this variant sits, load in sessions launched from the same root
 # too (#217). Then the checkpoint before-compact.sh wrote (coordinator/CHECKPOINT.md, #342), as it is after
 # one fixed sentence naming it data, and a note when it is stale (written over 60 minutes ago, or no moment)
-# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. The root is
-# CLAUDE_PROJECT_DIR when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, where
-# one at or under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed
-# exists, and <root>/coordinator/core/CORE.md is said missing when it is not there.
+# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. The root: CLAUDE_PROJECT_DIR
+# when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, one at or under <root>/coordinator with
+# no coordinator/ of its own acting as <root>: every path printed exists, and <root>/coordinator/core/CORE.md is said missing.
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
 # does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Windows: after-compact.ps1, the same text.
 role="${1:-}"
@@ -54,8 +53,7 @@ else
   [ -n "${COORD_ASSISTANT_DIR:-}" ] && exit 0
   b=""; case "$sid" in *[!0-9a-fA-F-]*|"") ;; *) b="$cfg/coordinator/briefs/$sid.md" ;; esac
   wd="$(printf '%s' "$cwd" | tr '\\' '/')"
-  # the root: CLAUDE_PROJECT_DIR when set (a /c/x form as cygpath -m reads it), whatever the cwd; else the cwd rule:
-  # a cwd at or under <root>/coordinator with no coordinator/ of its own acts as <root>. Every path printed exists, or is said missing
+  # the root: CLAUDE_PROJECT_DIR when set (a /c/x form as cygpath -m reads it); else the cwd rule (a cwd under <root>/coordinator acts as <root>)
   rt="$(printf '%s' "${CLAUDE_PROJECT_DIR:-}" | tr '\\' '/')"; [ -z "$rt" ] || ! command -v cygpath >/dev/null 2>&1 || rt="$(cygpath -m "$rt")"
   if { [ -n "$b" ] && [ -f "$b" ]; } || case "${rt:-$wd}" in */.claude/worktrees/*|*/.claude/worktrees) true ;; *) false ;; esac; then exit 0; fi
   case "$rt" in "") ;; *) case "$wd" in "$rt"/.claude/worktrees/*) exit 0 ;; esac ;; esac   # a worker's worktree inside the project
