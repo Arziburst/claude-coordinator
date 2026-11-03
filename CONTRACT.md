@@ -89,8 +89,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   is chosen:** the smallest that can hold the criteria. A bound that cannot carry the criteria is the signal
   to ask what wall would hold, never to widen it silently. `scripts/check-bounds <contract> <base>...<head>`
   compares the real diff with the bounds: the worker and the tester run it before reporting, the verifier as
-  an oracle, and `scripts/merge-queue land` on the contract it finds by the id the PR's branch starts with,
-  `coordinator/briefs/<id>-contract.md`. A contract written before this change is not rejected at a merge:
+  an oracle, and `scripts/merge-queue land` on the contract it finds at `coordinator/briefs/<head branch>-contract.md`
+  (a branch's `/` as `-`), then by the id the PR's branch starts with, `coordinator/briefs/<id>-contract.md`.
+  `scripts/start-worker` saves that copy when a worker or a lead starts, in a repository with `coordinator/briefs/`,
+  over an older copy and never committed (#387); a contract of a task with no `bounds:` needs no copy. A contract written before this change is not rejected at a merge:
   no `bounds:` is `check-bounds: no bounds`, exit 0. **What it does not stop:** a wrong bound, or a component
   left off the list, slips through; `--over-bounds-ok` for two PRs goes in two runs (`.ps1 -File` does not
   repeat a parameter); and the coordinator could pass an owner-ok flag on its own: only CORE §1.14 and the

@@ -650,7 +650,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   conflict, a merge of main that touched the PR's files with and without shared globs, a re-run once and
   a second failure, the approved commit, a push while it waits, superseded runs cancelled, closed / draft
   / no checks / a refused merge, a dry run, `status`, usage errors and a failing gh; the bounds: over, no
-  contract, exit 2 fail-closed, `--over-bounds-ok`), `tests/check-bounds/run.sh` (a throwaway repository: within,
+  contract, exit 2 fail-closed, `--over-bounds-ok`; the contract by the branch, the wrong folder, blank words), `tests/check-bounds/run.sh` (a throwaway repository: within,
   at and over a bound, a binary file, two globs, a rename, a CRLF contract, bounds in the body, usage errors),
   `tests/report-issue/run.sh` (a stub `gh` that logs every call: one signature from two machines' errors,
   at most 120 characters, the `.ps1` line the `.sh` line, no path tail, e-mail or host in it; FIXED UPSTREAM
@@ -693,13 +693,20 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls `gh`, and `git` only to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
-  checkout is left as it is, pulled after the merges as before. **The bounds (#381):** run from the project's root, it
-  runs check-bounds on the contract found by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
+  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
+  runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`, check-bounds exit 2 stops it fail-closed
   (`BOUNDS #<pr>: check-bounds ...`), no contract is one line and no stop, and the queue goes on.
   `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's OVER, the words printed and
-  journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter).
+  journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter); blank words are no words, a usage error.
+  `scripts/start-worker` saves the copy (#387): a worker or a lead whose contract has `bounds:`, in a repository with
+  `coordinator/briefs/`, copies it to `coordinator/briefs/<branch>-contract.md` (a branch's `/` as `-`) just before the launch, over
+  an older copy, one line naming it, never committed; a contract of a task with no `bounds:` needs no copy. **The folder (#387):** `land`
+  (`--dry-run` too) refuses, before any PR merges, a folder that is not a repository's root, or whose origin lacks an open PR's
+  branch: a usage error naming the folder, exit 1. A PR from a fork has no branch on origin: only the root holds for it.
+  Origin unreadable: exit 1 with a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch
+  of the same name passes.
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
   a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
   head (`gh pr view <n> --json headRefOid`, then `gh run list --commit <sha>`); on `cancelled`, look for

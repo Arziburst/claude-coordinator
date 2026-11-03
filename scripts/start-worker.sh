@@ -83,6 +83,8 @@
 # anything is created) unless --owner-ok <the owner's words>, printed. No log, no contract, a lead's sub-contract, another
 # role or an assistant: one `round gate:` line, no gate. Limits: a round given by a message to a live session passes no
 # gate (CORE §6: a third round is always a fresh worker); a running session has no row yet, its spend is not in the sum.
+# The contract's copy (#387): a worker or a lead whose contract (--contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
+# coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
@@ -308,7 +310,6 @@ else
     echo "round gate: $rline - passed on the owner's words: $owok"
   else echo "round gate: $rline$okt"; fi
 fi
-[ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 if [ "$crole" = lead ] && { [ -n "$tcommit" ] || [ -n "$ttests" ]; }; then
   echo "refused: a lead's task gets no task-level tester - start the lead without --tester-commit / --tester-tests; its contract has \`tests_first: no - the lead runs the tester per sub-contract\` (roles/lead.md step 3)" >&2; exit 1
 fi
@@ -511,6 +512,13 @@ if [ -n "$notes" ]; then
     echo "notes folder: $notes"
   fi
 fi
+# the contract's copy for the merge queue (#387, the header)
+cto="$root/coordinator/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"
+if [ -n "$cfile" ] && [ -d "$root/coordinator/briefs" ] && case "$crole" in worker|lead|"") [ -n "$(bash "$sd/check-contract.sh" --field bounds "$cfile" 2>/dev/null | tr -d '\r')" ] ;; *) false ;; esac; then
+  if [ "$dry" = 1 ]; then echo "[dry-run] copy the contract to $cto"
+  else cat "$cfile" > "$cto" || { echo "cannot copy the contract to $cto. Created: $made - clean it with cleanup-worker (--worktree $wt), or start again with the same branch" >&2; exit 1; }; echo "contract copied for the merge queue: $cto"; fi
+fi
+[ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 [ -z "$notice" ] || echo "$notice"
 [ -z "$rolemsg" ] || echo "$rolemsg"
 # conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names - inline

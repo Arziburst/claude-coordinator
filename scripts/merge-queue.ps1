@@ -22,11 +22,13 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381), land run from the repository's root: the contract by the id its branch starts with (coordinator/briefs/<id>-contract.md),
+# The bounds (#381, #387), land: the contract at coordinator/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (coordinator/briefs/<id>-contract.md),
 # scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
+# The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
+# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: anywhere.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
-# says why; the queue goes on with the next). gh is called, and git only to fetch the head check-bounds reads.
+# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
       [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [string]$OverBoundsOk = '', [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
@@ -39,7 +41,7 @@ if ($Mode -ne 'land' -and $Mode -ne 'status') { Usage '' }
 if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, merge or rebase' }
 if ($Poll -notmatch '^[0-9]+$' -or $Timeout -notmatch '^[0-9]+$') { Usage '-Poll and -Timeout take whole numbers' }
 $okPr = ''; $okW = ''
-if ($PSBoundParameters.ContainsKey('OverBoundsOk')) { if ($OverBoundsOk -cnotmatch '^([0-9]+):(.+)$') { Usage "-OverBoundsOk takes <pr>:<the owner's words>" }; $okPr = $Matches[1]; $okW = $Matches[2] }
+if ($PSBoundParameters.ContainsKey('OverBoundsOk')) { if ($OverBoundsOk -cnotmatch '^([0-9]+):(.*\S.*)$') { Usage "-OverBoundsOk takes <pr>:<the owner's words>" }; $okPr = $Matches[1]; $okW = $Matches[2] }
 $prs = @(if ($Pr) { $Pr -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
 $globs = @(if ($Shared) { $Shared -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
 $tl = @(if ($Touches) { $Touches -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
@@ -55,7 +57,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { [Console]::Error.Writ
 
 # gh's --template prints plain lines (no JSON to read); a literal newline or tab, never a quoted "\n", so
 # Windows PowerShell 5.1 hands gh the same template
-$T_PR = "{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}}`n"
+$T_PR = "{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}} {{.isCrossRepository}}`n"
 $T_FILES = "{{range .files}}{{.path}}`n{{end}}"
 $T_CMPFILES = "{{range .files}}{{.filename}}`n{{end}}"
 # a check name can run more than once on one head (a pull_request run and a later workflow_dispatch run):
@@ -70,7 +72,7 @@ function Q([string[]]$a) {
   @($o | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_ -ne '' })
 }
 function GhRc([string[]]$a) { $null = & gh @a 2>&1; $LASTEXITCODE }
-function PrView([string]$n) { -split (@(Q @('pr', 'view', $n, '--json', 'state,isDraft,headRefOid,headRefName,baseRefName', '--template', $T_PR)) -join ' ') }
+function PrView([string]$n) { -split (@(Q @('pr', 'view', $n, '--json', 'state,isDraft,headRefOid,headRefName,baseRefName,isCrossRepository', '--template', $T_PR)) -join ' ') }
 function Behind([string]$x, [string]$y) { "$(@(Q @('api', "repos/{owner}/{repo}/compare/$x...$y", '--template', '{{.behind_by}}')) -join '')" }
 function OpenPrs { Q @('pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,mergeable,mergeStateStatus,headRefName,files', '--template', $T_LIST) }
 function IsShared([string]$f) { foreach ($g in $globs) { if ($f -like $g) { return $true } }; $false }
@@ -105,18 +107,25 @@ if ($Mode -eq 'status') {
   exit 0
 }
 
+# the folder (#387, the header)
+$here = (Get-Location).Path; $rp = & { $ErrorActionPreference = 'Continue'; "$(& git rev-parse --show-prefix 2>$null)".Trim() }; if ($LASTEXITCODE -ne 0 -or $rp) { Usage "land: folder $here is not the root of a repository (a subfolder, or no repository) - land runs from the root of the repository holding the PR's branch" }
+foreach ($item in $prs) { $n = ($item -split '@')[0]; $st, $null, $null, $br, $null, $fork = PrView $n; if ($st -ne 'OPEN' -or $fork -eq 'true') { continue }
+  $e = @(& { $ErrorActionPreference = 'Continue'; & git ls-remote -q --exit-code origin "refs/heads/$br" 2>&1 } | ForEach-Object { "$_" }); $lrc = $LASTEXITCODE
+  if ($lrc -eq 2) { Usage "land: folder $here - its origin has no branch $br of #${n}: land runs from the root of the repository holding the PR's branch" }
+  if ($lrc -ne 0) { [Console]::Error.WriteLine("land: origin could not be read from folder $here for #$n's branch ${br}: $(@($e)[0])"); exit 1 }
+}
 $merged = 0; $left = @()
 function Leave([string]$n, [string]$tag, [string]$m) { "$tag #${n}: $m"; $script:left += "#$n ($tag)" }
 foreach ($item in $prs) {
   $pr, $want = $item -split '@', 2; if ($want) { $want = $want.ToLowerInvariant() }
-  $state, $draft, $head, $branch, $base = PrView $pr
+  $state, $draft, $head, $branch, $base, $null = PrView $pr
   if ($state -ne 'OPEN') { Leave $pr 'SKIP' "$state, not open"; continue }
   if ($draft -eq 'true') { Leave $pr 'SKIP' 'a draft'; continue }
   if ($want -and -not $head.StartsWith($want)) {
     Leave $pr 'NOT APPROVED' "its head $(Short $head) is not the approved $(Short $want) - verify the new commit, then queue $pr@$(Short $head)"; continue
   }
   # the contract's bounds (#381, the header)
-  $bc = "coordinator/briefs/$(($branch -split '-')[0])-contract.md"
+  $bc = "coordinator/briefs/$($branch.Replace('/', '-'))-contract.md"; if (-not (Test-Path -LiteralPath $bc)) { $bc = "coordinator/briefs/$(($branch -split '-')[0])-contract.md" }
   if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE
