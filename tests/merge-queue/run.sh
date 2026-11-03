@@ -14,6 +14,8 @@
 # passes and one line holds the words; another PR's stays stopped; no words, blank words, or no number before the colon: a usage
 # error, exit 1. The folder (#387): land's cwd must be a repository's root (`git rev-parse --show-prefix` empty) whose origin has each open PR's
 # branch (`git ls-remote origin <branch>`), checked before any PR merges: else exit 1, one line naming the cwd's folder, --dry-run too. status: anywhere.
+# Access point (#392): land, a PR whose isCrossRepository is true (the sixth word of the stub's pr-<n>): no `gh api -X DELETE`, whatever is based on its branch,
+# and in place of the deleted/kept line this one: `left the fork's branch <branch>: #<pr> is a fork's PR, nothing deleted on origin`. A PR from this repository: as before.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -128,6 +130,17 @@ code 0; has "MERGED #11: a111111"; has "AFFECTED #12: 12-feat - merge main now: 
 has "AFTER MERGE #11: the event table (CORE §4) - cleanup-worker (§8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, §10); tell each AFFECTED PR's session to merge main (§4a); a bug it fixed that escaped earlier work -> ESCAPES (§12); the project's after-merge duties (PROJECT.md)"
 has "merge-queue: 1 merged"; called "pr merge 11 --squash --match-head-commit $H11"; notcalled "--delete-branch"
 called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"
+
+fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
+run land 11 --poll 0; code 0; called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"; hasnt "left the fork's branch"; own="$out"
+fresh "a fork's PR, a branch of that name on origin: no DELETE, its one line, every other line as for a PR from this repository"; echo "OPEN false $H11 11-fix main true" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
+run land 11 --poll 0; code 0; notcalled "api -X DELETE"; hasnt "deleted the remote branch"; FORKL="left the fork's branch 11-fix: #11 is a fork's PR, nothing deleted on origin"
+[ "$(printf '%s\n' "$out" | grep -cxF -- "$FORKL")" = 1 ] && ok || bad "expected exactly one line: $FORKL"
+[ "$(printf '%s\n' "$out" | grep -vxF -- "$FORKL")" = "$(printf '%s\n' "$own" | grep -vxF "deleted the remote branch 11-fix")" ] && ok || bad "other lines differ from the same-repository run"
+fresh "a fork's PR with an open PR based on a same-named branch: the fork's line, not the kept one"; echo "OPEN false $H11 11-fix main true" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"; echo "#40 " > "$STUB_D/base-11-fix"
+run land 11 --poll 0; code 0; notcalled "api -X DELETE"; has "$FORKL"; hasnt "kept the remote branch"
+fresh "a fork's PR, then a PR from this repository, in one land: each by its own field"; echo "OPEN false $H11 11-fix main true" > "$STUB_D/pr-11"; echo "OPEN false $H13 13-x main false" > "$STUB_D/pr-13"; echo pass > "$STUB_D/checks-$H11"; echo pass > "$STUB_D/checks-$H13"
+run land 11 13 --poll 0; code 0; notcalled "/git/refs/heads/11-fix"; called "/git/refs/heads/13-x"; has "$FORKL"; has "deleted the remote branch 13-x"
 
 fresh "the method is passed on"
 pr 11 $H11 11-fix; echo pass > "$STUB_D/checks-$H11"
