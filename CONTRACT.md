@@ -48,6 +48,7 @@ depends_on: [31]
 touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
 bounds:                            # with tests_first: yes, or when touches holds an important component: the most lines a glob may add
   - src/cart/* 120
+  - tests/cart/* 80
 wall: the server checks the account on every read; the cart screen only filters  # what really protects it
 ---
 Free text: context, known traps, parallel work nearby, launch and test limits, the report phrase.
@@ -100,8 +101,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
 - **A bound on tests** (#390): a contract with `tests_first: yes` names the size of the tests the task adds, test
   data counted: its `bounds:` hold a line whose glob takes them in, chosen as above. check-contract refuses a `yes`
   with no well-formed `bounds:` line, important component or not; `wall:` stays a rule of the important components,
-  and `tests_first: no ...` needs no bound for this. **What it does not stop:** the refusal holds only that a bound
-  exists, not that it is wise or that its glob covers the tests; the verifier and the owner hold the rest.
+  and `tests_first: no ...` needs no bound for this. A case closing a real route of a safety or money check is never
+  cut for a bound; a bound too small there goes to asking. **What it does not stop:** the refusal holds only that a
+  bound exists, not that it is wise or that its glob covers the tests, and a binary file counts as 0; the verifier
+  and the owner hold the rest.
 - **`time`** (optional): the forecast work in active minutes, a number or a range (`25`, `18-40`), from
   `scripts/run-stats`, measured from the transcripts, owner waits never in it (CORE §7a). check-contract
   warns only when it is there and is neither; a contract without it is fine.

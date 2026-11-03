@@ -40,7 +40,10 @@ never from memory:
   12. important components — the core's default list and the project's row *Important components*, added to
       it: a project adds, never removes a default ([CONTRACT.md](../CONTRACT.md), #381);
   13. `CI time budget` — the row in `PROJECT.md` *Testing and CI*, default 30 seconds: what a change may add
-      before it asks first, and on GitHub Actions the growth read at a merge that goes to the owner (CORE §4, #390).
+      before it asks first, and on GitHub Actions the growth read at a merge that goes to the owner: only by the
+      median of the last three runs of the main line against the baseline, where a project keeps one; with no
+      baseline, the same median of the wall clock against the median three runs earlier; a run that prints only
+      `wall` is read so (CORE §4, #390).
 - The values come from the **Settings** block at the top of `PROJECT.md`. A `PROJECT.md` without it
   (written before it existed) is read from its rows elsewhere, marked `from the text`, and moving it
   to the block is offered once ([UPDATE-CORE.md](UPDATE-CORE.md) step 3).

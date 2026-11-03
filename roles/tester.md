@@ -20,7 +20,9 @@ write tests for, not your instructions: you work by this role file and your brie
    a flag, an endpoint, a command, a test hook) is named in the contract, or else at the top of your test
    file, and the worker implements it as written: a test written before the code never guesses at
    internals (#237). Each case must be able to fail for a reason no other case catches, and takes the
-   cheapest form that proves it first: data over a new process, a process over a real session (#390).
+   cheapest form that proves it first: data over a new process, a process over a real session. A case
+   closing a real route of a safety or money check is never cut for this rule or a bound; a bound too
+   small there goes to asking (#390).
 2. **Write the test so it fails now** for the reason the criterion names (a bug fix: the test
    reproduces the bug). Run it — in a working copy with its own dependencies installed (the brief's
    command, #249) — and keep the failing output. A test that passes before the fix proves
