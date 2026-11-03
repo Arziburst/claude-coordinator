@@ -23,8 +23,8 @@
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
 # The bounds (#381, #387), land: the contract at coordinator/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (coordinator/briefs/<id>-contract.md),
-# scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
-# fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
+# scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its -Important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
+# fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's stopping OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
 # The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
 # exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
@@ -129,6 +129,11 @@ foreach ($item in $prs) {
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE
     $bover = @($bo | Where-Object { $_ -clike 'check-bounds: OVER *' } | ForEach-Object { $_.Substring(19) })
+    if ($brc -eq 1) {   # which OVER stops (#419, the header); the list unreadable: every OVER stops
+      $bimp = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Important 2>&1 } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $bimp = @() }
+      $bstop = @(); foreach ($bl in $bover) { $bg = $bl.Substring(0, $bl.LastIndexOf(' '))
+        if (-not $bimp -or @($bimp | Where-Object { $_ -clike $bg -or $bg -clike $_ }).Count) { $bstop += $bl } else { "bounds over, not important: $pr $bl" } }
+      $bover = $bstop; if (-not $bover) { $brc = 0 } }
     if ($brc -eq 1 -and $okPr -ceq $pr) { "BOUNDS #${pr}: over its bounds ($($bover -join ' ')) - passed on the owner's words: $okW" }
     elseif ($brc -eq 1) { $bover | ForEach-Object { "OVER BOUNDS $pr $_" }; $left += "#$pr (OVER BOUNDS)"; continue }
     elseif ($brc -ne 0) { Leave $pr 'BOUNDS' "check-bounds exit ${brc}: $($bo | Select-Object -First 1)"; continue }

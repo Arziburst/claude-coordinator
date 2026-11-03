@@ -23,8 +23,8 @@
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
 # The bounds (#381, #387), land: the contract at coordinator/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (coordinator/briefs/<id>-contract.md),
-# scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
-# fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's OVER, its words printed; one per run, two PRs go in two runs.
+# scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its --important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
+# fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's stopping OVER, its words printed; one per run, two PRs go in two runs.
 # The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
 # exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
@@ -131,6 +131,13 @@ for item in "${prs[@]}"; do
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?
     bover="$(printf '%s\n' "$bo" | sed -n 's/^check-bounds: OVER //p')"
+    if [ "$brc" = 1 ]; then   # which OVER stops (#419, the header); the list unreadable: every OVER stops
+      bimp="$(bash "$(dirname "$0")/check-contract.sh" --important | tr -d '\r')" || bimp=""; bstop=""; bnl=$'\n'
+      while IFS= read -r bl; do bg="${bl% *}"; bs=""; [ -n "$bimp" ] || bs=1
+        while IFS= read -r bi; do case "$bi" in $bg) bs=1 ;; esac; case "$bg" in $bi) bs=1 ;; esac; done <<<"$bimp"
+        if [ -n "$bs" ]; then bstop="$bstop${bstop:+$bnl}$bl"; else echo "bounds over, not important: $pr $bl"; fi; done <<<"$bover"
+      bover="$bstop"; [ -n "$bover" ] || brc=0
+    fi
     if [ "$brc" = 1 ] && [ "$okpr" = "$pr" ]; then echo "BOUNDS #$pr: over its bounds ($(printf '%s\n' "$bover" | tr '\n' ' ' | sed 's/ $//')) - passed on the owner's words: $okw"
     elif [ "$brc" = 1 ]; then printf '%s\n' "$bover" | sed "s/^/OVER BOUNDS $pr /"; left="${left:+$left, }#$pr (OVER BOUNDS)"; continue
     elif [ "$brc" != 0 ]; then leave "$pr" BOUNDS "check-bounds exit $brc: $(printf '%s\n' "$bo" | head -n 1)"; continue; fi
