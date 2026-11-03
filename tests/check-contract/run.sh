@@ -68,7 +68,7 @@
 # A bound on tests (#390), the access point: `tests_first` is `yes` (with a reason or not) and no line `- <glob> <max>` stands
 # under `bounds:` (an empty key or a comment alone is no line): in every mode (plain, --field, --runs) one ERROR, this text:
 #   <file>: ERROR `tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)
-# `tests_first: no ...`: nothing new. A contract touching an important file keeps its own ERROR, beside this one.
+# `tests_first: no ...`: nothing new. A contract touching an important file keeps its own ERROR, beside this one; a malformed line there (`- x lots`) is a line: its own malformed ERROR alone.
 set -u
 [ $# -gt 0 ] || { sed -n '2,53s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
@@ -374,6 +374,7 @@ tfv=yes imk i-tfi.md scripts/hooks/x.sh "$W1"; iname="tests_first: yes, an impor
 printf '%s\n' "$CO" | grep -qxF -- "i-tfi.md: ERROR $tfm" || ifail "no tests_first ERROR"
 printf '%s\n' "$CO" | grep -F -- 'i-tfi.md: ERROR ' | grep -F -- 'bounds' | grep -qF -- 'scripts/hooks/*' || ifail "its own ERROR is gone"
 printf '%s\n' "$CO" | grep -qxF -- 'i-tfi.md: FAIL (2 errors, 0 warnings)' || ifail "the summary is not 2 errors"
+tfv=yes imk i-tfm.md scripts/hooks/x.sh "bounds:\n  - x lots\n$W1"; iname="tests_first: yes, an important file, a malformed bound"; ierr i-tfm.md bounds 'scripts/hooks/*'
 rname="tests_first: yes and no bound, --runs"; crun i-tf1.md --runs runs.tsv; rexit 1; rhas "i-tf1.md: ERROR $tfm"
 cfield i-tf1.md; [ "$FRC" = 1 ] && case "$FO" in *"i-tf1.md: ERROR $tfm"*) true ;; *) false ;; esac ||
   { echo "FAIL: $fopt tests_first i-tf1.md: expected exit 1 and the ERROR, got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
