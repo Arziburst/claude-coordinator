@@ -63,8 +63,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   questions. It prints JSON `additionalContext`: plain hook output never reaches the model. The worker variant is in the
   settings examples, the coordinator variant goes in its own settings (one-time step
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
-  load it, and it stays silent in a session with a kept brief or working in a worktree (#217). The
-  compaction threshold stays Claude Code's default.
+  load it, and it stays silent in a session with a kept brief or working in a worktree (#217).
+  **The compaction window (#421):** the coordinator's is `autoCompactWindow` 500000, or the number in
+  `PROJECT.md` *Settings*, in the project's local `.claude/settings.json` (the one-time step
+  `coordinator-window`). Workers launched from the root load that file too (measured: 500k over the
+  account's 900k), and a number in the worker safety file wins over it, so the step writes there the number
+  workers ran with before.
   **The checkpoint before a compaction (#342):** beside the coordinator's `SessionStart` entry, and only
   there (never a worker's or an assistant's settings), a `PreCompact` entry runs
   `scripts/hooks/before-compact.sh` (Windows `before-compact.ps1`) with a timeout above the listing's
@@ -73,7 +77,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   -ExecutionPolicy Bypass -File C:/ABSOLUTE/PATH/scripts/hooks/before-compact.ps1`), in the project's
   `.claude/settings.json` as the after-compact entry; an existing project is offered it at its next
   update (the one-time step `before-compact-hook`) or adds it by hand; the next `/compact` shows the
-  file in the hook's text. Before every
+  file in the hook's text. `coordinator/CHECKPOINT.md` goes into the state repository's `.gitignore`, and
+  CORE §4's row *Anything in `coordinator/` changes* does not apply to that file. Before every
   compaction, automatic or `/compact`, it writes `coordinator/CHECKPOINT.md`: the moment (`written:
   <UTC>`), the journal's open questions (the lines under `## Open questions`), the watch list, this
   project's sessions as `claude agents --json` lists them (id, state, name; the project's cwd or inside
