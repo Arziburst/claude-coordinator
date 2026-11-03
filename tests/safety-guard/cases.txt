@@ -1700,3 +1700,19 @@ allow	ps:work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinat
 allow	work	gh browse	-	@PROJECT@	-	-
 allow	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	-
 allow	work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	-
+# --- #385: gh -w in a cluster or with = is web too (run list's -w is a workflow, a flag's value is no flag); both guards on env:/, ${env:} and +=
+block	work	gh pr view 12 -cw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr view 12 -w=true	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh repo view o/x -wb main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh issue list -wa me	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	gh pr list -wL5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr view 12 -cw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	gh pr view 12 -w=true	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh run list -wci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr list --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	ps:work	gh pr list --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	ps:work	${env:GH_BROWSER}='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+block	work	BROWSER+=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+allow	work	gh pr view 12 -cw	-	@PROJECT@	-	-
+allow	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	-
