@@ -22,11 +22,13 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381), land run from the repository's root: the contract by the id its branch starts with (coordinator/briefs/<id>-contract.md),
+# The bounds (#381, #387), land: the contract at coordinator/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (coordinator/briefs/<id>-contract.md),
 # scripts/check-bounds on origin/<base>...<head>. OVER: `OVER BOUNDS <pr> <glob> <added>/<max>`, left. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's OVER, its words printed; one per run, two PRs go in two runs.
+# The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
+# exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
-# says why; the queue goes on with the next). gh is called, and git only to fetch the head check-bounds reads (Windows: merge-queue.ps1).
+# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads (Windows: merge-queue.ps1).
 set -uo pipefail
 
 usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
@@ -51,7 +53,7 @@ case "$method" in squash|merge|rebase) ;; *) echo "--method: squash, merge or re
 case "$poll$timeout" in *[!0-9]*) echo "--poll and --timeout take whole numbers; $usage" >&2; exit 1 ;; esac
 [ "$mode" = status ] || [ ${#prs[@]} -gt 0 ] || { echo "$usage" >&2; exit 1; }
 okpr="${ook%%:*}" okw="${ook#*:}"
-[ -z "$ook" ] || { [ "$okw" != "$ook" ] && [ -n "$okw" ] && case "$okpr" in ''|*[!0-9]*) false ;; *) true ;; esac; } || { echo "--over-bounds-ok takes <pr>:<the owner's words>; $usage" >&2; exit 1; }
+[ -z "$ook" ] || { [ "$okw" != "$ook" ] && case "$okw" in *[![:space:]]*) true ;; *) false ;; esac && case "$okpr" in ''|*[!0-9]*) false ;; *) true ;; esac; } || { echo "--over-bounds-ok takes <pr>:<the owner's words>; $usage" >&2; exit 1; }
 for item in ${prs[@]+"${prs[@]}"}; do
   case "$item" in *@*) p="${item%%@*}" s="${item#*@}" ;; *) p="$item" s=0 ;; esac
   case "$p" in ''|*[!0-9]*) echo "not a PR number: $item; $usage" >&2; exit 1 ;; esac
@@ -63,7 +65,7 @@ NL='
 '; TAB='	'
 # gh's --template prints plain lines (no JSON to read); a literal newline or tab, never a quoted "\n", so
 # Windows PowerShell 5.1 hands gh the same template
-T_PR="{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}}$NL"
+T_PR="{{.state}} {{.isDraft}} {{.headRefOid}} {{.headRefName}} {{.baseRefName}} {{.isCrossRepository}}$NL"
 T_FILES="{{range .files}}{{.path}}$NL{{end}}"
 T_CMPFILES="{{range .files}}{{.filename}}$NL{{end}}"
 # a check name can run more than once on one head (a pull_request run and a later workflow_dispatch run):
@@ -72,8 +74,8 @@ T_CHECKS="{{range .}}{{.name}}$TAB{{.startedAt}}$TAB{{.bucket}}$NL{{end}}"
 T_RUNS="{{range .}}{{.url}} {{.headSha}} {{.status}} {{.conclusion}}$NL{{end}}"
 T_LIST="{{range .}}{{.number}}$TAB{{.mergeable}}$TAB{{.mergeStateStatus}}$TAB{{.headRefName}}{{range .files}}$TAB{{.path}}{{end}}$NL{{end}}"
 # q <gh args>: gh's output; a failed gh stops the run (exit 1), called as `x="$(q ...)" || exit 1`
-q() { local out; out="$(gh "$@" 2>&1)" || { printf 'gh %s %s failed: %s\n' "$1" "$2" "$out" >&2; return 1; }; printf '%s\n' "$out"; }
-pr_view() { q pr view "$1" --json state,isDraft,headRefOid,headRefName,baseRefName --template "$T_PR"; }
+q() { local out; out="$(gh "$@" 2>&1)" || { printf 'gh %s %s failed%s: %s\n' "$1" "$2" "${here:+ (folder $here)}" "$out" >&2; return 1; }; printf '%s\n' "$out"; }
+pr_view() { q pr view "$1" --json state,isDraft,headRefOid,headRefName,baseRefName,isCrossRepository --template "$T_PR"; }
 behind() { q api "repos/{owner}/{repo}/compare/$1...$2" --template "{{.behind_by}}"; }
 open_prs() { q pr list --state open --limit 200 --json number,mergeable,mergeStateStatus,headRefName,files --template "$T_LIST"; }
 is_shared() { local g; for g in ${shared[@]+"${shared[@]}"}; do case "$1" in $g) return 0 ;; esac; done; return 1; }
@@ -108,17 +110,23 @@ if [ "$mode" = status ]; then
   exit 0
 fi
 
+here="$(pwd)"; rp="$(git rev-parse --show-prefix 2>/dev/null)" && [ -z "$rp" ] || { echo "land: folder $here is not the root of a repository (a subfolder, or no repository) - land runs from the root of the repository holding the PR's branch; $usage" >&2; exit 1; }
+for item in "${prs[@]}"; do pr="${item%%@*}"; v="$(pr_view "$pr")" || exit 1; read -r state _ _ branch _ fork <<< "$v"; [ "$state" = OPEN ] && [ "$fork" != true ] || continue
+  e="$(git ls-remote -q --exit-code origin "refs/heads/$branch" 2>&1 >/dev/null)"; lrc=$?
+  [ "$lrc" != 2 ] || { echo "land: folder $here - its origin has no branch $branch of #$pr: land runs from the root of the repository holding the PR's branch; $usage" >&2; exit 1; }
+  [ "$lrc" = 0 ] || { echo "land: origin could not be read from folder $here for #$pr's branch $branch: $(printf '%s\n' "$e" | tr -d '\r' | head -n 1)" >&2; exit 1; }
+done; here=""
 merged=0 left=""
 leave() { echo "$2 #$1: $3"; left="${left:+$left, }#$1 ($2)"; }
 for item in "${prs[@]}"; do
   pr="${item%%@*}" want=""; [ "$item" != "$pr" ] && want="$(printf '%s' "${item#*@}" | tr 'A-F' 'a-f')"
-  v="$(pr_view "$pr")" || exit 1; read -r state draft head branch base <<< "$v"
+  v="$(pr_view "$pr")" || exit 1; read -r state draft head branch base _ <<< "$v"
   [ "$state" = OPEN ] || { leave "$pr" SKIP "$state, not open"; continue; }
   [ "$draft" = true ] && { leave "$pr" SKIP "a draft"; continue; }
   if [ -n "$want" ]; then case "$head" in "$want"*) ;; *)
     leave "$pr" "NOT APPROVED" "its head ${head:0:7} is not the approved ${want:0:7} - verify the new commit, then queue $pr@${head:0:7}"; continue ;; esac; fi
   # the contract's bounds (#381, the header)
-  bc="coordinator/briefs/${branch%%-*}-contract.md"
+  bc="coordinator/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || bc="coordinator/briefs/${branch%%-*}-contract.md"
   if [ ! -e "$bc" ]; then echo "BOUNDS #$pr: no contract at $bc - not checked"
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?

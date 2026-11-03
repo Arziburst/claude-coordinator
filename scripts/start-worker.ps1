@@ -67,6 +67,8 @@
 # The round and money gate (#381; the rules: start-worker.sh's top comment): round 3 or later, or the task's rows summing
 # to at least twice budget.cost, is refused unless -OwnerOk <the owner's words>, printed. A mistyped -OwnerOk is swallowed by
 # param() and the gate still refuses. Limits: a round given by a message passes no gate; a running session has no row yet.
+# The contract's copy (#387): a worker or a lead whose contract (-Contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
+# coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
       [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '')
@@ -274,6 +276,7 @@ if ($cFile) {
       $tfRc = 1
       $tfOut = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Field tests_first $cFile 2>&1 } | ForEach-Object { "$_" }); $tfRc = $LASTEXITCODE
       $gId = (@(& (Join-Path $PSScriptRoot 'check-contract.ps1') -Field id $cFile) -join '').Trim(); $gCost = (@(& (Join-Path $PSScriptRoot 'check-contract.ps1') -Field budget.cost $cFile) -join '').Trim()
+      if ((@(& (Join-Path $PSScriptRoot 'check-contract.ps1') -Field bounds $cFile) -join '').Trim()) { $cCopy = [IO.File]::ReadAllBytes($cFile) }
     }
   }
   catch { $cOut = @("$_") }
@@ -551,6 +554,12 @@ if ($notes) {
     catch { Fail "cannot create the notes folder $notes. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch" }
     "notes folder: $notes"
   }
+}
+# the contract's copy for the merge queue (#387, the header)
+$cTo = "$root/coordinator/briefs/$("$Branch".Replace('/', '-'))-contract.md"
+if ($cCopy -and (Test-Path -LiteralPath "$root/coordinator/briefs" -PathType Container)) {
+  if ($DryRun) { "[dry-run] copy the contract to $cTo" }
+  else { try { [IO.File]::WriteAllBytes($cTo, $cCopy) } catch { Fail "cannot copy the contract to $cTo. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch" }; "contract copied for the merge queue: $cTo" }
 }
 if ($notice) { $notice }
 if ($roleMsg) { $roleMsg }

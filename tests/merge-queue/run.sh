@@ -4,20 +4,21 @@
 #   tests/merge-queue/run.sh sh                    # merge-queue.sh, with the bash running this file
 #   tests/merge-queue/run.sh ps pwsh               # merge-queue.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
-# Access points of the bounds (#381): land, run from the repository's root, reads the PR's contract by the id its
-# branch starts with (`<id>-...`: coordinator/briefs/<id>-contract.md) and runs check-bounds on it and
+# Access points of the bounds (#381, #387): land reads the PR's contract at coordinator/briefs/<head branch, / as ->-contract.md, then by the id
+# its branch starts with (`<id>-...`: coordinator/briefs/<id>-contract.md) and runs check-bounds on it and
 # <base>...<head>. An OVER: the line of its own `OVER BOUNDS <pr> <glob> <added>/<max>`, no merge, in the summary as
 # `left: #<pr> (OVER BOUNDS)`, the queue goes on, exit 3. No contract, or a branch with no id: one line
 # `BOUNDS #<pr>: no contract ...` (nothing at that path), no stop. check-bounds exiting 2 (a folder at that path, a
 # malformed bound, a head git cannot read) stops that PR, fail-closed: the line `BOUNDS #<pr>: check-bounds ...`, no
 # merge, in the summary as `left: #<pr> (BOUNDS)`, the queue goes on, exit 3. --over-bounds-ok <pr>:<the owner's words> (.ps1: -OverBoundsOk): that PR
-# passes and one line holds the words; another PR's stays stopped; no words, or no number before the colon: a usage
-# error, exit 1.
+# passes and one line holds the words; another PR's stays stopped; no words, blank words, or no number before the colon: a usage
+# error, exit 1. The folder (#387): land's cwd must be a repository's root (`git rev-parse --show-prefix` empty) whose origin has each open PR's
+# branch (`git ls-remote origin <branch>`), checked before any PR merges: else exit 1, one line naming the cwd's folder, --dry-run too. status: anywhere.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d)"; trap 'cd /; rm -rf "$tmp"' EXIT
 command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
 
 # The stub's state folder $STUB_D:
@@ -114,6 +115,9 @@ notcalled() { grep -qF -- "$1" "$STUB_D/log" && { bad "gh called with: $1"; sed 
 code() { [ "$rc" = "$1" ] && ok || bad "expected exit $1, got $rc"; }
 pr() { echo "OPEN false $2 $3 main" > "$STUB_D/pr-$1"; }
 H11=a111111111111111111111111111111111111111 H13=c131313131313131313131313131313131313131 N13=d131313131313131313131313131313131313131
+# the cases below run from a repository's root whose origin has their open PRs' branches (#387); 1-a is off it: a merged PR's branch is gone
+git init -q --bare "$tmp/r.git"; git init -q -b main "$tmp/r"; cd "$tmp/r" || exit 1; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
 
 fresh "up to date, green: merged; an open PR changing the same file is AFFECTED"
 pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "pass skipping" > "$STUB_D/checks-$H11"
@@ -269,7 +273,7 @@ git init -q --bare "$tmp/q.git"; git init -q -b main "$tmp/q"; qg config core.au
 mkdir -p "$tmp/q/src" "$tmp/q/coordinator/briefs"; echo base > "$tmp/q/README"
 qg add README; qg commit -q -m base; qg remote add origin "$tmp/q.git"; qg push -q origin main 2>/dev/null
 qbranch() {   # qbranch <branch> <lines>: a pushed branch of main adding that many lines to src/, its head in QH
-  local i=0; qg checkout -q -b "$1" main; mkdir -p "$tmp/q/src"
+  local i=0; qg checkout -q -b "$1" main; mkdir -p "$(dirname "$tmp/q/src/$1.txt")"
   while [ $i -lt "$2" ]; do echo "line $i"; i=$((i + 1)); done > "$tmp/q/src/$1.txt"
   qg add src; qg commit -q -m "$1"; QH="$(qg rev-parse HEAD)"; qg push -q origin "$1" 2>/dev/null; qg checkout -q main; }
 qbranch 15-over 5; H15=$QH; qbranch 16-fine 2; H16=$QH; qbranch 17-none 2; H17=$QH; qbranch nameless 1; H18=$QH
@@ -299,7 +303,7 @@ run land 18 --poll 0
 code 0; oneline "no contract"; has "BOUNDS #18: no contract"; has "MERGED #18"
 
 fresh "check-bounds cannot read it: each PR stopped with its own line, fail-closed, the next still lands, exit 3"
-qbranch 20-dir 1; H20=$QH; qbranch 21-bad 1; H21=$QH; H19=f191919191919191919191919191919191919191   # a head git does not have
+qbranch 20-dir 1; H20=$QH; qbranch 21-bad 1; H21=$QH; qbranch 19-gone 1; H19=f191919191919191919191919191919191919191   # its branch is there, a head git does not have
 mkdir -p coordinator/briefs/20-contract.md
 sed 's/^  - src.*/  - src\/* lots/' coordinator/briefs/16-contract.md > coordinator/briefs/21-contract.md
 cp coordinator/briefs/16-contract.md coordinator/briefs/19-contract.md
@@ -321,10 +325,27 @@ code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"
 
 fresh "--over-bounds-ok without its words or its PR: a usage error"
 qpr 15 "$H15" 15-over
-for v in 15 "15:" "x:the owner said yes" ":the owner said yes"; do
+for v in 15 "15:" "15: " "15:   " $'15:\t' "x:the owner said yes" ":the owner said yes"; do
   run land 15 --poll 0 --over-bounds-ok "$v"; code 1; notcalled "pr merge 15"
 done
-cd "$qback" || exit 1
+
+fresh "the branch-named contract before the id-named: a part suffix, a / in the branch, both copies with different bounds"
+qbranch 30a-part 5; H30=$QH; qbranch 31/slash-name 5; H31=$QH; qbranch 32-both 5; H32=$QH; qc() { sed "s/src\/\* 3/src\/* $2/" coordinator/briefs/16-contract.md > "coordinator/briefs/$1-contract.md"; }
+qc 30a-part 3; qc 31-slash-name 3; qc 32-both 3; qc 32 100; qpr 30 "$H30" 30a-part; qpr 31 "$H31" 31/slash-name; qpr 32 "$H32" 32-both
+run land 30 31 32 --poll 0
+code 3; hasline "OVER BOUNDS 30 src/* 5/3"; hasline "OVER BOUNDS 31 src/* 5/3"; hasline "OVER BOUNDS 32 src/* 5/3"; notcalled "pr merge"; hasnt "no contract"
+
+# the wrong folder: a subfolder, another repository (its origin lacks the branch), no repository at all
+mkdir -p "$tmp/q/wrong-sub" "$tmp/wrong-none"; git init -q --bare "$tmp/w.git"; git init -q -b main "$tmp/wrong-repo"; git -C "$tmp/wrong-repo" remote add origin "$tmp/w.git"
+for d in q/wrong-sub wrong-repo wrong-none; do for x in "" --dry-run; do
+  fresh "the wrong folder: $d $x"; qpr 16 "$H16" 16-fine; cd "$tmp/$d" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
+  code 1; has "${d##*/}"; notcalled "pr merge"; hasnt "MERGED #16"; hasnt "[dry-run] gh pr merge"; hasnt "no contract"
+done; done
+for x in "" --dry-run; do fresh "gh cannot read the PR from another repository: the refusal names the folder $x"; touch "$STUB_D/fail-view"; cd "$tmp/wrong-repo" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
+  code 1; has "wrong-repo"; has "Could not resolve to a PullRequest"; notcalled "pr merge"; hasnt "[dry-run] gh pr merge"; done
+fresh "one PR's branch is not in this repository: nothing merged, the first PR neither"
+qpr 16 "$H16" 16-fine; qpr 34 "$H19" 34-elsewhere; run land 16 34 --poll 0; code 1; notcalled "pr merge"; hasnt "MERGED #16"
+fresh "status runs anywhere"; cd "$tmp/wrong-none" || exit 1; run status; cd "$qback" || exit 1; code 0; has "merge-queue status: 0 open"
 
 fresh "usage errors and a failing gh: exit 1"
 run land; code 1
