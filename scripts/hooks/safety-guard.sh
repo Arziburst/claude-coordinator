@@ -1222,7 +1222,7 @@ asst_gvar() {
     t="${A[$k]}"; k=$((k + 1))
     case "$t" in
       GIT_?*=*|env:GIT_*|env:[/\\]GIT_*|'$env:GIT_'*=*) ;;
-      GH_BROWSER=*|BROWSER=*|env:GH_BROWSER*|env:BROWSER*|'$env:GH_BROWSER'*=*|'$env:BROWSER'*=*) block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" ;;
+      GH_BROWSER=*|BROWSER=*|BROWSER+=*|env:GH_BROWSER*|env:/GH_BROWSER*|env:BROWSER*|'$env:GH_BROWSER'*=*|'$env:BROWSER'*=*|'${env:GH_BROWSER}'=*) block "an assistant sets no GH_BROWSER or BROWSER ($t): it makes gh or git open a program (COORD_ASSISTANT_DIR is set, #345)" ;;
       '$env:GIT_'*|'$env:GH_BROWSER'*|'$env:BROWSER'*) case "${A[$k]:-}" in =*) ;; *) continue ;; esac ;;
       *) continue ;;
     esac
@@ -1313,7 +1313,7 @@ asst_git() {
 # codespace | ssh-key | gpg-key with no subcommand or list / view / status / diff / checks / watch; gh api:
 # asst_api
 asst_gh() {
-  local t grp="" sub="" nx=0 ok=0 ci
+  local t grp="" sub="" nx=0 ok=0 val=0 p="" ci
   ci=$(shopt -p nocasematch); shopt -u nocasematch   # PR is not pr, -r is not -R
   if [ $# = 1 ] && [ "$1" = --version ]; then eval "$ci"; return 0; fi
   case "${1:-}" in
@@ -1331,9 +1331,10 @@ asst_gh() {
     if [ -z "$grp" ]; then grp="$t"; case "$grp" in api|help|version|status|browse) break ;; esac; continue; fi
     sub="$t"; break
   done
-  if [ "$grp" != api ]; then   # no browser route (#345): --web, -w (run list -w is a workflow), browse without --no-browser
+  if [ "$grp" != api ]; then   # no browser route (#345, #385): --web, -w also as -w=x, -wb x, -cw (run list's -w is a workflow; the word after pr list's --search is its value), browse without --no-browser
     nx=0; [ "$grp" = browse ] && nx=1
-    for t in "$@"; do case "$t" in --web|--web=*) nx=2 ;; -w) [ "$grp $sub" = "run list" ] || nx=2 ;; --no-browser) [ $nx = 1 ] && nx=0 ;; esac; done
+    for t in "$@"; do case "$t" in --web|--web=*) nx=2 ;; --no-browser) [ $nx = 1 ] && nx=0 ;; esac
+      if [ $val = 1 ]; then val=0; elif [ "$grp $sub $t" = "pr list --search" ] && [ "${p#-}" = "$p" ]; then val=1; elif [ "$grp $sub" != "run list" ] && [[ $t =~ ^-c?w ]]; then nx=2; fi; p="$t"; done
     [ $nx != 0 ] && { eval "$ci"; block "an assistant opens no browser (gh $grp${sub:+ $sub} with --web / -w, or browse without --no-browser): gh reads only (COORD_ASSISTANT_DIR is set, #345)"; }
   fi
   case "$grp" in
@@ -1353,29 +1354,23 @@ asst_gh() {
 }
 # asst_api <gh api's arguments>: refuses a method (-X / --method, also -XPOST, --method=x) other than GET or
 # HEAD, and fields or --input (-f / -F / --field / --raw-field, also glued or with =) with no method (gh's
-# implicit POST); graphql instead: refused when a word holds "mutation" (letter case ignored) or the query
-# comes from a file (--input, a field's =@file), whatever the method; the endpoint folded first (a leading
+# implicit POST); graphql refused whatever the method or the query; the endpoint folded first (a leading
 # /, an http(s)://<host>/ prefix)
 asst_api() {
-  local t v m="" fl=0 ep="" mu=0 at=0 gq=0 url=0 ci
+  local t m="" fl=0 ep="" gq=0 url=0 ci
   ci=$(shopt -p nocasematch); shopt -u nocasematch   # -f is a field, -F a typed one; -h is not -H
-  for t in "$@"; do case "$t" in *[Mm][Uu][Tt][Aa][Tt][Ii][Oo][Nn]*) mu=1 ;; esac; done
   while [ $# -gt 0 ]; do
-    t="$1"; shift; v=""
+    t="$1"; shift
     case "$t" in
       -X|--method) m="${1:-}"; [ $# -gt 0 ] && shift ;;
       --method=*) m="${t#*=}" ;;
       -X*) m="${t#-X}"; m="${m#=}" ;;
-      -f|-F|--field|--raw-field) fl=1; v="${1:-}"; [ $# -gt 0 ] && shift ;;
-      --field=*|--raw-field=*) fl=1; v="${t#*=}" ;;
-      -f*|-F*) fl=1; v="${t#-?}"; v="${v#=}" ;;
-      --input) fl=1; at=1; [ $# -gt 0 ] && shift ;;
-      --input=*) fl=1; at=1 ;;
+      -f|-F|--field|--raw-field|--input) fl=1; [ $# -gt 0 ] && shift ;;
+      --field=*|--raw-field=*|--input=*|-f*|-F*) fl=1 ;;
       -H|--header|-p|--preview|-q|--jq|-t|--template|--cache|--hostname) [ $# -gt 0 ] && shift ;;
       -*) ;;
       *) [ -n "$ep" ] || ep="$t" ;;
     esac
-    case "$v" in *=@*) at=1 ;; esac
   done
   eval "$ci"
   case "$ep" in http://*|https://*) url=1; ep="${ep#*://}"; case "$ep" in */*) ep="${ep#*/}" ;; *) ep="" ;; esac ;; esac
