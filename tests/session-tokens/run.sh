@@ -36,7 +36,7 @@ expect() {
   n=$((n + 1)); run "$@"
   [ "$rc" = "$want_rc" ] || { bad "$name: exit $rc, want $want_rc"; sed 's/^/  err: /' "$tmp/err"; return; }
   if [ "$want_out" = - ]; then [ ! -s "$tmp/out" ] || { bad "$name: printed"; sed 's/^/  got: /' "$tmp/out"; return; }
-  elif ! [ "$(cat "$tmp/out")" = "$(tr -d '\r' < "$want_out")" ]; then
+  elif ! [ "$(grep -v '^context' "$tmp/out")" = "$(tr -d '\r' < "$want_out" | grep -v '^context')" ]; then   # every older line, byte for byte; the context line (#342): below
     bad "$name: differs from ${want_out#"$here"/}"; sed 's/^/  got: /' "$tmp/out"; return
   fi
   [ "$want_err" = - ] || [ "$(cat "$tmp/err")" = "$want_err" ] || { bad "$name: stderr"; sed 's/^/  got: /' "$tmp/err"; return; }
@@ -134,5 +134,15 @@ left="$(ls "$d" | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$rc" = 0 ] && [ "$left" = "d6.json new.json " ]; then echo "ok   --prune at 7 x 24 hours"; else bad "--prune: exit $rc, left $left"; fi
 n=$((n + 1)); left="$(ls "$c" | LC_ALL=C sort | tr '\n' ' ')"
 if [ "$left" = "sessions statusline.102.tmp statusline.json " ]; then echo "ok   --prune: the status line's temp files at 1 hour"; else bad "--prune temp files: left $left"; fi
+# #342, the access point: the output's last line, in every mode with a transcript, tab after `context`, each bucket <requests>/$<cost to 4 places>:
+# by input + cache read + cache write of a request (each message id once, its largest output), 100000 in 100-200k, 700000 in 400-700k.
+# List price per million, input/output/cache read/cache write at the 1-hour price: claude-fable-5-1 10/50/0.25/20, claude-opus-5-5 4/20/0.20/8,
+# claude-sonnet-5-5 2/10/0.10/4, claude-haiku-5-5 0.10/0.50/0.01/0.20 (a prompt over 100000: 0.50/2.50/0.05/1). Another model: its request counted, no cost, unpriced=<n>.
+ctx() { n=$((n + 1)); run "$2" "${@:4}"; [ "$rc" = 0 ] && [ "$(tail -n 1 "$tmp/out")" = "$(printf 'context\t%s' "$3")" ] && echo "ok   $1" || { bad "$1: want the last line context $3"; sed 's/^/  got: /' "$tmp/out"; }; }
+K='under100k=1/$0.4200 100-200k=2/$0.4500 200-400k=3/$0.1400 400-700k=3/$0.2600 over700k=2/$0.1400 unpriced=1'
+ctx "context: each bucket's edges, four models' prices, an unpriced model" "$here/context" "$K" k1
+ctx "context: --since" "$here/context" "$K" --since 2026-10-01T00:00:00Z
+ctx "context: a session and its subagent (expected.txt, the self-test's fixture)" "$cl" "$(tail -n 1 "$t/expected.txt" | tr -d '\r' | cut -f2)" s1
+ctx "context: a stopped session, from its transcript, not its record" "$st" 'under100k=1/$0.0002 100-200k=0/$0.0000 200-400k=0/$0.0000 400-700k=0/$0.0000 over700k=0/$0.0000 unpriced=0' c1
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
 exit "$fail"
