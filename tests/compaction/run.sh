@@ -19,14 +19,17 @@
 #   cannot be read; an absent one: silent); `heading not found` under `## Open questions` (a journal without that heading); `could not list the sessions`
 #   also when the listing exits 0 and is no JSON array. Both hooks read stdin and after-compact writes stdout as UTF-8 whatever the console's code page. Both hooks: a cwd at or under <root>/coordinator, with no coordinator/ of its own, acts as <root>.
 # - The test pins the code page: PIN=866 runs the hook on Windows in a NEW hidden console (Start-Process, whatever CI's console is) through a .cmd with `chcp.com 866` first; the page read inside it must be 866 or the case fails.
+# - Both hooks: a set CLAUDE_PROJECT_DIR is the root, whatever the input's cwd (a subfolder, another project, a worktree elsewhere); unset: the cwd rule above. In the .ps1 a `/c/...` form of it, of COORD_ASSISTANT_DIR and of CLAUDE_CONFIG_DIR reads as cygpath -m reads it.
+# - after-compact coordinator, <root>/coordinator/core/CORE.md absent: exit 0, `<root>/coordinator/core/CORE.md is missing`, and never today's `<root>/coordinator/core/CORE.md (section 1`, which stays when the file is there.
 set -u
+command -v cygpath >/dev/null 2>&1 && export LC_ALL=C.UTF-8   # under LC_ALL=C (CI's bash on Windows) cygpath drops a Cyrillic path component
 kind="${1:-}"; [ $# -gt 0 ] && shift; PS=("$@")
 case "$kind" in sh) ;; ps) [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; } ;; *) sed -n '2p' "$0" >&2; exit 2 ;; esac
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
 wp() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 jp() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1" | sed 's/\\/\\\\/g'; else printf '%s' "$1"; fi; }   # as JSON holds a path
-unset COORD_ASSISTANT_DIR; export CLAUDE_CONFIG_DIR; CLAUDE_CONFIG_DIR="$(wp "$tmp/cfg")"; mkdir -p "$tmp/cfg/coordinator/briefs" "$tmp/away"
+unset COORD_ASSISTANT_DIR CLAUDE_PROJECT_DIR; export CLAUDE_CONFIG_DIR; CLAUDE_CONFIG_DIR="$(wp "$tmp/cfg")"; mkdir -p "$tmp/cfg/coordinator/briefs" "$tmp/away"
 bin="$tmp/bin"; mkdir -p "$bin"; export STUB="$tmp/stub"; mkdir -p "$STUB"
 cat > "$bin/claude" <<'EOF'
 #!/usr/bin/env bash
@@ -142,6 +145,36 @@ for d in coordinator coordinator/briefs; do mk "$P"; mkdir -p "$P/coordinator/br
 mk "$P"; mkdir -p "$W/coordinator"; before "$W/coordinator"; [ ! -e "$W/coordinator/CHECKPOINT.md" ] || bad "wrote in a worktree"; R="$tmp/coordinator"; mk "$R"; before "$R"; [ -f "$R/coordinator/CHECKPOINT.md" ] && [ ! -e "$R/CHECKPOINT.md" ] || bad "a root named coordinator: not its own coordinator/"
 c "after with a cwd in the project's coordinator folder, or deeper: finds the checkpoint, the path it prints exists"
 for d in coordinator coordinator/briefs; do mk "$P"; mkdir -p "$P/coordinator/core" "$P/coordinator/briefs"; : > "$P/coordinator/core/CORE.md"; printf 'written: %s\nDEEP-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P/$d"; has "$tmp/ctx" DEEP-CONTENT; no "$tmp/ctx" 'checkpoint is missing'; x="$(grep -o '[^ ]*/core/CORE\.md' "$tmp/ctx" | head -1 | tr '\\' '/')"; [ -f "$x" ] || bad "from $d it prints '$x', no such file"; done
+withcore() { mkdir -p "$1/coordinator/core"; : > "$1/coordinator/core/CORE.md"; }
+nat() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }   # the form Claude Code sets
+c "the project dir set, the cwd at another project's root: before and after use the set root, nothing under the other"
+O="$tmp/otherproj"; mk "$O"; printf '## Open questions\n- OTHER-Q\n' > "$O/coordinator/LOG.md"; mk "$P"; withcore "$P"
+CLAUDE_PROJECT_DIR="$(nat "$P")" before "$O"
+has "$F" OPEN-Q1; has "$F" SESSION-HERE; no "$F" OTHER-Q
+[ ! -e "$O/coordinator/CHECKPOINT.md" ] || bad "wrote under the other project"
+printf 'written: %s\nOTHER-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$O/coordinator/CHECKPOINT.md"
+CLAUDE_PROJECT_DIR="$(nat "$P")" after "$O"
+has "$tmp/ctx" OPEN-Q1; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md (section 1"; no "$tmp/ctx" OTHER-CONTENT; no "$tmp/ctx" "$(wp "$O")"
+c "the project dir set, the cwd in a subfolder or in a worktree elsewhere: both hooks act as at the root"
+for d in "$P/src/deep" "$tmp/elsewhere/.claude/worktrees/7-x"; do
+  mk "$P"; withcore "$P"; mkdir -p "$d"
+  CLAUDE_PROJECT_DIR="$(nat "$P")" before "$d"; has "$F" OPEN-Q1; [ ! -e "$d/coordinator" ] || bad "wrote under $d"
+  CLAUDE_PROJECT_DIR="$(nat "$P")" after "$d"; has "$tmp/ctx" OPEN-Q1; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md (section 1"
+done
+c "guard (green before the change too): the project dir set, a cwd in a worktree inside it is a worker's: the root's checkpoint left alone, no coordinator text, its brief with one"
+mk "$P"; mkdir -p "$W"; printf 'ROOT-MARK\n' > "$F"; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$W"
+[ "$(cat "$F")" = ROOT-MARK ] || bad "a worker overwrote the root's checkpoint"; [ ! -e "$W/coordinator" ] || bad "wrote in the worktree"
+CLAUDE_PROJECT_DIR="$(nat "$P")" after "$W"; [ ! -s "$tmp/out" ] || bad "the coordinator's text in a worktree: $(cut -c1-120 "$tmp/out")"
+B=c0c00000-0000-4000-8000-000000000001.md; : > "$tmp/cfg/coordinator/briefs/$B"; CLAUDE_PROJECT_DIR="$(nat "$P")" after "$W" worker
+has "$tmp/ctx" "$(wp "$tmp/cfg")/coordinator/briefs/$B"; rm "$tmp/cfg/coordinator/briefs/$B"
+c "guard (green before the change too): the project dir unset, a cwd in a subfolder keeps the cwd rule: nothing written, the root's checkpoint not read"
+mk "$P"; mkdir -p "$P/src/deep"; before "$P/src/deep"; [ ! -e "$F" ] || bad "walked up to the root"
+printf 'written: %s\nROOT-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P/src/deep"; no "$tmp/ctx" ROOT-CONTENT
+c "after with the root's CORE.md missing: exit 0, says so, never as a file to read; with the file, today's text"
+mk "$P"; after "$P"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md is missing"; no "$tmp/ctx" 'CORE.md (section 1'; has "$tmp/ctx" "$TODAY"
+withcore "$P"; after "$P"; has "$tmp/ctx" 'CORE.md (section 1'; no "$tmp/ctx" 'CORE.md is missing'
+c "the project dir set, the root's CORE.md missing and the cwd's present: the root's is the one looked for"
+mk "$O"; withcore "$O"; mk "$P"; CLAUDE_PROJECT_DIR="$(nat "$P")" after "$O"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md is missing"
 if [ "$kind" = ps ] && command -v cygpath >/dev/null 2>&1; then Y="$tmp/$(printf '\320\277\321\200\320\276\320\265\320\272\321\202')"   # a Cyrillic folder
   c "code page 866: after's stdout carries a Cyrillic question as UTF-8 bytes, valid JSON"
   mk "$P"; before "$P"; PIN=866 after "$P"; has "$tmp/ctx" "$Q3"
@@ -149,6 +182,20 @@ if [ "$kind" = ps ] && command -v cygpath >/dev/null 2>&1; then Y="$tmp/$(printf
   mk "$Y"; PIN=866 before "$Y"; has "$Y/coordinator/CHECKPOINT.md" OPEN-Q1; has "$Y/coordinator/CHECKPOINT.md" "$Q3"
   c "code page 866, a Cyrillic project path: after reads its stdin as UTF-8, the checkpoint is found"
   printf 'written: %s\nCYRILLIC-PATH-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$Y/coordinator/CHECKPOINT.md"; PIN=866 after "$Y"; has "$tmp/ctx" CYRILLIC-PATH-CONTENT; no "$tmp/ctx" 'checkpoint is missing'
+  A="$tmp/$(printf '\320\277\320\260\320\277\320\272\320\260')"; mkdir -p "$A/coordinator/briefs"; K=c0c00000-0000-4000-8000-000000000001   # a Cyrillic folder, the session's kept brief
+  c "code page 866: the assistant variant's stdout carries a Cyrillic COORD_ASSISTANT_DIR as UTF-8 bytes"
+  COORD_ASSISTANT_DIR="$(wp "$A")" PIN=866 after "$P" assistant; has "$tmp/ctx" "$(wp "$A")/BRIEF.md"
+  c "code page 866: the worker variant's stdout carries a Cyrillic config dir as UTF-8 bytes"
+  : > "$A/coordinator/briefs/$K.md"; CLAUDE_CONFIG_DIR="$(wp "$A")" PIN=866 after "$P" worker; has "$tmp/ctx" "$(wp "$A")/coordinator/briefs/$K.md"
+  export MSYS2_ENV_CONV_EXCL='CLAUDE_PROJECT_DIR;COORD_ASSISTANT_DIR;CLAUDE_CONFIG_DIR'   # else Git Bash turns /c/x into C:/x on the way to PowerShell (measured)
+  dr() { local m; m="$(wp "$1")"; printf '/%s%s' "$(printf '%s' "${m%%:*}" | tr 'A-Z' 'a-z')" "${m#*:}"; }   # C:/x -> /c/x
+  c "a /c/... COORD_ASSISTANT_DIR and config dir: the variants print them as the .sh does, a kept brief silences before"
+  COORD_ASSISTANT_DIR="$(dr "$A")" after "$P" assistant; has "$tmp/ctx" "$(wp "$A")/BRIEF.md"
+  CLAUDE_CONFIG_DIR="$(dr "$A")" after "$P" worker; has "$tmp/ctx" "$(wp "$A")/coordinator/briefs/$K.md"
+  mk "$P"; CLAUDE_CONFIG_DIR="$(dr "$A")" before "$P"; [ ! -e "$F" ] || bad "before wrote with a kept brief under a /c/... config dir"
+  c "a /c/... project dir: both hooks use the root, the paths printed as the .sh does"
+  mk "$P"; withcore "$P"; CLAUDE_PROJECT_DIR="$(dr "$P")" before "$O"; has "$F" OPEN-Q1
+  CLAUDE_PROJECT_DIR="$(dr "$P")" after "$O"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md (section 1"
 fi
 c ""
 [ "$fail" = 0 ] && echo "compaction: $n cases passed" || echo "compaction: failures above ($n cases)"
