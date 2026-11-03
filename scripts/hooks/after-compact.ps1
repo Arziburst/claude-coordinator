@@ -17,8 +17,8 @@
 # or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. A cwd at or
 # under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed exists.
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
-# does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Stdin is read and
-# stdout written as UTF-8 whatever the console's code page (as safety-guard.ps1 does).
+# does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Stdin is read as
+# UTF-8 (as safety-guard.ps1 does) and stdout written as UTF-8 bytes: under any code page, with no console.
 param([string]$Role)
 if ($Role -notmatch '^(coordinator|worker|assistant)$') { [Console]::Error.WriteLine('usage: after-compact.ps1 coordinator|worker|assistant'); exit 0 }
 $in = ''; try { [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }; try { $in = [Console]::In.ReadToEnd() } catch { }
@@ -70,7 +70,6 @@ if ($Role -eq 'worker') {
 $U = New-Object System.Text.UTF8Encoding $false; $esc = ''; $n = 0; $k = 0
 foreach ($l in ($msg -replace "`r", '') -split "`n") { $x = $l.Replace('\', '\\').Replace('"', '\"').Replace("`t", '\t') -replace '[\x00-\x08\x0b-\x1f\x7f]', ''; $k++
   $n += $U.GetByteCount($x) + 2; if ($n -gt 9600) { $esc += $(if ($k -gt 1) { '\n' } else { '' }) + 'truncated'; break }; $esc += $(if ($k -gt 1) { '\n' } else { '' }) + $x }
-$enc = $null; try { $enc = [Console]::OutputEncoding; [Console]::OutputEncoding = $U } catch { }   # UTF-8 bytes at any code page
-[Console]::Out.Write('{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"' + $esc + '"}}' + "`n"); [Console]::Out.Flush()
-if ($enc) { try { [Console]::OutputEncoding = $enc } catch { } }
+# the bytes straight to stdout: UTF-8 under any code page and with no console (a console encoding cannot be set there)
+$b = $U.GetBytes('{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"' + $esc + '"}}' + "`n"); $so = [Console]::OpenStandardOutput(); $so.Write($b, 0, $b.Length); $so.Flush()
 exit 0
