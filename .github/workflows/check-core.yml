@@ -658,6 +658,9 @@ jobs:
         run: |
           bash tests/ci-times/run.sh ps powershell
           bash tests/ci-times/run.sh ps pwsh
+      - name: ci-times temporary - this shard fails, so check (ubuntu-latest) must go red (#373, reverted by the next commit)
+        if: matrix.shard == 'ubuntu-2'
+        run: exit 1
   shard-macos:
     strategy:
       fail-fast: false
