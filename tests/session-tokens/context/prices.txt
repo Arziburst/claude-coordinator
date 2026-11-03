@@ -1,0 +1,4 @@
+claude-opus-5-5     $4 / $20 / $0.20 / $8
+claude-fable-5-1	10	50	0.25	20	top
+claude-sonnet-5-5   $2 / $10 / $0.10 / $4
+claude-haiku-5-5    $0.10 / $0.50 / $0.01 / $0.20

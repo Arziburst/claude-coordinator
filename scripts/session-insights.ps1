@@ -12,6 +12,9 @@
 # "cache write= read= rewrites=" (a message writing over half its input to the cache, a transcript's first aside);
 # "reread files= reads=" (files the Read tool read 3+ times in one transcript; -Detail adds "reread_file <path> reads=",
 # file names for this machine only); "turns assistant= tool_calls=". One session is its transcript and its subagents'.
+# Last (#342): "origin human= peer= task_notification= system= other= unknown=", the prompts by who started the turn - a user
+# record's top-level turnOrigin (any other value: other; a compact summary never counts); unknown = a user record with none
+# that is no tool result and not isMeta (an old transcript).
 # Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
 param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project)
 # this script's output is written as UTF-8, whatever the console's code page; the caller's console gets its own
@@ -19,7 +22,7 @@ param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if ((-not $Session -and -not $Since) -or ($Session -and $Since) -or (-not $Since -and ($Until -or $SkipTests -or $Project))) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 15 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 18 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -194,6 +197,9 @@ function HookName([string]$b) {
 }
 $reContent = [regex]'"content":[ \t]*'
 $reText = [regex]'"text":[ \t]*"'
+# the record outside its message object (a prompt's own fields), and a prompt's turnOrigin (#342)
+$reMsg = [regex]'"message":[ \t]*[{]'; $reUser = [regex]'"type":[ \t]*"user"'; $reOrigin = [regex]'"turnOrigin":[ \t]*"([^"]*)"'; $reSummary = [regex]'"isCompactSummary":[ \t]*true'; $reMeta = [regex]'"isMeta":[ \t]*true'
+function Top([string]$s) { $m = $reMsg.Match($s); if (-not $m.Success) { return $s }; $e = ObjEnd $s ($m.Index + $m.Length - 1); $s.Substring(0, $m.Index) + $(if ($e -ge 0) { $s.Substring($e + 1) } else { '' }) }
 $MK = 'Blocked by safety-guard: '
 function Num([string]$u, [string]$k) { $g = [regex]::Match($u, '"' + $k + '":[ \t]*([0-9]+)'); if ($g.Success) { [long]$g.Groups[1].Value } else { [long]0 } }
 
@@ -205,7 +211,7 @@ $rep = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]
 $usage = NewMap; $calls = NewMap; $BC = NewMap; $TE = NewMap; $TR = NewMap; $TX = NewMap
 $ErrTools = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 function Get0($map, [string]$k) { if ($map.ContainsKey($k)) { $map[$k] } else { 0 } }
-$S = @{ na = 0; nc = 0; wt = [long]0; wn = 0; rf = 0; rr = 0 }
+$S = @{ na = 0; nc = 0; wt = [long]0; wn = 0; rf = 0; rr = 0 }; $PO = NewMap
 $detailLines = New-Object 'System.Collections.Generic.List[string]'
 function Add($map, [string]$k, $n) { if ($map.ContainsKey($k)) { $map[$k] += $n } else { $map[$k] = $n } }
 function Counts([string]$reason) { if (-not $BC.ContainsKey($reason)) { $BC[$reason] = @{ n = 0; changed = 0; retried = 0; around = 0; stopped = 0 } }; $BC[$reason] }
@@ -217,9 +223,10 @@ function Insights([string[]]$Files) {
     $perr = NewMap; $RD = NewMap; $first1 = $false
     foreach ($line in [IO.File]::ReadLines($file)) {
       if (-not $line) { continue }
-      if (-not $line.Contains('"tool_result"') -and -not $line.Contains('"assistant"')) { continue }
-      $isR = $reResultT.IsMatch($line)
-      if (-not $isR -and -not $reAssistant.IsMatch($line)) { continue }
+      if (-not $line.Contains('"tool_result"') -and -not $line.Contains('"assistant"') -and -not $line.Contains('"user"')) { continue }
+      $isR = $reResultT.IsMatch($line); $top = $null
+      if (-not $isR -and $reUser.IsMatch($line)) { $top = Top $line; if (-not $reUser.IsMatch($top)) { $top = $null } }
+      if (-not $isR -and $null -eq $top -and -not $reAssistant.IsMatch($line)) { continue }
       $ts = RecTime $line
       if ($cut) {
         if (-not $ts) { continue }
@@ -228,6 +235,12 @@ function Insights([string[]]$Files) {
         if ($upto -and [string]::CompareOrdinal($t19, $upto) -ge 0) { continue }
       }
       $ms = Tms $ts
+      if ($null -ne $top) {   # a prompt by its turnOrigin (#342); a compact summary never counts
+        if ($reSummary.IsMatch($top)) { continue }; $g = $reOrigin.Match($top)
+        if ($g.Success) { $o = $g.Groups[1].Value; if ($o -cnotmatch '^(human|peer|task_notification|system)\z') { $o = 'other' }; Add $PO $o 1 }
+        elseif (-not $reMeta.IsMatch($top)) { Add $PO 'unknown' 1 }
+        continue
+      }
       if ($isR) {
         $g = $reUseId.Match($line); if (-not $g.Success) { continue }
         $st = $g.Index; $id = $g.Groups[1].Value
@@ -341,6 +354,7 @@ function Insights([string[]]$Files) {
   "reread`tfiles={0} reads={1}" -f $S.rf, $S.rr
   $lines = $detailLines.ToArray(); [Array]::Sort($lines, [StringComparer]::Ordinal); $lines
   "turns`tassistant={0} tool_calls={1}" -f $S.na, $S.nc
+  "origin`thuman={0} peer={1} task_notification={2} system={3} other={4} unknown={5}" -f (Get0 $PO 'human'), (Get0 $PO 'peer'), (Get0 $PO 'task_notification'), (Get0 $PO 'system'), (Get0 $PO 'other'), (Get0 $PO 'unknown')
 }
 
 # -SkipTests / -Project: of the files (in order, $keys their paths under projects/ with /), those of the sessions
