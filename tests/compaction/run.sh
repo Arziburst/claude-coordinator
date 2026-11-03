@@ -9,10 +9,11 @@
 #   one line each with id, state and name, only a cwd that is the project or inside it, or one `could not list the sessions` line
 #   (the listing's bound 10 s); `## Re-read`: coordinator/core/CORE.md, coordinator/PROJECT.md, coordinator/BINDINGS.md,
 #   coordinator/LOG.md, a line each. A section over its share keeps its first lines and says `truncated`; the later ones stay.
-# - The settings: `PreCompact`, command before-compact.sh / .ps1, `"timeout": 30`, in settings.example.json / .windows.json only.
+# - The settings: no entry in any settings.example*; ONE-TIME.md and TOOLKIT.md each name `PreCompact` and `before-compact` (a project's
+#   .claude/settings.json, as the coordinator's after-compact), its timeout over the listing's bound.
 # - after-compact coordinator: today's text, then the file's content in additionalContext (raw UTF-8, valid JSON), the whole stdout
 #   at most 10000 bytes (over that: `truncated`). Says `checkpoint is missing` (absent or unreadable) or `checkpoint is stale`
-#   (`written:` over 60 minutes old; the content still printed). Its worker and assistant variants never read the file.
+#   (`written:` over 60 minutes old, or none): a note, never a loss, the content printed either way. Its worker and assistant variants never read the file.
 set -u
 kind="${1:-}"; [ $# -gt 0 ] && shift; PS=("$@")
 case "$kind" in sh) ;; ps) [ ${#PS[@]} -gt 0 ] || { echo "ps needs the PowerShell command" >&2; exit 2; } ;; *) sed -n '2p' "$0" >&2; exit 2 ;; esac
@@ -60,10 +61,9 @@ mk() { rm -r "$1" 2>/dev/null; mkdir -p "$1/coordinator"; rm -f "$STUB/fail" "$S
   printf '# Journal\n## Open questions\n- 2026-11-01: OPEN-Q1 which database?\n- 2026-11-02: %s\n- 2026-11-02: %s\n## Events\n- 2026-11-01: EVENT-LINE started\n' "$Q2" "$Q3" > "$1/coordinator/LOG.md"
   printf 'aaaa1111\nWATCHED-WORKER @120\n' > "$1/coordinator/watch.txt"; }
 P="$tmp/proj"; F="$P/coordinator/CHECKPOINT.md"; S="$tmp/settings"
-c "the settings: a PreCompact entry in the two examples, none in an assistant's"
-for x in "settings.example.json before-compact.sh" "settings.example.windows.json before-compact.ps1"; do
-  awk '/"PreCompact"/ { f = 1 } f' "$core/${x% *}" | sed -n '1,8p' > "$S"; has "$S" "/scripts/hooks/${x#* }"; has "$S" '"timeout": 30'; done
-for x in settings.example.assistant.json settings.example.assistant.windows.json; do grep -v '^  "_comment"' "$core/$x" > "$S"; no "$S" PreCompact; no "$S" before-compact; done
+c "the settings: ONE-TIME and TOOLKIT name the entry, no settings example holds it"
+for x in ONE-TIME.md TOOLKIT.md; do has "$core/$x" PreCompact; has "$core/$x" before-compact; done
+for x in "$core"/settings.example*.json; do grep -v '^  "_comment"' "$x" > "$S"; no "$S" PreCompact; no "$S" before-compact; done
 c "before: the file holds the moment, the open questions, the watch list, this project's sessions, what to re-read"
 mk "$P"; before "$P"; grep -Eq '^written: [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$F" || bad "no written line"
 for t in '## Open questions' OPEN-Q1 '## Watch list' 'WATCHED-WORKER @120' '## Sessions' '## Re-read' coordinator/core/CORE.md coordinator/PROJECT.md coordinator/BINDINGS.md coordinator/LOG.md; do has "$F" "$t"; done
@@ -110,6 +110,8 @@ mk "$P"; after "$P"; has "$tmp/ctx" "$TODAY"; has "$tmp/ctx" 'checkpoint is miss
 c "after on a checkpoint two hours old: says stale, still prints it"
 mk "$P"; printf 'written: %s\nSTALE-CONTENT\n' "$(stamp 7200 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; touch -t "$(stamp 7200 +%Y%m%d%H%M.%S)" "$F" 2>/dev/null
 after "$P"; has "$tmp/ctx" 'checkpoint is stale'; has "$tmp/ctx" STALE-CONTENT; no "$tmp/ctx" 'checkpoint is missing'
+c "after on a checkpoint with no written line: a note, the content still printed"
+printf 'NO-MOMENT-CONTENT\n' > "$F"; after "$P"; has "$tmp/ctx" 'checkpoint is stale'; has "$tmp/ctx" NO-MOMENT-CONTENT
 c "after on a checkpoint thirty minutes old: not stale"
 printf 'written: %s\nFRESH-CONTENT\n' "$(stamp 1800 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P"; has "$tmp/ctx" FRESH-CONTENT; no "$tmp/ctx" 'checkpoint is stale'
 c "guard (green before the change too): a worker's and an assistant's after-compact never read the file"
