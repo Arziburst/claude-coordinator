@@ -62,10 +62,12 @@
 # `--field budget.cost`: budget's cost as written, for start-worker's gate.
 # A bound on tests (#390): `tests_first: yes` with no well-formed line under `bounds:` is an ERROR naming `tests_first`, in
 # every mode. An important-file contract keeps its own ERROR: a malformed line there is that ERROR alone.
-usage() { sed -n '2,64s/^# \{0,1\}//p' "$0"; exit 2; }
+# `--important`, alone (#419): read-only, the list above (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
+usage() { sed -n '2,65s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 important='scripts/hooks/* .github/workflows/* tests/*/run.*'
 [ $# -gt 0 ] || usage
+listimp=""; if [ "$1" = --important ]; then [ $# = 1 ] || usage; listimp=1; set -- -; fi
 field=""
 if [ "$1" = --field ]; then
   [ $# -ge 3 ] && [ -n "$2" ] || usage
@@ -92,6 +94,7 @@ fi
 pf="$here/../../PROJECT.md"
 [ ! -f "$pf" ] || important="$important $(awk -F'|' '{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }
   n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</) print v; exit }' "$pf")"
+[ -z "$listimp" ] || { set -f; printf '%s\n' $important; exit 0; }
 # the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: --runs)
 forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
   local k="$1" bm="$2" tbl m ln n r

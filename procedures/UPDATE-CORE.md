@@ -82,7 +82,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    evidence that this commit works here; its CHECKLIST line names the commit. A declined full self-test
    still runs `selftest probes` when they are due (the same due-rule as SELFTEST step 2a), so they never
    stay due (#331). Then
-   install the roles into `~/.claude/agents/` (TOOLKIT *Workers*, Roles) and refresh the core's skills — every
+   install the roles (TOOLKIT *Workers*, Roles: the one-time step `roles-link` first, when it is *Not done yet* and the owner said yes; then a project with the link has them at the new commit, one without gets them in `~/.claude/agents/`) and refresh the core's skills — every
    `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
    removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
    Run the one-time checks the owner said yes to; write a `CHECKLIST.md` line for every *Not done yet*

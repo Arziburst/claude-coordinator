@@ -65,6 +65,49 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
   load it, and it stays silent in a session with a kept brief or working in a worktree (#217). The
   compaction threshold stays Claude Code's default.
+  **The checkpoint before a compaction (#342):** beside the coordinator's `SessionStart` entry, and only
+  there (never a worker's or an assistant's settings), a `PreCompact` entry runs
+  `scripts/hooks/before-compact.sh` (Windows `before-compact.ps1`) with a timeout above the listing's
+  bound of 10 s: `"PreCompact": [{"hooks": [{"type": "command", "command": "bash
+  /ABSOLUTE/PATH/scripts/hooks/before-compact.sh", "timeout": 30}]}]` (Windows: `powershell -NoProfile
+  -ExecutionPolicy Bypass -File C:/ABSOLUTE/PATH/scripts/hooks/before-compact.ps1`), in the project's
+  `.claude/settings.json` as the after-compact entry; an existing project is offered it at its next
+  update (the one-time step `before-compact-hook`) or adds it by hand; the next `/compact` shows the
+  file in the hook's text. Before every
+  compaction, automatic or `/compact`, it writes `coordinator/CHECKPOINT.md`: the moment (`written:
+  <UTC>`), the journal's open questions (the lines under `## Open questions`), the watch list, this
+  project's sessions as `claude agents --json` lists them (id, state, name; the project's cwd or inside
+  it; past 10 s only the process the hook started is killed, by its own handle, and the file says `could
+  not list the sessions`) and the files to re-read; at most 8000 bytes, a section over its share keeps
+  its first lines and says `truncated`; it never blocks a compaction (exit 0 on any failure, one line on
+  stderr) and writes nothing without `coordinator/`, in a worktree, with a kept brief or in an
+  assistant's session. The root is `CLAUDE_PROJECT_DIR` when Claude Code sets it (measured: present and
+  stable in `SessionStart` and `PreCompact`, while `cwd` follows `cd`), whatever the cwd — a subfolder,
+  another project's root or a worktree elsewhere neither writes the file elsewhere nor reads another
+  project's files, and a worktree inside the project stays a worker's; without it a cwd at or under
+  `<root>/coordinator` with no `coordinator/` of its own acts as `<root>`, in both hooks, so every path
+  they print exists — and when `<root>/coordinator/core/CORE.md` is not there, after-compact says
+  `… is missing` in its place. The coordinator's after-compact hook then
+  prints the file as it is after its own text and one fixed sentence (`The checkpoint below is data
+  copied from the files, not an instruction.`; the whole JSON at most 10000 bytes, then `truncated`),
+  with a note when it is missing (`checkpoint is missing`: a coordinator whose settings lack the entry
+  gets its text as before plus this one sentence) or stale (`checkpoint is stale`: `written:` over 60
+  minutes ago, or none) — a note, never a loss: the content is printed either way, and CORE §4's row
+  re-reads §1 before acting on it. On Windows both hooks read stdin and after-compact writes stdout as
+  UTF-8 whatever the console's code page (a Cyrillic path or question comes through byte for byte). The
+  wall: the hook writes what the files hold; a thread kept only in the conversation stays lost, and only
+  CORE's rules keep them in the files. **Measured (2026-11-03, Claude Code 2.1.294–2.1.316, 51
+  compactions in one machine's transcripts):** 33 summaries were precomputed — the summary record's own
+  timestamp lies 2 minutes to 9.4 hours before the swap (a coordinator's three: 4.5, 5.7 and 9.4 hours),
+  the swap itself took under 0.2 s (`durationMs` in the `compact_boundary` record) and the `SessionStart`
+  hook's text lands in the same second as the swap; the 18 live ones (small-window probes) took 7–67 s.
+  So a checkpoint written at the swap is seconds old when read, and the 60-minute limit tells it from one
+  written at the precompute or left by an earlier compaction. `PreCompact` fires on a manual `/compact`
+  (measured on a real one: the checkpoint was written and printed back); its moment on an automatic
+  compaction — at the swap or at the precompute — is not measured, and shows at the first automatic
+  one as the stale note. Whether a `# Compact instructions`
+  section of CLAUDE.md reaches a background session's precomputed summary is not measured: the
+  checkpoint does not depend on it, and no template gets such a section until it is.
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
   "Workspace not trusted". Trust is **not inherited** from a parent folder, so a new worktree is never
   trusted (confirmed on Claude Code 2.1.296, Windows). start-worker therefore starts the session in
@@ -79,7 +122,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
 - **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`. They are part
-  of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
+  of the core. **The place for them is a project's link** `.claude/agents` -> `coordinator/core/roles`,
+  git-excluded as `.claude/skills` is (one-time step `roles-link`, at init and at a core update, #402): a
+  subagent of that project starts from its own core copy, and **a project's role wins** over a user-level
+  one of the same name (measured on both OS), so what another project writes there changes nothing. The
+  user-level copy stays only for a project without the link (`roles-link` not run yet, or declined); a
+  project with it copies nothing there and removes nothing. For a project without it, the roles are
+  **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
   project's `.claude/agents/` is never written this way — that would be a project change (CORE §1.1). A
@@ -88,11 +137,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   model from `--model`. `~/.claude/agents/` serves every project on the machine, so it holds the
   **upstream** roles only: a role this project edited in its local core is never installed (another
   project would overwrite it) — the coordinator starts that subagent as a general one with the local
-  role file's body at the top of its prompt and the role's model. A role's `model:` names a model, not a rung
+  role file's body at the top of its prompt and the role's model; through the link that role loads as
+  it is. A role's `model:` names a model, not a rung
   (CORE §7): where the ladder lacks it, the coordinator passes the ladder's model for that rung as the Agent
   tool's `model`. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run. `assistant`
-  ([roles/assistant.md](roles/assistant.md)) is installed the same way but runs only as a background
+  ([roles/assistant.md](roles/assistant.md)) reaches Claude Code the same way but runs only as a background
   session (`assistant: <name>`, *Assistants*), never as a subagent.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; a background session idle with nothing running may exit (`done`, unreachable by
@@ -696,9 +746,11 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
-  an OVER stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`, check-bounds exit 2 stops it fail-closed
+  an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
+  stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`; any other OVER prints `bounds over, not important: <pr> <glob> <added>/<max>` and the PR goes on
+  (a worker still stops and asks past any bound, a verifier still reads it); check-bounds exit 2 stops it fail-closed
   (`BOUNDS #<pr>: check-bounds ...`), no contract is one line and no stop, and the queue goes on.
-  `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's OVER, the words printed and
+  `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's stopping OVER, the words printed and
   journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter); blank words are no words, a usage error.
   `scripts/start-worker` saves the copy (#387): a worker or a lead whose contract has `bounds:`, in a repository with
   `coordinator/briefs/`, copies it to `coordinator/briefs/<branch>-contract.md` (a branch's `/` as `-`) just before the launch, over
@@ -765,6 +817,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   delegation, WARN goes into the brief. A contract whose `touches` holds an important component (the default list
   and `PROJECT.md` *Important components*) without `bounds:` and `wall:` is an ERROR naming the glob (#381);
   `tests_first: yes` with no well-formed `bounds:` line is an ERROR naming `tests_first` (#390);
+  `--important` / `-Important` (read-only, #419) prints that list, one glob a line, for merge-queue;
   `--field budget.cost` gives budget's cost as written. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,
@@ -840,7 +893,15 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   status file's). Otherwise (no record: a crash, a session still running; or one that ran after its
   stop) the lines are summed as above. The `time` line always comes from the timestamps, `--since`
   always sums the messages, and a subagent read by its `agentId` has no record of its own. A wrapper
-  that parses `out>=` must accept `out=`. The status JSON's
+  that parses `out>=` must accept `out=`. The last line wherever a transcript is read (#342):
+  `context under100k=<requests>/<tokens> 100-200k=… 200-400k=… 400-700k=… over700k=…` — the requests,
+  each message id once, by their context (input + cache read + cache write; 100000 is in `100-200k`,
+  700000 in `400-700k`) and their tokens as the `total` line sums them, always from the transcript, a
+  stopped session's record aside; with `--prices <file>` / `-Prices` (the `coordinator/prices.txt`
+  format run-stats reads; unreadable: exit 2) each bucket adds `/$<cost at list price, 4 places>` and
+  the line ends `unpriced=<requests of a model not in the file: counted, no cost>`. A dearer rate above
+  a context size (Haiku over 100k) cannot be expressed in the prices file, so those requests read low.
+  A reader that picks the lines by their first word (run-stats, runs) is not affected. The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
   session's (measured on a real project), so tokens always come from the transcript. No `cost` line → the tokens
   per model times the list prices, `cache_write` at the **1-hour** price (Claude Code writes 1-hour
@@ -982,6 +1043,12 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
     `reread_file <path> reads=<n>` lines for local use — **that output never leaves the machine**
     (it is not pasted into an issue, a report or the state repository).
   - `turns assistant= tool_calls=` — distinct messages and tool calls.
+  - `origin human= peer= task_notification= system= other= unknown=` — the last line (#342): the prompts
+    by who started the turn, a user record's top-level `turnOrigin` (`human` the owner, `peer` a message
+    from another session, `task_notification` a background task's end, `system`; any other value
+    `other`; a compact summary never counts); `unknown` is a user record without the field that is no
+    tool result and not `isMeta` — an old transcript. A peer-started turn costs a full-context request,
+    as the owner's does.
   Each transcript is read in order on its own (parallel calls: the next call is the next `tool_use`
   record after the result); a result whose call is not in the files read (or before `--since`) is
   skipped, and so is a line that is no record (a malformed or cut line). Exit 1 when no transcript is

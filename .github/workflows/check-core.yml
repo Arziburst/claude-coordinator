@@ -11,6 +11,7 @@ name: check-core
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
 #need insights   ^scripts/session-insights\. ^tests/session-insights/ ^tests/retro/claude/  # session-insights on its fixture transcripts (and the retro's fixture transcripts)
+#need compaction ^scripts/hooks/(before|after)-compact\. ^tests/compaction/ ^ONE-TIME\.md$ ^TOOLKIT\.md$ ^settings\.example  # the compaction checkpoint (#342): the two hooks against a stub claude, the entry named in ONE-TIME and TOOLKIT, none in the settings examples
 #need retro      ^scripts/retro\. ^scripts/session-insights\. ^tests/retro/ +.  # retro (it runs session-insights; a proposal's names are checked against the core's own file list)
 #need statusline ^scripts/statusline\. ^tests/statusline/ ^tests/selftest/status\.json$  # the status line (and selftest's status fixture)
 #need runstats   ^scripts/run-stats\. ^tests/run-stats/  # run-stats on its fixture run logs
@@ -291,6 +292,18 @@ jobs:
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-insights/run.sh ps powershell
           bash tests/session-insights/run.sh ps pwsh
+      - name: compaction keeps the checkpoint through the two hooks (bash)
+        if: (matrix.shard == 'ubuntu-3' || matrix.shard == 'macos-1') && steps.need.outputs.compaction == 'true'
+        run: bash tests/compaction/run.sh sh
+      - name: compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
+        if: matrix.shard == 'ubuntu-3' && steps.need.outputs.compaction == 'true'
+        run: bash tests/compaction/run.sh ps pwsh
+      - name: compaction keeps the checkpoint through the two hooks (PowerShell)
+        if: matrix.shard == 'windows-4' && steps.need.outputs.compaction == 'true'
+        run: |
+          # through -File, as the docs give it, in both PowerShells
+          bash tests/compaction/run.sh ps powershell
+          bash tests/compaction/run.sh ps pwsh
       - name: retro measures the fixture weeks (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.retro == 'true'
         run: bash tests/retro/run.sh sh
