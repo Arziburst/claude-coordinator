@@ -696,9 +696,11 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
-  an OVER stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`, check-bounds exit 2 stops it fail-closed
+  an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
+  stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`; any other OVER prints `bounds over, not important: <pr> <glob> <added>/<max>` and the PR goes on
+  (a worker still stops and asks past any bound, a verifier still reads it); check-bounds exit 2 stops it fail-closed
   (`BOUNDS #<pr>: check-bounds ...`), no contract is one line and no stop, and the queue goes on.
-  `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's OVER, the words printed and
+  `--over-bounds-ok <pr>:<the owner's words>` (`-OverBoundsOk`) passes that PR's stopping OVER, the words printed and
   journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter); blank words are no words, a usage error.
   `scripts/start-worker` saves the copy (#387): a worker or a lead whose contract has `bounds:`, in a repository with
   `coordinator/briefs/`, copies it to `coordinator/briefs/<branch>-contract.md` (a branch's `/` as `-`) just before the launch, over
@@ -765,6 +767,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   delegation, WARN goes into the brief. A contract whose `touches` holds an important component (the default list
   and `PROJECT.md` *Important components*) without `bounds:` and `wall:` is an ERROR naming the glob (#381);
   `tests_first: yes` with no well-formed `bounds:` line is an ERROR naming `tests_first` (#390);
+  `--important` / `-Important` (read-only, #419) prints that list, one glob a line, for merge-queue;
   `--field budget.cost` gives budget's cost as written. `--field <key>` / `-Field <key>` (read-only): when the contract
   passes, only that key's value as the checks read it, on one line, exit 0; else the usual ERROR lines
   and exit 1 — start-worker's tests_first gate asks it, one parser (#276); with no key, or an empty one,

@@ -34,6 +34,7 @@
 #   and the row *Important components* of the PROJECT.md two folders above this script's) needs `bounds:` and `wall:`;
 #   missing or malformed: one ERROR per field, naming the glob. -Field budget.cost: budget's cost as written.
 #   A bound on tests (#390; the rules: check-contract.sh): `tests_first: yes` with no well-formed line under `bounds:`: an ERROR.
+#   -Important, alone (#419): read-only, the list below (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
 $Important = @('scripts/hooks/*', '.github/workflows/*', 'tests/*/run.*')
 $pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT.md'
 if (Test-Path -LiteralPath $pf -PathType Leaf) {
@@ -58,6 +59,7 @@ $GuardWords = @('payment', 'price', 'billing', 'invoice', 'refund', 'money', 'ro
 # the arguments are read here, not by a param() binding: -Field with no key, or an empty one, prints the
 # usage and exits 2 as check-contract.sh does (a binding would stop with its own error, #288)
 $Field = ''; $Files = @($args | ForEach-Object { "$_" }); $usage = -not $Files
+if ($Files.Count -gt 0 -and $Files[0] -match '^-important:?$') { if ($Files.Count -eq 1) { $Important; exit 0 }; $usage = $true }
 if ($Files.Count -gt 0 -and $Files[0] -match '^-field:?$') {
   if ($Files.Count -lt 3 -or -not $Files[1]) { $usage = $true } else { $Field = $Files[1]; $Files = @($Files[2..($Files.Count - 1)]) }
 }
