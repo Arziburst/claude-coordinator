@@ -899,7 +899,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `escalated` `failed` `dropped` (stopped without a result) `ready`; any other word is refused (exit 2), as
   is a missing transcript (exit 1) and a second row of the same session start and role (exit 1; an
   assistant's rows share their start and are allowed, their cost the session's since that assistant's
-  previous row). The file keeps its BOM and line ends. A subagent's row: `add --log … --in <parent>
+  previous row; so are a coordinator's). **The coordinator's own row, one per day (#389):** `add --log
+  coordinator/RUNS.tsv --session <its id> --task - --role coordinator --kind coordinator --model <m> --effort <e>
+  --estimate - --estimate-time - --result done` (`-Task:- -Role coordinator ...`): the task column `-`, as the
+  retro reads the coordinator's own line. The file keeps its BOM and line ends. A subagent's row: `add --log … --in <parent>
   --tokens <n> --task …` (`-In <parent> -Tokens <n>`), cost `in <parent>`, the time columns empty. Task rows
   stay `run-stats --task … --append`. **One task's numbers (#381):** `scripts/runs.sh task --log
   coordinator/RUNS.tsv --task <id>` (`… runs.ps1 task -Log … -Task <id>`), read-only, prints `<worker rows>
@@ -1077,7 +1080,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   approving verifier run's (result `approved…`, `done` or `pass`) start + wall and the moment the checks were all green — per check (type,
   workflow, name) its run started last counts, so a green rerun replaces a red run, and the last
   `completedAt` of those; a check not green (red, running) or verifier rows none of which approved:
-  not ready, exit 1; no checks, or no `--pr-json`: the verifier alone. `wall` = ready − start − the
+  not ready, exit 1; no checks, or no `--pr-json`: the verifier alone. **A verifier run as a subagent (#389):**
+  its approving row from `runs add --in` has no start and no wall, so, with no approval that has a time, ready
+  is the checks all green and the result reads `merged checks` / `ready checks` (no green checks: not ready;
+  give `--pr-json`). `wall` = ready − start − the
   owner waits inside that span (overlaps once); `wait` = merge − ready + those waits; unmerged:
   result `ready`, `wait` `<m>+` (open — append the merged row later; the last one counts). Minutes
   rounded half up from exact seconds; the row in the file's header order, missing names (`wait` in an

@@ -13,16 +13,16 @@
 # 7's order), else CORE 7's order: date task role kind model effort estimate tokens cost result start wall
 # active wait estimate_time. tokens, cost, start, wall and active come from `scripts/session-tokens <id>`
 # (its total line, its cost line's number, its time line's start= wall= active=), never typed by hand; no
-# cost line leaves the cell empty (a note on stderr). An assistant's row (role assistant) gets the cost its
-# session spent since that assistant's previous row: the session's cost less the earlier rows' of the same
-# task column (its name) and the same start (CORE 7). With --in: tokens = --tokens, cost `in <parent>`,
+# cost line leaves the cell empty (a note on stderr). An assistant's row (role assistant) and a coordinator's
+# (role coordinator, #389: a row per day, --task -) get the cost the session spent since its previous row: the
+# session's cost less the earlier rows' of the same task column, role and start (CORE 7). With --in: tokens = --tokens, cost `in <parent>`,
 # start, wall and active empty. wait stays empty (task rows: run-stats --task ... --append); date: --date,
 # else today (UTC). Result words: approved done pass `rework <n>` escalated failed dropped (stopped without a
 # result) ready. The file keeps its BOM and its line ends (a CRLF file gets a CRLF row); a last line
 # without its end gets one first. Refused, the file unchanged: another result word or a cell with a tab or
 # a line break (exit 2); no transcript for --session (exit 1); a run log that is no file or cannot be read
 # or written (exit 1, a line `runs:`, no row printed); a row already there with the same start and role
-# (exit 1) - except role assistant, whose rows share their session's start.
+# (exit 1) - except roles assistant and coordinator, whose rows share their session's start.
 # check lists the project's finished sessions (`claude agents --json --all`: the process ended - state
 # done, stopped or failed and no status field; a status idle, a worker waiting between rounds, or busy is
 # not finished: its row is written when it is stopped) whose start has no row: one line
@@ -107,14 +107,14 @@ if [ "$cmd" = add ]; then
     kv() { printf '%s\n' "$tl" | awk -v w="$1" '{ for (i = 2; i <= NF; i++) { n = index($i, "="); if (substr($i, 1, n - 1) == w) { v = substr($i, n + 1); sub(/m$/, "", v); print v } } }'; }
     start="$(kv start)"; wall="$(kv wall)"; active="$(kv active)"
     c="$(cols "$log")"; ns="$(colno "$c" start)"; nr="$(colno "$c" role)"; nc="$(colno "$c" cost)"; nt="$(colno "$c" task)"
-    if [ "$role" != assistant ]; then
+    if [ "$role" != assistant ] && [ "$role" != coordinator ]; then
       [ "$ns" -gt 0 ] && [ "$nr" -gt 0 ] && rowsof "$log" | awk -F'\t' -v s="$ns" -v r="$nr" -v S="$start" -v R="$role" \
         '$s == S && $r == R { f = 1 } END { exit !f }' &&
         die 1 "a row for session start $start and role $role is already in $log"
     elif [ -n "$cost" ] && [ "$ns" -gt 0 ] && [ "$nc" -gt 0 ] && [ "$nt" -gt 0 ]; then
-      # the cost since this assistant's previous row: less the earlier rows' of its name and this start
-      cost="$(rowsof "$log" | awk -F'\t' -v s="$ns" -v r="$nr" -v c="$nc" -v t="$nt" -v S="$start" -v T="$task" -v C="$cost" '
-        $s == S && $t == T && $r == "assistant" { v = $c; if (match(v, /^\$?[0-9]+(\.[0-9]+)?/)) { v = substr(v, RSTART, RLENGTH); sub(/^\$/, "", v); p += v } }
+      # the cost since this session's previous row of the role: less the earlier rows' of its name and this start
+      cost="$(rowsof "$log" | awk -F'\t' -v s="$ns" -v r="$nr" -v c="$nc" -v t="$nt" -v S="$start" -v T="$task" -v R="$role" -v C="$cost" '
+        $s == S && $t == T && $r == R { v = $c; if (match(v, /^\$?[0-9]+(\.[0-9]+)?/)) { v = substr(v, RSTART, RLENGTH); sub(/^\$/, "", v); p += v } }
         END { x = C - p; if (x < 0) x = 0; printf "%.4f\n", x + 1e-12 }')"
     fi
     [ -n "$cost" ] || echo "runs: session-tokens printed no cost line for $session; the cost cell is left empty" >&2

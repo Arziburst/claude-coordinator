@@ -12,7 +12,7 @@
 # add appends exactly one row (CORE 7) and prints it: its cells by the file's header, else CORE 7's order; tokens, cost,
 # start, wall and active from scripts/session-tokens <id>, never typed by hand; result one of approved done pass
 # `rework <n>` escalated failed dropped ready (exit 2 otherwise); no transcript: exit 1; a second row of the same start
-# and role: exit 1, except role assistant; the file keeps its BOM and line ends; a log that is no file or cannot be
+# and role: exit 1, except roles assistant and coordinator (#389: a row per day, each the cost since the previous); the file keeps its BOM and line ends; a log that is no file or cannot be
 # read or written: exit 1, a line `runs:`, no row printed. check lists the project's finished sessions (the process
 # ended: state done, stopped or failed and no status field) with no row - `MISSING <short id> <name> <start>` each,
 # else `ALL LOGGED` - and only reads (a log it cannot read: exit 1, never read as empty).
@@ -116,15 +116,15 @@ if ($Command -ceq 'add') {
     $Row.tokens = $tot; $Row.start = TimeKv $tl 'start'; $Row.wall = TimeKv $tl 'wall'; $Row.active = TimeKv $tl 'active'
     $ns = ColNo $c 'start'; $nr = ColNo $c 'role'; $nc = ColNo $c 'cost'; $nt = ColNo $c 'task'
     $rows = RowsOf $lines
-    if ($Role -cne 'assistant') {
+    if ($Role -cne 'assistant' -and $Role -cne 'coordinator') {
       if ($ns -ge 0 -and $nr -ge 0) {
         foreach ($r in $rows) { if ((Cell $r $ns) -ceq $Row.start -and (Cell $r $nr) -ceq $Role) { Die 1 "a row for session start $($Row.start) and role $Role is already in $Log" } }
       }
     } elseif ($cost -and $ns -ge 0 -and $nc -ge 0 -and $nt -ge 0) {
-      # the cost since this assistant's previous row: less the earlier rows' of its name and this start
+      # the cost since this session's previous row of the role: less the earlier rows' of its name and this start
       $p = 0.0
       foreach ($r in $rows) {
-        if ((Cell $r $ns) -ceq $Row.start -and (Cell $r $nt) -ceq $Task -and (Cell $r $nr) -ceq 'assistant') {
+        if ((Cell $r $ns) -ceq $Row.start -and (Cell $r $nt) -ceq $Task -and (Cell $r $nr) -ceq $Role) {
           $m = [regex]::Match((Cell $r $nc), '^\$?([0-9]+(\.[0-9]+)?)'); if ($m.Success) { $p += [double]::Parse($m.Groups[1].Value, $inv) }
         }
       }
