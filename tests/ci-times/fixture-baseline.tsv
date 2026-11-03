@@ -1,0 +1,11 @@
+# a comment line, ignored
+windows	1	Which step
+windows	300	At the line, 1.3 times
+windows	300	Over the line, 1.3 times
+windows	100	At the line, 60 s
+windows	100	Over the line, 60 s
+windows	205	At the line, floored
+windows	205	Over the line, floored
+windows	9	A step no longer there
+ubuntu	1000	Done step
+ubuntu	1	At the line, 1.3 times
