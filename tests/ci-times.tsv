@@ -2,7 +2,7 @@
 # reads with --baseline (a step over max(floor(b * 1.3), b + 60) is a warning in the check-<os> jobs). Raised only by a
 # pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 41584645981 (a4e608f),
 # 41555979259 (b5f0a28), 41457590582 (14eba92), all before the shards: the steps' shape changes the seconds.
-# The compaction rows (#342) are provisional: one run of their own pull request (41633875397), not three medians of main.
+# The compaction rows (#342) are provisional: one run of their own pull request (41661637153, 6969cf7), not three medians of main.
 ubuntu	1	Set up job
 ubuntu	1	Run actions/checkout@v4
 ubuntu	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -26,8 +26,8 @@ ubuntu	1	session-tokens counts the fixture exactly (bash)
 ubuntu	37	session-tokens counts the fixture exactly (PowerShell 7, Linux)
 ubuntu	1	session-insights reads the fixture transcripts (bash)
 ubuntu	29	session-insights reads the fixture transcripts (PowerShell 7, Linux)
-ubuntu	13	compaction keeps the checkpoint through the two hooks (bash)
-ubuntu	41	compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
+ubuntu	14	compaction keeps the checkpoint through the two hooks (bash)
+ubuntu	64	compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
 ubuntu	3	retro measures the fixture weeks (bash)
 ubuntu	120	retro measures the fixture weeks (PowerShell 7, Linux)
 ubuntu	0	The status line saves its files and leaves no temp file (bash)
@@ -79,7 +79,7 @@ macos	2	check-scripts on temporary folders (bash)
 macos	7	check-core on a core copy with a wrapped feature field and a script without its pair (bash)
 macos	2	session-tokens counts the fixture exactly (bash)
 macos	2	session-insights reads the fixture transcripts (bash)
-macos	18	compaction keeps the checkpoint through the two hooks (bash)
+macos	22	compaction keeps the checkpoint through the two hooks (bash)
 macos	5	retro measures the fixture weeks (bash)
 macos	1	The status line saves its files and leaves no temp file (bash)
 macos	2	run-stats computes the forecast numbers of the fixture run logs (bash)
@@ -115,7 +115,7 @@ windows	11	check-scripts on temporary folders (Git Bash, Windows PowerShell 5.1 
 windows	45	check-core on a core copy with a wrapped feature field and a script without its pair (Windows)
 windows	61	session-tokens counts the fixture exactly (PowerShell)
 windows	51	session-insights reads the fixture transcripts (PowerShell)
-windows	79	compaction keeps the checkpoint through the two hooks (PowerShell)
+windows	144	compaction keeps the checkpoint through the two hooks (PowerShell)
 windows	220	retro measures the fixture weeks (PowerShell)
 windows	17	The status line saves its files and leaves no temp file (PowerShell)
 windows	111	run-stats computes the forecast numbers of the fixture run logs (PowerShell)

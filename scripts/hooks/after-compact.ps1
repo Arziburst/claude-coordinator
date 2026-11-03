@@ -14,8 +14,11 @@
 # set): the project's settings, where this variant sits, load in sessions launched from the same root
 # too (#217). Then the checkpoint before-compact.ps1 wrote (coordinator/CHECKPOINT.md, #342), as it is after
 # one fixed sentence naming it data, and a note when it is stale (written over 60 minutes ago, or no moment)
-# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. A cwd at or
-# under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed exists.
+# or missing - a note, never a loss: a coordinator with no checkpoint gets one more sentence. The root is
+# CLAUDE_PROJECT_DIR when set, whatever the cwd (a worktree inside it stays a worker's); else the cwd, where
+# one at or under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed
+# exists, and <root>/coordinator/core/CORE.md is said missing when it is not there. A /c/... form of
+# CLAUDE_PROJECT_DIR, COORD_ASSISTANT_DIR or CLAUDE_CONFIG_DIR reads as cygpath -m reads it (as the .sh).
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
 # does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Stdin is read as
 # UTF-8 (as safety-guard.ps1 does) and stdout written as UTF-8 bytes: under any code page, with no console.
@@ -51,12 +54,16 @@ if ($Role -eq 'worker') {
   if ($env:COORD_ASSISTANT_DIR) { exit 0 }
   if ($sid -match '^[0-9a-fA-F-]+$' -and (Test-Path -LiteralPath (Join-Path $cfg "coordinator/briefs/$sid.md") -PathType Leaf)) { exit 0 }
   $wd = $cwd.Replace('\', '/')
-  if ($wd -like '*/.claude/worktrees/*' -or $wd -like '*/.claude/worktrees') { exit 0 }
-  # a cwd at or under <root>/coordinator with no coordinator/ of its own acts as <root>: every path printed exists
-  while ($wd -and -not (Test-Path -LiteralPath "$wd/coordinator" -PathType Container)) {
-    if ($wd -like '*/coordinator') { $wd = $wd.Substring(0, $wd.Length - 12); break } elseif ($wd -like '*/coordinator/*') { $wd = $wd.Substring(0, $wd.LastIndexOf('/')) } else { break } }
+  # the root: CLAUDE_PROJECT_DIR when set, whatever the cwd; else the cwd rule: a cwd at or under <root>/coordinator
+  # with no coordinator/ of its own acts as <root>. Every path printed exists, or is said missing
+  $rt = (Win ([string]$env:CLAUDE_PROJECT_DIR)).Replace('\', '/'); $x = if ($rt) { $rt } else { $wd }
+  if ($x -like '*/.claude/worktrees/*' -or $x -like '*/.claude/worktrees') { exit 0 }
+  if ($rt -and $wd.StartsWith("$rt/.claude/worktrees/", [StringComparison]::OrdinalIgnoreCase)) { exit 0 }   # a worker's worktree inside the project
+  if ($rt) { $wd = $rt } else { while ($wd -and -not (Test-Path -LiteralPath "$wd/coordinator" -PathType Container)) {
+    if ($wd -like '*/coordinator') { $wd = $wd.Substring(0, $wd.Length - 12); break } elseif ($wd -like '*/coordinator/*') { $wd = $wd.Substring(0, $wd.LastIndexOf('/')) } else { break } } }
   $p = if ($wd) { "$wd/coordinator" } else { 'coordinator' }
-  $msg = "$lead Before your next step, re-read in full with the Read tool: $p/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
+  $core = if (Test-Path -LiteralPath "$p/core/CORE.md" -PathType Leaf) { "$p/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now)" } else { "$p/core/CORE.md is missing" }
+  $msg = "$lead Before your next step, re-read in full with the Read tool: $core, $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
   # the checkpoint before-compact wrote (#342), as it is; stale (written: over 60 minutes ago, or none) is a note, never a loss
   $ck = $null; try { $ck = [IO.File]::ReadAllText("$p/CHECKPOINT.md", (New-Object System.Text.UTF8Encoding $false)) } catch { }
   if ($null -eq $ck) { $msg += " checkpoint is missing: $p/CHECKPOINT.md is absent or unreadable (the PreCompact hook before-compact writes it: TOOLKIT, After a compaction)." }
