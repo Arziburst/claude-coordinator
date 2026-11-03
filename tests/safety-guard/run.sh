@@ -4,12 +4,18 @@
 #   tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
 # Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores). SG_CASES=<file>: that file
 # for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384).
+# SG_PART=<k>/<n> (#405): the k-th of n parts of the cases (case i in part (i - 1) mod n + 1, so a case added at the end lands in one
+# part by itself); the sections after the cases run in part 1 only. SG_LIST=1: the line numbers of that part's cases, no hook run.
 set -u
-[ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
 unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
 unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
 here="$(cd "$(dirname "$0")" && pwd)"
+cases="${SG_CASES:-$here/cases.txt}"; pk=1; pn=1   # the part (#405): k/n of the cases, by their index in the file alone
+case "${SG_PART:-}" in '') ;; [0-9]*/[0-9]*) case "$SG_PART" in *[!0-9/]*|*/*/*) pk=0 ;; *) pk="${SG_PART%/*}"; pn="${SG_PART#*/}" ;; esac ;; *) pk=0 ;; esac
+{ [ "$pk" -ge 1 ] && [ "$pn" -ge "$pk" ]; } 2>/dev/null || { echo "SG_PART: expected <k>/<n> with 1 <= k <= n, got ${SG_PART:-}" >&2; exit 2; }
+[ "${SG_LIST:-}" != 1 ] || { LC_ALL=C awk -F '\t' -v k="$pk" -v n="$pn" '{ sub(/\r$/, "") } $1 != "" && $1 !~ /^#/ { if (i++ % n == k - 1) print FNR }' "$cases"; exit; }
 tmp="$(mktemp -d)"
 acl=""   # a deny file whose read an NTFS permission denies (Git Bash): the permission is taken back first
 finish() { [ -z "$acl" ] || MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' icacls "$acl" /remove:d "${USERNAME:-}" >/dev/null 2>&1; rm -rf "$tmp"; }
@@ -152,6 +158,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
   i=$((i + 1))
+  [ $(((i - 1) % pn)) = $((pk - 1)) ] || continue   # not this part's case
   case "$branch" in
     timed:*) [ "${3:-}" = timed ] || continue ;;
     *) [ -z "${3:-}" ] && [ $(((i - 1) % $2)) = "$1" ] || continue ;;
@@ -214,7 +221,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
   [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || head -n 20 "$e" | sed "s/^/$ln     /"; fail=1; }
-done < "${SG_CASES:-$here/cases.txt}"
+done < "$cases"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
 }
 k=0
@@ -228,9 +235,11 @@ for k in $(seq 0 $((jobs - 1))) timed; do
   else echo "FAIL (cases) shard $k of $jobs did not finish"; fail=1; fi
 done
 cat "$tmp"/shard.*.out | sort -s -n -k1,1 | sed 's/^[0-9]* //'
-[ -n "$total" ] && [ "$ran" = "$total" ] || { echo "FAIL (cases) $ran of ${total:-?} cases of cases.txt ran"; fail=1; }
+pt="${total:-0}"; pt=$(( pt >= pk ? (pt - pk) / pn + 1 : 0 )); cn="${cases##*/}"; [ "$pn" = 1 ] || cn="$cn part $pk/$pn"   # the cases of this part, its name in the summary
+[ -n "$total" ] && [ "$ran" = "$pt" ] || { echo "FAIL (cases) $ran of $pt cases of $cn ran"; fail=1; }
 n=$((n + ran))
-[ -z "${SG_CASES:-}" ] || { echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"; exit $fail; }
+# a file of its own, or a part but the first: the summary line and exit; the sections below run once, in part 1 of the real file
+[ -z "${SG_CASES:-}" ] && [ "$pk" = 1 ] || { echo "safety-guard cases: $n ($cn: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"; exit $fail; }
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
 # (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
@@ -421,5 +430,5 @@ if [ -n "$flag" ]; then
 fi
 # COORD_NO_PUSH (#367): tests/safety-guard/no-push.txt, in a file of its own that also runs alone
 bash "$here/no-push.sh" "$@" || fail=1
-echo "safety-guard cases: $n (cases.txt: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
+echo "safety-guard cases: $n ($cn: $ran of ${total:-?}, $jobs in parallel), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

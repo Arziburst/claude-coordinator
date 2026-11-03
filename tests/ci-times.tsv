@@ -3,6 +3,8 @@
 # pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 41584645981 (a4e608f),
 # 41555979259 (b5f0a28), 41457590582 (14eba92), all before the shards: the steps' shape changes the seconds.
 # The compaction rows (#342) are provisional: one run of their own pull request (41661637153, 6969cf7), not three medians of main.
+# #405: the rows of report-issue (PowerShell 7, Linux) and merge-queue (Git Bash, Windows PowerShell 5.1), over their line in every
+# run since the shards, hold the medians of 41686156714 (3d96f57), 41693993135 (e2a63b0), 41698437043 (f30d7a5).
 ubuntu	1	Set up job
 ubuntu	1	Run actions/checkout@v4
 ubuntu	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -46,7 +48,7 @@ ubuntu	18	merge-queue against a stub gh (PowerShell 7, Linux)
 ubuntu	1	check-bounds on a throwaway repository (bash)
 ubuntu	9	check-bounds on a throwaway repository (PowerShell 7, Linux)
 ubuntu	14	report-issue against a stub gh (bash)
-ubuntu	94	report-issue against a stub gh (PowerShell 7, Linux)
+ubuntu	205	report-issue against a stub gh (PowerShell 7, Linux)
 ubuntu	57	watch-sessions against a stub claude (bash)
 ubuntu	111	watch-sessions against a stub claude (PowerShell 7, Linux)
 ubuntu	4	runs against fixture transcripts and a stub claude (bash)
@@ -122,7 +124,7 @@ windows	111	run-stats computes the forecast numbers of the fixture run logs (Pow
 windows	996	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
 windows	616	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
 windows	105	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
-windows	120	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
+windows	224	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
 windows	23	check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
 windows	725	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
 windows	313	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)

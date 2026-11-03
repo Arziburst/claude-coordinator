@@ -774,25 +774,38 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
 - **A required check runs on every PR.** A workflow with a `paths` filter on its `pull_request` trigger
   cannot be a required check: a PR outside the paths never gets it and waits forever. Filter inside
   the job (a scope step that ends early) instead.
-- **The core's own CI runs in shards (#373).** `.github/workflows/check-core.yml` holds one list of steps (a YAML
-  anchor, `steps: &steps` / `steps: *steps`) run by the jobs `shard-ubuntu` (ubuntu-1..3), `shard-macos` (macos-1) and
-  `shard-windows` (windows-1..4) in parallel; a step's `if:` names its shards and its `#need` keys
+- **The core's own CI runs in shards (#373, #405).** `.github/workflows/check-core.yml` holds one list of steps (a YAML
+  anchor, `steps: &steps` / `steps: *steps`) run by the jobs `shard-ubuntu` (ubuntu-1..4), `shard-macos` (macos-1) and
+  `shard-windows` (windows-1..5) in parallel - 10 shards a run, so main's run and one pull request's fit the plan's 20
+  slots and a third waits; a step's `if:` names its shards and its `#need` keys
   (`matrix.shard == 'windows-2' && steps.need.outputs.guard == 'true'`), so every step runs exactly once per OS, with
   the body and the shell it had in one job. The required checks are the aggregator jobs `check (ubuntu-latest)`,
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
-  stale runs on its next push, never a run on main. **Adding a step:** `<os>-1` holds the common steps, the heavy sets
-  have shards of their own (Windows: 2 the guard, 3 report-issue, watch-sessions and runs, 4 the workers, merge-queue
-  and check-bounds; Ubuntu: 2 the guard, 3 the workers; the split follows the measured seconds, the longest set on a
-  shard of its own); the step's line goes into `tests/ci-times/steps-main.txt` (`<os> <shell> <name>`) and
-  `bash tests/ci-times/run.sh sh` proves the file: every step there in exactly one shard of its OS, each shard with a
-  step, the `if:` forms, the checkout and the `#need` step with none. **Step times:** `scripts/ci-times.sh|.ps1
+  stale runs on its next push, never a run on main. **How a step lands in a shard:** `<os>-1` holds the common steps,
+  the heavy sets have shards of their own and the split follows the measured seconds (Ubuntu: 3 start-worker under
+  PowerShell 7, the longest step of all; 2 report-issue, retro and the selftest probes; 4 watch-sessions, compaction and
+  the workers' bash and assistant checks. Windows: 3 report-issue; 4 start-worker; 2 watch-sessions and merge-queue; 5
+  runs, compaction and retro); a new step goes where the shard's sum stays under the longest step (about 16 minutes),
+  never on a shard that would then pass it. **How a case lands in a shard:** a set too long for one shard runs in parts
+  by its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in three parts on
+  Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/3 bash tests/safety-guard/run.sh ...` - case i of
+  cases.txt is in part (i - 1) mod n + 1, so a case added at the end lands in one part by itself; the sections after the
+  cases (sessions, the self-test, no-push.sh) run in part 1; `SG_LIST=1` prints a part's line numbers with no hook run,
+  and the summary names the file it read and its part. start-worker and report-issue are scripted sequences, not case
+  files, so they are not split: the longest of them is the floor of the wall until they are. The step's line goes into
+  `tests/ci-times/steps-main.txt` (`<os> <shell> <name>`, a part under its whole name) and `bash tests/ci-times/run.sh
+  sh` proves the file: every step there in exactly one shard of its OS, each shard with a step, the `if:` forms, the
+  checkout and the `#need` step with none, and for a split set the union of the parts is the whole set, no case in two
+  parts or in none. **Step times:** `scripts/ci-times.sh|.ps1
   [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>` and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
-  failure - the owner and the verifier read them. The baseline is the median of the last three main runs per step and
-  OS (`<os><TAB><seconds><TAB><name>`), raised only by a pull request's own diff: ci-times on three main runs, the new
-  medians in the file. A worker's `ci_seconds` is the number ci-times measures on its PR's run (roles/worker.md).
+  failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (1500 s
+  in the workflow, about 25 minutes) as a `::warning::`, never a failure. The baseline is the median of the last three
+  main runs per step and OS (`<os><TAB><seconds><TAB><name>`, a split set's parts a row each), raised only by a pull
+  request's own diff: ci-times on three main runs, the new medians in the file. A worker's `ci_seconds` is the number
+  ci-times measures on its PR's run (roles/worker.md).
   After a merge a coordinator on GitHub Actions reads the main run's times the same way (CORE §4, #390).
 - **A self-hosted runner and a public repository.** On a public repository a fork's pull request runs
   its code on the runner once a person approves the contributor's first run (GitHub's default

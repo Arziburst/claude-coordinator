@@ -40,11 +40,15 @@ jobs:
 # step runs exactly once per OS (tests/ci-times/run.sh proves it against steps-main.txt); the required checks are the
 # check-<os> jobs below, red when any shard of that OS failed, was cancelled or was skipped. The split follows the
 # measured seconds of main's runs (tests/ci-times.tsv): the longest sets on shards of their own, the rest together.
+# #405: 10 shards a run (Ubuntu 4, Windows 5, macOS 1), so two runs fit the plan's 20 slots; the two long guard sets run in
+# three parts each (SG_PART=<k>/3, a case's part by its index in cases.txt, the parts' union the whole set: tests/ci-times/run.sh
+# proves it). The floor is the longest step that is not split by its data (start-worker under PowerShell 7 on Ubuntu, about
+# 16 minutes): one more shard saves under a minute until that set is split too. A shard past SHARD_LIMIT is a warning below.
   shard-ubuntu:
     strategy:
       fail-fast: false
       matrix:
-        shard: [ubuntu-1, ubuntu-2, ubuntu-3]
+        shard: [ubuntu-1, ubuntu-2, ubuntu-3, ubuntu-4]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -152,7 +156,7 @@ jobs:
             [ "$a" = "$b" ] || { echo "differ on $d"; printf '%s\n--\n%s\n' "$a" "$b"; exit 1; }
           done
       - name: selftest - the guard's settings and transcripts (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
+        if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
         run: |
           # every settings fixture against tests/selftest/hooks/expected.txt (with jq here; the step
           # without jq runs the awk reader), and a step given another step's parameter is a usage error
@@ -169,7 +173,7 @@ jobs:
             if bash $s hookcheck --session $id --expect edit; then echo "$id must fail --expect edit"; exit 1; fi
           done
       - name: selftest - the guard's settings (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.selftest == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/hooks.sh ps pwsh
       - name: selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
         if: matrix.shard == 'windows-1' && steps.need.outputs.selftest == 'true'
@@ -177,19 +181,19 @@ jobs:
           bash tests/selftest/hooks.sh ps powershell
           bash tests/selftest/hooks.sh ps pwsh
       - name: selftest - the guard probes against a stub claude (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
+        if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh sh
       - name: selftest - the guard probes against a stub claude (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.selftest == 'true'
+        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps pwsh
       - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-1' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps powershell
       - name: selftest - the throwaway assistant against a stub claude (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
+        if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh sh
       - name: selftest - the throwaway assistant against a stub claude (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.selftest == 'true'
+        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh ps pwsh
       - name: selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-1' && steps.need.outputs.selftest == 'true'
@@ -263,7 +267,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1'
         run: bash tests/check-core/run.sh ps pwsh
       - name: check-core on a core copy with a wrapped feature field and a script without its pair (Windows)
-        if: matrix.shard == 'windows-1'
+        if: matrix.shard == 'windows-4'
         run: |
           bash tests/check-core/run.sh sh
           bash tests/check-core/run.sh ps powershell
@@ -275,7 +279,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.tokens == 'true'
         run: bash tests/session-tokens/run.sh ps pwsh
       - name: session-tokens counts the fixture exactly (PowerShell)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.tokens == 'true'
+        if: matrix.shard == 'windows-4' && steps.need.outputs.tokens == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
@@ -287,7 +291,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.insights == 'true'
         run: bash tests/session-insights/run.sh ps pwsh
       - name: session-insights reads the fixture transcripts (PowerShell)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.insights == 'true'
+        if: matrix.shard == 'windows-3' && steps.need.outputs.insights == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-insights/run.sh ps powershell
@@ -296,22 +300,22 @@ jobs:
         if: (matrix.shard == 'ubuntu-3' || matrix.shard == 'macos-1') && steps.need.outputs.compaction == 'true'
         run: bash tests/compaction/run.sh sh
       - name: compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-3' && steps.need.outputs.compaction == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.compaction == 'true'
         run: bash tests/compaction/run.sh ps pwsh
       - name: compaction keeps the checkpoint through the two hooks (PowerShell)
-        if: matrix.shard == 'windows-4' && steps.need.outputs.compaction == 'true'
+        if: matrix.shard == 'windows-5' && steps.need.outputs.compaction == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/compaction/run.sh ps powershell
           bash tests/compaction/run.sh ps pwsh
       - name: retro measures the fixture weeks (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.retro == 'true'
+        if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-1') && steps.need.outputs.retro == 'true'
         run: bash tests/retro/run.sh sh
       - name: retro measures the fixture weeks (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.retro == 'true'
+        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.retro == 'true'
         run: bash tests/retro/run.sh ps pwsh
       - name: retro measures the fixture weeks (PowerShell)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.retro == 'true'
+        if: matrix.shard == 'windows-5' && steps.need.outputs.retro == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/retro/run.sh ps powershell
@@ -323,7 +327,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.statusline == 'true'
         run: bash tests/statusline/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (PowerShell)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.statusline == 'true'
+        if: matrix.shard == 'windows-3' && steps.need.outputs.statusline == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/statusline/run.sh ps powershell
@@ -335,7 +339,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.runstats == 'true'
+        if: matrix.shard == 'windows-3' && steps.need.outputs.runstats == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/run-stats/run.sh ps powershell
@@ -362,16 +366,34 @@ jobs:
           PATH="$nojq" bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
           # selftest hooks reads the settings files with its awk JSON reader too
           PATH="$nojq" bash tests/selftest/hooks.sh sh
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
+      # #405: the two long guard sets in three parts each (SG_PART=<k>/3: a case's part by its index in cases.txt; the sections
+      # after the cases in part 1), the same body in every part, on three shards of their OS
+      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/3
+        if: matrix.shard == 'windows-1' && steps.need.outputs.guard == 'true'
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
+          SG_PART=1/3 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/3
         if: matrix.shard == 'windows-2' && steps.need.outputs.guard == 'true'
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux)
+          SG_PART=2/3 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 3/3
+        if: matrix.shard == 'windows-5' && steps.need.outputs.guard == 'true'
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
+          SG_PART=3/3 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 1/3
+        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.guard == 'true'
+        run: SG_PART=1/3 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 2/3
         if: matrix.shard == 'ubuntu-2' && steps.need.outputs.guard == 'true'
-        run: bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+        run: SG_PART=2/3 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 3/3
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.guard == 'true'
+        run: SG_PART=3/3 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
       - name: start-worker and cleanup-worker against temporary repositories (bash)
-        if: (matrix.shard == 'ubuntu-3' || matrix.shard == 'macos-1') && steps.need.outputs.workers == 'true'
+        if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh sh
       - name: start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)
         if: matrix.shard == 'ubuntu-3' && steps.need.outputs.workers == 'true'
@@ -380,10 +402,10 @@ jobs:
         if: matrix.shard == 'windows-4' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh ps powershell
       - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
-        if: (matrix.shard == 'ubuntu-3' || matrix.shard == 'macos-1') && steps.need.outputs.workers == 'true'
+        if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.workers == 'true'
         run: bash tests/workers/assistant.sh sh
       - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-3' && steps.need.outputs.workers == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/assistant.sh ps pwsh
       - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-4' && steps.need.outputs.workers == 'true'
@@ -395,7 +417,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.mergequeue == 'true'
         run: bash tests/merge-queue/run.sh ps pwsh
       - name: merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
-        if: matrix.shard == 'windows-4' && steps.need.outputs.mergequeue == 'true'
+        if: matrix.shard == 'windows-2' && steps.need.outputs.mergequeue == 'true'
         run: |
           bash tests/merge-queue/run.sh sh
           bash tests/merge-queue/run.sh ps powershell
@@ -406,15 +428,15 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.bounds == 'true'
         run: bash tests/check-bounds/run.sh ps pwsh
       - name: check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
-        if: matrix.shard == 'windows-4' && steps.need.outputs.bounds == 'true'
+        if: matrix.shard == 'windows-2' && steps.need.outputs.bounds == 'true'
         run: |
           bash tests/check-bounds/run.sh sh
           bash tests/check-bounds/run.sh ps powershell
       - name: report-issue against a stub gh (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.reportissue == 'true'
+        if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-1') && steps.need.outputs.reportissue == 'true'
         run: bash tests/report-issue/run.sh sh
       - name: report-issue against a stub gh (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.reportissue == 'true'
+        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.reportissue == 'true'
         run: bash tests/report-issue/run.sh ps pwsh
       - name: report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
         if: matrix.shard == 'windows-3' && steps.need.outputs.reportissue == 'true'
@@ -423,25 +445,25 @@ jobs:
           bash tests/report-issue/run.sh ps powershell
           bash tests/report-issue/run.sh ps pwsh
       - name: watch-sessions against a stub claude (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.watch == 'true'
+        if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.watch == 'true'
         run: bash tests/watch-sessions/run.sh sh
       - name: watch-sessions against a stub claude (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.watch == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.watch == 'true'
         run: bash tests/watch-sessions/run.sh ps pwsh
       - name: watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
-        if: matrix.shard == 'windows-3' && steps.need.outputs.watch == 'true'
+        if: matrix.shard == 'windows-2' && steps.need.outputs.watch == 'true'
         run: |
           bash tests/watch-sessions/run.sh sh
           bash tests/watch-sessions/run.sh ps powershell
           bash tests/watch-sessions/run.sh ps pwsh
       - name: runs against fixture transcripts and a stub claude (bash)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.runs == 'true'
+        if: (matrix.shard == 'ubuntu-3' || matrix.shard == 'macos-1') && steps.need.outputs.runs == 'true'
         run: bash tests/runs/run.sh sh
       - name: runs against fixture transcripts and a stub claude (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.runs == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.runs == 'true'
         run: bash tests/runs/run.sh ps pwsh
       - name: runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
-        if: matrix.shard == 'windows-3' && steps.need.outputs.runs == 'true'
+        if: matrix.shard == 'windows-5' && steps.need.outputs.runs == 'true'
         run: |
           bash tests/runs/run.sh sh
           bash tests/runs/run.sh ps powershell
@@ -667,7 +689,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.citimes == 'true'
         run: bash tests/ci-times/run.sh ps pwsh
       - name: ci-times on its fixtures (Windows PowerShell 5.1 and pwsh)
-        if: matrix.shard == 'windows-1' && steps.need.outputs.citimes == 'true'
+        if: matrix.shard == 'windows-3' && steps.need.outputs.citimes == 'true'
         run: |
           bash tests/ci-times/run.sh ps powershell
           bash tests/ci-times/run.sh ps pwsh
@@ -685,7 +707,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [windows-1, windows-2, windows-3, windows-4]
+        shard: [windows-1, windows-2, windows-3, windows-4, windows-5]
     runs-on: windows-latest
     defaults:
       run:
@@ -700,13 +722,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Every shard of ubuntu passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning
+      - name: Every shard of ubuntu passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning, a shard past SHARD_LIMIT too
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-ubuntu.result }}
+          SHARD_LIMIT: 1500   # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=ubuntu '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-ubuntu ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
+            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-ubuntu: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
   check-macos:
     name: check (macos-latest)
@@ -715,13 +740,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Every shard of macos passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning
+      - name: Every shard of macos passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning, a shard past SHARD_LIMIT too
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-macos.result }}
+          SHARD_LIMIT: 1500   # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=macos '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-macos ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
+            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-macos: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
   check-windows:
     name: check (windows-latest)
@@ -730,11 +758,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Every shard of windows passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning
+      - name: Every shard of windows passed; its steps' seconds against tests/ci-times.tsv, a step over its line a warning, a shard past SHARD_LIMIT too
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-windows.result }}
+          SHARD_LIMIT: 1500   # seconds a shard may take before its line is a warning (#405): about 25 minutes, the longest shard by the numbers is about 17; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=windows '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-windows ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
+            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-windows: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
