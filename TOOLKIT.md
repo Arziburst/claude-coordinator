@@ -122,7 +122,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
 - **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`. They are part
-  of the core and **installed automatically, without asking**, at every start (CORE §2 step 7) and after
+  of the core. **The place for them is a project's link** `.claude/agents` -> `coordinator/core/roles`,
+  git-excluded as `.claude/skills` is (one-time step `roles-link`, at init and at a core update, #402): a
+  subagent of that project starts from its own core copy, and **a project's role wins** over a user-level
+  one of the same name (measured on both OS), so what another project writes there changes nothing. The
+  user-level copy stays only for a project without the link (`roles-link` not run yet, or declined); a
+  project with it copies nothing there and removes nothing. For a project without it, the roles are
+  **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
   project's `.claude/agents/` is never written this way — that would be a project change (CORE §1.1). A
@@ -131,11 +137,12 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   model from `--model`. `~/.claude/agents/` serves every project on the machine, so it holds the
   **upstream** roles only: a role this project edited in its local core is never installed (another
   project would overwrite it) — the coordinator starts that subagent as a general one with the local
-  role file's body at the top of its prompt and the role's model. A role's `model:` names a model, not a rung
+  role file's body at the top of its prompt and the role's model; through the link that role loads as
+  it is. A role's `model:` names a model, not a rung
   (CORE §7): where the ladder lacks it, the coordinator passes the ladder's model for that rung as the Agent
   tool's `model`. Check the frontmatter fields (`name`,
   `description`, `tools`, `model`) against the sub-agents docs in the dry run. `assistant`
-  ([roles/assistant.md](roles/assistant.md)) is installed the same way but runs only as a background
+  ([roles/assistant.md](roles/assistant.md)) reaches Claude Code the same way but runs only as a background
   session (`assistant: <name>`, *Assistants*), never as a subagent.
 - **Lessons:** a session's message address can change after `respawn` — list sessions again and use the
   bare name; a background session idle with nothing running may exit (`done`, unreachable by

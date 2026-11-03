@@ -61,7 +61,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-WORKERS-05 | Worktrees kept out of git | one `.git/info/exclude` line each for the worktrees and an older lead's `.lead/`, never `.gitignore` | WORKERS |
 | F-WORKERS-06 | cleanup-worker | only clean, pushed and merged work is removed, or an empty never-pushed branch | WORKERS |
 | F-WORKERS-07 | Permission modes | workers run in `auto` or `acceptEdits`; bypass is refused | WORKERS |
-| F-WORKERS-08 | Roles installed | the core's roles are copied to the user's agents folder | WORKERS |
+| F-WORKERS-08 | Roles installed | a project's link to its core's roles; without it, the roles are copied to the user's agents folder | WORKERS |
 | F-WORKERS-09 | Messages between sessions | the name is the address; renames are announced | WORKERS |
 | F-WORKERS-10 | A run cut by a usage limit | pause to the reset, then respawn and say "continue" | WORKERS |
 | F-WORKERS-11 | After a compaction | the session re-reads its brief or the coordinator its rules, from disk; the coordinator's checkpoint, written before and printed after | WORKERS |
@@ -392,11 +392,11 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: whether hooks run in bypass mode is unconfirmed
 
 ### F-WORKERS-08 Roles installed
-- defined: TOOLKIT.md, roles/worker.md
-- entry: every start; every core update
-- promises: each upstream role is copied to the user's agents folder when missing or different, the old file saved as `.bak`; a role edited in the local core is never installed there; the project's own agents folder is never written
-- tested by: none
-- not covered: no automated check — it rests on the sessions following the rule
+- defined: TOOLKIT.md, roles/worker.md, ONE-TIME.md, procedures/INIT.md, procedures/UPDATE-CORE.md
+- entry: INIT 3.4; every start; every core update; one-time step `roles-link`
+- promises: `<project>/.claude/agents` links to `coordinator/core/roles`, git-excluded, so the project's subagents come from its own core copy and its role wins over a user-level one of the same name; a real or tracked `.claude/agents` is never overwritten: the owner is told and the link goes inside it, excluded by name; a project with the link copies nothing to the user's agents folder and removes nothing there. For a project without it: each upstream role is copied to the user's agents folder when missing or different, the old file saved as `.bak`; a role edited in the local core is never installed there; the copy never writes the project's own agents folder (#402)
+- tested by: the role loading through the link, for a session below the project, and winning over a user-level one, measured once by hand on macOS and Windows (2.1.316, #402)
+- not covered: no automated check — it rests on the sessions following the rule; the nested link on Windows and in a tracked folder is not measured
 
 ### F-WORKERS-09 Messages between sessions
 - defined: TOOLKIT.md, CORE.md §4
