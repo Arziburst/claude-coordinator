@@ -3,7 +3,7 @@
 # as one background command, it polls `claude agents --json --all` and ends - waking its caller once -
 # only when a listed session stopped, vanished or went quiet without its report.
 #   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>]
-#                             [--agents-timeout <s>] [--once]
+#                             [--long-minutes <m>] [--long-seconds <s>] [--agents-timeout <s>] [--once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
 # name; blank lines and comments ignored - a comment is a line whose first non-blank `#` is followed by a
 # blank or the line's end (`#12 worker: Fix` is a name); a UTF-8 BOM at its start is not part of the
@@ -19,8 +19,10 @@
 # prompt or a limit), with or without a status = quiet: QUIET once it stayed quiet for its limit
 # (--quiet-minutes, default 20; --quiet-seconds in its place, for tests; or the line's own), counted by
 # the watcher from the first poll that saw it quiet and started again after a poll that saw it at work.
+# State working, its transcript (<config>/projects/<cwd, all but A-Za-z0-9 as ->/<sessionId>.jsonl) unchanged for its limit
+# (--long-minutes, default 45; --long-seconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
-#   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes>
+#   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
 #   EMPTY: the list file is missing or holds no session (nothing to watch: it does not run)
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with --once there is no next poll)
@@ -28,14 +30,14 @@
 # take (default 60); past it the one claude process the watcher started is killed - nothing under it,
 # nothing else - and the poll failed. --once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or --once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# The only file it touches: one temp folder per call (mktemp -d) holding claude's stdout and stderr - read
+# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time) and one folder per call (mktemp -d) holding claude's stdout and stderr - read
 # from files, not a pipe, so a process left under a killed claude cannot hang the watcher - removed as
 # soon as it is read and on every way out. It never stops, messages or changes a session (Windows:
 # watch-sessions.ps1, the same output and exit codes).
 set -u
 
-list="" interval=120 qmin=20 qsec="" atimeout=60 once=0
-usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--agents-timeout <s>] [--once]"
+list="" interval=120 qmin=20 qsec="" lmin=45 lsec="" atimeout=60 once=0
+usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--long-minutes <m>] [--long-seconds <s>] [--agents-timeout <s>] [--once]"
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 2; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2); $usage" >&2; exit 2 ;; esac; }
 num() { need "$@"; case "$2" in *[!0-9]*) echo "$1 takes a whole number (got $2); $usage" >&2; exit 2 ;; esac; }
@@ -45,15 +47,18 @@ while [ $# -gt 0 ]; do
     --interval) num "$@"; interval="$2"; shift 2 ;;
     --quiet-minutes) num "$@"; qmin="$2"; shift 2 ;;
     --quiet-seconds) num "$@"; qsec="$2"; shift 2 ;;
+    --long-minutes) num "$@"; lmin="$2"; shift 2 ;;
+    --long-seconds) num "$@"; lsec="$2"; shift 2 ;;
     --agents-timeout) num "$@"; atimeout="$2"; shift 2 ;;
     --once) once=1; shift ;;
-    -h|--help) sed -n '2,34s/^# \{0,1\}//p' "$0"; exit 2 ;;
+    -h|--help) sed -n '2,36s/^# \{0,1\}//p' "$0"; exit 2 ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 2 ;;
   esac
 done
 [ -n "$list" ] || { echo "$usage" >&2; exit 2; }
 [ "$atimeout" -gt 0 ] || { echo "--agents-timeout must be above 0; $usage" >&2; exit 2; }
 limit=$((qmin * 60)); [ -n "$qsec" ] && limit=$qsec
+llimit=$((lmin * 60)); [ -n "$lsec" ] && llimit=$lsec
 tab="$(printf '\t')" nl='
 '
 
@@ -127,7 +132,8 @@ sessions() {
           if (st == "working" || su == "busy") cl = "work"
           else if (st == "stopped" || st == "failed" || (st == "done" && su == "")) cl = "stop"
           else cl = "quiet"
-          print v["id"] "\t" cl "\t" v["name"]
+          w = v["cwd"]; gsub(/[^A-Za-z0-9]/, "-", w)
+          print v["id"] "\t" cl "\t" v["name"] "\t" (st == "working" ? w "/" v["sessionId"] : "")
         }
         if (d == 2) delete v
         d--
@@ -137,7 +143,7 @@ sessions() {
 # pick <sessions> <entry>: the session the entry names (by the whole id or the whole name), at work first
 pick() {
   printf '%s\n' "$1" | E="$2" awk '{ i = index($0, "\t"); id = substr($0, 1, i - 1); r = substr($0, i + 1)
-      j = index(r, "\t"); cl = substr(r, 1, j - 1); nm = substr(r, j + 1)
+      j = index(r, "\t"); cl = substr(r, 1, j - 1); nm = substr(r, j + 1); sub(/\t.*/, "", nm)
       if (id != ENVIRON["E"] && nm != ENVIRON["E"]) next
       p = (cl == "work") ? 3 : (cl == "stop") ? 1 : 2
       if (p > best) { best = p; line = $0 } }
@@ -163,9 +169,13 @@ while :; do
     lim="${x%%$tab*}"; e="${x#*$tab}"; [ -n "$lim" ] || lim=$limit
     m="$(pick "$sess" "$e")"
     if [ -z "$m" ]; then found="${found}GONE $e$nl"; continue; fi
-    id="${m%%$tab*}"; r="${m#*$tab}"; cl="${r%%$tab*}"; nm="${r#*$tab}"
+    id="${m%%$tab*}"; r="${m#*$tab}"; cl="${r%%$tab*}"; nm="${r#*$tab}"; w="${nm##*$tab}"; nm="${nm%$tab*}"
     case "$cl" in
-      work) ;;
+      work) f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$w.jsonl"; d="${TMPDIR:-/tmp}/watch-sessions-long"; k="$d/${w##*/}"
+         t="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null)"; [ -n "$t" ] || continue
+         a=$(($(date +%s) - t)); o="${x%%$tab*}"
+         [ "$a" -ge "${o:-$llimit}" ] && [ "$t" != "$(cat "$k" 2>/dev/null)" ] || continue
+         found="${found}LONG $id $nm $((a / 60))$nl"; { mkdir -p "$d" && echo "$t" > "$k"; } 2>/dev/null ;;
       stop) found="${found}STOPPED $id $nm$nl" ;;
       *) t0="$(since "$e")"; [ -n "$t0" ] || t0=$now
          quiet="$quiet$t0$tab$e$nl"
