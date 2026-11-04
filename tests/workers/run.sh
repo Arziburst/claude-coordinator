@@ -321,10 +321,16 @@ grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not laun
 grep -q 'Report to: the session named "Core lead"' "$STUB_LOG" || { echo "FAIL: the brief does not name the report address"; fail=1; }
 grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/12-fix\." "$STUB_LOG" ||
   { echo "FAIL: the brief does not start with entering the worktree"; fail=1; }
-awk 'BEGIN { for (i = 1; i <= 140; i++) printf "line %03d %090d\n", i, i; print "LAST LINE OF THE LONG BRIEF" }' > "$tmp/brief-long.md"
+# the long text is sized from what the role and the short brief already make (the start above), to land near 21000
+# characters, under the 24000 route, whatever the role's size (#485: a role that grows is no delivery failure; never cut it for this)
+base=$(wc -c < "$STUB_LOG.arg"); nl=$(( (21000 - base) / 100 ))
+if [ "$nl" -lt 20 ]; then echo "note: the role and the short brief already make $base characters, near start-worker's 24000 route - the long-brief case has no room under it and is skipped"
+else
+awk -v n="$nl" 'BEGIN { for (i = 1; i <= n; i++) printf "line %03d %090d\n", i, i; print "LAST LINE OF THE LONG BRIEF" }' > "$tmp/brief-long.md"
 SL=("${S[@]}"); for ((i = 0; i < ${#SL[@]}; i++)); do [ "${SL[i]}" = --brief-file ] && SL[i+1]="$tmp/brief-long.md"; done
 check 0 "start: a long launch text (over 8186, under start-worker's 24000)" -- start "${SL[@]}"
-{ grep -q 'LAST LINE OF THE LONG BRIEF' "$STUB_LOG.arg" && [ "$(wc -c < "$STUB_LOG.arg")" -gt 20000 ]; } || { echo "FAIL: the long brief did not reach claude intact ($(wc -c < "$STUB_LOG.arg") characters)"; fail=1; }
+{ grep -q 'LAST LINE OF THE LONG BRIEF' "$STUB_LOG.arg" && [ "$(wc -c < "$STUB_LOG.arg")" -gt 20000 ]; } || { echo "FAIL: the long brief did not reach claude intact ($(wc -c < "$STUB_LOG.arg") characters; start-worker sends a text over 24000 through a file instead)"; fail=1; }
+fi
 : > "$STUB_LOG"
 check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
