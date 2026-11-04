@@ -48,11 +48,12 @@ no() { ! grep -qF -- "$2" "$1" 2>/dev/null || bad "'$2' in ${1##*/}"; }
 max() { [ "$(wc -c < "$1")" -le "$2" ] 2>/dev/null || bad "${1##*/} over $2 bytes: $(wc -c < "$1" 2>/dev/null)"; }
 hook() {   # hook <before|after> <stdin> [role]: stdout to $tmp/out, stderr to $tmp/err, the exit code to rc; run from elsewhere
   local s="$core/scripts/hooks/$1-compact"
-  if [ -n "${PIN:-}" ]; then local w; w="$(cygpath -w "$tmp")"; printf '%s' "$2" > "$tmp/in"; rm -f "$tmp/cp"
+  if [ -n "${PIN:-}" ]; then local w; w="$(cygpath -w "$tmp")"; printf '%s' "$2" > "$tmp/in"; rm -f "$tmp/cp" "$tmp/out.raw" "$tmp/err.raw"
     printf '%s\r\n' "@chcp.com $PIN >nul" "@\"${PS[0]}\" -NoProfile -Command \"[Console]::OutputEncoding.CodePage; [Console]::InputEncoding.CodePage\" > \"$w\\cp\"" \
       "@\"${PS[0]}\" -NoProfile -ExecutionPolicy Bypass -File \"$(wp "$s.ps1")\" ${3:-} < \"$w\\in\" > \"$w\\out.raw\" 2> \"$w\\err.raw\"" > "$tmp/pin.cmd"
     ( cd "$tmp/away" && "${PS[0]}" -NoProfile -Command "Start-Process -Wait -WindowStyle Hidden cmd.exe -ArgumentList '/d /c \"\"$w\\pin.cmd\"\"'" )
     [ "$(tr -d '\r\n ' < "$tmp/cp" 2>/dev/null)" = "$PIN$PIN" ] || bad "the code page was not pinned: $(tr -d '\r' < "$tmp/cp" 2>/dev/null | tr '\n' ' ')"
+    [ -e "$tmp/out.raw" ] || bad "the hook did not run: no out.raw after the pinned console"
   elif [ "$kind" = ps ]; then ( cd "$tmp/away" && printf '%s' "$2" | "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(wp "$s.ps1")" ${3:+"$3"} > "$tmp/out.raw" 2> "$tmp/err.raw" )
   else ( cd "$tmp/away" && printf '%s' "$2" | bash "$s.sh" ${3:+"$3"} > "$tmp/out.raw" 2> "$tmp/err.raw" ); fi
   rc=$?; tr -d '\r' < "$tmp/out.raw" > "$tmp/out"; tr -d '\r' < "$tmp/err.raw" > "$tmp/err"
