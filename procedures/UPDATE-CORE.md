@@ -50,8 +50,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
      by `hostname`), and every row whose newest line is `failed`. A setting is asked with its default
      first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
-     report (`coordinator window 500000, workers keep <n>`, the number `PROJECT.md` names where it names
-     one), and the owner's yes to step 4 runs it, as the settings files above when auto mode refuses the edit.
+     report (`coordinator window 500000 set, in force from the coordinator's next start, workers keep <n>`,
+     the number `PROJECT.md` names where it names one), and the owner's yes to step 4 runs it, as the
+     settings files above when auto mode refuses the edit. The same line when only the PreCompact hook is due.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -99,3 +100,6 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    resume*); each is told to re-read its brief's rules only where the update changes them.
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
+
+**The update's very end** (only when it set the window or the PreCompact hook): the coordinator prints the owner
+the commands of TOOLKIT *Pause and resume*, as RESET.md step 6 does; a session cannot restart itself.
