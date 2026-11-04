@@ -61,7 +61,7 @@ function Get-Nearest([double]$x) { [math]::Floor($x + 0.5) }
 
 $root = if ($j.workspace.project_dir) { "$($j.workspace.project_dir)" } else { "$($j.cwd)" }
 $isCoordinator = "$($j.session_name)" -cmatch 'Coordinator'
-# The core's own public address (README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
+# The core's public home (the same value as README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
 $coreUrl = 'https://github.com/Arziburst/claude-coordinator'
 
 # The threshold actually set: local project settings, project settings, the account's; else the model's window.

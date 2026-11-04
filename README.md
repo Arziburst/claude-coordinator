@@ -63,7 +63,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   home or a worktree by hand — work branches stay free), `selftest` (the scripted steps of the
   self-test: checks, environment, the evidence branches in the state repository; a sandbox for the
   core itself), `statusline`
-  (the status line `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`, offered in the init quiz;
+  (the status line `Opus 5.5 high · 837k/1M 83% · 5h limit 14% · week 92% · reset 50%` as coloured bars, offered in the init quiz;
   also saves usage limits for the coordinator). Run with `--dry-run` / `-DryRun` first on a new machine.
 - **Code host:** the scripts that talk to it (the merge queue, cleanup-worker's merged check, the task
   row's PR times) use GitHub's `gh`; on another host the coordinator takes the same steps by hand

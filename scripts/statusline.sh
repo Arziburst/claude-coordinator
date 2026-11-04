@@ -30,7 +30,7 @@ sid="$(printf '%s' "$input" | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' |
 [ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && save "$dir/sessions/$sid.json"
 command -v jq >/dev/null 2>&1 || { echo "Claude · install jq for the full status line"; exit 0; }
 
-# The core's own public address (README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
+# The core's public home (the same value as README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
 core_url=https://github.com/Arziburst/claude-coordinator
 tab="$(printf '\t')"
 { read -r name; read -r root; } <<LINES

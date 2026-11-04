@@ -8,7 +8,7 @@ Rows marked "(re-detect)" differ per machine: check them at every start on a new
 | Generic term | Here |
 |---|---|
 | Operating system(s) and shells | `<Windows / macOS / Linux; PowerShell / bash / zsh>` — commands below are for these; per-OS variants where machines differ |
-| Core scripts (hook, start-worker, status line) | `<absolute path to coordinator/core/scripts>` (re-detect) |
+| Core scripts (hook, start-worker; the status line runs from its neutral copy, `<config>/coordinator/statusline/`) | `<absolute path to coordinator/core/scripts>` (re-detect) |
 | Repository, main branch, protected branches | `<fill>` |
 | State repository (private) | `<url or local only>` |
 | Owner's working copy | `<path>` |
