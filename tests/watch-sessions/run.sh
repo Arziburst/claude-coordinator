@@ -31,6 +31,16 @@
 #   The list file: a comment is a line whose first non-blank `#` is followed by a blank or the line's
 #   end (`# text`, `#`); `#12 worker: Fix` is a session name (start-worker names begin with `#<n>`).
 #   A line matches a session by the whole short id or the whole name, never a part of it.
+#   LONG (#467): `--long-minutes <m>` (default 45), `--long-seconds <s>` in its place (tests); .ps1 -LongMinutes,
+#   -LongSeconds. Line: `LONG <id> <name> <minutes>`, <minutes> whole, from the transcript's time; exit 0. A
+#   list line's own `@<n>` is its limit in place of the default or the flag. For a session in state `working`:
+#   its transcript is <config>/projects/<cwd, every character but A-Za-z0-9 as ->/<sessionId>.jsonl, with cwd
+#   and sessionId from claude agents --json, <config> = CLAUDE_CONFIG_DIR, else the home's .claude (home: .sh
+#   $HOME; .ps1 $env:USERPROFILE, else $env:HOME); its time is the file's modification time. No such file: no LONG.
+#   Once per stretch, across restarts (the watcher exits on a finding, the coordinator starts it again): one
+#   file per session in <temp>/watch-sessions-long/ holds the transcript time LONG last printed, and the same
+#   time never prints again; a newer one past the limit does. <temp>: .sh ${TMPDIR:-/tmp}, .ps1
+#   [IO.Path]::GetTempPath(), so the test sets TMPDIR, TMP, TEMP to a scratch folder. Nothing else is written.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -46,6 +56,7 @@ command -v cygpath >/dev/null 2>&1 && { core="$(cygpath -m "$core")"; tmp="$(cyg
 #   sleep-<n>   call <n> waits this many seconds before it answers (a hung listing)
 #   nonl        the JSON ends without a final newline
 #   fail-<n>    call <n> fails (exit 1) with this text on stderr
+#   cwd         every session's cwd, as JSON text (backslashes doubled); no file: no cwd field
 #   after-<n>   a shell script run after call <n> answered (the coordinator editing the list between
 #               two polls)
 #   log         every call's arguments, one call a line;  n  the number of calls so far
@@ -63,11 +74,11 @@ if [ ! -f "$f" ]; then f=""; for x in "$D"/list-*; do [ -f "$x" ] || continue
   i="${x##*-}"; [ "$i" -lt "$k" ] && { [ -z "$f" ] || [ "$i" -gt "${f##*-}" ]; } && f="$x"; done; fi
 [ -n "$f" ] || { echo "[]"; exit 0; }
 nonl=""; [ -f "$D/nonl" ] && nonl=1
-awk -v nonl="$nonl" '{ n = $0; st = ""
+CWD="$(cat "$D/cwd" 2>/dev/null)" awk -v nonl="$nonl" '{ n = $0; st = ""; c = ENVIRON["CWD"]
   if ($3 == "busy" || $3 == "idle" || $3 == "-") { sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); if ($3 != "-") st = $3 }
   else sub(/^[^ ]+ [^ ]+ /, "", n)
   gsub(/\\/, "\\\\", n); gsub(/"/, "\\\"", n)
-  printf "%s{\n    \"id\": \"%s\",\n    \"sessionId\": \"5e550000-0000-4000-8000-%012d\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"%s\n  }", (m++ ? ",\n  " : "[\n  "), $1, NR, n, $2, (st == "" ? "" : ",\n    \"status\": \"" st "\"") }
+  printf "%s{\n    \"id\": \"%s\",%s\n    \"sessionId\": \"5e550000-0000-4000-8000-%012d\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"%s\n  }", (m++ ? ",\n  " : "[\n  "), $1, (c == "" ? "" : "\n    \"cwd\": \"" c "\","), NR, n, $2, (st == "" ? "" : ",\n    \"status\": \"" st "\"") }
   END { printf "%s%s", (m ? "\n]" : "[]"), (nonl ? "" : "\n") }' "$f"
 exit 0
 EOF
@@ -91,6 +102,7 @@ case "$kind" in
             --list) a+=(-List "$2"); shift 2 ;; --interval) a+=(-Interval "$2"); shift 2 ;;
             --quiet-minutes) a+=(-QuietMinutes "$2"); shift 2 ;; --quiet-seconds) a+=(-QuietSeconds "$2"); shift 2 ;;
             --agents-timeout) a+=(-AgentsTimeout "$2"); shift 2 ;;
+            --long-minutes) a+=(-LongMinutes "$2"); shift 2 ;; --long-seconds) a+=(-LongSeconds "$2"); shift 2 ;;
             --once) a+=(-Once); shift ;; *) a+=("$1"); shift ;;
           esac
         done
@@ -391,5 +403,41 @@ printf '\357\273\277# awaited\n' > "$L"
 run --list "$L" --once
 code 0; has "^EMPTY\$"
 
+# --- LONG: one long command (#467). A scratch home and temp folder per case; the transcript's age is set
+unset CLAUDE_CONFIG_DIR; SID=5e550000-0000-4000-8000-000000000001 ENC=-work-my-proj-v2--claude-worktrees-467-x
+lfresh() { fresh "$1"; export HOME="$STUB_D.home" USERPROFILE="$STUB_D.home" TMPDIR="$STUB_D.tmp" TMP="$STUB_D.tmp" TEMP="$STUB_D.tmp"
+  mkdir -p "$TMPDIR" "$HOME/.claude/projects/$ENC"; T="$HOME/.claude/projects/$ENC/$SID.jsonl"; echo '{}' > "$T"; echo "$A" > "$L"
+  echo '/work/my_proj.v2/.claude/worktrees/467-x' > "$STUB_D/cwd"; echo "$A working w-a" > "$STUB_D/list-1"; }
+age() { local t=$(($(date +%s) - $1)); touch -t "$(date -d "@$t" +%Y%m%d%H%M.%S 2>/dev/null || date -r "$t" +%Y%m%d%H%M.%S)" "$T"; }
+lfresh "working past the default 45 minutes: LONG with the transcript's minutes, exit 0"; age 3030
+run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"
+lfresh "working under the default, past the quiet limit: nothing (LONG is not the quiet limit)"; age 2600
+run --list "$L" --once --quiet-seconds 0; code 0; silent
+lfresh "--long-minutes sets the limit, both ways"; age 3030
+run --list "$L" --once --long-minutes 60; code 0; silent; run --list "$L" --once --long-minutes 40; code 0; has "^LONG $A w-a 50\$"
+lfresh "--long-seconds sets the limit, both ways"; age 5
+run --list "$L" --once --long-seconds 600; code 0; silent; run --list "$L" --once --long-seconds 2; code 0; has "^LONG $A w-a 0\$"
+lfresh "watching, not --once: the limit passes, the watcher ends on LONG, exit 0"; age 0
+run --list "$L" --interval 1 --long-seconds 2; code 0; has "^LONG $A w-a 0\$"
+lfresh "the same stretch after a restart: no second LONG, the watcher keeps watching"; age 3030; echo "$A done w-a" > "$STUB_D/list-3"
+run --list "$L" --once; has "^LONG $A w-a 50\$"; run --list "$L" --interval 1; code 0; hasnt "^LONG"; has "^STOPPED $A w-a\$"; calls -eq 3
+lfresh "a new record starts a new stretch: under the limit nothing, past it LONG once more"; age 7200
+run --list "$L" --once; has "^LONG $A w-a 120\$"; age 5430; run --list "$L" --once --long-minutes 100; code 0; silent
+run --list "$L" --once; has "^LONG $A w-a 90\$"; run --list "$L" --once; code 0; silent
+lfresh "a line's @<n> holds LONG back, past the flag"; age 3030; echo "$A @120" > "$L"; run --list "$L" --once --long-seconds 0; code 0; silent
+lfresh "a line's @<n> sets a shorter limit than the default"; age 2000; echo "$A @30" > "$L"; run --list "$L" --once; code 0; has "^LONG $A w-a 33\$"
+lfresh "no transcript: no LONG"; rm -f "$T"; run --list "$L" --once --long-seconds 0; code 0; silent
+lfresh "not working, idle at a prompt: QUIET as today, no LONG"; age 3030; echo "$A idle w-a" > "$STUB_D/list-1"
+run --list "$L" --once --long-seconds 0 --quiet-seconds 0; code 0; has "^QUIET $A w-a 0\$"; hasnt "^LONG"
+lfresh "LONG and STOPPED in one poll: both lines"; age 3030; echo "$B" >> "$L"; printf '%s working w-a\n%s done w-b\n' $A $B > "$STUB_D/list-1"
+run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"; has "^STOPPED $B w-b\$"
+lfresh "CLAUDE_CONFIG_DIR in place of the home"; mv "$HOME/.claude" "$STUB_D.cfg"; T="$STUB_D.cfg/projects/$ENC/$SID.jsonl"; age 3030
+export CLAUDE_CONFIG_DIR="$STUB_D.cfg"; run --list "$L" --once; unset CLAUDE_CONFIG_DIR; code 0; has "^LONG $A w-a 50\$"
+lfresh "a Windows cwd in the listing: its folder name"; printf '%s' 'C:\\Users\\me_x\\proj' > "$STUB_D/cwd"; mkdir -p "$HOME/.claude/projects/C--Users-me-x-proj"
+T="$HOME/.claude/projects/C--Users-me-x-proj/$SID.jsonl"; echo '{}' > "$T"; age 3030; run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"
+lfresh "LONG stops nothing and writes only under the temp folder"; age 3030; touch -r "$T" "$STUB_D.ref"
+run --list "$L" --once; has "^LONG $A"; grep -qv '^agents --json --all$' "$STUB_D/log" && bad "another claude call" || ok
+[ "$T" -nt "$STUB_D.ref" ] && bad "the transcript changed" || ok
+[ "$(find "$HOME/.claude" "$STUB_D.cwd" -type f | wc -l | tr -d ' ')" = 2 ] && [ -n "$(ls -A "$TMPDIR/watch-sessions-long" 2>/dev/null)" ] && ok || bad "files: $(find "$HOME/.claude" "$STUB_D.cwd" "$TMPDIR" -type f)"
 echo "watch-sessions ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -328,6 +328,8 @@ The continuous work:
    prompt sends no idle notice) → tell the owner, never answer the prompt (§1.9); idle → one
    SendMessage asking for its report or its state; a lead quiet while its workers run is normal —
    keep its line, never message it in a loop, wait for its report; `EMPTY` → nothing to watch;
+   `LONG <id> <name> <minutes>` (state `working`, its transcript unchanged for 45 minutes, or its line's own limit) → look at
+   what it runs, against its brief's limit; a legitimately long command gets `@<n>` in the watch list; the line stops nothing;
    `ERROR <line>` (`claude agents` failed twice in a row) → start it once more; failing again → tell
    the owner and check `ListAgents` while a report is due. **Renamed** (by the owner, or
    after a restart) → tell every running session of this project (§1.17) the new name, one SendMessage each; the roles'
