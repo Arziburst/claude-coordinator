@@ -50,10 +50,11 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
      by `hostname`), and every row whose newest line is `failed`. A setting is asked with its default
      first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
-     report (`coordinator window 500000, workers keep <n>`, the number `PROJECT.md` names where it names
-     one), and the owner's yes to step 4 runs it, as the settings files above when auto mode refuses the edit.
-     The window and the PreCompact hook take effect at a coordinator's next start: the report never states
-     the window as in force before that.
+     report (`coordinator window 500000 set, in force from the coordinator's next start, workers keep <n>`,
+     the number `PROJECT.md` names where it names one), and the owner's yes to step 4 runs it, as the
+     settings files above when auto mode refuses the edit. When either the window or the PreCompact hook is
+     due, that line is in the report, with "in force from the coordinator's next start": both take effect
+     only then, and the report never states the window as in force before that.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -92,8 +93,6 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    Run the one-time checks the owner said yes to and `coordinator-window`; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.
-   When this update set the window or the PreCompact hook, the coordinator that ran it restarts itself, with the
-   commands of TOOLKIT *Pause and resume*: both take effect only at its next start.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
    [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
@@ -103,3 +102,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    resume*); each is told to re-read its brief's rules only where the update changes them.
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
+
+**The update's very end, only when this update set the window or the PreCompact hook** (both take effect at the
+coordinator's next start): the last thing, after step 7, the coordinator prints the owner the two
+commands of TOOLKIT *Pause and resume*, as RESET.md step 6 does, and does nothing else in this session. A
+session cannot restart itself from inside. A foreground session: its form is `/exit`, then the new start.
