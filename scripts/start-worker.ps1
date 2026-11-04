@@ -10,7 +10,7 @@
 # (names change on a restart). It heads the brief; the script's last line says how to watch the new
 # session: a `watch:` line with its short id (a dry run, or a launch that printed no id: its name), the
 # watch list and the watcher; an assistant, from which no report is awaited, gets the line that subscribes
-# to its idle notice instead (CORE section 4, Control; #365).
+# to its idle notice instead (CORE section 4, Control; #365). A tester, a worker or a lead: right before it a `board:` line, the issue's number from the name, else <n>; printed only (#466).
 # -Safety: a settings file for the worker (from settings.example.windows.json) with the deny rules, the
 #          PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. The hook's
 #          self-test must pass, or no worker starts. -Model is required (CORE section 7). Default mode auto;
@@ -135,13 +135,20 @@ while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$q" ;; esac
 #
 '@
+  # the bash as check-scripts.ps1 finds it: on Windows Git's (a plain `bash` on PATH may be the WSL launcher, which answers nothing)
+  $bashTried = @(); $gi = if ($env:OS -eq 'Windows_NT') { Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  if ($gi) { $gd = Split-Path -Parent $gi.Source; $bashTried += (Join-Path $gd '..\bin\bash.exe'), (Join-Path $gd '..\..\bin\bash.exe') }
+  if ($gi -and $env:ProgramFiles) { $bashTried += Join-Path $env:ProgramFiles 'Git\bin\bash.exe' }
+  $bashExe = @($bashTried | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]
+  if (-not $bashExe) { $bashTried += 'bash on PATH'; $bashExe = 'bash' }
   $script:fcn = 0
   function FCanon([string]$p) {
     # Windows PowerShell 5.1 puts a UTF-8 BOM before the piped text: an empty first line takes it (an error on stderr)
-    $b = & { $ErrorActionPreference = 'Continue'; ("`n" + ($fcanonSh -replace "`r", '')) | bash -s -- $p.Replace('\', '/') 2>$null }
+    $b = & { $ErrorActionPreference = 'Continue'; ("`n" + ($fcanonSh -replace "`r", '')) | & $bashExe -s -- $p.Replace('\', '/') 2>$null }
     if ($LASTEXITCODE -ne 0 -or -not "$b") { $script:fcn++; return "?no answer $($script:fcn)" }
     "$b".TrimEnd("`r", "`n")
   }
+  if ((FCanon $root).StartsWith('?')) { Fail "refused: no working bash answered (tried: $($bashTried -join ', ')) - the folders cannot be compared; install Git for Windows (Git Bash) or put a working bash on PATH" }
   # -AssistantDir: the folder elsewhere (the self-test's throwaway assistant), seen by no git working tree
   if ($AssistantDir) {
     if (-not (Test-Path -LiteralPath $AssistantDir -PathType Container)) { Fail "refused: -AssistantDir $AssistantDir is not a folder" }
@@ -599,6 +606,7 @@ if ($fr -in @('worker', 'lead', '')) {
 $brief = $full   # $full as sent, before the escaping below: kept for after a compaction
 function LastLine([string]$id) {
   if ($asst) { return "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)" }
+  if ($role -cin 'tester', 'worker', 'lead') { "board: move issue #$(if ($Name -match '^#([0-9]+)') { $Matches[1] } else { '<n>' }) to In Progress on the board, by the project's words (PROJECT.md) where it has none" }
   "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: $(if ($id) { $id } else { $Name })"
 }
 if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }

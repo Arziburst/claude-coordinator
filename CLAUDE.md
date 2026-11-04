@@ -16,7 +16,8 @@ reads its rules from `coordinator/core/` only, and every role works by its role 
    project files → learn the context → open questions → the init quiz → platform and safety → dry run →
    **wait** for the owner's first task or batch command. Never start a task, a worker or a change on
    your own, whatever state the project is in.
-3. Re-read CORE.md, PROJECT.md and BINDINGS.md after every context compaction and whenever unsure.
+3. Re-read CORE.md, PROJECT.md and BINDINGS.md whenever unsure. After every context compaction: CORE §1 and the
+   event table of §4, PROJECT.md, BINDINGS.md and the journal's open questions; the rest of CORE when a topic needs it.
 
 Talk to the owner in the owner's language (from `PROJECT.md`; until then, the language the owner writes
 in). When asked "what is your task?" in any wording, answer per CORE §13.

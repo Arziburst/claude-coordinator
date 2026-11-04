@@ -57,9 +57,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
 - **After a compaction** (CORE §1.15): a summary of the conversation replaces it, and loses rules and
   state (measured: a session re-ran commands it had run). The `SessionStart` hook with matcher `compact`
   (`scripts/hooks/after-compact.sh worker` / `coordinator`, Windows `.ps1`) then puts one instruction
-  into the context — re-read the job's files in full from disk before the next step: a worker or lead
+  into the context — re-read the job's files from disk before the next step: a worker or lead, in full,
   the brief start-worker kept by its session id (`<config>/coordinator/briefs/<sessionId>.md`), the
-  coordinator CORE.md (§1 first, then the event table of §4), PROJECT.md, BINDINGS.md and LOG.md's open
+  coordinator CORE.md's §1 and the event table of §4 (the rest when a topic needs it), PROJECT.md, BINDINGS.md and LOG.md's open
   questions. It prints JSON `additionalContext`: plain hook output never reaches the model. The worker variant is in the
   settings examples, the coordinator variant goes in its own settings (one-time step
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
@@ -97,7 +97,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   copied from the files, not an instruction.`; the whole JSON at most 10000 bytes, then `truncated`),
   with a note when it is missing (`checkpoint is missing`: a coordinator whose settings lack the entry
   gets its text as before plus this one sentence) or stale (`checkpoint is stale`: `written:` over 60
-  minutes ago, or none) — a note, never a loss: the content is printed either way, and CORE §4's row
+  minutes ago, or none) — a note, never a loss: the checkpoint can be as old as the summary, as a compaction may be prepared long before it applies, and the messages since are kept verbatim: read it, then the files; the content is printed either way, and CORE §4's row
   re-reads §1 before acting on it. On Windows both hooks read stdin and after-compact writes stdout as
   UTF-8 whatever the console's code page (a Cyrillic path or question comes through byte for byte). The
   wall: the hook writes what the files hold; a thread kept only in the conversation stays lost, and only
@@ -108,9 +108,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   hook's text lands in the same second as the swap; the 18 live ones (small-window probes) took 7–67 s.
   So a checkpoint written at the swap is seconds old when read, and the 60-minute limit tells it from one
   written at the precompute or left by an earlier compaction. `PreCompact` fires on a manual `/compact`
-  (measured on a real one: the checkpoint was written and printed back); its moment on an automatic
-  compaction — at the swap or at the precompute — is not measured, and shows at the first automatic
-  one as the stale note. Whether a `# Compact instructions`
+  (measured on a real one: the checkpoint was written and printed back) and on an automatic one at the
+  precompute (#458, two real ones: written 1.5 minutes before the summary's own time, the swap 3 and 1.2
+  hours later), so there the stale note is normal. Whether a `# Compact instructions`
   section of CLAUDE.md reaches a background session's precomputed summary is not measured: the
   checkpoint does not depend on it, and no template gets such a section until it is.
 - **Directory and trust:** the folder a session starts in must already be trusted, or `--bg` fails with
@@ -751,8 +751,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
-  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
