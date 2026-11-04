@@ -782,20 +782,20 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the body and the shell it had in one job. The required checks are the aggregator jobs `check (ubuntu-latest)`,
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
-  stale runs on its next push, never a run on main. **How a step lands in a shard:** every shard holds about 7 to 8
+  stale runs on its next push, never a run on main. **How a step lands in a shard:** every shard holds about 9 to 10
   minutes by the measured seconds (tests/ci-times.tsv): `ubuntu-1`, `macos-1` and `windows-1` the common steps, each
-  part of a split set a shard of its own (Ubuntu: workers 1-3, the guard 4-7; Windows: the guard 1-4, workers 5-7,
-  report-issue 8-10; macOS: 2 the workers' bash set, the guard without jq and watch-sessions), the other steps where the
+  part of a split set a shard of its own (Ubuntu: the guard 1-5, workers 6-8; Windows: the guard 1-5, workers 6-8,
+  report-issue 9-10; macOS: 2 the workers' bash set, the guard without jq and watch-sessions), the other steps where the
   seconds leave room; a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
   is rebalanced at the next CI audit. **How a case lands in a shard:** a set too long for one shard runs in parts by
-  its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in four parts on
-  Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/4 bash tests/safety-guard/run.sh ...` - case i of
+  its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in five parts on
+  Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/5 bash tests/safety-guard/run.sh ...` - case i of
   cases.txt is in part (i - 1) mod n + 1, so a case added at the end lands in one part by itself; the sections after the
   cases (sessions, the self-test, no-push.sh) run in part 1, about 200 s more than another part, so its shard holds
   less of the rest; `SG_LIST=1` prints a part's line numbers with no hook run,
   and the summary names the file it read and its part. The workers set (under PowerShell 7 on Ubuntu and 5.1 on Windows)
-  and report-issue on Windows run in three parts the same way, `WK_PART=<k>/3 bash tests/workers/run.sh ...` and
-  `RI_PART=<k>/3` on each of report-issue's three commands: their case is a section, what follows a line starting
+  runs in three parts the same way and report-issue on Windows in two, `WK_PART=<k>/3 bash tests/workers/run.sh ...` and
+  `RI_PART=<k>/2` on each of report-issue's three commands: their case is a section, what follows a line starting
   `# --- ` of the run.sh up to the next one, section i in part (i - 1) mod n + 1; the set-up above the first section runs
   in every part, so whatever a section needs from another (a repository, a fixture, a function, a counter) is made there,
   once, and a part's checks are exactly its sections'; `WK_LIST=1` / `RI_LIST=1` print a part's section lines with nothing
