@@ -1714,7 +1714,7 @@ pj="$tmp/work/proj"; mkdir -p "$pj/coordinator/core"; : > "$pj/coordinator/core/
 pjw="$pj"; command -v cygpath >/dev/null 2>&1 && pjw="$(cygpath -m "$pj")"
 jc="$(printf '{"session_id":"c0c00000-0000-4000-8000-000000000001","cwd":"%s","source":"compact"}' "$pjw")"
 LAST="$(printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
-expect_in "re-read in full with the Read tool: $pjw/coordinator/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), $pjw/coordinator/PROJECT.md"
+expect_in "re-read with the Read tool: $pjw/coordinator/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; find them by a literal search, read with offset and limit: section 1 from the line '## 1.' to '## 2.', the table from the line starting '| Event |' to the line starting '**Where the topics live', which ends it; the rest of CORE when a topic needs it), $pjw/coordinator/PROJECT.md"
 # the coordinator variant also loads in a worker launched from the project root (#217): silent there -
 # a session with a kept brief, or one working in a worktree (either separator)
 out="$(printf '%s' "$j" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
