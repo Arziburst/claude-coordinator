@@ -251,8 +251,8 @@ through "Coordinator, settings" (#237).
   `.git/`, `.github/` and `CLAUDE.md` (`tests/` included: the self-test reads it; the core's `CLAUDE.md`
   says "you are the coordinator", and Claude Code loads a nested `CLAUDE.md` into any session that reads
   files there — every worker reading its role) into
-  `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook, the status line and the
-  roles run from there. It may be **edited for this project**; upstream changes come in only on "update
+  `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook and the
+  roles run from there; the status line from its neutral copy (TOOLKIT *Usage*). It may be **edited for this project**; upstream changes come in only on "update
   the core" ([UPDATE-CORE.md](UPDATE-CORE.md)). A local edit useful for every project is proposed back
   to claude-coordinator (§10), with the owner's yes.
 - **`coordinator/`** is the coordinator's own local git repository (the **state repository**, §12b),

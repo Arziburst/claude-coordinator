@@ -6,7 +6,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.sh --install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 # statusline-version: 1
-script_version() { tr -d '\r' < "$1" 2>/dev/null | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
+script_version() { tr -d '\r' 2>/dev/null < "$1" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
 if [ "${1:-}" = --install ]; then
   to="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/statusline"; copy="$to/$(basename "$0")"; have="$(script_version "$copy")"
   if [ -z "$have" ] || [ "$have" -lt "$(script_version "$0")" ]; then
