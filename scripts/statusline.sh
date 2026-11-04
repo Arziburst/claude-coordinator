@@ -122,22 +122,22 @@ line_prog='
   def fm($m): . - $m * ((. / $m) | floor);
   def tok: if . >= 1000000 then "\((. / 100000 | floor) / 10)M" elif . >= 1000 then "\(. / 1000 | floor)k" else "\(floor)" end;
   def spaces($n): [range(0; $n) | " "] | join("");
-  def label($t; $w): (($w - ($t | length)) | if . < 0 then 0 else . end) as $p | spaces($p / 2 | floor) + $t + spaces($p / 2 | ceil);
+  def cells($t; $w): (($w - ($t | length)) | if . < 0 then 0 else . end) as $p | spaces($p / 2 | floor) + $t + spaces($p / 2 | ceil);
   def base($c): {green: "63;185;80", yellow: "227;179;65", red: "248;81;73"}[$c] // "88;166;255";
   def on($c): "\u001b[48;2;\(base($c))m\u001b[38;2;13;17;23m";
   def off: "\u001b[48;2;48;54;61m\u001b[38;2;201;209;217m";
   def at($l; $pct): [($l | length), (($l | length) * $pct / 100 | rnd)] | min;
-  def bar($t; $pct; $w; $c): label($t; $w) as $l | at($l; $pct) as $f | on($c) + $l[0:$f] + off + $l[$f:] + "\u001b[0m";
+  def bar($t; $pct; $w; $c): cells($t; $w) as $l | at($l; $pct) as $f | on($c) + $l[0:$f] + off + $l[$f:] + "\u001b[0m";
   def level: if . < 70 then "green" elif . < 90 then "yellow" else "red" end;
   # The week gone is always blue; the limit is green when it is behind or level with the time, and past the time its excess is yellow, or red over 10 points.
-  def weekbar($t; $u; $g; $width): label($t; $width) as $l | at($l; ([$u, $g] | min)) as $a | at($l; ([$u, $g] | max)) as $b
+  def weekbar($t; $u; $g; $width): cells($t; $width) as $l | at($l; ([$u, $g] | min)) as $a | at($l; ([$u, $g] | max)) as $b
     | (if $u <= $g then on("green") + $l[0:$a] + on("blue") else on("blue") + $l[0:$a] + (if $u <= $g + 10 then on("yellow") else on("red") end) end) + $l[$a:$b] + off + $l[$b:] + "\u001b[0m";
   # Each letter its own colour, red through orange to yellow, the wave moving with the clock at every refresh.
   def gradient($t): (($now / 5 | fm(8)) / 8) as $s | ($t | length) as $n
     | ([range(0; $n) | . as $k | ((($k / $n + $s) | fm(1)) * 2 - 1 | mag | 1 - .) as $v
         | "\u001b[1;38;2;255;\(80 + 140 * $v | rnd);\(80 - 20 * $v | rnd)m\($t[$k:$k + 1])"] | join("")) + "\u001b[0m";
   # A working task: a soft lighter wave moves through the fill at every redraw, in the colour its budget has now.
-  def wave($t; $pct; $width; $c): label($t; $width) as $l | at($l; $pct) as $f | (base($c) | split(";") | map(tonumber)) as $b
+  def wave($t; $pct; $width; $c): cells($t; $width) as $l | at($l; $pct) as $f | (base($c) | split(";") | map(tonumber)) as $b
     | ([range(0; $l | length) | . as $k
         | if $k < $f then (($k - $now / 2) | fm($f) / $f * 2 - 1 | mag | 1 - .) as $v | ($v * $v) as $w
             | "\u001b[48;2;\([$b[] | (. + (255 - .) * 0.45 * $w | rnd)] | map(tostring) | join(";"))m\u001b[38;2;13;17;23m\($l[$k:$k + 1])"
