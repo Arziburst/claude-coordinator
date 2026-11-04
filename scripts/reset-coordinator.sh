@@ -6,6 +6,8 @@
 # before-reset-<date>, pushed where there is an origin; coordinator/ then holds only .git and core/, a copy of the clone; the memory
 # folder is emptied, those files removed. The project's own repository is never touched.
 # Exit 0 with `reset-coordinator: done tag=<tag> core=<sha>`; 1 a refusal, nothing changed, or a failed step, named; 2 a usage error.
+# bash reads a script as it runs, and Git Bash cannot rename the folder a running script sits in: the text runs from memory, no file held, none left behind.
+[ -n "${BASH_EXECUTION_STRING:-}" ] || { s="$(cat "$0")" && exec "$BASH" -c "$s" "$0" "$@"; }
 set -u
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
 no() { echo "reset-coordinator: refused: $*" >&2; exit 1; }
@@ -70,7 +72,7 @@ behind "$t/c" "$t/n" before-reset-config
 tree="$(GIT_INDEX_FILE="$t/i" git -C "$st" write-tree)" && commit="$(git -C "$st" commit-tree "$tree" -p "$parent" -m "before reset: $tag")" || no "the tag $tag: cannot commit (git's user set?)"
 git -C "$st" tag "$tag" "$commit" || no "the tag $tag cannot be made"
 [ -z "$remote" ] || git -C "$st" push -q "$remote" "refs/tags/$tag" >/dev/null 2>&1 || { git -C "$st" tag -d "$tag" >/dev/null 2>&1; no "the tag $tag cannot be pushed to $remote"; }
-# Parked first, by rename: a held file or folder (Windows) stops it here, all put back. A running script keeps reading the parked file; the new core goes to new files.
+# Parked first, by rename: a held file or folder (Windows) stops it here, all put back.
 old="$st/.reset-old"; parked=""; mkdir "$old" || failed "cannot make $old; the tag $tag is made"
 while IFS= read -r e; do case "$e" in .git|.reset-old|"") continue ;; esac
   mv "$st/$e" "$old/$e" 2>/dev/null && { parked="$parked $e"; continue; }
@@ -81,10 +83,10 @@ done <<EOF
 $(ls -A "$st")
 EOF
 git -C "$st" update-ref HEAD "$commit" || failed "cannot move the state branch; everything is in $old and behind the tag $tag"
-rm -rf "$old" && rm -rf "$mem" || failed "cannot remove $old or $mem; everything is behind the tag $tag"; [ ! -d "$pdir" ] || mkdir -p "$mem"
-for f in "$t"/c/*/*; do [ -f "$f" ] || continue; f="${f#"$t"/c/}"; rm -f "$cfg/coordinator/$f" || failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag"; done
 mkdir "$st/core" && find "$from" -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name CLAUDE.md -exec cp -R {} "$st/core/" \; || failed "cannot copy the core from $from; everything is behind the tag $tag"
-git -C "$st" read-tree --empty && git -C "$st" add -A >/dev/null 2>&1 && tree="$(git -C "$st" write-tree)" && c2="$(git -C "$st" commit-tree "$tree" -p "$commit" -m "reset of the coordinator: tag=$tag core=$sha")" &&
+git -C "$st" read-tree --empty && git -C "$st" add -A core >/dev/null 2>&1 && tree="$(git -C "$st" write-tree)" && c2="$(git -C "$st" commit-tree "$tree" -p "$commit" -m "reset of the coordinator: tag=$tag core=$sha")" &&
   git -C "$st" update-ref HEAD "$c2" || failed "cannot commit the new state in $st; everything is behind the tag $tag"
 if [ -z "$remote" ]; then echo "reset-coordinator: no remote: the tag is local only"; elif ! git -C "$st" push -q "$remote" HEAD >/dev/null 2>&1; then echo "reset-coordinator: the state branch is not pushed yet: git -C coordinator push $remote HEAD"; fi
+rm -rf "$old" && rm -rf "$mem" || failed "cannot remove $old or $mem; everything is behind the tag $tag"; [ ! -d "$pdir" ] || mkdir -p "$mem"
+for f in "$t"/c/*/*; do [ -f "$f" ] || continue; f="${f#"$t"/c/}"; rm -f "$cfg/coordinator/$f" || failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag"; done
 echo "reset-coordinator: done tag=$tag core=$sha"

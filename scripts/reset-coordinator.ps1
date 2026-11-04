@@ -83,13 +83,13 @@ foreach ($e in @(Get-ChildItem -LiteralPath $st -Force | ForEach-Object { $_.Nam
     if ($remote) { $null = G push -q $remote ":refs/tags/$tag" }
     No "coordinator/$e is held by another process: nothing removed, the tag taken back" } }
 $null = G update-ref HEAD $commit; if ($script:rc -ne 0) { Failed "cannot move the state branch; everything is in $old and behind the tag $tag" }
-try { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction Stop; if (Test-Path -LiteralPath $mem) { Remove-Item -LiteralPath $mem -Recurse -Force -ErrorAction Stop } } catch { Failed "cannot remove $old or $mem; everything is behind the tag $tag" }; if (Test-Path -LiteralPath $pdir) { $null = New-Item -ItemType Directory -Force -Path $mem }
-foreach ($f in $taken) { try { Remove-Item -LiteralPath "$cfg/coordinator/$f" -Force -ErrorAction Stop } catch { Failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag" } }
 try { $null = New-Item -ItemType Directory -Path "$st/core" -ErrorAction Stop
   Get-ChildItem -LiteralPath $from -Force | Where-Object { $_.Name -cne '.git' -and $_.Name -cne '.github' -and $_.Name -cne 'CLAUDE.md' } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "$st/core" -Recurse -Force -ErrorAction Stop } } catch { Failed "cannot copy the core from $from; everything is behind the tag $tag" }
-$null = G read-tree --empty; $b = $script:rc; $null = G add -A; $b += $script:rc; $tree = G write-tree; $b += $script:rc; $c2 = G commit-tree $tree -p $commit -m "reset of the coordinator: tag=$tag core=$sha"; $b += $script:rc; $null = G update-ref HEAD $c2; $b += $script:rc
+$null = G read-tree --empty; $b = $script:rc; $null = G add -A core; $b += $script:rc; $tree = G write-tree; $b += $script:rc; $c2 = G commit-tree $tree -p $commit -m "reset of the coordinator: tag=$tag core=$sha"; $b += $script:rc; $null = G update-ref HEAD $c2; $b += $script:rc
 if ($b -ne 0) { Failed "cannot commit the new state in $st; everything is behind the tag $tag" }
 if ($remote) { $null = G push -q $remote HEAD; if ($script:rc -ne 0) { "reset-coordinator: the state branch is not pushed yet: git -C coordinator push $remote HEAD" } } else { "reset-coordinator: no remote: the tag is local only" }
+try { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction Stop; if (Test-Path -LiteralPath $mem) { Remove-Item -LiteralPath $mem -Recurse -Force -ErrorAction Stop } } catch { Failed "cannot remove $old or $mem; everything is behind the tag $tag" }; if (Test-Path -LiteralPath $pdir) { $null = New-Item -ItemType Directory -Force -Path $mem }
+foreach ($f in $taken) { try { Remove-Item -LiteralPath "$cfg/coordinator/$f" -Force -ErrorAction Stop } catch { Failed "cannot remove $cfg/coordinator/$f; everything is behind the tag $tag" } }
 "reset-coordinator: done tag=$tag core=$sha"
 } finally { if ($t -and (Test-Path -LiteralPath $t)) { Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue }
   if ($null -ne $enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
