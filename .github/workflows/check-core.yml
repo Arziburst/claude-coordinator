@@ -22,6 +22,7 @@ name: check-core
 #need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need watch      ^scripts/watch-sessions\. ^tests/watch-sessions/  # watch-sessions against a stub claude
 #need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
+#need reset      ^scripts/reset-coordinator\. ^tests/reset-coordinator/  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 #need citimes    ^scripts/ci-times\. ^tests/ci-times ^tests/safety-guard/run\.sh$ ^tests/workers/ ^tests/report-issue/  # the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr, the split sets' parts (it lists and runs them)
 on:
@@ -517,6 +518,15 @@ jobs:
           bash tests/runs/run.sh sh
           bash tests/runs/run.sh ps powershell
           bash tests/runs/run.sh ps pwsh
+      - name: reset-coordinator on scratch projects (bash)
+        if: (matrix.shard == 'ubuntu-5' || matrix.shard == 'macos-1') && steps.need.outputs.reset == 'true'
+        run: bash tests/reset-coordinator/run.sh sh
+      - name: reset-coordinator on scratch projects (PowerShell 7, Linux)
+        if: matrix.shard == 'ubuntu-5' && steps.need.outputs.reset == 'true'
+        run: bash tests/reset-coordinator/run.sh ps pwsh
+      - name: reset-coordinator on scratch projects (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+        if: matrix.shard == 'windows-1' && steps.need.outputs.reset == 'true'
+        run: bash tests/reset-coordinator/run.sh sh && bash tests/reset-coordinator/run.sh ps powershell && bash tests/reset-coordinator/run.sh ps pwsh
       - name: selftest - the scripted steps (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
         run: |
