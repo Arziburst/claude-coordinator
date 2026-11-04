@@ -239,7 +239,8 @@ scripts)
   check "check-contract on the fixture" -- bash "$core/scripts/check-contract.sh" "$core/tests/selftest/contract.md"
   if command -v jq >/dev/null 2>&1; then
     out="$(CLAUDE_CONFIG_DIR="$t" bash "$core/scripts/statusline.sh" < "$core/tests/selftest/status.json")"
-    case "$out" in *"5h 14%"*"week 92%"*) [ -f "$t/coordinator/sessions/selftest-fixture.json" ] &&
+    out="$(printf '%s' "$out" | sed "s/$(printf '\033')\[[0-9;]*m//g")"   # a bar's fill splits its text with colour codes
+    case "$out" in *"5h limit 14%"*"week 92%"*) [ -f "$t/coordinator/sessions/selftest-fixture.json" ] &&
       pass "statusline" || fail "statusline: no session file" ;; *) fail "statusline: printed '$out'" ;; esac
   else skip "statusline: no jq (the .sh needs it for its line, TOOLKIT Scripts)"; fi
   out="$(CLAUDE_CONFIG_DIR="$core/tests/session-tokens/claude" bash "$core/scripts/session-tokens.sh" s1)"

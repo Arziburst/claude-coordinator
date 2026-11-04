@@ -1211,7 +1211,13 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   response). `scripts/statusline.ps1` (Windows) / `scripts/statusline.sh` (macOS / Linux, needs `jq`)
   save it to `~/.claude/coordinator/statusline.json` (the last session to draw) and to
   `~/.claude/coordinator/sessions/<session_id>.json` (one per session) for the coordinator to read, and print
-  `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. Both write each file (`statusline.json` and
+  coloured bars with their text inside: `Opus 5.5 high · 837k/1M 83%` against the threshold set (`autoCompactWindow`
+  from the project's local settings, the project's, the account's; else the model's window), `5h limit 14%` where
+  Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
+  `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
+  `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
+  the network) and `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now.
+  Past `COLUMNS` less 4 a whole bar moves to the next line. Both write each file (`statusline.json` and
   the session's copy) to `statusline.<pid>.tmp` and move it over, so neither is ever seen half-written
   or empty; on Windows, when another status line or a reader holds the file, the move fails (three
   tries, 20 ms apart), the old file stays for that tick and the temp file is removed.
@@ -1221,12 +1227,16 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the project's scripts and BINDINGS rows that read the old one's files — they stop getting data
   without an error — so they become a task at once). The coordinator sees the files and can run the
   script on the same JSON, but not the window: only the owner sees the drawn line.
-  Then: add to the user settings (`~/.claude/settings.json`, with the Edit tool — the owner
-  approves the write) the script's absolute path in the core copy (`/ABSOLUTE/PATH` = `<project>/coordinator/core`;
-  the user settings serve every project, so one project's copy is used for all):
-  Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/PATH/scripts/statusline.ps1\"", "refreshInterval": 10}`
+  Then: copy the script to the machine's one neutral place, tied to no project: `scripts/statusline.sh --install` /
+  `scripts/statusline.ps1 -Install` from the core copy puts it in `<config>/coordinator/statusline/`. The script carries a
+  version (`# statusline-version:`, raised with a change) and a copy is replaced only by a newer one, so an older
+  project's update never rolls it back. Add to the user settings (`~/.claude/settings.json`, with the Edit tool — the
+  owner approves the write) that copy's absolute path (`/ABSOLUTE/CONFIG` = `<config>`):
+  Windows `"statusLine": {"type": "command", "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"C:/ABSOLUTE/CONFIG/coordinator/statusline/statusline.ps1\"", "refreshInterval": 5}`
   (`powershell` instead of `pwsh` where PowerShell 7 is missing); macOS / Linux
-  `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/PATH/scripts/statusline.sh", "refreshInterval": 10}`. It
+  `"statusLine": {"type": "command", "command": "bash /ABSOLUTE/CONFIG/coordinator/statusline/statusline.sh", "refreshInterval": 5}`.
+  A `statusLine` already pointing into a project's core copy moves there on the owner's yes (one-time step
+  `statusline-neutral`); auto mode refuses the write → one command for the owner, the coordinator fills in the path. It
   appears after the next response. `refreshInterval` (seconds, minimum 1) also re-runs the script on a
   timer, so a session waiting with no events (a coordinator waiting on its workers) keeps its status
   file fresh.

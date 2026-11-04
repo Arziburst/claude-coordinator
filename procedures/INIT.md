@@ -153,8 +153,9 @@ The numbered list below says what each answer sets, where it is recorded and wha
    succeeds there too when credits are on. No row → Fable stays off the ladder; credits on → the
    coordinator says that the guard rail on Fable's weekly share is then the only stop (CORE §7).
 9. **Status line** — only when this Claude Code has none (no `statusLine` in the user or project
-   settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
-   coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
+   settings): show `Opus 5.5 high · 837k/1M 83% · 5h limit 14% · week 92% · reset 50%`, as coloured bars. *Yes* (recommended — the
+   coordinator reads its limits from it, §9): install the machine's neutral copy from the core copy (TOOLKIT.md). One
+   already pointing into a project's core copy: the one-time step `statusline-neutral`.
    *No:* nothing installed; the coordinator asks about limits when it matters.
 10. **The coordinator's name.** Explain: workers, leads and other sessions find this
     coordinator by its session name — they send their reports to it, and when that name is not found
@@ -250,8 +251,8 @@ through "Coordinator, settings" (#237).
   `.git/`, `.github/` and `CLAUDE.md` (`tests/` included: the self-test reads it; the core's `CLAUDE.md`
   says "you are the coordinator", and Claude Code loads a nested `CLAUDE.md` into any session that reads
   files there — every worker reading its role) into
-  `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook, the status line and the
-  roles run from there. It may be **edited for this project**; upstream changes come in only on "update
+  `coordinator/core/`, record the commit in `PROJECT.md`. Scripts, the hook and the
+  roles run from there; the status line from its neutral copy (TOOLKIT *Usage*). It may be **edited for this project**; upstream changes come in only on "update
   the core" ([UPDATE-CORE.md](UPDATE-CORE.md)). A local edit useful for every project is proposed back
   to claude-coordinator (§10), with the owner's yes.
 - **`coordinator/`** is the coordinator's own local git repository (the **state repository**, §12b),

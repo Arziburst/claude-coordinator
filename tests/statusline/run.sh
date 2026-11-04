@@ -5,6 +5,17 @@
 #   tests/statusline/run.sh sh              # scripts/statusline.sh, with the bash running this file
 #   tests/statusline/run.sh ps pwsh         # scripts/statusline.ps1 (or: ps powershell)
 # The .sh draws its line only with jq: without it the line is not compared. Exit 1 if any case fails.
+# Access points the scripts implement as written here (#449):
+#   Install: `statusline.sh --install` / `statusline.ps1 -Install` copies the script itself to
+#     <config>/coordinator/statusline/<its file name>, unless a copy there holds the same or a newer version; exit 0.
+#   Version: a line `# statusline-version: <whole number>` in each script, raised with a change.
+#   Upstream's head: <config>/coordinator/core-upstream.txt, its first 40 characters the sha (the `git ls-remote` line).
+#   The recorded commit: <project>/coordinator/PROJECT.md, the row `| Core (CORE ...` holding commit `<sha>`, a prefix.
+#   The project: workspace.project_dir of the status JSON. A task's budget: `  cost: <n>` in its briefs/<task>-contract.md.
+#   Sessions: `claude agents --json`: name, cwd, state, status, sessionId. A live one has a status; at work: state `working`.
+#   Live spend: <config>/coordinator/sessions/<sessionId>.json, cost.total_cost_usd. A row in coordinator/RUNS.tsv is that
+#     session's when its start cell equals the session's start, as `runs check` reads it: the first timestamp in the
+#     transcript (transcript_path in that file), to the second, with Z.
 set -u
 [ $# -gt 0 ] || { sed -n '2,7s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -14,8 +25,8 @@ PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }   # Git Bash -> C:/...
-fixture="$core/tests/selftest/status.json"
-want='Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%'
+fixture="$core/tests/selftest/status.json"; in="$fixture"; script="$core/scripts/statusline"; unset COLUMNS
+want='Opus 5.5 high · 837k/1M 83% · 5h limit 14% · week 92%'
 line=yes; [ "$kind" = ps ] || command -v jq >/dev/null 2>&1 || line=no
 bom="$(printf '\357\273\277')"
 
@@ -23,13 +34,15 @@ bom="$(printf '\357\273\277')"
 run() {
   local cfg; cfg="$(winpath "$1")"
   if [ "$kind" = ps ]; then
-    CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/statusline.ps1")" < "$fixture" > "$tmp/out.raw" 2> "$tmp/err"
+    CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$script.ps1")" < "$in" 2> "$tmp/err" | cat > "$tmp/out.raw"
   else
-    CLAUDE_CONFIG_DIR="$cfg" bash "$core/scripts/statusline.sh" < "$fixture" > "$tmp/out.raw" 2> "$tmp/err"
+    CLAUDE_CONFIG_DIR="$cfg" bash "$script.sh" < "$in" 2> "$tmp/err" | cat > "$tmp/out.raw"
   fi
-  rc=$?
+  rc=${PIPESTATUS[0]}
   tr -d '\r' < "$tmp/out.raw" > "$tmp/out"
 }
+# what the line says: no colour codes, a bar's padding gone
+plain() { sed "s/$(printf '\033')\[[0-9;]*m//g" "$tmp/out" | tr -s ' ' | sed 's/^ //; s/ $//'; }
 # is $1 the fixture, a BOM (Windows PowerShell 5.1's utf8) aside?
 same() { local c; [ -f "$1" ] || return 1; c="$(cat "$1")"; [ "${c#"$bom"}" = "$(cat "$fixture")" ]; }
 # the statusline.*.tmp files left in $1/coordinator
@@ -41,7 +54,7 @@ check() {
   local name="$1" cfg="$2" json="$3" t
   n=$((n + 1))
   [ "$rc" = 0 ] || { bad "$name: exit $rc"; sed 's/^/  err: /' "$tmp/err"; return; }
-  [ "$line" = no ] || [ "$(cat "$tmp/out")" = "$want" ] || { bad "$name: printed '$(cat "$tmp/out")'"; return; }
+  [ "$line" = no ] || [ "$(plain)" = "$want" ] || { bad "$name: wants '$want', printed '$(plain)'"; return; }
   t="$(temps "$cfg")"; [ -z "$t" ] || { bad "$name: left $t"; return; }
   [ "$json" = no ] || same "$cfg/coordinator/statusline.json" || { bad "$name: statusline.json is not the status JSON"; return; }
   same "$cfg/coordinator/sessions/selftest-fixture.json" || { bad "$name: no session copy"; return; }
@@ -86,5 +99,154 @@ EOF
   rc=$?; tr -d '\r' < "$tmp/out.raw" > "$tmp/out"
   check "statusline.json held open by a reader" "$hd" no
 fi
+# ---- The bars (#449). `| cat` in run: a status line's stdout is a pipe. $tmp/bars, read cell by cell from the codes: a row per bar: line, text (trimmed;
+# . the middle dot, ^ the up arrow), width, colours (`green:8 grey:13`; `!` = not dark text on a colour; a lighter wave cell is its base colour), text colours, fill colours.
+E="$(printf '\033')"; dot="$(printf '\302\267')"; arrow="$(printf '\342\206\221')"
+bars() { tr -d '\r' < "$tmp/out.raw" | LC_ALL=C sed "s/$dot/./g; s/$arrow/^/g" | LC_ALL=C awk -v E="$E" '
+  function rgb(p, key, i, a) { i = index(";" p ";", ";" key ";2;"); if (!i) return ""; split(substr(p, i + length(key) + 3), a, ";"); return a[1] ";" a[2] ";" a[3] }
+  function col(c, a) { if (c == "") return "none"; if (c == "48;54;61") return "grey"; split(c, a, ";"); if (a[3] >= a[2]) return "blue"; if (a[1] < a[2]) return "green"; return a[2] >= 179 ? "yellow" : "red" }
+  function cell(ch, k) { k = col(bg); if (bg != "" && k != "grey" && fg != "13;17;23") k = k "!"; if (k != ck) { if (ck != "") segs = segs ck ":" cn " "; ck = k; cn = 0 } cn++; txt = txt ch; fgs = fgs " " fg; bgs = bgs " " bg }
+  function flush(t) { if (txt != "") { segs = segs ck ":" cn; t = txt; gsub(/^ +| +$/, "", t); printf "%d\t%s\t%d\t%s\t%s\t%s\n", NR, t, length(txt), segs, fgs, bgs } txt = segs = fgs = bgs = ck = ""; cn = 0 }
+  { s = $0; bg = fg = ""
+    while (s != "") {
+      if (substr(s, 1, 2) == E "[") { i = index(s, "m"); p = substr(s, 3, i - 3); s = substr(s, i + 1)
+        if (p == "0" || p == "") { flush(); bg = fg = "" } else { x = rgb(p, 48); if (x != "") bg = x; x = rgb(p, 38); if (x != "") fg = x }
+      } else { if (bg != "" || fg != "") cell(substr(s, 1, 1)); s = substr(s, 2) } }
+    flush() }' > "$tmp/bars"; }
+cname=""; cfail=0
+finish() { [ -z "$cname" ] || [ "$cfail" != 0 ] || echo "ok   $cname"; cname=""; }
+begin() { finish; cname="$1"; cfail=0; n=$((n + 1)); }
+no() { echo "FAIL $cname: $*"; fail=1; cfail=1; }
+draw() { run "$cfg"; [ "$rc" = 0 ] || no "wants exit 0, got $rc: $(head -n 2 "$tmp/err")"; bars; }
+is() { [ "$(plain)" = "$1" ] || no "wants the text '$1', printed '$(plain)'"; }
+bar() { local g; g="$(awk -F'\t' -v t="$1" '$2 == t { print $3 " " $4 }' "$tmp/bars" | head -n 1)"; [ "$g" = "$2 $3" ] || no "wants the bar '$1' width $2 colours '$3', got '${g:-no such bar}'; printed '$(plain)'"; }
+lines() { local g; g="$(cut -f1 "$tmp/bars" | tr '\n' ' ')"; [ "$g" = "$1" ] || no "wants the bars on lines '$1', got '$g'; printed '$(plain)'"; }
+first() { head -n 1 "$tmp/bars" | cut -f2; }
+nat() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }   # the form Claude Code hands over
+jp() { nat "$1" | sed 's/\\/\\\\/g'; }
+cfg="$tmp/c"; root="$tmp/proj"; other="$tmp/proj-other"; wt="$root/.claude/worktrees/w"; up="$cfg/coordinator/core-upstream.txt"
+mkdir -p "$cfg/coordinator/sessions" "$cfg/projects/p" "$root/.claude" "$root/coordinator/briefs" "$other" "$tmp/bin" "$tmp/stub"
+# fx <session name> <model> <effort> <used tokens> <window> [,more top-level JSON]: the status JSON of the next draw
+fx() { printf '{"session_id":"t1","session_name":"%s","cwd":"%s","workspace":{"project_dir":"%s"},"model":{"display_name":"%s"},"effort":{"level":"%s"},"context_window":{"used_percentage":1,"context_window_size":%s,"current_usage":{"input_tokens":%s,"cache_read_input_tokens":0}}%s}\n' \
+    "$1" "$(jp "$root")" "$(jp "$root")" "$2" "$3" "$5" "$4" "${6:-}" > "$tmp/in.json"; in="$tmp/in.json"; }
+export STUB_D; STUB_D="$(winpath "$tmp/stub")"
+printf '#!/usr/bin/env bash\ncat "$STUB_D/agents.json" 2>/dev/null || echo "[]"\n' > "$tmp/bin/claude"
+cat > "$tmp/bin/git" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$STUB_D/git.log"
+case "$*" in *ls-remote*) sleep "$(cat "$STUB_D/git.sleep")"; printf '%s\trefs/heads/main\n' "$(cat "$STUB_D/git.head")"; printf x >> "$STUB_D/git.done" ;; esac
+EOF
+for s in claude git; do chmod +x "$tmp/bin/$s"; printf '& bash (Join-Path $PSScriptRoot %s) @args\nexit $LASTEXITCODE\n' "$s" > "$tmp/bin/$s.ps1"; printf '@bash "%%~dp0%s" %%*\r\n' "$s" > "$tmp/bin/$s.cmd"; done
+export PATH="$tmp/bin:$PATH"
+# agent <id> <name> <state> <status|-> <cwd> <cost> <start>: in the stub's list (no status field for -), with its status copy and its transcript
+ag=0
+agent() { local st=""; [ "$4" = - ] || st=",\"status\":\"$4\""; ag=$((ag + 1))
+  printf ',{"id":"%s","sessionId":"%s","name":"%s","cwd":"%s","state":"%s","startedAt":%s%s}' "$1" "$1" "$2" "$(jp "$5")" "$3" "$((1793786400000 + ag * 1000))" "$st" >> "$tmp/agents.body"
+  printf '[%s]\n' "$(cut -c2- "$tmp/agents.body")" > "$tmp/stub/agents.json"
+  printf '{"timestamp":"%s.000Z","type":"user"}\n' "${7%Z}" > "$cfg/projects/p/$1.jsonl"
+  printf '{"session_id":"%s","transcript_path":"%s","cost":{"total_cost_usd":%s}}\n' "$1" "$(jp "$cfg/projects/p/$1.jsonl")" "$6" > "$cfg/coordinator/sessions/$1.json"; }
+row() { printf '2026-11-04\t%s\t%s\thard\tm\thigh\t-\t1\t%s\tdone\t%s\t1\t1\t\t\n' "$1" "$2" "$3" "$4" >> "$root/coordinator/RUNS.tsv"; }
+tasks_reset() { rm -f "$tmp/agents.body" "$tmp/stub/agents.json"; printf 'date\ttask\trole\tkind\tmodel\teffort\testimate\ttokens\tcost\tresult\tstart\twall\tactive\twait\testimate_time\n' > "$root/coordinator/RUNS.tsv"; }
+budget() { printf -- '---\nid: %s\nbudget:\n  model: opus\n  cost: 10\n---\n' "$1" > "$root/coordinator/briefs/$1-contract.md"; }
+A=aaaaaaa000000000000000000000000000000000; B=bbbbbbb000000000000000000000000000000000
+core_row() { printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` at claude-coordinator commit `%s`; local edits: none |\n' "$(printf '%s' "$B" | cut -c1-7)" > "$root/coordinator/PROJECT.md"; }
+upstream() { printf '%s\trefs/heads/main' "$1" > "$up"; }
+waitfor() { local i=0; while [ $i -lt 20 ]; do grep -q "^$1" "$up" 2>/dev/null && return 0; sleep 1; i=$((i + 1)); done; return 1; }
+stamp() { local s=$(( $(date +%s) - $1 )); if date --version >/dev/null 2>&1; then date -d "@$s" +%Y%m%d%H%M.%S; else date -r "$s" +%Y%m%d%H%M.%S; fi; }
+gitcalls() { grep -c ls-remote "$tmp/stub/git.log" 2>/dev/null; }
+wk() { printf '"seven_day":{"used_percentage":%s,"resets_at":%s}' "$1" "$(( $(date +%s) + (1000 - $2) * 6048 / 10 ))"; }   # $2: the week gone, in tenths of a point
+C="CORE Coordinator"; M="Opus 5.5"; W400="400000 1000000"; L400="Opus 5.5 high $dot 400k/1M 40%"
+
+bar_cases() {
+  local m e u t s g
+  begin "the context bar: the four models at high and medium, one width"
+  for m in "Opus 5.5" "Sonnet 5.5" "Haiku 5.5" "Fable 5.1"; do for e in high medium; do fx x "$m" "$e" $W400; draw; bar "$m $e . 400k/1M 40%" 34 "green:14 grey:20"; done; done
+  begin "the threshold: the project's local settings, the project's, the account's, else the model's window"
+  printf '{"autoCompactWindow":100000}' > "$root/.claude/settings.local.json"; printf '{"autoCompactWindow":200000}' > "$root/.claude/settings.json"; printf '{"autoCompactWindow":300000}' > "$cfg/settings.json"
+  fx x "$M" high 60000 1000000
+  draw; bar "$M high . 60k/100k 60%" 34 "green:20 grey:14"; rm "$root/.claude/settings.local.json"
+  draw; bar "$M high . 60k/200k 30%" 34 "green:10 grey:24"; rm "$root/.claude/settings.json"
+  draw; bar "$M high . 60k/300k 20%" 34 "green:7 grey:27"; rm "$cfg/settings.json"
+  draw; bar "$M high . 60k/1M 6%" 34 "green:2 grey:32"
+  begin "the longest context bar holds its width, red and full past the threshold"; printf '{"autoCompactWindow":500000}' > "$cfg/settings.json"; fx x "Sonnet 5.5" medium 999000 1000000; draw; bar "Sonnet 5.5 medium . 999k/500k 199%" 34 "red:34"; rm "$cfg/settings.json"
+  begin "the context's colours at their edges: 70 and 90"
+  fx x "$M" high 699999 1000000; draw; bar "$M high . 699k/1M 69%" 34 "green:24 grey:10"; fx x "$M" high 700000 1000000; draw; bar "$M high . 700k/1M 70%" 34 "yellow:24 grey:10"
+  fx x "$M" high 899999 1000000; draw; bar "$M high . 899k/1M 89%" 34 "yellow:31 grey:3"; fx x "$M" high 900000 1000000; draw; bar "$M high . 900k/1M 90%" 34 "red:31 grey:3"
+  begin "the 5-hour bar by the context's levels, only where it is passed"
+  fx x "$M" high $W400 ",\"rate_limits\":{\"five_hour\":{\"used_percentage\":85},$(wk 30 502)}"; draw; bar "5h limit 85%" 14 "yellow:12 grey:2"
+  fx x "$M" high $W400 ",\"rate_limits\":{$(wk 30 502)}"; draw; is "$L400 $dot week 30% $dot reset 50%"
+  begin "the week behind time: green to the limit, blue to the time, then grey"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 30 502)}"; draw; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
+  begin "the week level with time: green to the limit, then grey"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 50 500)}"; draw; bar "week 50% . reset 50%" 26 "green:13 grey:13"
+  begin "the week ahead up to 10 points: blue to the time, the excess yellow"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 60 502)}"; draw; bar "week 60% . reset 50%" 26 "blue:13 yellow:3 grey:10"
+  begin "the week ahead past 10 points: blue to the time, the excess red"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 61 502)}"; draw; bar "week 61% . reset 50%" 26 "blue:13 red:3 grey:10"
+
+  # no fetch while the tasks are drawn: a fresh file, the commit PROJECT.md records
+  core_row; upstream "$B"; for t in 7 11 12 13 14 20 21; do budget "$t"; done
+  begin "a lead's task: stage L, its #<task>.<n> sessions and rows count"; tasks_reset; agent l1 "#7 lead: x" idle idle "$root" 2 2026-11-04T09:00:00Z; agent l2 "#7.1 worker: x" working busy "$wt" 1 2026-11-04T09:10:00Z; row 7.1 tester 1.0000 2026-11-04T09:05:00Z
+  fx "$C" "$M" high $W400; draw; bar "#7 L 4/10\$" 17 "green:7 grey:10"
+  begin "tasks at work: stage, spent/budget, green, yellow from 80%, yellow at 100%, red past; a live session and its row count once; idle, another folder, self: no bar"; tasks_reset; s=2026-11-04T10:00
+  agent a1 "$C" working busy "$root" 1 "$s:00Z"
+  agent b1 "#11 tester: x" done - "$wt" 2 "$s:01Z"; row 11 tester 2.0000 "$s:01Z"; agent b2 "#11 worker: x" working busy "$wt" 5 "$s:02Z"; row 11 verifier "in coordinator" ""; row 11 task - "$s:01Z"
+  agent c1 "#12 tester: x" working busy "$wt" 8 "$s:03Z"
+  agent d1 "#13 verifier: x" working busy "$wt" 3 "$s:04Z"; row 13 verifier 3.0000 "$s:04Z"; row 13 worker 8.0000 "$s:05Z"
+  agent e1 "#14 researcher: x" working busy "$wt" 10 "$s:06Z"
+  agent f1 "#20 worker: x" idle idle "$wt" 1 "$s:07Z"
+  agent g1 "#21 worker: x" working busy "$other" 1 "$s:08Z"
+  fx "$C" "$M" high $W400; draw
+  is "$L400 $dot #11 W 7/10\$ $dot #12 T 8/10\$ $dot #13 V 11/10\$ $dot #14 R 10/10\$"
+  bar "#11 W 7/10\$" 17 "green:12 grey:5"; bar "#12 T 8/10\$" 17 "yellow:14 grey:3"; bar "#13 V 11/10\$" 17 "red:17"; bar "#14 R 10/10\$" 17 "yellow:17"
+  begin "not a coordinator: no task bars and no core mark"; upstream "$A"; fx "#11 worker: x" "$M" high $W400; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call in a session that is not a coordinator"
+
+  tasks_reset; printf 6 > "$tmp/stub/git.sleep"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; fx "$C" "$M" high $W400
+  begin "the core mark: the first read detached, the script does not wait for git ls-remote, nothing shown"; draw; [ ! -f "$tmp/stub/git.done" ] || no "wants the script done before the stub git (6 s) answered"
+  is "$L400"
+  if waitfor "$A"; then
+    grep -Eq 'ls-remote .*claude-coordinator.* refs/heads/main' "$tmp/stub/git.log" || no "wants 'git ls-remote <the core's address> refs/heads/main', got '$(cat "$tmp/stub/git.log")'"
+    begin "the core mark shown, first, letters red to yellow; git not read again inside 12 hours"; draw; [ "$(first)" = "core ^" ] || no "wants 'core <up arrow>' as the first bar, printed '$(plain)'"
+    g="$(awk -F'\t' 'NR == 1 { n = split($5, a, " "); for (i = 1; i <= n; i++) { split(a[i], c, ";"); if (c[1] != 255 || c[2] < 80 || c[2] > 220 || c[3] < 60 || c[3] > 80) { print "bad"; exit } if (!(a[i] in d)) { d[a[i]] = 1; k++ } } print k + 0 }' "$tmp/bars")"
+    [ "$g" -ge 3 ] 2>/dev/null || no "wants its letters in at least 3 colours, each 255;80-220;60-80, got '$g'"
+    [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote inside 12 hours, got $(gitcalls)"
+    begin "past 12 hours: the old file drawn, git read once more; upstream's main at the recorded commit: no mark"; printf 0 > "$tmp/stub/git.sleep"; printf '%s' "$B" > "$tmp/stub/git.head"; touch -t "$(stamp 46800)" "$up"
+    draw; [ "$(first)" = "core ^" ] || no "wants the mark from the old file, printed '$(plain)'"
+    waitfor "$B" || no "wants the file read again after 13 hours"
+    [ "$(gitcalls)" = 2 ] || no "wants a second git ls-remote, got $(gitcalls)"
+    draw; is "$L400"
+  else no "wants the detached git ls-remote's answer in core-upstream.txt"; fi
+  begin "the core mark with no PROJECT.md: nothing"; upstream "$A"; rm "$root/coordinator/PROJECT.md"; draw; is "$L400"; core_row
+  begin "the wave: a task's fill has lighter cells, it and the core mark move with the clock"; agent w1 "#11 worker: x" working busy "$wt" 7 2026-11-04T11:00:00Z; draw
+  u="$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")"; m="$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")"
+  if [ -n "$u" ] && [ -n "$m" ]; then
+    [ "$(printf '%s' "$u" | tr ' ' '\n' | grep -v '^48;54;61$' | sort -u | grep -c .)" -ge 2 ] || no "wants at least 2 fill colours in the task's bar, got '$u'"
+    sleep 6; draw
+    [ "$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")" != "$u" ] || no "wants the task's fill changed after 6 s"
+    [ "$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")" != "$m" ] || no "wants the core mark's colours changed after 6 s"
+  else no "wants a task bar and a core mark to read, printed '$(plain)'"; fi
+  tasks_reset
+
+  fx x "$M" high $W400 ",\"rate_limits\":{\"five_hour\":{\"used_percentage\":14},$(wk 30 502)}"
+  for t in "140|1 1 1 " "66|1 1 2 " "40|1 2 3 " "|1 1 1 "; do
+    begin "the width '${t%%|*}': whole bars, on lines ${t#*|}"
+    if [ -n "${t%%|*}" ]; then COLUMNS="${t%%|*}" draw; else draw; fi
+    lines "${t#*|}"; bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; bar "5h limit 14%" 14 "green:2 grey:12"; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
+  done
+}
+if [ "$line" = yes ]; then bar_cases; else echo "skip the bars: no jq here (the .sh needs it for its line)"; fi
+
+begin "refreshInterval 5 on TOOLKIT's statusLine, no other"; grep -q '"statusLine".*"refreshInterval": 5}' "$core/TOOLKIT.md" || no "wants '\"refreshInterval\": 5' on the statusLine lines in TOOLKIT.md"
+! grep '"statusLine"' "$core/TOOLKIT.md" | grep -q '"refreshInterval": 10' || no "wants no \"refreshInterval\": 10 on a statusLine line in TOOLKIT.md"
+
+# the install's version rule: a copy in <config>/coordinator/statusline/ is replaced only by a newer script
+i="$tmp/inst"; if [ "$kind" = ps ]; then f=statusline.ps1; else f=statusline.sh; fi; src="$core/scripts/$f"; to="$i/coordinator/statusline/$f"
+inst() { if [ "$kind" = ps ]; then CLAUDE_CONFIG_DIR="$(winpath "$i")" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$src")" -Install; else CLAUDE_CONFIG_DIR="$i" bash "$src" --install; fi < /dev/null > /dev/null 2> "$tmp/err"; }
+begin "the install: none there: copied; a newer copy stays; an older one replaced; the copy draws by itself"
+v="$(tr -d '\r' < "$src" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1)"
+if [ -z "$v" ]; then no "wants a line '# statusline-version: <whole number>' in scripts/$f"
+else
+  inst; cmp -s "$src" "$to" || no "wants $f copied whole to <config>/coordinator/statusline/"
+  printf '# statusline-version: %s\nnewer\n' "$((v + 1))" > "$to"; cp "$to" "$tmp/newer"; inst; cmp -s "$tmp/newer" "$to" || no "wants a newer copy kept byte for byte"
+  printf '# statusline-version: %s\nolder\n' "$((v - 1))" > "$to"; inst; cmp -s "$src" "$to" || no "wants an older copy replaced by the script"
+  in="$fixture"; script="$i/coordinator/statusline/statusline"; run "$tmp/copy"; [ "$line" = no ] || is "$want"; [ -f "$tmp/copy/coordinator/statusline.json" ] || no "wants the copy to save statusline.json"; script="$core/scripts/statusline"
+fi
+finish
 [ "$fail" = 0 ] && echo "statusline: $n cases passed" || echo "statusline: failures above ($n cases)"
 exit "$fail"
