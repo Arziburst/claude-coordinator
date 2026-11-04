@@ -131,7 +131,8 @@ printf '11\tMERGEABLE\tCLEAN\t11-fix\tsrc/x.ts\n12\tMERGEABLE\tBEHIND\t12-feat\t
 run land 11 --poll 0
 code 0; has "MERGED #11: a111111"; has "AFFECTED #12: 12-feat - merge main now: src/x.ts, docs/LOG.md"; hasnt "AFFECTED #19"
 # the event table's merge row, printed line by line so its duties have a trigger (#242, #466)
-has "AFTER MERGE #11: cleanup-worker $(case "$kind" in sh) echo --worktree ;; *) echo -Worktree ;; esac) .claude/worktrees/11-fix (CORE §8)"; hasnt "the event table (CORE §4) -"
+wtflag=-Worktree; [ "$kind" = sh ] && wtflag=--worktree
+has "AFTER MERGE #11: cleanup-worker $wtflag .claude/worktrees/11-fix (CORE §8)"; hasnt "the event table (CORE §4) -"
 has "merge-queue: 1 merged"; called "pr merge 11 --squash --match-head-commit $H11"; notcalled "--delete-branch"
 called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"
 
