@@ -244,8 +244,8 @@ native() { (cd -P -- "$1" && case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) pwd -W 
 rp="$(native "$tmp/repo")"
 sep=/; case "$rp" in *\\*) sep='\' ;; esac   # (no case inside $(...): bash 3.2 cannot parse it)
 # a git that unregisters a worktree but leaves its folder (#238), for the cleanup cases that ask for it with $tmp/leave-folder
-realgit="$(command -v git)"; gw="$tmp/gitwrap"; mkdir -p "$gw"
-cat > "$gw/git" <<EOF
+realgit="$(command -v git)"; gitw="$tmp/gitwrap"; mkdir -p "$gitw"
+cat > "$gitw/git" <<EOF
 #!/usr/bin/env bash
 if [ "\$3 \$4" = "worktree remove" ] && [ -f "$tmp/leave-folder" ]; then
   rm -f "$tmp/leave-folder"; "$realgit" "\$@"; mkdir -p "\$5"; [ -z "\${LEAVE_FILE:-}" ] || : > "\$5/held"; exit 1
@@ -254,7 +254,8 @@ exec "$realgit" "\$@"
 EOF
 # (MSYS noglob: the bash started from PowerShell gets git's arguments as given - its own globbing would
 # expand the braces of `<ref>^{commit}`)
-printf '%s\n' '$env:MSYS = ("$env:MSYS noglob").Trim()' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gw/git.ps1"; chmod +x "$gw/git"
+printf '%s\n' '$env:MSYS = ("$env:MSYS noglob").Trim()' '& bash (Join-Path $PSScriptRoot "git") @args' 'exit $LASTEXITCODE' > "$gitw/git.ps1"; chmod +x "$gitw/git"
+wtg="$tmp/repo/.claude/worktrees/77-gate"   # the tests_first gate's reused worktree: made in the contract section, removed after the round-3 section
 me() {   # me <branch> [<start>]: a worktree on a new branch with no commits of its own, not pushed
   w="$tmp/repo/.claude/worktrees/$1"
   git -C "$tmp/repo" worktree add -q --no-track -b "$1" "$w" "${2:-main}"
@@ -631,7 +632,6 @@ expect_gate "contract in the brief"; nothing_made 76-gate
 git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/76-gate" 2>/dev/null; git -C "$tmp/repo" branch -q -D 76-gate 2>/dev/null
 # a valid --tester-commit: the reused worktree's HEAD (the tester's commit on the task branch), then an
 # ancestor of it; on a new branch, a commit of the base
-wtg="$tmp/repo/.claude/worktrees/77-gate"
 git -C "$tmp/repo" worktree add -q -b 77-gate "$wtg" main && g -C "$wtg" commit -q --allow-empty -m "test: t8 (tester)"
 tc="$(git -C "$wtg" rev-parse HEAD)"; tcs="$(printf '%s' "$tc" | cut -c1-7)"
 : > "$STUB_LOG"
@@ -1433,11 +1433,11 @@ fi
 # --- a folder git could not delete (a just-stopped session still holding it, #238): git unregisters the
 # worktree but the folder stays - removed when empty, left with an error when not (the git wrapper: the set-up)
 mk 26-fix; : > "$tmp/leave-folder"
-PATH="$gw:$PATH" STUB_HEADS="$h" check 0 "cleanup: git leaves the folder empty - it is removed" -- cleanup --worktree "$w"
+PATH="$gitw:$PATH" STUB_HEADS="$h" check 0 "cleanup: git leaves the folder empty - it is removed" -- cleanup --worktree "$w"
 expect_in "removed the empty folder git left"
 [ -d "$w" ] && { echo "FAIL: the empty folder git left was not removed"; fail=1; }
 mk 27-fix; : > "$tmp/leave-folder"
-PATH="$gw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: git leaves the folder with a file - kept, reported" -- cleanup --worktree "$w"
+PATH="$gitw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: git leaves the folder with a file - kept, reported" -- cleanup --worktree "$w"
 expect_in "is no longer a worktree but not empty - left as is"
 [ -f "$w/held" ] || { echo "FAIL: a folder with a file in it was touched"; fail=1; }
 
@@ -1529,7 +1529,7 @@ expect_in "EMPTY: 41-empty has no commits beyond origin/main and was never pushe
 gone 41-empty "run again once the removal works"
 # git unregisters the worktree but leaves a file in the folder: the branch is put back in the repository
 me 42-empty; : > "$tmp/leave-folder"
-PATH="$gw:$PATH" STUB_GH_RC=1 LEAVE_FILE=1 check 1 "cleanup: an empty branch, git leaves the folder with a file" -- cleanup --worktree "$w"
+PATH="$gitw:$PATH" STUB_GH_RC=1 LEAVE_FILE=1 check 1 "cleanup: an empty branch, git leaves the folder with a file" -- cleanup --worktree "$w"
 expect_in "is no longer a worktree but not empty - left as is; branch 42-empty put back at "
 git -C "$tmp/repo" show-ref -q --verify refs/heads/42-empty || { echo "FAIL: the branch was not put back after the failed removal"; fail=1; }
 # pushed to another remote only (refs/remotes/backup/<branch>): not never pushed - the usual checks
@@ -1590,7 +1590,7 @@ printf 'e5454545\t%s\n' "$(native "$w")" > "$SS.cwd"
 STUB_STOP_COMMIT="$w" STUB_GH_RC=1 check 3 "cleanup: CHANGED - the notes folder kept" -- cleanup --worktree "$w" --session e5454545
 expect_in "CHANGED: "; nkept "changed"
 mk 55-lead; notes; : > "$tmp/leave-folder"
-PATH="$gw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: a failed removal - the notes folder kept" -- cleanup --worktree "$w"
+PATH="$gitw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: a failed removal - the notes folder kept" -- cleanup --worktree "$w"
 expect_in "not empty - left as is"; nkept "failed removal"
 mk 56-lead
 STUB_HEADS="$h" check 0 "cleanup: merged, no notes folder - no error" -- cleanup --worktree "$w"
