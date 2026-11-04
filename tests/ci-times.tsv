@@ -3,6 +3,12 @@
 # pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 41584645981 (a4e608f),
 # 41555979259 (b5f0a28), 41457590582 (14eba92), all before the shards: the steps' shape changes the seconds.
 # The compaction rows (#342) are provisional: one run of their own pull request (41661637153, 6969cf7), not three medians of main.
+# #405: the rows of report-issue (PowerShell 7, Linux) and merge-queue (Git Bash, Windows PowerShell 5.1), over their line in every
+# run since the shards, hold the medians of 41686156714 (3d96f57), 41693993135 (e2a63b0), 41698437043 (f30d7a5). The split sets'
+# part rows (`- part <k>/<n>`: the guard sets in 5, the workers sets in 3, report-issue on Windows in 2) are provisional: the workers'
+# parts measured on one run of their own pull request (41771464759, 8f17328); the guard's parts on one run of five parts (41774407135,
+# 1e7259f; the four parts of 8f17328 took about twice that, a part's cases in one parallel job on four cores, #459); report-issue's
+# parts estimated from 41771464759's three-part steps until a run measures them; the whole sets' rows were replaced by them.
 ubuntu	1	Set up job
 ubuntu	1	Run actions/checkout@v4
 ubuntu	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -36,9 +42,15 @@ ubuntu	2	run-stats computes the forecast numbers of the fixture run logs (bash)
 ubuntu	72	run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
 ubuntu	42	safety-guard blocks and allows the shared cases (bash, with jq)
 ubuntu	45	safety-guard without jq (bash, the sed / awk JSON reader)
-ubuntu	914	safety-guard.ps1 under PowerShell 7 too (Linux)
+ubuntu	364	safety-guard.ps1 under PowerShell 7 too (Linux) - part 1/5
+ubuntu	148	safety-guard.ps1 under PowerShell 7 too (Linux) - part 2/5
+ubuntu	171	safety-guard.ps1 under PowerShell 7 too (Linux) - part 3/5
+ubuntu	164	safety-guard.ps1 under PowerShell 7 too (Linux) - part 4/5
+ubuntu	172	safety-guard.ps1 under PowerShell 7 too (Linux) - part 5/5
 ubuntu	70	start-worker and cleanup-worker against temporary repositories (bash)
-ubuntu	805	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)
+ubuntu	125	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 1/3
+ubuntu	336	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 2/3
+ubuntu	376	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 3/3
 ubuntu	38	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
 ubuntu	60	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (PowerShell 7, Linux)
 ubuntu	4	merge-queue against a stub gh (bash)
@@ -46,7 +58,7 @@ ubuntu	18	merge-queue against a stub gh (PowerShell 7, Linux)
 ubuntu	1	check-bounds on a throwaway repository (bash)
 ubuntu	9	check-bounds on a throwaway repository (PowerShell 7, Linux)
 ubuntu	14	report-issue against a stub gh (bash)
-ubuntu	94	report-issue against a stub gh (PowerShell 7, Linux)
+ubuntu	205	report-issue against a stub gh (PowerShell 7, Linux)
 ubuntu	57	watch-sessions against a stub claude (bash)
 ubuntu	111	watch-sessions against a stub claude (PowerShell 7, Linux)
 ubuntu	4	runs against fixture transcripts and a stub claude (bash)
@@ -119,12 +131,19 @@ windows	144	compaction keeps the checkpoint through the two hooks (PowerShell)
 windows	220	retro measures the fixture weeks (PowerShell)
 windows	17	The status line saves its files and leaves no temp file (PowerShell)
 windows	111	run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-windows	996	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)
-windows	616	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)
+windows	330	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
+windows	211	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/5
+windows	230	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 3/5
+windows	202	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 4/5
+windows	223	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 5/5
+windows	145	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 1/3
+windows	348	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 2/3
+windows	291	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 3/3
 windows	105	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
-windows	120	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
+windows	224	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
 windows	23	check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
-windows	725	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+windows	306	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 1/2
+windows	306	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 2/2
 windows	313	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
 windows	201	runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
 windows	4	selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1, code page 866, a non-ASCII folder)
