@@ -85,7 +85,7 @@ EOF
 # as claude.exe gets them (a script called in-process would see 5.1's quote escaping, which the
 # command line consumes)
 cat > "$tmp/bin/claude.ps1" <<'EOF'
-& bash (Join-Path $PSScriptRoot 'claude') @args
+& $(if ($env:STUB_BASH) { $env:STUB_BASH } else { 'bash' }) (Join-Path $PSScriptRoot 'claude') @args
 exit $LASTEXITCODE
 EOF
 cat > "$tmp/bin/gh.ps1" <<'EOF'
@@ -1173,6 +1173,19 @@ for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
   asnothing "an assistant without $vf"
   expect_no_line "watch:"; expect_no_line "subscribe:"   # refused: neither line (#365)
 done
+# a `bash` first on PATH that answers nothing, as the WSL launcher (#465): Git's bash is used where there is one, else no working bash is said
+if [ "$kind" = ps ]; then
+  wsl="$tmp/wslbin"; export STUB_BASH="$(command -v bash)"; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) STUB_BASH="$(cygpath -w "$STUB_BASH")" ;; esac; mkdir -p "$wsl"; printf '#!/bin/sh\nexit 1\n' > "$wsl/bash"; chmod +x "$wsl/bash"; printf '@exit /b 1\r\n' > "$wsl/bash.cmd"
+  mkas wsl1; : > "$STUB_LOG"
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+    PATH="$wsl:$PATH" check 0 "start: an assistant, the WSL launcher first on PATH" -- start "${A[@]}" --name "assistant: wsl1" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
+    expect_in "[dry-run]"; asnothing "an assistant, the WSL launcher first on PATH" ;;
+  *) # no Git's bash outside Windows (on Windows Git is always found): the bash on PATH answers nothing
+    PATH="$wsl:$PATH" check 1 "start: an assistant, no working bash" -- start "${A[@]}" --name "assistant: wsl1" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
+    says "an assistant, no working bash" "no working bash" "tried"; asnothing "an assistant, no working bash"
+    printf '%s\n' "$LAST" | grep -qiE 'brief is' && { echo "FAIL (an assistant, no working bash): the message blames the path"; fail=1; } ;;
+  esac
+fi
 
 # --- the round and money gate (#381, the header): dry runs on a fixture run log, its columns in their own order ---
 rg="$tmp/rgrepo"; git init -q -b main "$rg"; git -C "$rg" config core.autocrlf false; mkdir -p "$rg/coordinator"
