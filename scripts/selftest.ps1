@@ -326,7 +326,8 @@ switch ($Step) {
     $t = NewTemp
     $env:CLAUDE_CONFIG_DIR = $t
     $out = "$(Feed (Join-Path $coreDir 'tests/selftest/status.json') (Join-Path $coreDir 'scripts/statusline.ps1'))"
-    if ($out -notmatch '5h 14%.*week 92%') { Fail "statusline$tag`: printed '$out'" }
+    $out = $out -replace "$([char]27)\[[0-9;]*m", ''   # a bar's fill splits its text with colour codes
+    if ($out -notmatch '5h limit 14%.*week 92%') { Fail "statusline$tag`: printed '$out'" }
     elseif (-not (Test-Path -LiteralPath (Join-Path $t 'coordinator/sessions/selftest-fixture.json'))) { Fail "statusline$tag`: no session file" }
     else { Pass "statusline$tag" }
     Remove-Item -LiteralPath $t -Recurse

@@ -88,6 +88,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    install the roles (TOOLKIT *Workers*, Roles: the one-time step `roles-link` first, when it is *Not done yet* and the owner said yes; then a project with the link has them at the new commit, one without gets them in `~/.claude/agents/`) and refresh the core's skills — every
    `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
    removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
+   Where the user settings' `statusLine` points at the machine's neutral copy, run `scripts/statusline --install` from the new core copy — automatic, it replaces that copy only by a newer version (TOOLKIT *Usage*).
    Run the one-time checks the owner said yes to and `coordinator-window`; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.
