@@ -1208,7 +1208,7 @@ expect_in "[dry-run]"; rgone "gate: no log"
 rgc 504.1 14 > "$tmp/rg504.md"
 check 0 "gate: a lead's sub-contract has no gate" -- start --name "#504.1 worker: G" "${RG[@]}" --branch 504-1-g --brief-file "$tmp/brief.md" --contract "$tmp/rg504.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: a lead's sub-contract"
-cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"; mkas rg
+mkas rg; cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"
 check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
 expect_in "[dry-run]"; rgone "gate: an assistant"
 rm -f "$ar/coordinator/RUNS.tsv"

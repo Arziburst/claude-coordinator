@@ -43,9 +43,10 @@ jobs:
 # #405: 20 shards a run (Ubuntu 8, Windows 10, macOS 2: the owner's target, the plan's 20 slots; a second run waits for them);
 # the long sets run in parts by their data, every case once (tests/ci-times/run.sh proves it): the two guard sets in five parts
 # (SG_PART=<k>/5, a case's part by its index in cases.txt), the two workers sets in three and report-issue on Windows in two
-# (WK_PART, RI_PART: a section's part by its index among the `# --- ` lines of its run.sh). Every shard then holds about 9 to 10
-# minutes by the measured seconds of run 41771464759 (the guard's seconds vary up to twofold with the runner, #384); a longer one
-# is rebalanced at the next CI audit. A shard past SHARD_LIMIT is a warning below.
+# (WK_PART, RI_PART: a section's part by its index among the `# --- ` lines of its run.sh). Every shard then holds about 5 to 11
+# minutes by the measured seconds of run 41774407135 (the guard's twofold seconds at four parts were mostly that count on the runner's
+# four cores: a part's cases all fell in one parallel job, #459; five parts do not); a longer one is rebalanced at the next CI audit.
+# A shard past SHARD_LIMIT is a warning below.
   shard-ubuntu:
     strategy:
       fail-fast: false
@@ -643,7 +644,7 @@ jobs:
           diff <(bash scripts/check-core.sh) <(pwsh -NoProfile -File scripts/check-core.ps1)
           diff <(bash scripts/selftest.sh scripts) <(pwsh -NoProfile -File scripts/selftest.ps1 scripts)
       - name: Both variants print the same (pwsh on Linux)
-        if: matrix.shard == 'ubuntu-5' && steps.need.outputs.variants == 'true'
+        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.variants == 'true'
         run: |
           for f in tests/selftest/hooks/*.json tests/selftest/hooks/os/*.json; do diff <(bash scripts/selftest.sh hooks --settings $f) <(pwsh -NoProfile -File scripts/selftest.ps1 hooks -Settings $f); done
           for id in blocked0 nonblock noblock0 missing0 editblk0; do diff <(CLAUDE_CONFIG_DIR=tests/selftest/claude bash scripts/selftest.sh hookcheck --session $id) <(CLAUDE_CONFIG_DIR=tests/selftest/claude pwsh -NoProfile -File scripts/selftest.ps1 hookcheck -Session $id); done
@@ -652,6 +653,9 @@ jobs:
           diff <(bash scripts/check-scripts.sh scripts tests/check-scripts/broken tests/check-scripts/pwsh7) <(pwsh -NoProfile -File scripts/check-scripts.ps1 scripts tests/check-scripts/broken tests/check-scripts/pwsh7)
           diff <(bash scripts/check-scripts.sh . tests) <(pwsh -NoProfile -File scripts/check-scripts.ps1 . tests)
           f="$RUNNER_TEMP/example.md"
+          # both scripts print the same `cannot read` on a missing file, so an empty diff there proves nothing: its writer is the example contract's step, on this shard
+          [ -s "$f" ] || { echo "$f is missing or empty: the example contract's step must run first, on this shard"; exit 1; }
+          wc -l "$f"
           diff <(bash scripts/check-contract.sh "$f") <(pwsh -NoProfile -File scripts/check-contract.ps1 "$f")
           home="$RUNNER_TEMP/home"; mkdir -p "$home"
           for j in \
@@ -774,7 +778,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-ubuntu.result }}
-          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 8; never a failure
+          SHARD_LIMIT: 900   # seconds a shard may take before its line is a warning (#405): 15 minutes, the longest shard by the numbers is about 11; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=ubuntu '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
@@ -792,7 +796,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-macos.result }}
-          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 8; never a failure
+          SHARD_LIMIT: 900   # seconds a shard may take before its line is a warning (#405): 15 minutes, the longest shard by the numbers is about 11; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=macos '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
@@ -810,7 +814,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.shard-windows.result }}
-          SHARD_LIMIT: 1200   # seconds a shard may take before its line is a warning (#405): 20 minutes, the longest shard by the numbers is about 8; never a failure
+          SHARD_LIMIT: 900   # seconds a shard may take before its line is a warning (#405): 15 minutes, the longest shard by the numbers is about 11; never a failure
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=windows '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
