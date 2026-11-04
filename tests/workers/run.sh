@@ -35,6 +35,10 @@ command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
 mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+# $STUB_LASTARG: the PowerShell stub put the launch text in that file (#397); it is the last argument
+if [ -n "${STUB_LASTARG:-}" ] && [ "${!#}" = '@LASTARG' ]; then
+  la="$(cat "$STUB_LASTARG"; printf x)"; la="${la%x}"; set -- "${@:1:$#-1}" "$la"
+fi
 printf '%s\n' "$*" >> "$STUB_LOG"
 # --bg: remember the folder and the session name; agents --json: list the names started so far, then
 # the sessions of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>` per line, pretty-printed as the
@@ -84,8 +88,23 @@ EOF
 # as claude.exe gets them (a script called in-process would see 5.1's quote escaping, which the
 # command line consumes)
 cat > "$tmp/bin/claude.ps1" <<'EOF'
-& bash (Join-Path $PSScriptRoot 'claude') @args
-exit $LASTEXITCODE
+# MSYS bash cuts an argument with a line break at 8186 characters (#397): the launch text (the last
+# argument of --bg) goes to the bash stub in a file, not in its command line. It gets there through a
+# native child of this shell, so it is still as the command line carried it, with 5.1's quote escaping
+$a = @($args)
+if ($a.Count -gt 1 -and $a[0] -eq '--bg') {
+  $f = Join-Path $PSScriptRoot 'lastarg.txt'
+  & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'recv.ps1') $f @a
+  $a[$a.Count - 1] = '@LASTARG'
+  $env:STUB_LASTARG = $f
+}
+& bash (Join-Path $PSScriptRoot 'claude') @a
+$rc = $LASTEXITCODE
+$env:STUB_LASTARG = $null
+exit $rc
+EOF
+cat > "$tmp/bin/recv.ps1" <<'EOF'
+[IO.File]::WriteAllText($args[0], $args[$args.Count - 1], (New-Object Text.UTF8Encoding($false)))
 EOF
 cat > "$tmp/bin/gh.ps1" <<'EOF'
 if ($env:STUB_GH_RC -and $env:STUB_GH_RC -ne '0') { exit [int]$env:STUB_GH_RC }
@@ -315,6 +334,14 @@ grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not laun
 grep -q 'Report to: the session named "Core lead"' "$STUB_LOG" || { echo "FAIL: the brief does not name the report address"; fail=1; }
 grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/12-fix\." "$STUB_LOG" ||
   { echo "FAIL: the brief does not start with entering the worktree"; fail=1; }
+# a long launch text reaches claude whole (#397: MSYS bash cut an argument with a line break at 8186 characters)
+: > "$STUB_LOG"
+awk 'BEGIN { for (i = 1; i <= 140; i++) printf "line %03d %090d\n", i, i; print "LAST LINE OF THE LONG BRIEF" }' > "$tmp/brief-long.md"
+SL=("${S[@]}"); for ((i = 0; i < ${#SL[@]}; i++)); do [ "${SL[i]}" = --brief-file ] && SL[i+1]="$tmp/brief-long.md"; done
+check 0 "start: a long brief" -- start "${SL[@]}"
+{ grep -q 'LAST LINE OF THE LONG BRIEF' "$STUB_LOG.arg" && [ "$(wc -c < "$STUB_LOG.arg")" -gt 20000 ] && [ "$(wc -c < "$STUB_LOG.arg")" -le 24000 ]; } ||
+  { echo "FAIL: a long brief did not reach claude intact ($(wc -c < "$STUB_LOG.arg") characters)"; head -c 600 "$STUB_LOG.arg"; printf '%s\n' "$LAST" | head -5; fail=1; }
+rm -f "$tmp/brief-long.md"
 : > "$STUB_LOG"
 check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
