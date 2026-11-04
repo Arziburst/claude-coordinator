@@ -153,8 +153,9 @@ The numbered list below says what each answer sets, where it is recorded and wha
    succeeds there too when credits are on. No row → Fable stays off the ladder; credits on → the
    coordinator says that the guard rail on Fable's weekly share is then the only stop (CORE §7).
 9. **Status line** — only when this Claude Code has none (no `statusLine` in the user or project
-   settings): show `Opus 5.5 (high) · ctx 837k/1M (84%) · 5h 14% · week 92%`. *Yes* (recommended — the
-   coordinator reads its limits from it, §9): install the script from the core copy (TOOLKIT.md).
+   settings): show `Opus 5.5 high · 837k/1M 83% · 5h limit 14% · week 92% · reset 50%`, as coloured bars. *Yes* (recommended — the
+   coordinator reads its limits from it, §9): install the machine's neutral copy from the core copy (TOOLKIT.md). One
+   already pointing into a project's core copy: the one-time step `statusline-neutral`.
    *No:* nothing installed; the coordinator asks about limits when it matters.
 10. **The coordinator's name.** Explain: workers, leads and other sessions find this
     coordinator by its session name — they send their reports to it, and when that name is not found

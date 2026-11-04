@@ -644,9 +644,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 
 ### F-SPEND-08 The status line
 - defined: scripts/statusline.sh, scripts/statusline.ps1, TOOLKIT.md
-- entry: INIT question 9; one-time step `statusline-verified`
-- promises: installed only on the owner's yes and only where no status line exists; it saves the status JSON per session for the coordinator and prints model, context and limits
-- tested by: selftest scripts step (the status line on a fixture); tests/statusline/run.sh (the line, the last session's status file and the session's copy saved whole and no `statusline.*.tmp` left: on the fixture, a config path with [ ], 20 runs at once (each file written through a temp file and a move: the session copy was left empty by a write that lost the race, about 1 round in 10 on Windows PowerShell 5.1), and in PowerShell the status file held open by a reader; in bash and both PowerShells)
+- entry: INIT question 9; one-time steps `statusline-verified`, `statusline-neutral`; every update refreshes the neutral copy
+- promises: installed only on the owner's yes and only where no status line exists, one neutral copy per machine replaced only by a newer version; it saves the status JSON per session for the coordinator and prints bars for model, context against the threshold set, and limits; in a coordinator's session also a newer core and the tasks at work
+- tested by: selftest scripts step (the status line on a fixture); tests/statusline/run.sh (the line, the last session's status file and the session's copy saved whole and no `statusline.*.tmp` left: on the fixture, a config path with [ ], 20 runs at once (each file written through a temp file and a move: the session copy was left empty by a write that lost the race, about 1 round in 10 on Windows PowerShell 5.1), and in PowerShell the status file held open by a reader; in bash and both PowerShells; the bars read cell by cell: the threshold, the colours at their edges, the week's four cases, the tasks with a stub `claude`, the core mark with a stub `git`, widths 140, 66, 40; the install's version rule)
 - not covered: only the owner sees the drawn line
 
 ### F-SPEND-09 Estimates and forecasts
