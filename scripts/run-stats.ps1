@@ -43,6 +43,9 @@ if ($Limits) {
   if (-not $File -or -not $Model -or $Kind -or $PerRun) { Show-Usage }
 } elseif (-not $File -or ([bool]$Kind -ne [bool]$Model) -or ($PerRun -and $Kind)) { Show-Usage }
 $ErrorActionPreference = 'Stop'
+# stdin is the pipeline ($input: a piped command in a session, a redirect under -File), not [Console]::In (#479)
+$script:StdinText = $null
+if ($PrJson -eq '-' -or $Spend5h -eq '-' -or $SpendWeek -eq '-') { $script:StdinText = (@($input) | ForEach-Object { [string]$_ }) -join "`n" }
 # numbers as the .sh prints them (6.50, not 6,50 on a Russian or German Windows)
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 $inv = [Globalization.CultureInfo]::InvariantCulture
@@ -115,7 +118,7 @@ if ($Limits) {
   # a spend in micro-USD, then the `top` models' part of it: tokens times the price of the model's line; the
   # week leaves not-weekly out
   function Spend([string]$f, [bool]$week) {
-    if ($f -eq '-') { $lines = @([Console]::In.ReadToEnd() -split "`r?`n"); if ($lines.Count -gt 0) { $lines[0] = $lines[0].TrimStart([char]0xFEFF) } }
+    if ($f -eq '-') { $lines = @($script:StdinText -split "`r?`n"); if ($lines.Count -gt 0) { $lines[0] = $lines[0].TrimStart([char]0xFEFF) } }
     else { $lines = Read-Lines $f }
     [long]$T = 0; [long]$TT = 0
     foreach ($line in $lines) {
@@ -179,7 +182,7 @@ if ($Task) {
   function IDiv([long]$a, [long]$b) { [long](($a - ($a % $b)) / $b) }   # whole numbers: exact
   function Read-Lines([string]$f) {
     $r = $null
-    try { if ($f -eq '-') { $r = @([Console]::In.ReadToEnd() -split "`n") } else { $r = @([IO.File]::ReadAllLines((Resolve-Path -LiteralPath $f).Path)) } } catch { }
+    try { if ($f -eq '-') { $r = @($script:StdinText -split "`n") } else { $r = @([IO.File]::ReadAllLines((Resolve-Path -LiteralPath $f).Path)) } } catch { }
     if ($null -eq $r) { [Console]::Error.WriteLine("run-stats: cannot read $f"); exit 1 }
     if ($r.Count -gt 0) { $r[0] = $r[0].TrimStart([char]0xFEFF) }
     ,@($r | ForEach-Object { $_ -creplace "`r$", '' })
@@ -205,6 +208,7 @@ if ($Task) {
   # later one in the list); all green: the last completion; the JSON as one line, read as text, each check a flat object
   [long]$MergedAt = -1; $chk = 'none'; [long]$green = -1; $redName = ''; $redState = ''
   if ($PrJson) {
+    if ($PrJson -eq '-' -and [string]::IsNullOrWhiteSpace($script:StdinText)) { [Console]::Error.WriteLine("run-stats: the PR's JSON on stdin is empty"); exit 1 }
     $s = ' ' + ((Read-Lines $PrJson) -join ' ')
     function Str([string]$o, [string]$k) { $n = [regex]::Match($o, '"' + $k + '"[ \t]*:[ \t]*"([^"]*)"'); if ($n.Success) { $n.Groups[1].Value } else { '' } }
     $MergedAt = Epoch (Str $s 'mergedAt')

@@ -233,7 +233,10 @@ taskrow() {
   # the PR: `merged <seconds|->`, then `checks none`, `checks green <seconds>` (the last completion of the
   # checks' latest runs) or `checks red <state> <name>`; the JSON as one line, read as text, each check a flat object
   if [ -n "$pj" ]; then
-    x="$pj"; [ "$x" = - ] && x=""
+    x="$pj"; pjtext=""; [ "$x" = - ] && x=""
+    if [ -z "$x" ]; then   # stdin: empty is refused, as the .ps1 (#479)
+      pjtext="$(cat)"; [ -n "$(printf '%s' "$pjtext" | tr -d ' \t\r\n')" ] || { echo "run-stats: the PR's JSON on stdin is empty" >&2; return 1; }
+    fi
     x="$(B="$B" LC_ALL=C awk "$units$tfn"'
       { bom(); s = s " " $0 }
       function str(o, k,   v) { if (!match(o, "\"" k "\"[ \t]*:[ \t]*\"[^\"]*\"")) return ""
@@ -254,7 +257,7 @@ taskrow() {
         g = -1
         for (i = 1; i <= n; i++) { k = key[i]; if (!ok[k]) { print "checks red", (st[k] == "" ? "unknown" : st[k]), nm[k]; exit }
           if (fin[k] > g) g = fin[k] }
-        print (g < 0 ? "checks none" : "checks green " g) }' ${x:+"$x"})" || return 1
+        print (g < 0 ? "checks none" : "checks green " g) }' ${x:+"$x"} <<< "$pjtext")" || return 1
     G="${x%%
 *}"; G="${G#merged }"; C="${x#*
 }"

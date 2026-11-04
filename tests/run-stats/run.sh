@@ -67,7 +67,12 @@ run() {
       # stdin: 5.1 takes a bare - after a parameter through -File for a parameter name and fails, so -Spend5h:-
       -) case "${a[${#a[@]}-1]}" in -Spend5h | -SpendWeek | -PrJson | -Waits) a[${#a[@]}-1]="${a[${#a[@]}-1]}:-" ;; *) a+=(-) ;; esac ;;
       *) a+=("$x") ;; esac; done
-    "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/run-stats.ps1")" ${a[@]+"${a[@]}"} < "${IN:-/dev/null}" > out.raw 2> err.raw
+    if [ -n "${PIPE:-}" ]; then   # a pipeline inside a PowerShell session (#479): the file piped to the script, not a redirect
+      local q=""; for x in ${a[@]+"${a[@]}"}; do case "$x" in -*) q="$q $x" ;; *) q="$q '$x'" ;; esac; done
+      "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Raw '$(winpath "$tmp/$PIPE")' | & '$(winpath "$core/scripts/run-stats.ps1")'$q" < /dev/null > out.raw 2> err.raw
+    else
+      "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/run-stats.ps1")" ${a[@]+"${a[@]}"} < "${IN:-/dev/null}" > out.raw 2> err.raw
+    fi
   else
     bash "$core/scripts/run-stats.sh" "$@" < "${IN:-/dev/null}" > out.raw 2> err.raw
   fi
@@ -207,6 +212,12 @@ expect "task: --append, CRLF and a last line without its end" 0 "$k/expected-crl
 n=$((n + 1)); if [ "$(tail -c 2 app-crlf.tsv | od -An -c | tr -d ' ')" = '\r\n' ] && [ "$(tail -n 2 app-crlf.tsv | head -n 1 | od -An -c | tr -d ' \n')" = 'no-end\r\n' ]
 then echo "ok   task: --append kept CRLF and ended the last line first"; else bad "task: --append broke the line ends"; fi
 IN=pr-late.json expect "task: the PR's JSON from stdin" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json -
+PIPE=pr-late.json IN=pr-late.json expect "task: the PR's JSON piped inside a session - the same row (#479)" 0 "$k/expected-late.txt" - -- task-runs.tsv --task 40 --pr-json -
+cp task-runs.tsv app-empty.tsv
+expect "task: an empty stdin is refused, no row written (#479)" 1 - "run-stats: the PR's JSON on stdin is empty" -- app-empty.tsv --task 40 --pr-json - --append
+n=$((n + 1)); if cmp -s task-runs.tsv app-empty.tsv; then echo "ok   task: the refused empty stdin wrote no row"; else bad "task: a row was written on an empty stdin"; fi
+printf '' > empty.json
+PIPE=empty.json expect "task: an empty pipeline is refused (#479)" 1 - "run-stats: the PR's JSON on stdin is empty" -- app-empty.tsv --task 40 --pr-json - --append
 expect "task: the last run of a check red - not ready" 1 - "run-stats: task 40: not ready - the check checks (windows-latest) is FAILURE" -- \
   task-runs.tsv --task 40 --pr-json pr-red.json
 expect "task: a check still running - not ready" 1 - "run-stats: task 40: not ready - the check checks (macos-latest) is IN_PROGRESS" -- \
