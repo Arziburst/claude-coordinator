@@ -113,6 +113,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-STATE-06 | Layout migration | an older layout moves to its own git only on the owner's yes | STATE |
 | F-STATE-07 | The journal and open questions | one dated line per event; open questions asked first on return | STATE |
 | F-STATE-08 | The core's skills | `coord-*` skills point the coordinator to the event table and the procedures | STATE |
+| F-STATE-09 | The reset | on the owner's own words everything the coordinator holds goes behind a tag and is removed, then a new init; never the core's own repository | STATE |
 | F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
 | F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
 | F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
@@ -752,7 +753,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-STATE-08 The core's skills
 - defined: skills/, CORE.md §12b, procedures/INIT.md, procedures/UPDATE-CORE.md, ONE-TIME.md, scripts/check-core.sh, scripts/check-core.ps1
 - entry: INIT 3.4; every "update the core"; one-time step `coordinator-skills`; Claude Code lists the skills to the coordinator every turn
-- promises: fifteen `coord-*` skills — the procedures (update, self-test, retro, handoff, settings, what is your task, core findings, sources, research, spend report) and the event table's rows (task start, after a merge, a red check, a mistake, after a compaction); each says "Coordinator only" and points to the core file that wins over it, never a copy of its rules; copied into `coordinator/skills/` at init and refreshed by every update, the project's own skills untouched; check-core refuses a skill outside `coord-`, named unlike its folder, not marked as the coordinator's or naming a missing core file (#243)
+- promises: seventeen `coord-*` skills — the procedures (update, self-test, retro, handoff, settings, what is your task, core findings, sources, research, spend report) and the event table's rows (task start, after a merge, a red check, a mistake, after a compaction); each says "Coordinator only" and points to the core file that wins over it, never a copy of its rules; copied into `coordinator/skills/` at init and refreshed by every update, the project's own skills untouched; check-core refuses a skill outside `coord-`, named unlike its folder, not marked as the coordinator's or naming a missing core file (#243)
 - tested by: tests/check-core/run.sh (a skill naming a missing core file; a folder without `coord-`, a name not its folder, a description not the coordinator's; in bash and both PowerShells); Claude Code loading all fifteen measured once by hand (2026-10-20, 2.1.304)
 - not covered: whether the coordinator invokes a skill at its event rests on the model (a hint, not a trigger: the scripts and the after-compact hook are the triggers); the copy at init and update rests on the coordinator following the steps
 
@@ -762,6 +763,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: one dated line per event; unanswered questions are asked first, preferably as a quiz; no customer data or secrets in it
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
+
+### F-STATE-09 The reset
+- defined: procedures/RESET.md, skills/coord-reset/SKILL.md, scripts/reset-coordinator.sh, scripts/reset-coordinator.ps1, CORE.md §4, procedures/INIT.md
+- entry: the owner's own words asking for a reset (CORE §1.14), the `coord-reset` skill
+- promises: the core's own repository is refused first, read from files, a linked worktree too; a wrong `--confirm`, an open PR, another running session, anything in `coordinator/assistants/`, an unreachable remote, an unusable `--core-from` or a tag already there is a refusal with nothing changed; `gh` or `claude` failing is a refusal, but for a project with no git remote; all of `coordinator/` (ignored files too, raw bytes), the auto-memory and the project's `briefs/<id>.md` and `sessions/<id>.json` under `<config>/coordinator/` (by its sessions' transcripts at the root's folder and its worktrees', exact names) go behind `before-reset-<date>`, pushed before anything is removed; then `coordinator/` holds only `.git` and a clean core copy, `core=<sha>` in the commit's message; the project's own repository, the `.claude/agents` link, `~/.claude/agents/`, `statusline.json`, `agents/` and other projects' files are untouched; a new session runs INIT's full quiz
+- tested by: tests/reset-coordinator/run.sh (scratch projects under a temp folder, stub `gh` and `claude`, in bash and PowerShell)
+- not covered: the words of the confirmation hold only through CORE §1.14; a file held on Windows and the restore's line endings there are proven by the verifier, not by a test on every run; a project on a host `gh` cannot read cannot be reset
 
 ## UPDATE
 
