@@ -9,6 +9,7 @@
 # parts measured on one run of their own pull request (41771464759, 8f17328); the guard's parts on one run of five parts (41774407135,
 # 1e7259f; the four parts of 8f17328 took about twice that, a part's cases in one parallel job on four cores, #459); report-issue's
 # parts estimated from 41771464759's three-part steps until a run measures them; the whole sets' rows were replaced by them.
+# #449: the status line's rows hold one run of their own pull request (41836460206, d7d3060): the bars' cases, provisional.
 ubuntu	1	Set up job
 ubuntu	1	Run actions/checkout@v4
 ubuntu	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -36,8 +37,8 @@ ubuntu	14	compaction keeps the checkpoint through the two hooks (bash)
 ubuntu	64	compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
 ubuntu	3	retro measures the fixture weeks (bash)
 ubuntu	120	retro measures the fixture weeks (PowerShell 7, Linux)
-ubuntu	0	The status line saves its files and leaves no temp file (bash)
-ubuntu	13	The status line saves its files and leaves no temp file (PowerShell 7, Linux)
+ubuntu	15	The status line saves its files and leaves no temp file (bash)
+ubuntu	74	The status line saves its files and leaves no temp file (PowerShell 7, Linux)
 ubuntu	2	run-stats computes the forecast numbers of the fixture run logs (bash)
 ubuntu	72	run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
 ubuntu	42	safety-guard blocks and allows the shared cases (bash, with jq)
@@ -93,7 +94,7 @@ macos	2	session-tokens counts the fixture exactly (bash)
 macos	2	session-insights reads the fixture transcripts (bash)
 macos	22	compaction keeps the checkpoint through the two hooks (bash)
 macos	5	retro measures the fixture weeks (bash)
-macos	1	The status line saves its files and leaves no temp file (bash)
+macos	18	The status line saves its files and leaves no temp file (bash)
 macos	2	run-stats computes the forecast numbers of the fixture run logs (bash)
 macos	99	safety-guard blocks and allows the shared cases (bash, with jq)
 macos	97	safety-guard without jq (bash, the sed / awk JSON reader)
@@ -129,7 +130,7 @@ windows	61	session-tokens counts the fixture exactly (PowerShell)
 windows	51	session-insights reads the fixture transcripts (PowerShell)
 windows	144	compaction keeps the checkpoint through the two hooks (PowerShell)
 windows	220	retro measures the fixture weeks (PowerShell)
-windows	17	The status line saves its files and leaves no temp file (PowerShell)
+windows	120	The status line saves its files and leaves no temp file (PowerShell)
 windows	111	run-stats computes the forecast numbers of the fixture run logs (PowerShell)
 windows	330	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
 windows	211	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/5
