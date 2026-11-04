@@ -340,12 +340,13 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   coordinator\core\scripts\watch-sessions.ps1 -List coordinator\watch.txt`), with `run_in_background`.
   It polls `claude agents --json --all` every `--interval` seconds (default 120), reads the list again
   on every poll, prints nothing while every listed session is at work, and ends with one line per
-  finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`
+  finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`, `LONG <id> <name> <minutes>`
   (exit 0); `EMPTY` when the list is missing or holds no session (exit 0 — with nothing to watch it does
   not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1) — a call
   past `--agents-timeout` (default 60 s) is a failed poll: the watcher kills only the listing process
   it started itself (by its own `$!` / process handle), never a process under it or one looked up by
   name or id — a descendant of a hung listing is left running.
+  **LONG**, the one line for a session at work: state `working`, its transcript (`<config>/projects/<cwd, all but A-Za-z0-9 as ->/<sessionId>.jsonl`) unchanged for `--long-minutes` (default 45) or its line's `@<n>`, once per stretch; no transcript, no LONG. Look at what it runs, against its brief's limit; a legitimately long command gets `@<n>` in the watch list.
   **States, as measured:** the listing gives `state`, and `status` (`busy` / `idle`) only while the
   session's process lives — a live session between turns is `done` + `idle`, an exited one `done`
   with no status. State `working` or status `busy` = at work; state `stopped` / `failed` (any status),
@@ -355,7 +356,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   it at work. A list line is the session's short id (`id` in the listing) or its whole name, with an
   optional limit of its own at its end, ` @<n>` minutes (a lead waiting for its workers: `<id> @120`);
   a UTF-8 BOM, blank lines and comments (`# …`, a `#` followed by a blank or the line's end) are
-  skipped, `#12 worker: Fix` is a name. The only files it writes are the listing's output, in a fresh
+  skipped, `#12 worker: Fix` is a name. The only files it writes, all temp: `watch-sessions-long/<sessionId>` (LONG's last time) and the listing's output, in a fresh
   temp location per call (read from files, not a pipe, so a leftover child cannot hang it), deleted at
   once; it never stops, messages or changes a session; `--once` polls once (a manual check). The list is committed in `coordinator/` with the
   event's journal line; the sync starts the watcher when the list is not empty. Tests: `tests/watch-sessions/run.sh
@@ -750,8 +751,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
-  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))

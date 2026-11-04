@@ -3,7 +3,7 @@
 # command, it polls `claude agents --json --all` and ends - waking its caller once - only when a listed
 # session stopped, vanished or went quiet without its report.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-sessions.ps1 -List <file> [-Interval <s>]
-#     [-QuietMinutes <m>] [-QuietSeconds <s>] [-AgentsTimeout <s>] [-Once]
+#     [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-AgentsTimeout <s>] [-Once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
 # name; blank lines and comments ignored - a comment is a line whose first non-blank `#` is followed by a
 # blank or the line's end (`#12 worker: Fix` is a name); a UTF-8 BOM at its start is not part of the
@@ -19,8 +19,10 @@
 # prompt or a limit), with or without a status = quiet: QUIET once it stayed quiet for its limit
 # (-QuietMinutes, default 20; -QuietSeconds in its place, for tests; or the line's own), counted by
 # the watcher from the first poll that saw it quiet and started again after a poll that saw it at work.
+# State working, its transcript (<config>/projects/<cwd, all but A-Za-z0-9 as ->/<sessionId>.jsonl) unchanged for its limit
+# (-LongMinutes, default 45; -LongSeconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
-#   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes>
+#   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
 #   EMPTY: the list file is missing or holds no session (nothing to watch: it does not run)
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with -Once there is no next poll)
@@ -28,25 +30,26 @@
 # take (default 60); past it the one process the watcher started is killed by its own handle - nothing
 # under it, nothing else - and the poll failed. -Once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or -Once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# The only files it touches: two temp files per call ([IO.Path]::GetTempFileName) holding claude's
+# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time) and two per call ([IO.Path]::GetTempFileName) holding claude's
 # stdout and stderr - read from files, not a pipe, so a process left under a killed claude cannot hang
 # the watcher - removed as soon as they are read and on every way out. It never stops, messages or
 # changes a session.
 param([string]$List, [string]$Interval = '120', [string]$QuietMinutes = '20', [string]$QuietSeconds = '',
-  [string]$AgentsTimeout = '60', [switch]$Once)
+  [string]$LongMinutes = '45', [string]$LongSeconds = '', [string]$AgentsTimeout = '60', [switch]$Once)
 # a name is written as UTF-8, whatever the console's code page; the caller's console gets its own encoding
 # back on every way out (the body runs inside try, the encoding is restored in finally)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: -List <file> [-Interval <s>] [-QuietMinutes <m>] [-QuietSeconds <s>] [-AgentsTimeout <s>] [-Once]'
+$usage = 'usage: -List <file> [-Interval <s>] [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-AgentsTimeout <s>] [-Once]'
 function Usage([string]$m) { [Console]::Error.WriteLine("$m; $usage"); exit 2 }
 if (-not $List) { Usage 'missing -List' }
-foreach ($p in @(@('-Interval', $Interval), @('-QuietMinutes', $QuietMinutes), @('-QuietSeconds', $QuietSeconds), @('-AgentsTimeout', $AgentsTimeout))) {
+foreach ($p in @(@('-Interval', $Interval), @('-QuietMinutes', $QuietMinutes), @('-QuietSeconds', $QuietSeconds), @('-LongMinutes', $LongMinutes), @('-LongSeconds', $LongSeconds), @('-AgentsTimeout', $AgentsTimeout))) {
   if ($p[1] -ne '' -and $p[1] -notmatch '^[0-9]+$') { Usage "$($p[0]) takes a whole number (got $($p[1]))" }
 }
 if ($Interval -eq '') { Usage 'missing value for -Interval' }
 if ($AgentsTimeout -eq '' -or [int64]$AgentsTimeout -le 0) { Usage '-AgentsTimeout must be above 0' }
 $limit = [int64]$QuietMinutes * 60; if ($QuietSeconds -ne '') { $limit = [int64]$QuietSeconds }
+$llimit = [int64]$LongMinutes * 60; if ($LongSeconds -ne '') { $llimit = [int64]$LongSeconds }
 $t00 = [DateTime]::UtcNow
 
 # Entries: the list file's sessions as @(<own limit in seconds, or -1>, <entry>), the blanks around each
@@ -142,7 +145,8 @@ function Sessions([string]$s) {
         if ($st -ceq 'working' -or $su -ceq 'busy') { $cl = 'work' }
         elseif ($st -ceq 'stopped' -or $st -ceq 'failed' -or ($st -ceq 'done' -and $su -eq '')) { $cl = 'stop' }
         else { $cl = 'quiet' }
-        [void]$r.Add(@([string]$v['id'], $cl, [string]$v['name']))
+        $w = ''; if ($st -ceq 'working') { $w = ([string]$v['cwd'] -replace '[^A-Za-z0-9]', '-') + '/' + $v['sessionId'] }
+        [void]$r.Add(@([string]$v['id'], $cl, [string]$v['name'], $w))
       }
       if ($d -eq 2) { $v = @{} }
       $d--
@@ -182,7 +186,15 @@ while ($true) {
     $m = Pick $sess $e
     if ($null -eq $m) { $found += "GONE $e"; continue }
     $id = $m[0]; $cl = $m[1]; $nm = $m[2]
-    if ($cl -eq 'work') { continue }
+    if ($cl -eq 'work') {
+      $cf = $env:CLAUDE_CONFIG_DIR; if (-not $cf) { $h = $env:USERPROFILE; if (-not $h) { $h = $env:HOME }; $cf = "$h/.claude" }
+      $f = "$cf/projects/$($m[3]).jsonl"; if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
+      $ft = [IO.File]::GetLastWriteTimeUtc($f); $a = [int64][Math]::Floor(([DateTime]::UtcNow - $ft).TotalSeconds)
+      $d = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'watch-sessions-long'); $k = $d + '/' + $m[3].Substring($m[3].LastIndexOf('/') + 1)
+      if ($a -ge $(if ($en[0] -lt 0) { $llimit } else { $en[0] }) -and (Get-Content -Raw -LiteralPath $k -ErrorAction SilentlyContinue) -cne "$($ft.Ticks)") {
+        $found += "LONG $id $nm $([Math]::Floor($a / 60))"
+        try { [void][IO.Directory]::CreateDirectory($d); [IO.File]::WriteAllText($k, "$($ft.Ticks)") } catch { } }
+      continue }
     if ($cl -eq 'stop') { $found += "STOPPED $id $nm"; continue }
     $t0 = $now; if ($timers.ContainsKey($e)) { $t0 = $timers[$e] }
     $quiet[$e] = $t0
