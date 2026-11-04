@@ -135,13 +135,20 @@ while :; do case "$q" in ?*/) q="${q%/}" ;; *) break ;; esac; done
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$q" ;; esac
 #
 '@
+  # the bash as check-scripts.ps1 finds it: on Windows Git's (a plain `bash` on PATH may be the WSL launcher, which answers nothing)
+  $bashTried = @(); $gi = if ($env:OS -eq 'Windows_NT') { Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  if ($gi) { $gd = Split-Path -Parent $gi.Source; $bashTried += (Join-Path $gd '..\bin\bash.exe'), (Join-Path $gd '..\..\bin\bash.exe') }
+  if ($gi -and $env:ProgramFiles) { $bashTried += Join-Path $env:ProgramFiles 'Git\bin\bash.exe' }
+  $bashExe = @($bashTried | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })[0]
+  if (-not $bashExe) { $bashTried += 'bash on PATH'; $bashExe = 'bash' }
   $script:fcn = 0
   function FCanon([string]$p) {
     # Windows PowerShell 5.1 puts a UTF-8 BOM before the piped text: an empty first line takes it (an error on stderr)
-    $b = & { $ErrorActionPreference = 'Continue'; ("`n" + ($fcanonSh -replace "`r", '')) | bash -s -- $p.Replace('\', '/') 2>$null }
+    $b = & { $ErrorActionPreference = 'Continue'; ("`n" + ($fcanonSh -replace "`r", '')) | & $bashExe -s -- $p.Replace('\', '/') 2>$null }
     if ($LASTEXITCODE -ne 0 -or -not "$b") { $script:fcn++; return "?no answer $($script:fcn)" }
     "$b".TrimEnd("`r", "`n")
   }
+  if ((FCanon $root).StartsWith('?')) { Fail "refused: no working bash answered (tried: $($bashTried -join ', ')) - the folders cannot be compared; install Git for Windows (Git Bash) or put a working bash on PATH" }
   # -AssistantDir: the folder elsewhere (the self-test's throwaway assistant), seen by no git working tree
   if ($AssistantDir) {
     if (-not (Test-Path -LiteralPath $AssistantDir -PathType Container)) { Fail "refused: -AssistantDir $AssistantDir is not a folder" }
