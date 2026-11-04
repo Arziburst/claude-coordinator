@@ -12,7 +12,7 @@
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
 # stays for cleanup-worker; a branch other open PRs are based on is kept, #229; a fork's PR deletes nothing there, #392), and every open PR that
 # changes a file the merged one changed is printed
-# as AFFECTED, then one AFTER MERGE line: the merge row of CORE §4's event table, so its duties have a
+# as AFFECTED, then the AFTER MERGE lines: the merge row of CORE §4's event table, one thing a line with the PR's values, so its duties have a
 # trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
 # not make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md
 # *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
@@ -221,7 +221,17 @@ for item in "${prs[@]}"; do
     both="$(meet "$(pr_files "$l")" "$files" all)"
     [ -n "$both" ] && echo "AFFECTED #$num: $(printf '%s\n' "$l" | cut -f4) - merge $base now: $both"
   done <<< "$list"
-  echo "AFTER MERGE #$pr: the event table (CORE §4) - cleanup-worker (§8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, §10); tell each AFFECTED PR's session to merge $base (§4a); a bug it fixed that escaped earlier work -> ESCAPES (§12); the project's after-merge duties (PROJECT.md)"
+  # the merge row of CORE §4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
+  n='<n>'; printf '%s' "$branch" | grep -qE '^[0-9]+-' && n="${branch%%-*}"
+  while IFS= read -r l; do echo "AFTER MERGE #$pr: $l"; done <<EOF
+cleanup-worker --worktree .claude/worktrees/$branch (CORE §8)
+the run rows of task $n (branch $branch), then runs check, and the journal line (CORE §7)
+close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
+the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv --task $n --pr-json - --append
+tell each AFFECTED PR's session to merge $base (CORE §4a)
+did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE §10)? an escape (CORE §12)?
+the project's own after-merge duties (PROJECT.md)
+EOF
 done
 echo "merge-queue: $merged merged${left:+, left: $left}"
 [ -z "$left" ] || exit 3

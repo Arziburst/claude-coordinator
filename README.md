@@ -45,7 +45,7 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   core's own failures sent to its maintainer and proven fixed ([CORE-FINDINGS.md](procedures/CORE-FINDINGS.md)),
   the retro, run only when the owner asks ([RETRO.md](procedures/RETRO.md)).
 - [skills/](skills/) — the core's own Claude Code skills, `coord-*`: one per procedure and per row of the
-  event table (task start, after a merge, a red check, a mistake, after a compaction), each a short
+  event table (a red check, a mistake, after a compaction), each a short
   pointer to the core file that wins over it. Copied into the project's `coordinator/skills/` at init and
   refreshed by every update; Claude Code finds them through `<project>/.claude/skills`, a link to that
   folder (CORE §12b).

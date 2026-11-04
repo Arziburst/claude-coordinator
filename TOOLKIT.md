@@ -750,8 +750,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
-  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with an
-  `AFTER MERGE` line, the event table's merge row (CORE §4); never filter it out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))

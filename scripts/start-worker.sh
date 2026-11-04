@@ -32,7 +32,7 @@
 # (names change on a restart). It heads the brief; the script's last line says how to watch the new
 # session: a `watch:` line with its short id (a dry run, or a launch that printed no id: its name), the
 # watch list and the watcher; an assistant, from which no report is awaited, gets the line that subscribes
-# to its idle notice instead (CORE section 4, Control; #365).
+# to its idle notice instead (CORE section 4, Control; #365). A tester, a worker or a lead: right before it a `board:` line, the issue's number from the name, else <n>; printed only (#466).
 # A worker or a lead: before the launch it prints the conflict foresight (CORE §4a) - merge-queue status
 # with the brief's `touches` - as `foresight:` lines; informational, never a stop.
 # The contract must pass check-contract before it goes out (CORE §4, #267): --contract <file>, or for a
@@ -597,4 +597,9 @@ else
   fi
 fi
 if [ -n "$asst" ]; then echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"
-else echo "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: ${bgid:-$name}"; fi
+else
+  case "$role" in tester|worker|lead)
+    bn="$(printf '%s' "$name" | sed -n 's/^#\([0-9][0-9]*\).*/\1/p')"
+    echo "board: move issue #${bn:-<n>} to In Progress on the board, by the project's words (PROJECT.md) where it has none" ;;
+  esac
+  echo "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: ${bgid:-$name}"; fi
