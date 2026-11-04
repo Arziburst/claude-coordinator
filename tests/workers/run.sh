@@ -76,6 +76,7 @@ exit 0
 EOF
 cat > "$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
+[ -z "${STUB_GH_LOG:-}" ] || echo "$*" >> "$STUB_GH_LOG"
 [ "${STUB_GH_RC:-0}" = 0 ] || exit "$STUB_GH_RC"
 [ -n "${STUB_HEADS:-}" ] && printf '%s\n' "$STUB_HEADS"
 exit 0
@@ -88,6 +89,7 @@ cat > "$tmp/bin/claude.ps1" <<'EOF'
 exit $LASTEXITCODE
 EOF
 cat > "$tmp/bin/gh.ps1" <<'EOF'
+if ($env:STUB_GH_LOG) { "$args" | Add-Content $env:STUB_GH_LOG }
 if ($env:STUB_GH_RC -and $env:STUB_GH_RC -ne '0') { exit [int]$env:STUB_GH_RC }
 if ($env:STUB_HEADS) { $env:STUB_HEADS }
 exit 0
@@ -1725,7 +1727,7 @@ pj="$tmp/work/proj"; mkdir -p "$pj/coordinator/core"; : > "$pj/coordinator/core/
 pjw="$pj"; command -v cygpath >/dev/null 2>&1 && pjw="$(cygpath -m "$pj")"
 jc="$(printf '{"session_id":"c0c00000-0000-4000-8000-000000000001","cwd":"%s","source":"compact"}' "$pjw")"
 LAST="$(printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
-expect_in "re-read in full with the Read tool: $pjw/coordinator/core/CORE.md (section 1, the hard rules, first; then the event table of section 4 - any duty there not done since the last journal line, do it now), $pjw/coordinator/PROJECT.md"
+expect_in "re-read with the Read tool: $pjw/coordinator/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; find them by a literal search, read with offset and limit: section 1 from the line '## 1.' to '## 2.', the table from the line starting '| Event |' to the line starting '**Where the topics live', which ends it; the rest of CORE when a topic needs it), $pjw/coordinator/PROJECT.md"
 # the coordinator variant also loads in a worker launched from the project root (#217): silent there -
 # a session with a kept brief, or one working in a worktree (either separator)
 out="$(printf '%s' "$j" | CLAUDE_CONFIG_DIR="$cfgw" ac coordinator | tr -d '\r')"
@@ -1775,6 +1777,14 @@ out="$(set -o pipefail; printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSI
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: the coordinator variant spoke in an assistant's session: exit $rc, printed '$out'"; fail=1; }
 err="$(printf '%s' "$j" | ac nobody 2>&1 >/dev/null | tr -d '\r')"
 case "$err" in *usage*assistant*) ;; *) echo "FAIL: the after-compact usage line does not name assistant: '$err'"; fail=1 ;; esac
+
+# --- the board line (#466): `board: ...`, exactly as below, the line before `watch:`; <n> where the session's name holds no number; a tester, a worker, a lead; a verifier, an assistant, a researcher none; printed only: gh not called ---
+bl() { export STUB_GH_LOG="$mtmp/gh-466.log"; : > "$STUB_GH_LOG"; start "${F[@]}" --brief-file "$tmp/brief.md" --branch 77-board --name "#77 worker: B" --dry-run && echo "== verifier" && start "${F[@]}" --brief-file "$tmp/brief.md" --branch 77-board --name "#77 verifier: B" --dry-run; }
+check 0 "board: a worker's line with its number, none for a verifier, no gh call" -- bl
+bw="board: move issue #77 to In Progress on the board, by the project's words (PROJECT.md) where it has none"; bo="$(printf '%s\n' "$LAST" | tr -d '\r')"
+[ "$(printf '%s\n' "$bo" | sed '/^== verifier/,$d' | grep -B1 '^watch:' | head -n 1)" = "$bw" ] || { echo "FAIL (board): the worker's line before watch: is not: $bw"; printf '%s\n' "$bo" | sed 's/^/    /'; fail=1; }
+printf '%s\n' "$bo" | sed -n '/^== verifier/,$p' | grep -q '^board:' && { echo "FAIL (board): a verifier got a board: line"; fail=1; }
+[ -s "$mtmp/gh-466.log" ] && { echo "FAIL (board): gh called: $(cat "$mtmp/gh-466.log")"; fail=1; }
 
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

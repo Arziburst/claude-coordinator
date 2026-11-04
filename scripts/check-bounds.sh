@@ -31,7 +31,7 @@ b="$(LC_ALL=C awk '
 bad="$(printf '%s\n' "$b" | sed -n 's/^ //p' | head -n 1)"
 [ -z "$bad" ] || { echo "check-bounds: a malformed bound (- <glob> <max added lines>): $bad"; exit 2; }
 [ -n "$b" ] || { echo "check-bounds: no bounds"; exit 0; }
-nums="$(git -c core.quotePath=false diff --numstat --no-renames "$range" 2>&1)" || { echo "check-bounds: cannot read $range: $(printf '%s' "$nums" | head -n 1)"; exit 2; }
+nums="$(git -c core.quotePath=false diff --numstat --no-renames "$range" 2>&1)" || { echo "check-bounds: cannot read $range in the repository $(git rev-parse --show-toplevel 2>/dev/null || echo '(none)'): $(printf '%s' "$nums" | head -n 1); run it from the project's root"; exit 2; }
 over=""
 while read -r g m; do
   a=0

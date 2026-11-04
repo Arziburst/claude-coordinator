@@ -12,7 +12,7 @@
 # --match-head-commit <head>` and the remote branch deleted (never the local one: the worker's worktree
 # stays for cleanup-worker; a branch other open PRs are based on is kept, #229; a fork's PR deletes nothing there, #392), and every open PR that
 # changes a file the merged one changed is printed
-# as AFFECTED, then one AFTER MERGE line: the merge row of CORE section 4's event table, so its duties have
+# as AFFECTED, then the AFTER MERGE lines: the merge row of CORE section 4's event table, one thing a line with the PR's values, so its duties have
 # a trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
 # not make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md
 # *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
@@ -222,7 +222,17 @@ foreach ($item in $prs) {
     $both = Meet (PrFiles $l) $files -All
     if ($both) { "AFFECTED #$($f[0]): $($f[3]) - merge $base now: $both" }
   }
-  "AFTER MERGE #${pr}: the event table (CORE ${sect}4) - cleanup-worker (${sect}8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, ${sect}10); tell each AFFECTED PR's session to merge $base (${sect}4a); a bug it fixed that escaped earlier work -> ESCAPES (${sect}12); the project's after-merge duties (PROJECT.md)"
+  # the merge row of CORE section 4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
+  $n = if ($branch -match '^([0-9]+)-') { $Matches[1] } else { '<n>' }
+  foreach ($l in @(
+    "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
+    "the run rows of task $n (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
+    "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
+    "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv -Task $n -PrJson:- -Append",
+    "tell each AFFECTED PR's session to merge $base (CORE ${sect}4a)",
+    "did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE ${sect}10)? an escape (CORE ${sect}12)?",
+    "the project's own after-merge duties (PROJECT.md)"
+  )) { "AFTER MERGE #${pr}: $l" }
 }
 "merge-queue: $merged merged$(if ($left.Count) { ", left: $($left -join ', ')" })"
 if ($left.Count) { exit 3 }

@@ -18,6 +18,8 @@
 # and in place of the deleted/kept line this one: `left the fork's branch <branch>: #<pr> is a fork's PR, nothing deleted on origin`. A PR from this repository: as before.
 # Access point (#419): land stops as above only on an OVER whose glob matches or holds an important glob (check-contract's list: its defaults and the row *Important components* of the PROJECT.md
 # two folders above the scripts). Any other OVER, instead of `OVER BOUNDS`: exactly the line `bounds over, not important: <pr> <glob> <added>/<max>`, and if no OVER stops it the PR goes on.
+# Access point (#466): after each MERGED and its AFFECTED lines, in place of the one AFTER MERGE line, exactly these `AFTER MERGE #<pr>: ` lines in this order (the case "after a merge" holds them word by word). <n> is the
+# number the branch starts with (`<n>-...`), else the literal `<n>`. The .ps1 prints its own flags (-Worktree, -Task <n> -PrJson:- -Append). Printed only: gh sees no call beyond today's.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -121,17 +123,42 @@ pr() { echo "OPEN false $2 $3 main" > "$STUB_D/pr-$1"; }
 H11=a111111111111111111111111111111111111111 H13=c131313131313131313131313131313131313131 N13=d131313131313131313131313131313131313131
 # the cases below run from a repository's root whose origin has their open PRs' branches (#387); 1-a is off it: a merged PR's branch is gone
 git init -q --bare "$tmp/r.git"; git init -q -b main "$tmp/r"; cd "$tmp/r" || exit 1; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
-for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
+for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d 466-feat hotfix-x; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
 
 fresh "up to date, green: merged; an open PR changing the same file is AFFECTED"
 pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "pass skipping" > "$STUB_D/checks-$H11"
 printf '11\tMERGEABLE\tCLEAN\t11-fix\tsrc/x.ts\n12\tMERGEABLE\tBEHIND\t12-feat\tsrc/x.ts\tdocs/LOG.md\n19\tMERGEABLE\tBEHIND\t19-other\tsrc/q.ts\n' > "$STUB_D/prlist"
 run land 11 --poll 0
 code 0; has "MERGED #11: a111111"; has "AFFECTED #12: 12-feat - merge main now: src/x.ts, docs/LOG.md"; hasnt "AFFECTED #19"
-# the merge row of CORE §4's event table, printed so its duties have a trigger (#242)
-has "AFTER MERGE #11: the event table (CORE §4) - cleanup-worker (§8); its run-log rows and journal line; did a core rule, script or check fail us? (the verifier's core_findings too, §10); tell each AFFECTED PR's session to merge main (§4a); a bug it fixed that escaped earlier work -> ESCAPES (§12); the project's after-merge duties (PROJECT.md)"
+# the event table's merge row, printed line by line so its duties have a trigger (#242, #466)
+wtflag=-Worktree; [ "$kind" = sh ] && wtflag=--worktree
+has "AFTER MERGE #11: cleanup-worker $wtflag .claude/worktrees/11-fix (CORE §8)"; hasnt "the event table (CORE §4) -"
 has "merge-queue: 1 merged"; called "pr merge 11 --squash --match-head-commit $H11"; notcalled "--delete-branch"
 called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"
+
+fresh "after a merge: the AFTER MERGE lines in order, filled in, the issue from the branch or <n>; printed only"
+H77=7777777777777777777777777777777777777777 H78=7878787878787878787878787878787878787878
+pr 77 $H77 466-feat; pr 78 $H78 hotfix-x; echo src/x.ts > "$STUB_D/files-77"; echo src/y.ts > "$STUB_D/files-78"; echo pass > "$STUB_D/checks-$H77"; echo pass > "$STUB_D/checks-$H78"
+printf '79\tMERGEABLE\tBEHIND\t79-other\tsrc/x.ts\n' > "$STUB_D/prlist"
+case "$kind" in sh) amw=--worktree amt='--task 466 --pr-json - --append' ;; *) amw=-Worktree amt='-Task 466 -PrJson:- -Append' ;; esac
+am77="AFTER MERGE #77: cleanup-worker $amw .claude/worktrees/466-feat (CORE §8)
+AFTER MERGE #77: the run rows of task 466 (branch 466-feat), then runs check, and the journal line (CORE §7)
+AFTER MERGE #77: close issue #466 and move it on the board, by the project's words (PROJECT.md) where it has none
+AFTER MERGE #77: the task row, from the product repository: gh pr view 77 --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv $amt
+AFTER MERGE #77: tell each AFFECTED PR's session to merge main (CORE §4a)
+AFTER MERGE #77: did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE §10)? an escape (CORE §12)?
+AFTER MERGE #77: the project's own after-merge duties (PROJECT.md)"
+am78="$(printf '%s\n' "$am77" | sed 's/#77/#78/; s/pr view 77/pr view 78/; s/466-feat/hotfix-x/g; s/466/<n>/g')"
+run land 77 78 --poll 0; code 0
+got="$(printf '%s\n' "$out" | sed -n '/^MERGED #77:/,/^MERGED #78:/p' | grep -E '^(AFFECTED|AFTER MERGE)')"
+[ "$got" = "AFFECTED #79: 79-other - merge main now: src/x.ts
+$am77" ] && ok || bad "after MERGED #77 expected AFFECTED #79 as today, then exactly:
+$am77"
+got="$(printf '%s\n' "$out" | sed -n '/^MERGED #78:/,$p' | grep '^AFTER MERGE')"
+[ "$got" = "$am78" ] && ok || bad "after MERGED #78 (no number in its branch) expected exactly:
+$am78"
+# no duty is run: every call of the stub is one the queue makes today, none to an issue, a board or a tracker
+x="$(grep -vE '^(pr (view|checks|merge|list) |api -X DELETE repos/[^ ]*/git/refs/heads/|api repos/[^ ]*/compare/|run list )' "$STUB_D/log")"; [ -z "$x" ] && ok || bad "gh called beyond today's: $x"
 
 fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
 run land 11 --poll 0; code 0; called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"; hasnt "left the fork's branch"; own="$out"

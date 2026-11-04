@@ -10,7 +10,7 @@
 # (names change on a restart). It heads the brief; the script's last line says how to watch the new
 # session: a `watch:` line with its short id (a dry run, or a launch that printed no id: its name), the
 # watch list and the watcher; an assistant, from which no report is awaited, gets the line that subscribes
-# to its idle notice instead (CORE section 4, Control; #365).
+# to its idle notice instead (CORE section 4, Control; #365). A tester, a worker or a lead: right before it a `board:` line, the issue's number from the name, else <n>; printed only (#466).
 # -Safety: a settings file for the worker (from settings.example.windows.json) with the deny rules, the
 #          PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. The hook's
 #          self-test must pass, or no worker starts. -Model is required (CORE section 7). Default mode auto;
@@ -606,6 +606,7 @@ if ($fr -in @('worker', 'lead', '')) {
 $brief = $full   # $full as sent, before the escaping below: kept for after a compaction
 function LastLine([string]$id) {
   if ($asst) { return "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)" }
+  if ($role -cin 'tester', 'worker', 'lead') { "board: move issue #$(if ($Name -match '^#([0-9]+)') { $Matches[1] } else { '<n>' }) to In Progress on the board, by the project's words (PROJECT.md) where it has none" }
   "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: $(if ($id) { $id } else { $Name })"
 }
 if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }
