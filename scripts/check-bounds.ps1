@@ -24,7 +24,7 @@ for ($i = $s; $i -le $e; $i++) { $t = $L[$i]
   $b += , @($Matches[1], $Matches[2]) }
 if (-not $b.Count) { 'check-bounds: no bounds'; exit 0 }
 $nums = @(& { $ErrorActionPreference = 'Continue'; & git -c core.quotePath=false diff --numstat --no-renames $range 2>&1 } | ForEach-Object { "$_" })
-if ($LASTEXITCODE -ne 0) { Stop2 "check-bounds: cannot read ${range}: $($nums | Select-Object -First 1)" }
+if ($LASTEXITCODE -ne 0) { $top = @(& { $ErrorActionPreference = 'Continue'; & git rev-parse --show-toplevel 2>$null } | ForEach-Object { "$_" }); $top = if ($LASTEXITCODE -eq 0 -and $top.Count) { $top[0] } else { '(none)' }; Stop2 "check-bounds: cannot read $range in the repository ${top}: $($nums | Select-Object -First 1); run it from the project's root" }
 $over = @()
 foreach ($x in $b) { $g = $x[0]; $a = [long]0
   foreach ($n in $nums) { $f = $n -split "`t", 3; if ($f.Count -lt 3 -or $f[2] -cnotlike $g) { continue }
