@@ -1171,17 +1171,14 @@ for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
   asnothing "an assistant without $vf"
   expect_no_line "watch:"; expect_no_line "subscribe:"   # refused: neither line (#365)
 done
-# a `bash` first on PATH that answers nothing, as the WSL launcher without a distribution (#465): the .ps1 uses Git's bash
-# where there is one (Windows), else says that no working bash answered, naming what it tried
+# a `bash` first on PATH that answers nothing, as the WSL launcher (#465): Git's bash is used where there is one, else no working bash is said
 if [ "$kind" = ps ]; then
   wsl="$tmp/wslbin"; export STUB_BASH="$(command -v bash)"; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) STUB_BASH="$(cygpath -w "$STUB_BASH")" ;; esac; mkdir -p "$wsl"; printf '#!/bin/sh\nexit 1\n' > "$wsl/bash"; chmod +x "$wsl/bash"; printf '@exit /b 1\r\n' > "$wsl/bash.cmd"
   mkas wsl1; : > "$STUB_LOG"
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
     PATH="$wsl:$PATH" check 0 "start: an assistant, the WSL launcher first on PATH" -- start "${A[@]}" --name "assistant: wsl1" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
-    expect_in "[dry-run]"; asnothing "an assistant, the WSL launcher first on PATH"
-  ;;
-  *) # no Git's bash outside Windows: the bash on PATH is the only one, and it answers nothing (on Windows Git is always found)
-    : > "$STUB_LOG"
+    expect_in "[dry-run]"; asnothing "an assistant, the WSL launcher first on PATH" ;;
+  *) # no Git's bash outside Windows (on Windows Git is always found): the bash on PATH answers nothing
     PATH="$wsl:$PATH" check 1 "start: an assistant, no working bash" -- start "${A[@]}" --name "assistant: wsl1" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
     says "an assistant, no working bash" "no working bash" "tried"; asnothing "an assistant, no working bash"
     printf '%s\n' "$LAST" | grep -qiE 'brief is' && { echo "FAIL (an assistant, no working bash): the message blames the path"; fail=1; } ;;
