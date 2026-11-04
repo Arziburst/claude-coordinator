@@ -108,6 +108,8 @@ c "claude fails: said, the rest kept"
 mk "$P"; : > "$STUB/fail"; before "$P"; has "$F" 'could not list the sessions'; has "$F" OPEN-Q1; no "$F" SESSION-HERE
 c "claude hangs: the hook ends within its entry's timeout, said, the rest kept"
 mk "$P"; : > "$STUB/hang"; t0=$SECONDS; before "$P"; [ $((SECONDS - t0)) -le 25 ] || bad "took $((SECONDS - t0)) s"; has "$F" 'could not list the sessions'; has "$F" coordinator/core/CORE.md; rm -f "$STUB/hang"
+if [ "$kind" = ps ] && command -v cygpath >/dev/null 2>&1; then c "code page 866 right after a hang: the stub left under the killed listing still holds the hook's out.raw and err.raw (40 s), the hook in the new console runs all the same (#474)"
+  mk "$P"; before "$P"; PIN=866 after "$P"; has "$tmp/ctx" "$Q3"; fi
 c "a very long journal: bounded, its first questions and every later section kept"
 mk "$P"; { printf '## Open questions\n- OPEN-Q1 first\n'; awk 'BEGIN { for (i = 0; i < 20000; i++) printf "- 2026-11-02: OPEN-LONG %d a question of about sixty characters in all\n", i }'; } > "$P/coordinator/LOG.md"
 before "$P"; max "$F" 8000; has "$F" truncated; for t in OPEN-Q1 WATCHED-WORKER SESSION-HERE coordinator/LOG.md; do has "$F" "$t"; done; after "$P"; max "$tmp/out" 10000; has "$tmp/ctx" coordinator/BINDINGS.md
