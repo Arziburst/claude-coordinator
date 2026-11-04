@@ -59,7 +59,7 @@ else
   case "$rt" in "") ;; *) case "$wd" in "$rt"/.claude/worktrees/*) exit 0 ;; esac ;; esac   # a worker's worktree inside the project
   if [ -n "$rt" ]; then wd="$rt"; else while [ -n "$wd" ] && [ ! -d "$wd/coordinator" ]; do case "$wd" in */coordinator) wd="${wd%/coordinator}"; break ;; */coordinator/*) wd="${wd%/*}" ;; *) break ;; esac; done; fi
   p="${wd:+$wd/}coordinator"
-  core="$p/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; the rest of CORE when a topic needs it)"; [ -f "$p/core/CORE.md" ] || core="$p/core/CORE.md is missing"
+  core="$p/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; find them by a literal search, read with offset and limit: section 1 from the line '## 1.' to '## 2.', the table from the line starting '| Event |' to the line starting '**Where the topics live', which ends it; the rest of CORE when a topic needs it)"; [ -f "$p/core/CORE.md" ] || core="$p/core/CORE.md is missing"
   msg="$lead Before your next step, re-read with the Read tool: $core, $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
   # the checkpoint before-compact wrote (#342), as it is; stale (written: over 60 minutes ago, or none) is a note, never a loss
   if ck="$(cat "$p/CHECKPOINT.md" 2>/dev/null)"; then

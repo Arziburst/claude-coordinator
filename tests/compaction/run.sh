@@ -22,7 +22,7 @@
 # - The test pins the code page: PIN=866 runs the hook on Windows in a NEW hidden console (Start-Process, whatever CI's console is) through a .cmd with `chcp.com 866` first; the page read inside it must be 866 or the case fails.
 # - Both hooks: a set CLAUDE_PROJECT_DIR is the root, whatever the input's cwd (a subfolder, another project, a worktree elsewhere); unset: the cwd rule above. In the .ps1 a `/c/...` form of it, of COORD_ASSISTANT_DIR and of CLAUDE_CONFIG_DIR reads as cygpath -m reads it.
 # - after-compact coordinator, <root>/coordinator/core/CORE.md absent: exit 0, `<root>/coordinator/core/CORE.md is missing`, and never today's `<root>/coordinator/core/CORE.md (section 1`, which stays when the file is there.
-# - after-compact coordinator's re-read (#468): CORE's section 1 and the event table of section 4, PROJECT.md, BINDINGS.md, LOG.md's open questions, `the rest of CORE when a topic needs it`; never `re-read in full`. A worker's and an assistant's messages unchanged.
+# - after-compact coordinator's re-read (#468): CORE's section 1 and the event table of section 4 by their markers, each the start of one line of CORE.md at the repository's root, PROJECT.md, BINDINGS.md, LOG.md's open questions, `the rest of CORE when a topic needs it`; never `re-read in full`. A worker's and an assistant's messages unchanged.
 set -u
 command -v cygpath >/dev/null 2>&1 && export LC_ALL=C.UTF-8   # under LC_ALL=C (CI's bash on Windows) cygpath drops a Cyrillic path component
 kind="${1:-}"; [ $# -gt 0 ] && shift; PS=("$@")
@@ -177,7 +177,8 @@ c "after with the root's CORE.md missing: exit 0, says so, never as a file to re
 mk "$P"; after "$P"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md is missing"; no "$tmp/ctx" 'CORE.md (section 1'; has "$tmp/ctx" "$TODAY"; no "$tmp/ctx" 'the rest of CORE'
 withcore "$P"; after "$P"; has "$tmp/ctx" 'CORE.md (section 1'; no "$tmp/ctx" 'CORE.md is missing'
 c "after names the narrower re-read, not all of CORE (#468); a worker's and an assistant's messages stay as they were"
-W="$(wp "$P")/coordinator"; for t in "re-read with the Read tool: $W/core/CORE.md (section 1, the hard rules, and the event table of section 4" 'the rest of CORE when a topic needs it' "$W/PROJECT.md, $W/BINDINGS.md and the open questions in $W/LOG.md"; do has "$tmp/ctx" "$t"; done; no "$tmp/ctx" 're-read in full'
+W="$(wp "$P")/coordinator"; for t in "re-read with the Read tool: $W/core/CORE.md (section 1, the hard rules, and the event table of section 4" 'the rest of CORE when a topic needs it' "$W/PROJECT.md, $W/BINDINGS.md and the open questions in $W/LOG.md" "find them by a literal search, read with offset and limit: section 1 from the line '## 1.' to '## 2.', the table from the line starting '| Event |' to the line starting '**Where the topics live', which ends it"; do has "$tmp/ctx" "$t"; done; no "$tmp/ctx" 're-read in full'
+for m in '## 1.' '## 2.' '| Event |' '**Where the topics live'; do [ "$(awk -v m="$m" 'index($0, m) == 1' "$core/CORE.md" | wc -l | tr -d ' ')" = 1 ] || bad "CORE.md at the repository's root needs one line starting '$m': the message names it"; done
 after "$P" worker; has "$tmp/ctx" 're-read your role file and the contract your brief gave (its criteria, non_goals and do_not_decide), then check your branch with git status and git log. Follow them as written, not the summary.'; no "$tmp/ctx" 'section 1'
 after "$P" assistant; has "$tmp/ctx" 'Before your next step, read in full with the Read tool: '; has "$tmp/ctx" 'roles/assistant.md (your role). Follow them as written, not the summary.'; no "$tmp/ctx" 'section 1'
 c "the project dir set, the root's CORE.md missing and the cwd's present: the root's is the one looked for"

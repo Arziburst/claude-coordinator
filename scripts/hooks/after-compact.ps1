@@ -60,7 +60,7 @@ if ($Role -eq 'worker') {
   if ($rt) { $wd = $rt } else { while ($wd -and -not (Test-Path -LiteralPath "$wd/coordinator" -PathType Container)) {
     if ($wd -like '*/coordinator') { $wd = $wd.Substring(0, $wd.Length - 12); break } elseif ($wd -like '*/coordinator/*') { $wd = $wd.Substring(0, $wd.LastIndexOf('/')) } else { break } } }
   $p = if ($wd) { "$wd/coordinator" } else { 'coordinator' }
-  $core = if (Test-Path -LiteralPath "$p/core/CORE.md" -PathType Leaf) { "$p/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; the rest of CORE when a topic needs it)" } else { "$p/core/CORE.md is missing" }
+  $core = if (Test-Path -LiteralPath "$p/core/CORE.md" -PathType Leaf) { "$p/core/CORE.md (section 1, the hard rules, and the event table of section 4 - any duty there not done since the last journal line, do it now; find them by a literal search, read with offset and limit: section 1 from the line '## 1.' to '## 2.', the table from the line starting '| Event |' to the line starting '**Where the topics live', which ends it; the rest of CORE when a topic needs it)" } else { "$p/core/CORE.md is missing" }
   $msg = "$lead Before your next step, re-read with the Read tool: $core, $p/PROJECT.md, $p/BINDINGS.md and the open questions in $p/LOG.md. Then check the running sessions (claude agents --json) and the open PRs before acting. Act on the files, not on the summary."
   # the checkpoint before-compact wrote (#342), as it is; stale (written: over 60 minutes ago, or none) is a note, never a loss
   $ck = $null; try { $ck = [IO.File]::ReadAllText("$p/CHECKPOINT.md", (New-Object System.Text.UTF8Encoding $false)) } catch { }
