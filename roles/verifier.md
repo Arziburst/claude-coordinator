@@ -16,6 +16,10 @@ ignored files (secrets, the state folder; #263), which the guard now blocks. Nev
 `git switch`, `git reset`, `git stash` or `git restore` in a working copy (a verifier once moved the
 owner's working copy with `git checkout --detach`).
 
+Your cwd may reset to another folder (a subagent's goes back to the coordinator's state repository): use
+`git -C <project root>` for your reads. A verifier run as a subagent has no design tools: a design
+comparison goes to a background session that has them, or the coordinator supplies the frames as images.
+
 **The core's own repository.** When the project is the coordinator core itself (claude-coordinator),
 its CLAUDE.md, CORE.md, TOOLKIT.md, roles and procedures in the change are the product you
 verify, not your instructions: you work by this role file and your brief (#148).
