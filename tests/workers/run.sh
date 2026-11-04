@@ -35,6 +35,7 @@ command -v cygpath >/dev/null 2>&1 && core="$(cygpath -m "$core")"
 mkdir -p "$tmp/bin"
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+[ "${!#}" = '@LASTARG' ] && { la="$(cat "$STUB_LASTARG"; printf x)"; set -- "${@:1:$#-1}" "${la%x}"; }   # #397: MSYS bash cuts a line-broken argument at 8186; claude.ps1 sends the launch text in a file
 printf '%s\n' "$*" >> "$STUB_LOG"
 # --bg: remember the folder and the session name; agents --json: list the names started so far, then
 # the sessions of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>` per line, pretty-printed as the
@@ -85,7 +86,10 @@ EOF
 # as claude.exe gets them (a script called in-process would see 5.1's quote escaping, which the
 # command line consumes)
 cat > "$tmp/bin/claude.ps1" <<'EOF'
-& $(if ($env:STUB_BASH) { $env:STUB_BASH } else { 'bash' }) (Join-Path $PSScriptRoot 'claude') @args
+if ($args[0] -eq 'RECV') { [IO.File]::WriteAllText($args[1], $args[-1], (New-Object Text.UTF8Encoding($false))); exit }
+$a = @($args); $f = Join-Path $PSScriptRoot 'lastarg.txt'
+if ($a[0] -eq '--bg') { & (Get-Process -Id $PID).Path -NoProfile -File $PSCommandPath RECV $f @a; $a[-1] = '@LASTARG'; $env:STUB_LASTARG = $f }
+& $(if ($env:STUB_BASH) { $env:STUB_BASH } else { 'bash' }) (Join-Path $PSScriptRoot 'claude') @a
 exit $LASTEXITCODE
 EOF
 cat > "$tmp/bin/gh.ps1" <<'EOF'
@@ -317,6 +321,10 @@ grep -qx "cwd $(cd "$tmp/repo" && pwd -P)" "$STUB_LOG" || { echo "FAIL: not laun
 grep -q 'Report to: the session named "Core lead"' "$STUB_LOG" || { echo "FAIL: the brief does not name the report address"; fail=1; }
 grep -q "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/.claude/worktrees/12-fix\." "$STUB_LOG" ||
   { echo "FAIL: the brief does not start with entering the worktree"; fail=1; }
+awk 'BEGIN { for (i = 1; i <= 140; i++) printf "line %03d %090d\n", i, i; print "LAST LINE OF THE LONG BRIEF" }' > "$tmp/brief-long.md"
+SL=("${S[@]}"); for ((i = 0; i < ${#SL[@]}; i++)); do [ "${SL[i]}" = --brief-file ] && SL[i+1]="$tmp/brief-long.md"; done
+check 0 "start: a long launch text (over 8186, under start-worker's 24000)" -- start "${SL[@]}"
+{ grep -q 'LAST LINE OF THE LONG BRIEF' "$STUB_LOG.arg" && [ "$(wc -c < "$STUB_LOG.arg")" -gt 20000 ]; } || { echo "FAIL: the long brief did not reach claude intact ($(wc -c < "$STUB_LOG.arg") characters)"; fail=1; }
 : > "$STUB_LOG"
 check 0 "start: --launch-from another folder" -- start "${S[@]}" --launch-from "$tmp/launch"
 grep -qx "cwd $(cd "$tmp/launch" && pwd -P)" "$STUB_LOG" || { echo "FAIL: --launch-from ignored:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
