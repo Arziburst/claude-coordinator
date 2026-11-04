@@ -1765,7 +1765,7 @@ out="$(set -o pipefail; printf '%s' "$jc" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSI
 err="$(printf '%s' "$j" | ac nobody 2>&1 >/dev/null | tr -d '\r')"
 case "$err" in *usage*assistant*) ;; *) echo "FAIL: the after-compact usage line does not name assistant: '$err'"; fail=1 ;; esac
 
-# --- the board line (#466): `board: ...`, exactly as below, the line before `watch:`; <n> where the session's name holds no number; a verifier none; printed only: gh not called ---
+# --- the board line (#466): `board: ...`, exactly as below, the line before `watch:`; <n> where the session's name holds no number; a tester, a worker, a lead; a verifier, an assistant, a researcher none; printed only: gh not called ---
 bl() { export STUB_GH_LOG="$mtmp/gh-466.log"; : > "$STUB_GH_LOG"; start "${F[@]}" --brief-file "$tmp/brief.md" --branch 77-board --name "#77 worker: B" --dry-run && echo "== verifier" && start "${F[@]}" --brief-file "$tmp/brief.md" --branch 77-board --name "#77 verifier: B" --dry-run; }
 check 0 "board: a worker's line with its number, none for a verifier, no gh call" -- bl
 bw="board: move issue #77 to In Progress on the board, by the project's words (PROJECT.md) where it has none"; bo="$(printf '%s\n' "$LAST" | tr -d '\r')"

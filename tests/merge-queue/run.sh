@@ -141,11 +141,11 @@ pr 77 $H77 466-feat; pr 78 $H78 hotfix-x; echo src/x.ts > "$STUB_D/files-77"; ec
 printf '79\tMERGEABLE\tBEHIND\t79-other\tsrc/x.ts\n' > "$STUB_D/prlist"
 case "$kind" in sh) amw=--worktree amt='--task 466 --pr-json - --append' ;; *) amw=-Worktree amt='-Task 466 -PrJson:- -Append' ;; esac
 am77="AFTER MERGE #77: cleanup-worker $amw .claude/worktrees/466-feat (CORE §8)
-AFTER MERGE #77: the run rows of task 466 (branch 466-feat), then runs check (CORE §7)
+AFTER MERGE #77: the run rows of task 466 (branch 466-feat), then runs check, and the journal line (CORE §7)
 AFTER MERGE #77: close issue #466 and move it on the board, by the project's words (PROJECT.md) where it has none
 AFTER MERGE #77: the task row, from the product repository: gh pr view 77 --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv $amt
 AFTER MERGE #77: tell each AFFECTED PR's session to merge main (CORE §4a)
-AFTER MERGE #77: did a rule or number in the project's own files move? did a core rule or check fail us? (CORE §10)
+AFTER MERGE #77: did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE §10)? an escape (CORE §12)?
 AFTER MERGE #77: the project's own after-merge duties (PROJECT.md)"
 am78="$(printf '%s\n' "$am77" | sed 's/#77/#78/; s/pr view 77/pr view 78/; s/466-feat/hotfix-x/g; s/466/<n>/g')"
 run land 77 78 --poll 0; code 0
