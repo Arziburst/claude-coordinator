@@ -315,6 +315,10 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
   answers mapped to a strictness preset (CORE §3), then only what the old rules did not cover (the state
   repository, the sources of truth), and every row of [ONE-TIME.md](../ONE-TIME.md) with no line in
   `coordinator/CHECKLIST.md` (built as UPDATE-CORE step 3 says) — settings as a quiz, checks offered.
+- **After a reset** ([RESET.md](RESET.md)): `coordinator/` holds only `.git` and `core/`, no `PROJECT.md`: INIT's full
+  quiz, as for a new project. `coordinator/` already being a git repository with a remote is not a new state
+  repository: keep them. The core's commit for the new `PROJECT.md` is the `core=<sha>` in the reset's own commit
+  message (`git -C coordinator log -1 --format=%B`).
 - **A new machine or a teammate** (a state repository exists): find it (HANDOFF, *Finding it*); no
   access → name the repository and whom to ask, stop. With access: clone it, re-detect the "re-detect"
   rows, and instead of the quiz one "still so?" per section; then the dry run.

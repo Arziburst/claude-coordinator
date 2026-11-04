@@ -673,6 +673,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
 - **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
+- **`reset-coordinator`** ([RESET.md](procedures/RESET.md), #446) takes the same double-dash arguments in both files, and runs
+  from the folder it replaces. Nobody runs it on a real project to try it: `tests/reset-coordinator/run.sh sh|ps <powershell>`
+  only, on scratch folders under a temp directory.
 - Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
   `hooks/safety-guard.sh` uses `jq` when present and reads the JSON with `sed -E` and `awk` otherwise
   (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
