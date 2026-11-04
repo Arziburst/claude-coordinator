@@ -48,11 +48,12 @@ no() { ! grep -qF -- "$2" "$1" 2>/dev/null || bad "'$2' in ${1##*/}"; }
 max() { [ "$(wc -c < "$1")" -le "$2" ] 2>/dev/null || bad "${1##*/} over $2 bytes: $(wc -c < "$1" 2>/dev/null)"; }
 hook() {   # hook <before|after> <stdin> [role]: stdout to $tmp/out, stderr to $tmp/err, the exit code to rc; run from elsewhere
   local s="$core/scripts/hooks/$1-compact"
-  if [ -n "${PIN:-}" ]; then local w; w="$(cygpath -w "$tmp")"; printf '%s' "$2" > "$tmp/in"; rm -f "$tmp/cp"
+  if [ -n "${PIN:-}" ]; then local w; w="$(cygpath -w "$tmp")"; printf '%s' "$2" > "$tmp/in"; rm -f "$tmp/cp" "$tmp/out.raw" "$tmp/err.raw"
     printf '%s\r\n' "@chcp.com $PIN >nul" "@\"${PS[0]}\" -NoProfile -Command \"[Console]::OutputEncoding.CodePage; [Console]::InputEncoding.CodePage\" > \"$w\\cp\"" \
       "@\"${PS[0]}\" -NoProfile -ExecutionPolicy Bypass -File \"$(wp "$s.ps1")\" ${3:-} < \"$w\\in\" > \"$w\\out.raw\" 2> \"$w\\err.raw\"" > "$tmp/pin.cmd"
     ( cd "$tmp/away" && "${PS[0]}" -NoProfile -Command "Start-Process -Wait -WindowStyle Hidden cmd.exe -ArgumentList '/d /c \"\"$w\\pin.cmd\"\"'" )
     [ "$(tr -d '\r\n ' < "$tmp/cp" 2>/dev/null)" = "$PIN$PIN" ] || bad "the code page was not pinned: $(tr -d '\r' < "$tmp/cp" 2>/dev/null | tr '\n' ' ')"
+    [ -e "$tmp/out.raw" ] || bad "the hook did not run: no out.raw after the pinned console"
   elif [ "$kind" = ps ]; then ( cd "$tmp/away" && printf '%s' "$2" | "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(wp "$s.ps1")" ${3:+"$3"} > "$tmp/out.raw" 2> "$tmp/err.raw" )
   else ( cd "$tmp/away" && printf '%s' "$2" | bash "$s.sh" ${3:+"$3"} > "$tmp/out.raw" 2> "$tmp/err.raw" ); fi
   rc=$?; tr -d '\r' < "$tmp/out.raw" > "$tmp/out"; tr -d '\r' < "$tmp/err.raw" > "$tmp/err"
@@ -108,6 +109,8 @@ c "claude fails: said, the rest kept"
 mk "$P"; : > "$STUB/fail"; before "$P"; has "$F" 'could not list the sessions'; has "$F" OPEN-Q1; no "$F" SESSION-HERE
 c "claude hangs: the hook ends within its entry's timeout, said, the rest kept"
 mk "$P"; : > "$STUB/hang"; t0=$SECONDS; before "$P"; [ $((SECONDS - t0)) -le 25 ] || bad "took $((SECONDS - t0)) s"; has "$F" 'could not list the sessions'; has "$F" coordinator/core/CORE.md; rm -f "$STUB/hang"
+if [ "$kind" = ps ] && command -v cygpath >/dev/null 2>&1; then c "code page 866 right after a hang: the stub left under the killed listing still holds the hook's out.raw and err.raw (40 s), the hook in the new console runs all the same (#474)"
+  mk "$P"; before "$P"; PIN=866 after "$P"; has "$tmp/ctx" "$Q3"; fi
 c "a very long journal: bounded, its first questions and every later section kept"
 mk "$P"; { printf '## Open questions\n- OPEN-Q1 first\n'; awk 'BEGIN { for (i = 0; i < 20000; i++) printf "- 2026-11-02: OPEN-LONG %d a question of about sixty characters in all\n", i }'; } > "$P/coordinator/LOG.md"
 before "$P"; max "$F" 8000; has "$F" truncated; for t in OPEN-Q1 WATCHED-WORKER SESSION-HERE coordinator/LOG.md; do has "$F" "$t"; done; after "$P"; max "$tmp/out" 10000; has "$tmp/ctx" coordinator/BINDINGS.md
