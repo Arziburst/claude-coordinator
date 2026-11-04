@@ -187,6 +187,14 @@ keep_start() {   # keep_start <contract | brief> <file>: the last start, by --co
   kn=$((kn + 1)); printf '%s\n' "$LAST" > "$tmp/kept/$kn.out"; echo "$LRC" > "$tmp/kept/$kn.rc"
   printf '%s\t%s\t%s\n' "$1" "$2" "$kn" >> "$tmp/kept/index"
 }
+{ printf 'Do it.\n\n'; cat "$cc/budget-time-ok.md"; } > "$tmp/brief-tfyes.md"
+{ printf 'Do it.\n\n'; tfno "$cc/budget-time-ok.md"; } > "$tmp/brief-tfno.md"
+# elsewhere <contract or brief file>: in a part without the contract section, a start that section keeps is run by the guard again
+# and counted as kept, not as a check, as the whole set counts it (the parts' checks sum to the whole set's)
+elsewhere() { [ -n "${WK_PART:-}" ] || return 0
+  case "$1" in "$tmp/c276-yes.md"|"$tmp/c276-no.md"|"$tmp/budget-time-ok.md"|"$tmp/c276-cblock-yes.md"|"$tmp/c276-cblock-no.md"|"$tmp/c276-body-yes.md") ;;
+    *) cmp -s "$1" "$tmp/brief-tfyes.md" || cmp -s "$1" "$tmp/brief-tfno.md" || cmp -s "$1" "$tmp/brief-body-yes.md" || return 0 ;; esac
+  n=$((n - 1)); nr=$((nr + 1)); }
 expect_gate() {   # expect_gate <contract label>: the refusal's content, not its wording
   printf '%s\n' "$LAST" | grep -F -- "$1" | grep -q tests_first ||
     { echo "FAIL: no line names the contract ($1) and tests_first"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
@@ -612,8 +620,6 @@ case "$LAST" in *"check-contract"*|*"contract in the brief"*) echo "FAIL: a veri
 # folder, a lead's case); a refusal names the contract, the missing flag and CORE §4 step 3, and comes
 # before anything is created (--dry-run too). Access points: the flags --tester-commit / -TesterCommit and
 # --tester-tests / -TesterTests; a start with either prints one line naming the commit or the path.
-{ printf 'Do it.\n\n'; cat "$cc/budget-time-ok.md"; } > "$tmp/brief-tfyes.md"
-{ printf 'Do it.\n\n'; tfno "$cc/budget-time-ok.md"; } > "$tmp/brief-tfno.md"
 grep -q '^tests_first: yes$' "$tmp/brief-tfyes.md" && grep -q '^tests_first: no - ' "$tmp/brief-tfno.md" ||
   { echo "FAIL: could not write the tests_first briefs"; fail=1; }
 one_line() {   # one_line <text>: exactly one output line names the tester's tests
@@ -875,7 +881,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   cc_decide "$gf"; gd="$GD"; gw=1; [ "$gd" = no ] && gw=0
   : > "$STUB_LOG"
   reused contract "$gf" "$gw" "guard: --contract $gb (check-contract reads: $gd)" ||
-  check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run
+  { check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run; elsewhere "$gf"; }
   gate_as "$gd" "$gb"; [ "$gw" = 0 ] || nothing_made 88-gate
   # a brief holding it: the front-matter forms with LF endings and no BOM (a brief's contract follows its text)
   case "$gb" in g276-crlf.md|g276-bom.md|c276-cr.md) continue ;; esac
@@ -883,7 +889,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   { printf 'Do it.\n\n'; cat "$gf"; } > "$tmp/brief-g$gi.md"
   : > "$STUB_LOG"
   reused brief "$tmp/brief-g$gi.md" "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" ||
-  check "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief-g$gi.md" --dry-run
+  { check "$gw" "guard: a brief holding $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief-g$gi.md" --dry-run; elsewhere "$tmp/brief-g$gi.md"; }
   gate_as "$gd" "brief with $gb"; [ "$gw" = 0 ] || nothing_made 88-gate
 done
 drop_gate 88-gate
