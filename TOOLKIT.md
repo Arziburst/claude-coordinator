@@ -1237,7 +1237,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
 
 ## New machine — safe start checklist
 Run in this order; the first work is a **dry run** (CORE §12a).
-1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in.
+1. `claude --version` meets the messaging minimum above; `gh auth status` (or the host's CLI) logged in. For a project whose tasks may touch CI, the owner runs `gh auth refresh -h github.com -s workflow` (without the `workflow` scope a push of a workflow file is refused); never worked around with another credential.
 2. The owner trusts the project folder (and accepts any one-time consent) — the owner's own step.
 3. **Worker safety file** from [settings.example.json](settings.example.json) (Windows:
    [settings.example.windows.json](settings.example.windows.json)) with absolute paths — the core copy's

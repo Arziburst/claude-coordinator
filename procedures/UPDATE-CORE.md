@@ -52,6 +52,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
      report (`coordinator window 500000, workers keep <n>`, the number `PROJECT.md` names where it names
      one), and the owner's yes to step 4 runs it, as the settings files above when auto mode refuses the edit.
+     The window and the PreCompact hook take effect at a coordinator's next start: the report never states
+     the window as in force before that.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -90,6 +92,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    Run the one-time checks the owner said yes to and `coordinator-window`; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.
+   When this update set the window or the PreCompact hook, the coordinator that ran it restarts itself, with the
+   commands of TOOLKIT *Pause and resume*: both take effect only at its next start.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
    ([INIT.md](INIT.md)), include the migration plan in the report and run it on the owner's yes:
    [MIGRATE-LAYOUT.md](MIGRATE-LAYOUT.md) (files tracked by the project's git leave it through the
