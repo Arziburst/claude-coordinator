@@ -5,7 +5,8 @@
 # coordinator's session also a newer core and the tasks at work - and saves Claude Code's status JSON to
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.sh --install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
-# statusline-version: 1
+#   statusline.sh --session-start    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
+# statusline-version: 2
 script_version() { tr -d '\r' 2>/dev/null < "$1" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
 if [ "${1:-}" = --install ]; then
   to="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/statusline"; copy="$to/$(basename "$0")"; have="$(script_version "$copy")"
@@ -23,19 +24,24 @@ dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator"
 # after an hour).
 tmp="$dir/statusline.$$.tmp"
 save() { printf '%s' "$input" > "$tmp" && mv -f "$tmp" "$1" 2>/dev/null; rm -f "$tmp"; }
-mkdir -p "$dir" 2>/dev/null && save "$dir/statusline.json"
-# A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
-# session to draw its status line, whichever that was).
 sid="$(printf '%s' "$input" | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -n 1)"
-[ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && save "$dir/sessions/$sid.json"
-command -v jq >/dev/null 2>&1 || { echo "Claude · install jq for the full status line"; exit 0; }
+if [ "${1:-}" != --session-start ]; then
+  mkdir -p "$dir" 2>/dev/null && save "$dir/statusline.json"
+  # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
+  # session to draw its status line, whichever that was).
+  [ -n "$sid" ] && mkdir -p "$dir/sessions" 2>/dev/null && save "$dir/sessions/$sid.json"
+  command -v jq >/dev/null 2>&1 || { echo "Claude · install jq for the full status line"; exit 0; }
+else
+  command -v jq >/dev/null 2>&1 || exit 0
+fi
 
 # The core's public home (the same value as README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
 core_url=https://github.com/Arziburst/claude-coordinator
 tab="$(printf '\t')"
-{ read -r name; read -r root; } <<LINES
-$(printf '%s' "$input" | jq -r '(.session_name // ""), (.workspace.project_dir // .cwd // "")' 2>/dev/null)
+{ read -r name; read -r root; read -r src; } <<LINES
+$(printf '%s' "$input" | jq -r '(.session_name // ""), (.workspace.project_dir // .cwd // ""), (.source // "")' 2>/dev/null)
 LINES
+[ "${1:-}" != --session-start ] || root="${CLAUDE_PROJECT_DIR:-$root}"
 
 # The threshold actually set: local project settings, project settings, the account's; else the model's window.
 limit=""
@@ -44,6 +50,25 @@ for f in "$root/.claude/settings.local.json" "$root/.claude/settings.json" "${di
   limit="$(jq -r '.autoCompactWindow | select(type == "number" and . > 0)' "$f" 2>/dev/null)"
   [ -z "$limit" ] || break
 done
+
+# A session keeps the window it started with (measured, #499): a process's start reads the file, a start and a resume;
+# an edit, /clear and a compaction do not. So only those two write the record, and /clear, which changes the id, leaves none.
+windows="$dir/windows"
+if [ "${1:-}" = --session-start ]; then
+  case "$sid" in *[!0-9a-zA-Z-]*|'') exit 0 ;; esac
+  case "$src" in startup|resume)
+    mkdir -p "$windows" 2>/dev/null && printf '%s' "$limit" > "$windows/$sid.$$" && mv -f "$windows/$sid.$$" "$windows/$sid"
+    rm -f "$windows/$sid.$$"
+    find "$windows" -maxdepth 1 -type f -mtime +30 -delete 2>/dev/null ;;
+  esac
+  exit 0
+fi
+# Does this session need a restart for the window? The record differs from the file; or none is there and the project has
+# the hook: the session started before it. No hook in the project: an older core, a restart would change nothing.
+window_stale() {
+  if [ -f "$windows/$sid" ]; then [ "$(cat "$windows/$sid" 2>/dev/null)" != "$limit" ]
+  else cat "$root/.claude/settings.local.json" "$root/.claude/settings.json" 2>/dev/null | grep -Eq 'statusline\.(sh|ps1).*(--session-start|-SessionStart)'; fi
+}
 
 # A newer core: upstream's main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
 # itself never waits for the network), against the commit PROJECT.md records. Nothing when anything is missing.
@@ -108,10 +133,11 @@ LINES
   cat "$state/RUNS.tsv" 2>/dev/null | jq -Rsc --arg items "$items" "$tasks_prog" 2>/dev/null
 }
 
-behind=0; tasks='[]'
+behind=0; tasks='[]'; restart=""
 case "$name" in *Coordinator*)
   if [ -n "$root" ]; then
     if core_behind; then behind=1; fi
+    if window_stale; then restart=1; else restart=0; fi
     tasks="$(task_json)"; [ -n "$tasks" ] || tasks='[]'
   fi ;;
 esac
@@ -136,6 +162,8 @@ line_prog='
   def gradient($t): (($now / 5 | fm(8)) / 8) as $s | ($t | length) as $n
     | ([range(0; $n) | . as $k | ((($k / $n + $s) | fm(1)) * 2 - 1 | mag | 1 - .) as $v
         | "\u001b[1;38;2;255;\(80 + 140 * $v | rnd);\(80 - 20 * $v | rnd)m\($t[$k:$k + 1])"] | join("")) + "\u001b[0m";
+  # Beside the number: the window in force is not the one shown. Past 100% is itself a sign: a compaction comes before it, or one large turn after.
+  def restartmark($over): if $restart == "1" or ($restart != "" and $over) then gradient("restart") else empty end;
   # A working task: a soft lighter wave moves through the fill at every redraw, in the colour its budget has now.
   def wave($t; $pct; $width; $c): cells($t; $width) as $l | at($l; $pct) as $f | (base($c) | split(";") | map(tonumber)) as $b
     | ([range(0; $l | length) | . as $k
@@ -152,8 +180,8 @@ line_prog='
          ((.current_usage.input_tokens // 0) + (.current_usage.cache_read_input_tokens // 0) + (.current_usage.cache_creation_input_tokens // 0)) as $u
          | (if $lim != "" then ($lim | tonumber) else (.context_window_size // 0) end) as $t
          | (if $t > 0 then $u * 100 / $t else 0 end) as $p
-         | bar("\($model) · \($u | tok)/\($t | tok) \($p | floor)%"; $p; 34; ($p | level))
-       else $model end),
+         | bar("\($model) · \($u | tok)/\($t | tok) \($p | floor)%"; $p; 34; ($p | level)), restartmark($lim != "" and $u > $t)
+       else $model, restartmark(false) end),
       (.rate_limits.five_hour | if type == "object" and .used_percentage != null then bar("5h limit \(.used_percentage | floor)%"; .used_percentage; 14; (.used_percentage | level)) else empty end),
       (.rate_limits.seven_day | if type == "object" and .used_percentage != null then .used_percentage as $w
          | if (.resets_at | type) == "number" then ((100 - (.resets_at - $now) * 100 / 604800) | if . < 0 then 0 elif . > 100 then 100 else . end) as $g
@@ -169,4 +197,4 @@ line_prog='
       | if .used > 0 then .line += " · " | .used += 3 else . end
       | .line += $p | .used += $w)
   | (.lines + [.line])[]'
-printf '%s' "$input" | jq -r --arg lim "$limit" --argjson now "$(date +%s)" --arg behind "$behind" --arg cols "${COLUMNS:-}" --argjson tasks "$tasks" "$line_prog" 2>/dev/null || echo "Claude"
+printf '%s' "$input" | jq -r --arg lim "$limit" --argjson now "$(date +%s)" --arg behind "$behind" --arg restart "$restart" --arg cols "${COLUMNS:-}" --argjson tasks "$tasks" "$line_prog" 2>/dev/null || echo "Claude"

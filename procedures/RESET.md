@@ -40,7 +40,7 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
    - `remote`: the remote cannot be reached or does not take the branch: fix that first. `tag`: one reset a day.
    - `--confirm`, `--core-from`: the name as typed in step 3; a clean clone, from step 4.
    - `held by another process` (Windows): close what holds it and run it again; the tag was taken back.
-   - `FAILED`, or no `done` line (a partial move on Windows, a handle deeper in `coordinator/`): nothing is lost, the tag gives every file back; close the holder, remove what the message names, do not run again (one reset a day).
+   - `FAILED cannot remove <path>`: close the holder of that path and remove it. Any other `FAILED`, or a partial move with no message (a handle deeper in `coordinator/` on Windows): nothing is lost, the tag gives every file back; do not run again, the way back below is the owner's. Never remove what `cannot commit` or `cannot copy` names. The `refused:` lines are not this bullet: the `held by another process` bullet above says to run again.
    The last line is `reset-coordinator: done tag=<tag> core=<sha>`. Delete the scratch clone.
 6. **End by printing these commands, and do nothing else in this session:**
    ```
