@@ -29,6 +29,7 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   - **The coordinator's compaction window** — one-time step `coordinator-window` (ONE-TIME.md, #421):
     `autoCompactWindow` 500000, or the project's number, in the same local file; workers keep theirs in
     the worker safety file; one line in the summary (3.5), run on its yes; the window takes effect at the next start, as for an update.
+    With the status line installed, one-time step `window-mark-hook` the same way: the bar says `restart` until that start.
   - **Branch protection on the code host** — each protected branch (`PROJECT.md` *Protected
     branches*, question 14; not only the default branch) requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it

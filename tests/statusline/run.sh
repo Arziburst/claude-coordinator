@@ -25,7 +25,7 @@ PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }   # Git Bash -> C:/...
-fixture="$core/tests/selftest/status.json"; in="$fixture"; script="$core/scripts/statusline"; unset COLUMNS
+fixture="$core/tests/selftest/status.json"; in="$fixture"; script="$core/scripts/statusline"; unset COLUMNS CLAUDE_PROJECT_DIR
 want='Opus 5.5 high · 837k/1M 83% · 5h limit 14% · week 92%'
 line=yes; [ "$kind" = ps ] || command -v jq >/dev/null 2>&1 || line=no
 bom="$(printf '\357\273\277')"
@@ -156,6 +156,9 @@ stamp() { local s=$(( $(date +%s) - $1 )); if date --version >/dev/null 2>&1; th
 gitcalls() { grep -c ls-remote "$tmp/stub/git.log" 2>/dev/null; }
 wk() { printf '"seven_day":{"used_percentage":%s,"resets_at":%s}' "$1" "$(( $(date +%s) + (1000 - $2) * 6048 / 10 ))"; }   # $2: the week gone, in tenths of a point
 C="CORE Coordinator"; M="Opus 5.5"; W400="400000 1000000"; L400="Opus 5.5 high $dot 400k/1M 40%"
+# the coordinator's SessionStart hook on $tmp/hook.json: stdout in $tmp/out, exit in rc; hk <source> <session id> writes that JSON first
+hkrun() { if [ "$kind" = ps ]; then CLAUDE_CONFIG_DIR="$(winpath "$cfg")" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$script.ps1")" -SessionStart; else CLAUDE_CONFIG_DIR="$cfg" bash "$script.sh" --session-start; fi < "$tmp/hook.json" > "$tmp/out" 2> "$tmp/err"; rc=$?; }
+hk() { printf '{"session_id":"%s","cwd":"%s","hook_event_name":"SessionStart","source":"%s"}\n' "$2" "$(jp "$root")" "$1" > "$tmp/hook.json"; hkrun; }
 
 bar_cases() {
   local m e u t s g
@@ -222,6 +225,27 @@ bar_cases() {
     [ "$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")" != "$m" ] || no "wants the core mark's colours changed after 6 s"
   else no "wants a task bar and a core mark to read, printed '$(plain)'"; fi
   tasks_reset
+
+  # The window mark (#499). The hook entry named in the project's settings; the record: <config>/coordinator/windows/<session id>.
+  local HOOK='{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash /core/scripts/statusline.sh --session-start"}]}]}}'
+  local WIN="$root/.claude/settings.local.json" R="$cfg/coordinator/windows/t1" LR="$L400 $dot restart"
+  upstream "$B"; rm -f "$root/.claude/settings.json" "$WIN"; rm -rf "$cfg/coordinator/windows"
+  L6="$M high $dot 400k/600k 66%"
+  begin "the mark: no record and no hook in the project: none, an older core's restart changes nothing"; fx "$C" "$M" high $W400; draw; is "$L400"
+  begin "the mark: no record, the hook in the project: the session started before it, beside the number"; printf '%s' "$HOOK" > "$root/.claude/settings.json"; draw; is "$LR"
+  bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; g="$(sed -n 2p "$tmp/bars" | cut -f2)"; [ "$g" = restart ] || no "wants the mark right after the context bar, got '$g'"
+  begin "the hook on a start: the window recorded, prints nothing, no status file; the same window: no mark"; printf '{"autoCompactWindow":600000}' > "$WIN"; rm -f "$cfg/coordinator/statusline.json"
+  hk startup t1; [ "$rc" = 0 ] && [ ! -s "$tmp/out" ] || no "wants exit 0 and no output, got $rc '$(cat "$tmp/out")'"; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 600000 ] || no "wants 600000 recorded, got '$(cat "$R" 2>/dev/null)'"
+  [ ! -f "$cfg/coordinator/statusline.json" ] || no "wants no statusline.json from the hook"; draw; is "$L6"
+  begin "the file edited: the bar shows the file's number, the mark says restart"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "$M high $dot 400k/800k 50% $dot restart"
+  begin "a compaction and /clear do not record: the mark stays, /clear's new id has no record"; hk compact t1; hk clear t1; draw; is "$M high $dot 400k/800k 50% $dot restart"; hk clear t2; [ ! -f "$cfg/coordinator/windows/t2" ] || no "wants no record on /clear"
+  begin "a resume records: the mark goes"; hk resume t1; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 800000 ] || no "wants 800000 recorded on a resume, got '$(cat "$R" 2>/dev/null)'"; draw; is "$M high $dot 400k/800k 50%"
+  begin "the window removed from the file, then none at the start and one added: the mark"; rm "$WIN"; draw; is "$LR"; hk startup t1; [ ! -s "$R" ] || no "wants an empty record with no window set"; draw; is "$L400"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "$M high $dot 400k/800k 50% $dot restart"
+  begin "past 100% with the record equal: the mark; not a coordinator: none, with a differing record too"; printf '{"autoCompactWindow":300000}' > "$WIN"; hk startup t1; draw; is "$M high $dot 400k/300k 133% $dot restart"; fx "#11 worker: x" "$M" high $W400; draw; is "$M high $dot 400k/300k 133%"; printf 1 > "$R"; draw; is "$M high $dot 400k/300k 133%"
+  begin "before the first response: the mark beside the model"; printf '{"session_id":"t1","session_name":"%s","workspace":{"project_dir":"%s"},"model":{"display_name":"%s"},"effort":{"level":"high"}}\n' "$C" "$(jp "$root")" "$M" > "$tmp/in.json"; draw; is "$M high $dot restart"
+  begin "the hook's root: CLAUDE_PROJECT_DIR over a cwd in a subfolder; a session id that is no plain name writes nothing"; printf '{"autoCompactWindow":700000}' > "$WIN"; mkdir -p "$root/sub"; printf '{"session_id":"t3","cwd":"%s","source":"startup"}\n' "$(jp "$root/sub")" > "$tmp/hook.json"; CLAUDE_PROJECT_DIR="$(nat "$root")" hkrun; [ "$(tr -d '\r\n' < "$cfg/coordinator/windows/t3" 2>/dev/null)" = 700000 ] || no "wants 700000 recorded from the project's settings, got '$(cat "$cfg/coordinator/windows/t3" 2>/dev/null)'"; hk startup '../../evil'; [ ! -e "$cfg/evil" ] && [ ! -e "$cfg/coordinator/evil" ] || no "wants nothing written outside the folder"
+  begin "the hook removes a record older than 30 days, keeps a newer one"; printf x > "$cfg/coordinator/windows/old"; touch -t "$(stamp 2678400)" "$cfg/coordinator/windows/old"; hk startup t1; [ ! -e "$cfg/coordinator/windows/old" ] || no "wants the old record gone"; [ -e "$cfg/coordinator/windows/t3" ] || no "wants a newer record kept"
+  rm -f "$root/.claude/settings.json" "$WIN"
 
   fx x "$M" high $W400 ",\"rate_limits\":{\"five_hour\":{\"used_percentage\":14},$(wk 30 502)}"
   for t in "140|1 1 1 " "66|1 1 2 " "40|1 2 3 " "|1 1 1 "; do

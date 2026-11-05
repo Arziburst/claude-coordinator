@@ -1216,8 +1216,25 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
   `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
-  the network) and `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now.
-  Past `COLUMNS` less 4 a whole bar moves to the next line. Both write each file (`statusline.json` and
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now, and
+  `restart` beside the number when the window in force is not the one shown (below).
+  Past `COLUMNS` less 4 a whole bar moves to the next line.
+  **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
+  when its process starts, a start or a `--resume`: a `--bg` session started at 300k, its file edited to 100k, ran to 238k with
+  no compaction, the same session resumed compacted on its next message; the control started at 100k compacted past it. An edit, `/clear`
+  and a compaction change nothing (`/clear` also gives the session a new id). The status JSON has no such field, and the bar's number
+  is the file's. So the project's `SessionStart` entry (one-time step `window-mark-hook`) runs `statusline.sh --session-start` /
+  `statusline.ps1 -SessionStart`, which on `startup` and `resume` records the file's window in
+  `<config>/coordinator/windows/<session id>` (older than 30 days removed by the same run), and the mark shows in a coordinator's session when
+  the record differs from the file, when none is recorded and the project has the entry (it started before the entry, or was `/clear`ed), or past
+  100% of a set window: a compaction comes first, or just after one large turn (151k under 100k, measured), which draws the mark until that compaction.
+  A session cannot restart itself: the commands are in *Pause and resume*. The check: `/context` in the session
+  shows the window in force, `Tokens: … / 500k` (no model call); for what a new session would take,
+  `claude -p "/context" --no-session-persistence --output-format json` from the project's root in PowerShell or a macOS / Linux shell
+  (in Git Bash with `MSYS_NO_PATHCONV=1`, or MSYS turns `/context` into a path and it goes to the model as a prompt).
+  `--autocompact`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and `modelSettings` win over the file (measured) and the bar does not read them. `/autocompact <n>`
+  does not change the session it runs in (`/context` still the old number, measured in `-p`) and saves `modelSettings.<model>.autoCompactWindow` in the
+  user settings, so it reaches every project on the machine. Both write each file (`statusline.json` and
   the session's copy) to `statusline.<pid>.tmp` and move it over, so neither is ever seen half-written
   or empty; on Windows, when another status line or a reader holds the file, the move fails (three
   tries, 20 ms apart), the old file stays for that tick and the temp file is removed.
