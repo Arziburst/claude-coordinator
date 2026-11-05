@@ -14,7 +14,7 @@
 #                               title, after the colon, only names it); --project keeps the sessions whose
 #                               first cwd is the folder or inside it (\ read as /, case ignored, C:/x as /c/x);
 #                               several folders joined by | (the root and its worktree roots: root|root-wt)
-#   [--window <n>] the compaction window for the context line (default 500000)
+#   [--window <n>] the compaction window for the context line (default 1000000, Claude Code's own window; retro passes the one in force)
 # One session is its transcript and its subagents'; each transcript is read in order on its own. Lines,
 # tab-separated, one kind per line, no header (nothing at all for a session without messages):
 #   block  <reason>  count=<n> changed=<n> retried=<n> around=<n> stopped=<n>   — per safety-guard reason
@@ -52,7 +52,7 @@
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
 usage() { sed -n '2,52s/^# \{0,1\}//p' "$0"; exit 2; }
-arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""; win=500000
+arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""; win=1000000
 while [ $# -gt 0 ]; do
   case "$1" in
     --detail) detail=1 ;;
