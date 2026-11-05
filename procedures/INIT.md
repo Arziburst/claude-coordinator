@@ -291,6 +291,7 @@ grouped by section — asked, found, by default, and the differences with existi
 or fix these rows". On the yes, write `coordinator/CHECKLIST.md` ([ONE-TIME.md](../ONE-TIME.md)): a line for
 every catalog row — the settings as answered, the checks as run in the setup (`done`, `failed`, `n/a`)
 or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SELFTEST.md](SELFTEST.md)).
+At init's very end, when it set the window (`coordinator-window` or `window-mark-hook`), print the owner the commands of TOOLKIT *Pause and resume*, as UPDATE-CORE's end does, with or without the status line.
 
 ### 3.6 Scenarios
 
