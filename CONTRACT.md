@@ -96,7 +96,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   any other OVER prints one line (`bounds over, not important: <pr> <glob> <added>/<max>`) and the PR goes on. The worker
   still stops and asks past any bound, and the verifier still reads it.
   `scripts/start-worker` saves that copy when a worker or a lead starts, in a repository with `coordinator/briefs/`,
-  over an older copy and never committed (#387); a contract of a task with no `bounds:` needs no copy. A contract written before this change is not rejected at a merge:
+  over an older copy and never committed (#387), for the queue; the session gets the contract in its brief, or in its launch text when its brief holds none (#504); a contract of a task with no `bounds:` needs no copy. A contract written before this change is not rejected at a merge:
   no `bounds:` is `check-bounds: no bounds`, exit 0. **What it does not stop:** a wrong bound, or a component
   left off the list, slips through; a glob that only overlaps an important one (`*.sh` over `scripts/hooks/x.sh`) stays
   ordinary at the queue; `--over-bounds-ok` for two PRs goes in two runs (`.ps1 -File` does not

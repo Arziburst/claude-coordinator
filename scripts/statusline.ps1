@@ -5,7 +5,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.ps1 -Install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.ps1 -SessionStart    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 2
+# statusline-version: 3
 param([switch]$Install, [switch]$SessionStart)
 $ErrorActionPreference = 'SilentlyContinue'
 function Get-ScriptVersion([string]$f) {
@@ -225,6 +225,15 @@ function Get-Slashed([string]$p) { ($p -replace '\\', '/').TrimEnd('/') }
 function Get-SessionStart([string]$path) {
 	foreach ($l in [IO.File]::ReadLines($path)) { if ($l -match '"timestamp"\s*:\s*"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)') { return "$($Matches[1])Z" } }
 }
+# What a session was started with, its kept brief: the first `cost:` under a `budget:` line; 0 when none (#505).
+function Get-KeptBudget([string]$path) { $on = $false
+	try { foreach ($l in [IO.File]::ReadLines($path)) {
+		if ($l -match '^[ \t]*budget:') { $on = $true; continue }
+		if ($on -and $l -match '^[ \t]+cost:') { if ($l -match '[0-9.]+') { return [double]::Parse($Matches[0], $inv) }; return 0.0 }
+		if ($on -and $l -match '^[^ \t]') { $on = $false }
+	} } catch { }
+	return 0.0
+}
 
 # The tasks at work: only this project's folder, only tasks with a session at work now.
 # Spent = the task's rows of RUNS.tsv + what its live sessions spent, idle ones too. A live session and its finished row
@@ -239,9 +248,10 @@ function Get-TaskLine {
 		$c = Get-Slashed "$($a.cwd)"
 		if ($c -ne $base -and -not $c.StartsWith("$base/", [StringComparison]::OrdinalIgnoreCase)) { continue }
 		if ("$($a.name)" -notmatch '^#(\d+)(\.\d+)?\s+(\w+):') { continue }
-		$n = $Matches[1]; $role = $Matches[3]
-		if (-not $tasks[$n]) { $tasks[$n] = @{ spent = 0.0; stage = '?'; lead = $false; working = $false; live = @{} } }
+		$n = $Matches[1]; $role = $Matches[3]; $sub = $Matches[2]
+		if (-not $tasks[$n]) { $tasks[$n] = @{ spent = 0.0; stage = '?'; lead = $false; working = $false; live = @{}; kept = @() } }
 		$t = $tasks[$n]
+		if (-not $sub) { $t.kept += "$($a.sessionId)" }   # a lead's #<task>.<n> session has its own budget
 		if ($role -eq 'lead') { $t.lead = $true }
 		if ($a.status) {
 			try {
@@ -274,6 +284,7 @@ function Get-TaskLine {
 		$budget = 0.0
 		$m = Select-String -LiteralPath (Join-Path $state "briefs/$n-contract.md") -Pattern '^\s+cost:\s*([0-9.]+)' | Select-Object -First 1
 		if ($m) { $budget = [double]::Parse($m.Matches[0].Groups[1].Value, $inv) }
+		else { foreach ($id in $t.kept) { $budget = Get-KeptBudget (Join-Path $dir "briefs/$id.md"); if ($budget -gt 0) { break } } }
 		$stage = if ($t.lead) { 'L' } else { $t.stage }
 		$spent = Get-Nearest $t.spent
 		if ($budget -gt 0) {

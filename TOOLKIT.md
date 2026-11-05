@@ -197,8 +197,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
-  are printed, no contract found is one notice line and the start goes on. `--contract` / `-Contract` only
-  checks a contract: the session reads the brief alone, so the contract's text goes into the brief file;
+  are printed, no contract found is one notice line (the session starts without a contract) and the start goes on. A worker's or a lead's `--contract` / `-Contract`
+  whose brief holds no `acceptance:` block ends its launch text and kept brief, whole, one WARN line saying so (#504; past 24 000 characters the file route below). Any other is only checked (the brief file is never changed):
   a `--contract` whose `id:` and `title:` lines are both absent from the brief prints one WARN line saying
   so, and the start goes on (`--dry-run` too; the brief is never changed, #331). A worker whose contract has
   `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
@@ -1215,7 +1215,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
   `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
-  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now, and
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505), and
   `restart` beside the number when the window in force is not the one shown (below).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`

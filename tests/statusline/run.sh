@@ -11,7 +11,8 @@
 #   Version: a line `# statusline-version: <whole number>` in each script, raised with a change.
 #   Upstream's head: <config>/coordinator/core-upstream.txt, its first 40 characters the sha (the `git ls-remote` line).
 #   The recorded commit: <project>/coordinator/PROJECT.md, the row `| Core (CORE ...` holding commit `<sha>`, a prefix.
-#   The project: workspace.project_dir of the status JSON. A task's budget: `  cost: <n>` in its briefs/<task>-contract.md.
+#   The project: workspace.project_dir of the status JSON. A task's budget: `  cost: <n>` in its briefs/<task>-contract.md, else
+#     (#505) under a `budget:` line in <config>/coordinator/briefs/<sessionId>.md, the first of its sessions in start order that holds one, a `#<task>.<n>` one never.
 #   Sessions: `claude agents --json`: name, cwd, state, status, sessionId. A live one has a status; at work: state `working`.
 #   Live spend: <config>/coordinator/sessions/<sessionId>.json, cost.total_cost_usd. A row in coordinator/RUNS.tsv is that
 #     session's when its start cell equals the session's start, as `runs check` reads it: the first timestamp in the
@@ -198,6 +199,15 @@ bar_cases() {
   fx "$C" "$M" high $W400; draw
   is "$L400 $dot #11 W 7/10\$ $dot #12 T 8/10\$ $dot #13 V 11/10\$ $dot #14 R 10/10\$"
   bar "#11 W 7/10\$" 17 "green:12 grey:5"; bar "#12 T 8/10\$" 17 "yellow:14 grey:3"; bar "#13 V 11/10\$" 17 "red:17"; bar "#14 R 10/10\$" 17 "yellow:17"
+  # #505: <config>/coordinator/briefs/<sessionId>.md, what a session was started with; `  cost:` counts only under `budget:`
+  kept() { mkdir -p "$cfg/coordinator/briefs"; printf '# %s\nprice:\n  cost: 3\n---\nid: x\nbudget:\n  model: opus\n  cost: %s\n---\n' "$1" "$2" > "$cfg/coordinator/briefs/$1.md"; }
+  begin "no coordinator/briefs, the contract at another path: the budget from the session's kept brief"; tasks_reset; mv "$root/coordinator/briefs" "$tmp/briefs.away"; mkdir -p "$root/coordinator/contracts"; printf -- '---\nbudget:\n  cost: 99\n---\n' > "$root/coordinator/contracts/c30.md"
+  agent k1 "#30 worker: x" working busy "$wt" 7 2026-11-04T12:00:00Z; kept k1 10; fx "$C" "$M" high $W400; draw; bar "#30 W 7/10\$" 17 "green:12 grey:5"
+  begin "an earlier session of the task holds no budget: the next one's counts"; tasks_reset; agent k2 "#31 tester: x" done - "$wt" 0 2026-11-04T12:01:00Z; printf 'no contract here\n' > "$cfg/coordinator/briefs/k2.md"; agent k3 "#31 worker: x" working busy "$wt" 7 2026-11-04T12:02:00Z; kept k3 10; draw; bar "#31 W 7/10\$" 17 "green:12 grey:5"
+  begin "nothing found, no kept brief or one without a budget: the bar as before, exit 0"; tasks_reset; agent k4 "#32 worker: x" working busy "$wt" 3 2026-11-04T12:03:00Z; draw; bar "#32 W 3\$" 17 "blue:17"; printf 'no contract here\n' > "$cfg/coordinator/briefs/k4.md"; draw; bar "#32 W 3\$" 17 "blue:17"
+  begin "a lead's sub-session does not replace the lead's budget, nor stand in for one"; tasks_reset; agent k5 "#33.1 worker: x" working busy "$wt" 1 2026-11-04T12:04:00Z; kept k5 1; agent k6 "#33 lead: x" idle idle "$root" 2 2026-11-04T12:05:00Z; kept k6 10; draw; bar "#33 L 3/10\$" 17 "green:5 grey:12"
+  rm "$cfg/coordinator/briefs/k6.md"; draw; bar "#33 L 3\$" 17 "blue:17"
+  begin "briefs/<task>-contract.md first, where it exists"; tasks_reset; mv "$tmp/briefs.away" "$root/coordinator/briefs"; budget 34; agent k7 "#34 worker: x" working busy "$wt" 7 2026-11-04T12:06:00Z; kept k7 20; draw; bar "#34 W 7/10\$" 17 "green:12 grey:5"
   begin "not a coordinator: no task bars and no core mark"; upstream "$A"; fx "#11 worker: x" "$M" high $W400; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call in a session that is not a coordinator"
 
   tasks_reset; printf 6 > "$tmp/stub/git.sleep"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; fx "$C" "$M" high $W400
