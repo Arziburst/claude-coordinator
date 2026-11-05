@@ -51,6 +51,7 @@ if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; print
 fi
 if [ "${1:-}" = agents ]; then
   [ -z "${STUB_NOLIST:-}" ] || { echo '[]'; exit 0; }   # $STUB_NOLIST: the listing never has the started session (#370)
+  [ -z "${STUB_LIST_FAIL:-}" ] || [ "${3:-}" != --all ] || { echo "stub claude: listing failed" >&2; exit 1; }   # #521: only the --all listing fails
   all=""; case " $* " in *" --all "*) all=1 ;; esac
   a="$(sed 's/\\/\\\\/g; s/"/\\"/g' "$STUB_LOG.names" 2>/dev/null | awk '{ printf "{\"name\":\"%s\",\"sessionId\":\"5e550000-0000-4000-8000-%012d\"}\n", $0, NR }' | paste -sd, -)"
   [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
@@ -1833,5 +1834,25 @@ rm -f "$STUB_LOG.arg"; check 0 "#504: a tester's --contract is only checked" -- 
 grep -q '^acceptance:' "$STUB_LOG.arg" && { echo "FAIL (tester): the contract in its launch text"; fail=1; }
 for r in worker lead; do check 0 "#504: a $r with neither a contract in the brief nor --contract" -- start "${F[@]}" --name "#504 $r: E" --branch 504-e --brief-file "$tmp/brief.md" --dry-run
   [ "$(printf '%s\n' "$LAST" | grep -c 'starts without a contract')" = 1 ] || { echo "FAIL ($r, no contract): not one line naming it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; done
+# --- a task's earlier finished sessions (#521): found by the worktree their kept brief names (else by `#<id> `), removed with a run row ---
+r5="$tmp/r521" F5=(--repo "$tmp/r521" --model opus --safety "$tmp/safety.json" --report-to x --brief-file "$tmp/brief.md"); git init -q -b main "$r5" && g -C "$r5" commit -q --allow-empty -m init && git -C "$r5" remote add origin "$tmp/remote.git"; mkdir -p "$r5/coordinator" "$tmp/cfg/projects/p521" "$tmp/cfg/coordinator/briefs"
+r5c="$(cd "$r5" && { pwd -W 2>/dev/null || pwd -P; })"; printf 'date\ttask\trole\tkind\tmodel\teffort\testimate\ttokens\tcost\tresult\tstart\twall\tactive\twait\testimate_time\n' > "$r5/coordinator/RUNS.tsv"
+s521() { local sid="5e552100-0000-4000-8000-00000000000$1" t="2026-11-0$1T10:00:00Z"; printf 'c521000%s %s %s %s\n' "$1" "$sid" "$2" "$3" >> "$STUB_LOG.sessions"; printf 'c521000%s\t%s\n' "$1" "$4" >> "$STUB_LOG.sessions.cwd"
+  printf '{"cwd":"x","sessionId":"%s","type":"assistant","message":{"id":"m%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$sid" "$1" "$t" > "$tmp/cfg/projects/p521/$sid.jsonl"
+  [ -z "${5:-}" ] || printf 'FIRST ACTION, before anything else: use the EnterWorktree tool with path = %s/.claude/worktrees/%s. Work only inside it.\n' "$r5c" "$5" > "$tmp/cfg/coordinator/briefs/$sid.md"
+  [ -z "${6:-}" ] || printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> "$r5/coordinator/RUNS.tsv"; }
+s521 1 done "#BIN-161 tester: a" "$r5c" BIN-161-x row; s521 2 done "#BIN-161 worker: b" "$r5c" BIN-161-x; s521 3 working "#BIN-161 worker: c" "$r5c" BIN-161-x row
+s521 4 done "#BIN-161 worker: d" "$tmp/other" BIN-161-x row; s521 5 done "#BIN-77 worker: e" "$r5c" BIN-77-y row; s521 6 done "#BIN-161 tester: old" "$r5c" "" row
+s521 7 done "CORE Coordinator" "$r5c" "" row; s521 8 done "#RECEPTION-FLOW worker: renamed" "$r5c" BIN-161-x row; s521 9 stopped "#BIN-1610 worker: f" "$r5c" "" row
+check 0 "#521: a worker's start removes the task's earlier finished sessions with a run row" -- start "${F5[@]}" --branch BIN-161-x --name "#BIN-161 worker: next"
+for i in 1 6 8; do expect_in "removed the earlier session c521000$i"; grep -qx "rm c521000$i" "$STUB_LOG" || { echo "FAIL (#521): c521000$i not removed"; fail=1; }; done
+expect_in "earlier session c5210002 (#BIN-161 worker: b) kept: no run row - write it first (scripts/runs add"; expect_watch "$(stub_id)"
+for i in 2 3 4 5 7 9; do grep -qx "rm c521000$i" "$STUB_LOG" && { echo "FAIL (#521): c521000$i removed"; fail=1; }; done
+[ "$(printf '%s\n' "$LAST" | grep -cE 'c52100(0[3457]|09)')" = 0 ] || { echo "FAIL (#521): a session of another task, project or state named"; fail=1; }
+STUB_LIST_FAIL=1 check 0 "#521: a failing listing: one line, the start goes on" -- start "${F5[@]}" --branch BIN-161-x --name "#BIN-161 tester: t2"
+expect_in "earlier sessions: the listing failed - none removed"; expect_watch "$(stub_id)"
+s521 1 done "#BIN-161 tester: a2" "$r5c" BIN-161-x   # its row is written above
+STUB_RM_FAIL="rm broke" check 0 "#521: a failing claude rm: one line, the start goes on" -- start "${F5[@]}" --branch BIN-161-x --name "#BIN-161 lead: l"
+expect_in "earlier session c5210001 (#BIN-161 tester: a2): claude rm failed - remove it by hand"; expect_watch "$(stub_id) @120"
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

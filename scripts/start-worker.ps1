@@ -608,6 +608,21 @@ if ($fr -in @('worker', 'lead', '')) {
     else { "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE ${sect}4a): $(@($fo)[0])" }
   }
 }
+# the task's earlier finished sessions (#521): a finished one is listed with its launch folder only (measured), so it is
+# the task's when the brief kept by its sessionId names this worktree, else (no brief kept) by its name `#<id> ` or `#<id>.`;
+# removed only with its run row (runs check), never another project's, a running or waiting one; a failure: one line
+if ($role -cin 'tester', 'worker', 'lead') { $tid = if ($Name -match '^#([^ .]+)') { $Matches[1] } else { $null }; $ms = $null
+  if ($DryRun) { "[dry-run] the task's earlier finished sessions with a run row would be removed (claude rm)" }
+  else { try { $al = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"; if ($LASTEXITCODE -ne 0) { throw 'rc' }; $js = @($al | ConvertFrom-Json | ForEach-Object { $_ }) } catch { $js = $null; "earlier sessions: the listing failed - none removed" }
+    $rt = $root.Replace('\', '/').TrimEnd('/')
+    foreach ($s in @($js | Where-Object { $_ -and $_.id -and $_.state -in @('done', 'stopped', 'failed') -and -not ($_.PSObject.Properties.Name -contains 'status') })) {
+      $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"; $kb = "$bd/$($s.sessionId).md"
+      if (-not ($cw -ieq $rt -or $cw.StartsWith("$rt/", [StringComparison]::OrdinalIgnoreCase))) { continue }
+      if (Test-Path -LiteralPath $kb -PathType Leaf) { $f1 = "$(@(Get-Content -LiteralPath $kb -TotalCount 1))"; if (-not ($f1.Contains("/$Branch. ") -or $f1.Contains("/$Branch, "))) { continue } }
+      elseif (-not $tid -or -not ($nm.StartsWith("#$tid ") -or $nm.StartsWith("#$tid."))) { continue }
+      if ($null -eq $ms) { $ms = @(& (Join-Path $PSScriptRoot 'runs.ps1') check -Log $rl -Root $root 2>&1 | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { "earlier sessions: runs check failed - none removed: $(@($ms)[0])"; break } }
+      if (@($ms | Where-Object { $_.StartsWith("MISSING $($s.id) ") }).Count) { "earlier session $($s.id) ($nm) kept: no run row - write it first (scripts/runs add --log $rl --session $($s.id) ..., CORE ${sect}7), then claude rm $($s.id)" }
+      else { $null = & { $ErrorActionPreference = 'Continue'; & claude rm $s.id 2>&1 }; if ($LASTEXITCODE -eq 0) { "removed the earlier session $($s.id) ($nm): finished, its run row written" } else { "earlier session $($s.id) ($nm): claude rm failed - remove it by hand" } } } } }
 $brief = $full   # $full as sent, before the escaping below: kept for after a compaction
 function LastLine([string]$id) {
   if ($asst) { return "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)" }

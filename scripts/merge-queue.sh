@@ -223,18 +223,27 @@ for item in "${prs[@]}"; do
   done <<< "$list"
   # the merge row of CORE §4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   n='<n>'; printf '%s' "$branch" | grep -qE '^[0-9]+-' && n="${branch%%-*}"
-  # the task's finished sessions of this project (tester, fix rounds, a lead's workers: named `#<n> ` or `#<n>.`) still listed, each with its rm; a failing listing or none found: no line (#493)
-  fin=""; [ "$n" = '<n>' ] || fin="$(claude agents --json --all 2>/dev/null </dev/null | tr -d '\r\n' | tr '}' '\n' | awk -v n="$n" -v R="$(pwd)|$(pwd -P)|$(pwd -W 2>/dev/null)" '
+  # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
+  # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
+  # their rm; a failing listing or none found: no line
+  bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs" fin="" rmd="" ms=""
+  while IFS="$TAB" read -r xid xsid xnm; do [ -n "$xid" ] || continue
+    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -F -e "/$branch. " -e "/$branch, " >/dev/null || continue
+    else case "$xnm" in "#$n "*|"#$n."*) [ "$n" != '<n>' ] || continue ;; *) continue ;; esac; fi
+    [ -n "$ms" ] || ms="$(bash "$(dirname "$0")/runs.sh" check --log coordinator/RUNS.tsv --root "$(pwd)" 2>/dev/null </dev/null)" || ms=-
+    if [ "$ms" != - ] && ! printf '%s\n' "$ms" | grep -F "MISSING $xid " >/dev/null && claude rm "$xid" >/dev/null 2>&1 </dev/null; then rmd="${rmd:+$rmd; }$xid ($xnm)"
+    else fin="${fin:+$fin; }claude rm $xid ($xnm)"; fi
+  done <<< "$(claude agents --json --all 2>/dev/null </dev/null | tr -d '\r\n' | tr '}' '\n' | awk -v R="$(pwd)|$(pwd -P)|$(pwd -W 2>/dev/null)" '
     function f(k,  m) { if (!match($0, "\"" k "\": *\"[^\"]*\"")) return ""; m = substr($0, RSTART, RLENGTH); sub(/^[^:]*: *"/, "", m); sub(/"$/, "", m); return m }
     function c(s) { gsub(/\\+/, "/", s); return tolower(s) }
     BEGIN { split(R, rt, "|") }
     { st = f("state"); nm = f("name"); cw = c(f("cwd")); ok = 0
       for (i in rt) if (rt[i] != "" && (cw == c(rt[i]) || index(cw, c(rt[i]) "/") == 1)) ok = 1
-      if (ok && f("id") != "" && (st == "done" || st == "stopped" || st == "failed") && (index(nm, "#" n " ") == 1 || index(nm, "#" n ".") == 1))
-        printf "%sclaude rm %s (%s)", (k++ ? "; " : ""), f("id"), nm }')"
+      if (ok && f("id") != "" && (st == "done" || st == "stopped" || st == "failed") && $0 !~ /"status":/) print f("id") "\t" f("sessionId") "\t" nm }')"
   while IFS= read -r l; do [ -z "$l" ] || echo "AFTER MERGE #$pr: $l"; done <<EOF
 cleanup-worker --worktree .claude/worktrees/$branch (CORE §8)
 the run rows of task $n (branch $branch), then runs check, and the journal line (CORE §7)
+${rmd:+removed the finished sessions of this task whose run rows are written: $rmd}
 ${fin:+other finished sessions of task $n are still listed; claude rm only after the run rows above: $fin}
 close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
 the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv --task $n --pr-json - --append

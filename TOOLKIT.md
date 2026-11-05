@@ -15,6 +15,10 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `sessionId` (*Pause and resume*). `claude agents --json --all` lists the stopped (`done`) sessions too.
   These commands, `--resume` and SendMessage reach **any** session on the machine, other projects'
   included: act only on sessions whose `cwd` is inside the project (CORE §1.17; the layers: *Safety*).
+  **A finished session** (no `status` field; measured on 2.1.318, macOS, #521) is listed with its launch folder as `cwd`, never the
+  worktree it entered, and no branch; `claude rm` drops the listing only: its transcript, its kept brief and its worktree stay.
+  So start-worker (before a tester's, worker's or lead's launch) and merge-queue (after a merge) find a task's finished sessions by
+  the worktree the brief kept by their `sessionId` names, else by the name `#<id> `, and `claude rm` those `runs check` finds a row for.
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project: `#37 worker: <title>`.
@@ -754,7 +758,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
-  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only), and `claude agents --json --all` once after a merge for the sessions line (the task's other finished sessions, printed below the run rows line: rows first, then `claude rm`; the worker's own is among them): the owner's
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only), and `claude agents --json --all` once after a merge for the sessions line (the task's finished sessions, found as start-worker finds them: those whose run rows are written removed, the rest named below the run rows line: rows first, then `claude rm`; the worker's own is among them, #521): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
