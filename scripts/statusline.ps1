@@ -4,8 +4,9 @@
 # coordinator's session also a newer core and the tasks at work - and saves Claude Code's status JSON to
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.ps1 -Install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
-# statusline-version: 1
-param([switch]$Install)
+#   statusline.ps1 -SessionStart    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
+# statusline-version: 2
+param([switch]$Install, [switch]$SessionStart)
 $ErrorActionPreference = 'SilentlyContinue'
 function Get-ScriptVersion([string]$f) {
   $m = Select-String -LiteralPath $f -Pattern '^# statusline-version: (\d+)\s*$' | Select-Object -First 1
@@ -41,15 +42,17 @@ function Save([string]$path) {
     }
   } catch { } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp } }
 }
-Save (Join-Path $dir 'statusline.json')
-# A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
-# session to draw its status line, whichever that was).
-if ($raw -match '"session_id"\s*:\s*"([^"]+)"') {
-  $sdir = Join-Path $dir 'sessions'; New-Item -ItemType Directory -Force $sdir | Out-Null
-  Save (Join-Path $sdir ($Matches[1] + '.json'))
+if (-not $SessionStart) {
+  Save (Join-Path $dir 'statusline.json')
+  # A copy per session, so the coordinator reads each worker's own numbers (the file above is the last
+  # session to draw its status line, whichever that was).
+  if ($raw -match '"session_id"\s*:\s*"([^"]+)"') {
+    $sdir = Join-Path $dir 'sessions'; New-Item -ItemType Directory -Force $sdir | Out-Null
+    Save (Join-Path $sdir ($Matches[1] + '.json'))
+  }
 }
 
-try { $j = $raw | ConvertFrom-Json } catch { 'Claude'; exit 0 }
+try { $j = $raw | ConvertFrom-Json } catch { if ($SessionStart) { exit 0 }; 'Claude'; exit 0 }
 
 # Invariant culture: 1.2M, not 1,2M on a German or Russian Windows.
 $inv = [Globalization.CultureInfo]::InvariantCulture
@@ -60,6 +63,7 @@ function Format-Tokens([double]$n) {
 function Get-Nearest([double]$x) { [math]::Floor($x + 0.5) }
 
 $root = if ($j.workspace.project_dir) { "$($j.workspace.project_dir)" } else { "$($j.cwd)" }
+if ($SessionStart -and $env:CLAUDE_PROJECT_DIR) { $root = $env:CLAUDE_PROJECT_DIR }
 $isCoordinator = "$($j.session_name)" -cmatch 'Coordinator'
 # The core's public home (the same value as README, procedures/CORE-FINDINGS.md): this copy lives outside any repository.
 $coreUrl = 'https://github.com/Arziburst/claude-coordinator'
@@ -74,6 +78,35 @@ function Get-Threshold($fallback) {
 		try { $v = (Get-Content -LiteralPath $f -Raw | ConvertFrom-Json).autoCompactWindow; if ($v -is [ValueType] -and $v -isnot [bool] -and [double]$v -gt 0) { return [double]$v } } catch { }
 	}
 	return [double]$fallback
+}
+
+# A session keeps the window it started with (measured, #499): a process's start reads the file, a start and a resume;
+# an edit, /clear and a compaction do not. So only those two write the record, and /clear, which changes the id, leaves none.
+$set = Get-Threshold 0
+$windowText = if ($set -gt 0) { $set.ToString($inv) } else { '' }
+$sid = "$($j.session_id)"
+$windows = Join-Path $dir 'windows'
+if ($SessionStart) {
+	if ($sid -cmatch '^[0-9a-zA-Z-]+$' -and "$($j.source)" -cin 'startup', 'resume') {
+		$null = [IO.Directory]::CreateDirectory($windows)
+		$rec = Join-Path $windows $sid; $tmp = "$rec.$PID"
+		[IO.File]::WriteAllText($tmp, $windowText)
+		Move-Item -Force -LiteralPath $tmp -Destination $rec
+		if (Test-Path -LiteralPath $tmp) { Remove-Item -Force -LiteralPath $tmp }
+		Get-ChildItem -LiteralPath $windows -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | Remove-Item -Force
+	}
+	exit 0
+}
+# Does this session need a restart for the window? The record differs from the file; or none is there and the project has
+# the hook: the session started before it. No hook in the project: an older core, a restart would change nothing.
+function Test-WindowStale {
+	$rec = if ($sid -cmatch '^[0-9a-zA-Z-]+$') { Join-Path $windows $sid } else { '' }
+	if ($rec -and (Test-Path -LiteralPath $rec)) { return "$(Get-Content -LiteralPath $rec -Raw)".Trim() -cne $windowText }
+	foreach ($f in '.claude/settings.local.json', '.claude/settings.json') {
+		$p = Join-Path $root $f
+		if ((Test-Path -LiteralPath $p) -and (Select-String -LiteralPath $p -CaseSensitive -Quiet -Pattern 'statusline\.(sh|ps1).*(--session-start|-SessionStart)')) { return $true }
+	}
+	return $false
 }
 
 $e = [char]27
@@ -143,14 +176,19 @@ if ($isCoordinator -and $root) { try { if (Test-CoreBehind) { $parts += Format-G
 $model = if ($j.model.display_name) { "$($j.model.display_name)" } else { 'Claude' }
 if ($j.effort.level) { $model += " $($j.effort.level)" }
 
+# Beside the number: the window in force is not the one shown. Past 100% is itself a sign: a compaction comes before it, or one large turn after.
+$restart = $false
+if ($isCoordinator -and $root) { try { $restart = Test-WindowStale } catch { } }
 $cw = $j.context_window
 if ($cw -and $null -ne $cw.used_percentage) {
 	$u = $cw.current_usage
 	$used = [double]$u.input_tokens + [double]$u.cache_read_input_tokens + [double]$u.cache_creation_input_tokens
-	$limit = Get-Threshold $cw.context_window_size
+	$limit = if ($set -gt 0) { $set } else { [double]$cw.context_window_size }
 	$pct = if ($limit -gt 0) { $used * 100 / $limit } else { 0 }
 	$parts += Format-Bar ('{0} {1} {2}/{3} {4}%' -f $model, [char]0x00B7, (Format-Tokens $used), (Format-Tokens $limit), [math]::Floor($pct)) $pct 34 (Get-LevelColour $pct)   # 34 holds the longest: Sonnet 5.5 medium, three-digit tokens, three-digit percent
+	if ($isCoordinator -and $root -and $set -gt 0 -and $used -gt $limit) { $restart = $true }
 } else { $parts += $model }
+if ($restart) { $parts += Format-Gradient 'restart' }
 
 $rl = $j.rate_limits
 # The 5-hour limit only where Claude Code passes it (a plan with one): by its level.

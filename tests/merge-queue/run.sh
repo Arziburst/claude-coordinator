@@ -175,10 +175,13 @@ sess() { printf '  {\n    "id": "%s",\n    "sessionId": "5e550000-0000-4000-8000
     \"cwd\": \"$4\"}"; }
 { echo '['; sess a1 "#466 tester: x" done "$qroot/.claude/worktrees/466-feat"; echo ,; sess a2 "#466.1 worker: y" stopped "$qroot"; echo ,
   sess a3 "#466 worker: still going" working "$qroot"; echo ,; sess a4 "#4660 another task" done "$qroot"; echo ,
-  sess a5 "#466 other folder" done "$qroot-other"; echo ,; sess a6 "#466 no folder" done; echo ,; sess a7 "#466 fix round" failed "$qroot"; echo; echo ']'; } > "$STUB_D/agents"
+  sess a5 "#466 other folder" done "$qroot-other"; echo ,; sess a6 "#466 no folder" done; echo ,; sess a7 "#466 fix round" failed "$qroot"; echo ,
+  sess a8 "#466 windows form" done "${qroot//\//\\\\}"; echo; echo ']'; } > "$STUB_D/agents"   # a8: the folder as a real Windows listing writes it, doubled backslashes (dropping the normalising leaves it out)
 run land 77 --poll 0; code 0; has "MERGED #77:"
 got="$(printf '%s\n' "$out" | grep 'other finished sessions')"
-[ "$got" = "AFTER MERGE #77: other finished sessions of task 466 are still listed: claude rm a1 (#466 tester: x); claude rm a2 (#466.1 worker: y); claude rm a7 (#466 fix round)" ] && ok || bad "expected exactly the sessions a1, a2, a7 in one line, got: $got"
+[ "$got" = "AFTER MERGE #77: other finished sessions of task 466 are still listed; claude rm only after the run rows above: claude rm a1 (#466 tester: x); claude rm a2 (#466.1 worker: y); claude rm a7 (#466 fix round); claude rm a8 (#466 windows form)" ] && ok || bad "expected exactly the sessions a1, a2, a7, a8 in one line, got: $got"
+got="$(printf '%s\n' "$out" | grep -E '^AFTER MERGE #77: (the run rows|other finished)' | sed -E 's/^AFTER MERGE #77: ([a-z]+ [a-z]+).*/\1/')"
+[ "$got" = "$(printf 'the run\nother finished')" ] && ok || bad "the sessions line must print below the run rows line, got: $got"
 hasnt "claude rm a3"; hasnt "claude rm a4"; hasnt "claude rm a5"; hasnt "claude rm a6"; has "AFTER MERGE #77: cleanup-worker"
 fresh "after a merge: a failing listing or no matching session: no line, the merge stands (#493)"
 pr 77 $H77 466-feat; echo src/x.ts > "$STUB_D/files-77"; echo pass > "$STUB_D/checks-$H77"; touch "$STUB_D/agents-fail"

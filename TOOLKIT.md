@@ -670,6 +670,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   a variable followed by `:` is read as a drive-qualified name and the file stops parsing:
   write `"${Issue}: $title"`, not `"$Issue: $title"` (it broke a project's start-worker wrapper).
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
+  In a `.sh`, a `case` inside `$( )` writes `(` before its patterns (`(sh) ... ;;`): on bash 3.2 the first `)` of a pattern closes the substitution (#489).
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
 - **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
@@ -751,7 +752,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
-  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only), and `claude agents --json --all` once after a merge for the sessions line (the task's other finished sessions, printed below the run rows line: rows first, then `claude rm`; the worker's own is among them): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
@@ -762,7 +763,11 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter); blank words are no words, a usage error.
   `scripts/start-worker` saves the copy (#387): a worker or a lead whose contract has `bounds:`, in a repository with
   `coordinator/briefs/`, copies it to `coordinator/briefs/<branch>-contract.md` (a branch's `/` as `-`) just before the launch, over
-  an older copy, one line naming it, never committed; a contract of a task with no `bounds:` needs no copy. **The folder (#387):** `land`
+  an older copy, one line naming it, never committed; a contract of a task with no `bounds:` needs no copy.
+  **The copy goes stale (#394):** a restart whose contract has no `bounds:` keeps the old copy, and the queue reads it (a false, loud stop);
+  a contract tightened needs a restart, else the queue checks the older copy;
+  a bound raised on a running task: edit the saved copy too, or the queue stops falsely (a fresh start-worker round recopies; `--over-bounds-ok` exists);
+  `no contract` on a PR with important files is the signal to look. **The folder (#387):** `land`
   (`--dry-run` too) refuses, before any PR merges, a folder that is not a repository's root, or whose origin lacks an open PR's
   branch: a usage error naming the folder, exit 1. A PR from a fork has no branch on origin: only the root holds for it.
   Origin unreadable: exit 1 with a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch
@@ -807,7 +812,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   sh` proves the file: every step there in exactly one shard of its OS, each shard with a step, the `if:` forms, the
   checkout and the `#need` step with none, and for a split set the union of the parts is the whole set, no case in two
   parts or in none (`parts sh`, by hand on macOS or Ubuntu: the whole set and every part really run, the counts summed,
-  a broken script failing its part alone). **Step times:** `scripts/ci-times.sh|.ps1
+  a broken script failing its part alone). It does not prove a step's input from another step: a step reading a file
+  under `$RUNNER_TEMP` that another step wrote runs in the shard of the step that writes it (#460). **Step times:** `scripts/ci-times.sh|.ps1
   [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>` and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
@@ -1219,8 +1225,25 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
   `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
-  the network) and `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now.
-  Past `COLUMNS` less 4 a whole bar moves to the next line. Both write each file (`statusline.json` and
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now, and
+  `restart` beside the number when the window in force is not the one shown (below).
+  Past `COLUMNS` less 4 a whole bar moves to the next line.
+  **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
+  when its process starts, a start or a `--resume`: a `--bg` session started at 300k, its file edited to 100k, ran to 238k with
+  no compaction, the same session resumed compacted on its next message; the control started at 100k compacted past it. An edit, `/clear`
+  and a compaction change nothing (`/clear` also gives the session a new id). The status JSON has no such field, and the bar's number
+  is the file's. So the project's `SessionStart` entry (one-time step `window-mark-hook`) runs `statusline.sh --session-start` /
+  `statusline.ps1 -SessionStart`, which on `startup` and `resume` records the file's window in
+  `<config>/coordinator/windows/<session id>` (older than 30 days removed by the same run), and the mark shows in a coordinator's session when
+  the record differs from the file, when none is recorded and the project has the entry (it started before the entry, or was `/clear`ed), or past
+  100% of a set window: a compaction comes first, or just after one large turn (151k under 100k, measured), which draws the mark until that compaction.
+  A session cannot restart itself: the commands are in *Pause and resume*. The check: `/context` in the session
+  shows the window in force, `Tokens: … / 500k` (no model call); for what a new session would take,
+  `claude -p "/context" --no-session-persistence --output-format json` from the project's root in PowerShell or a macOS / Linux shell
+  (in Git Bash with `MSYS_NO_PATHCONV=1`, or MSYS turns `/context` into a path and it goes to the model as a prompt).
+  `--autocompact` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` win over the file; `modelSettings` by their own order (measured: user 250k under a project's 300k gives 300k, alone 250k; project 250k over it 250k; local 300k over that 300k); the bar reads none. `/autocompact <n>`
+  does not change the session it runs in (`/context` still the old number; under a project's number it prints "a higher-priority override is active") and saves `modelSettings.<model>.autoCompactWindow` in the
+  user settings, which a project's number overrides. Both write each file (`statusline.json` and
   the session's copy) to `statusline.<pid>.tmp` and move it over, so neither is ever seen half-written
   or empty; on Windows, when another status line or a reader holds the file, the move fails (three
   tries, 20 ms apart), the old file stays for that tick and the temp file is removed.
