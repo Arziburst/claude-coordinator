@@ -30,7 +30,11 @@
 # Prints tab-separated: "retro", the weeks; "axis measure week previous" and a line per measure:
 #   cost            tasks, merged, median_per_task (USD), total (the tasks' cost and the coordinator's own),
 #                   coordinator, assistants (their own spend, apart from total; the local report only),
-#                   per_merged_task (total / merged)
+#                   per_merged_task (total / merged), context_share_over_400k and context_tokens_over_window (the
+#                   session-insights context line, the local report only; the window: PROJECT.md's row "Coordinator
+#                   window", else 500000). merged (#490): first-parent subjects ending (#n) in the project's git log,
+#                   origin's default branch, else HEAD, the root the repository's top, no fetch; none in either
+#                   week or no repository: the task rows with a result `merged`
 #   speed           ready_median, work_median, owner_wait_median (minutes, from the task rows; the owner wait
 #                   is shown apart, never in the others), owner_wait_open (tasks ready, not merged)
 #   quality         rework_rate, escalated_rate, failed_rate (of the tasks with runs), escapes (ESCAPES.tsv rows
@@ -529,11 +533,21 @@ fi
 # the transcripts of each week (the core report: of its period), or "none" (no insights asked, no transcripts on
 # this machine)
 IW=none; IP=none
+win=""; [ ! -f "$dir/PROJECT.md" ] || win="$(LC_ALL=C awk -F '|' '$2 ~ /^[ \t]*[*]*Coordinator window/ && match($3, /[0-9][0-9][0-9][0-9][0-9]+/) { print substr($3, RSTART, RLENGTH); exit }' "$dir/PROJECT.md")"
+win="${win:-500000}"
 if [ "$noins" = 0 ] && [ "$core" = 1 ]; then
   IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
 elif [ "$noins" = 0 ]; then
-  IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --until "${WN}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
-  IP="$(bash "$here/session-insights.sh" --since "${PS}T00:00:00Z" --until "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IP=none
+  IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --until "${WN}T00:00:00Z" --skip-tests --window "$win" --project "$roots" 2>/dev/null)" || IW=none
+  IP="$(bash "$here/session-insights.sh" --since "${PS}T00:00:00Z" --until "${WS}T00:00:00Z" --skip-tests --window "$win" --project "$roots" 2>/dev/null)" || IP=none
+fi
+# merged from the project's git log (#490): "<week>:<previous>", empty when there is no such source
+prs() { git -C "$proj" log --first-parent "$ref" "--since=$1T00:00:00Z" ${2:+"--until=$2T00:00:00Z"} --format=%s 2>/dev/null | LC_ALL=C grep -cE '\(#[0-9]+\)[[:space:]]*$'; }
+GM=""
+if cd0="$(git -C "$proj" rev-parse --show-cdup 2>/dev/null)" && [ -z "$cd0" ]; then
+  ref="$(git -C "$proj" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)" || ref=HEAD
+  if [ "$core" = 1 ]; then gw="$(prs "$WS" "")"; gp=0; else gw="$(prs "$WS" "$WN")"; gp="$(prs "$PS" "$WS")"; fi
+  [ "$((gw + gp))" = 0 ] || export GM="$gw:$gp"
 fi
 # the journal's guard false positives and the escapes, per week ("-": no file)
 JC=-; EC=-
@@ -622,6 +636,7 @@ report() {
       else if (f[1] == "waiting") wmin[w] = kv(f[2], "minutes")
       else if (f[1] == "cache") crw[w] = kv(f[2], "rewrites")
       else if (f[1] == "reread") rrf[w] = kv(f[2], "files")
+      else if (f[1] == "context") { ctk[w] = kv(f[2], "tokens"); c4k[w] = kv(f[2], "over400k"); cwk[w] = kv(f[2], "overwindow") }
       else if (f[1] == "turns") calls[w] = kv(f[2], "tool_calls") } }
   function rank(p, n,   q) { q = p * n / 100; return q == int(q) ? q : int(q) + 1 }
   # twice the median of a list
@@ -700,7 +715,9 @@ report() {
         if (w == "W") { k = tk[t] == "" ? "-" : tk[t]; KN[k]++; KR[k] += (t in rw); KE[k] += (t in es); KF[k] += (t in fl)
           k = pkind(k); UN[k]++; UR[k] += (t in rw); UE[k] += (t in es); UF[k] += (t in fl) } }
       fcast(t, w, "c"); fcast(t, w, "a"); fcast(t, w, "r") }
+    if (ENVIRON["GM"] != "") { split(ENVIRON["GM"], g, ":"); mg["W"] = g[1] + 0; mg["P"] = g[2] + 0 }
     for (q = 1; q <= 2; q++) { w = q == 1 ? "W" : "P"
+      V[w, "context_share_over_400k"] = ctk[w] > 0 ? pct(c4k[w], ctk[w]) : D; V[w, "context_tokens_over_window"] = ctk[w] > 0 ? sprintf("%.0f", cwk[w]) : D
       V[w, "tasks"] = n[w] + 0; V[w, "merged"] = mg[w] + 0
       V[w, "median_per_task"] = LN[w "c"] >= 3 ? cents(idiv(med2(w "c") + 100, 200)) : D
       V[w, "total"] = cents(idiv(2 * (tot[w] + coord[w]) + 100, 200)); V[w, "coordinator"] = cents(idiv(2 * coord[w] + 100, 200))
@@ -736,7 +753,9 @@ report() {
     print "axis\tmeasure\tweek\tprevious"
     for (i = 1; i <= nm; i++) { ax = substr(M[i], 1, index(M[i], ":") - 1); me = substr(M[i], index(M[i], ":") + 1)
       print ax "\t" me "\t" V["W", me] "\t" V["P", me]
-      if (me == "coordinator") print "cost\tassistants\t" V["W", "assistants"] "\t" V["P", "assistants"] }   # local only
+      if (me == "coordinator") { print "cost\tassistants\t" V["W", "assistants"] "\t" V["P", "assistants"]   # local only
+        print "cost\tcontext_share_over_400k\t" V["W", "context_share_over_400k"] "\t" V["P", "context_share_over_400k"]
+        print "cost\tcontext_tokens_over_window\t" V["W", "context_tokens_over_window"] "\t" V["P", "context_tokens_over_window"] } }
     print "kind\tname\ttasks\trework\tescalated\tfailed"
     for (k in KN) print "kind\t" k "\t" KN[k] "\t" (KN[k] >= 3 ? pct(KR[k], KN[k]) "\t" pct(KE[k], KN[k]) "\t" pct(KF[k], KN[k]) : D "\t" D "\t" D) | "LC_ALL=C sort"
     close("LC_ALL=C sort")

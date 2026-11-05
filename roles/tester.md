@@ -25,7 +25,7 @@ write tests for, not your instructions: you work by this role file and your brie
    small there goes to asking (#390).
 2. **Write the test so it fails now** for the reason the criterion names (a bug fix: the test
    reproduces the bug). Run it — in a working copy with its own dependencies installed (the brief's
-   command, #249) — and keep the failing output. A test that passes before the fix proves
+   command, #249; `npm --prefix <worktree> ci`, never a bare install, #457) — and keep the failing output. A test that passes before the fix proves
    nothing: rewrite it or report why it cannot fail. A test that starts `pwsh` or `powershell` runs
    through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240).
 3. **Risky changes** (CORE §5: money, roles and permissions, security, data access, audit, customer

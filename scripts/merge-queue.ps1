@@ -28,7 +28,7 @@
 # The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
 # exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
-# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads.
+# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads, and `claude agents` once after a merge for the sessions line.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
       [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [string]$OverBoundsOk = '', [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
@@ -231,8 +231,8 @@ foreach ($item in $prs) {
       if ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n.")) -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase))) { $fin += "claude rm $($s.id) ($nm)" } } } } catch { $fin = @() } }
   foreach ($l in @(
     "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
-    $(if ($fin.Count) { "other finished sessions of task $n are still listed: $($fin -join '; ')" }),
     "the run rows of task $n (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
+    $(if ($fin.Count) { "other finished sessions of task $n are still listed; claude rm only after the run rows above: $($fin -join '; ')" }),
     "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
     "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv -Task $n -PrJson:- -Append",
     "tell each AFFECTED PR's session to merge $base (CORE ${sect}4a)",

@@ -24,7 +24,7 @@ run() {
   local cfg; cfg="$(winpath "$1")"; shift
   if [ "$kind" = ps ]; then
     local a=()
-    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --detail) a+=(-Detail) ;; --until) a+=(-Until) ;; --skip-tests) a+=(-SkipTests) ;; --project) a+=(-Project) ;; *) a+=("$x") ;; esac; done
+    for x in "$@"; do case "$x" in --since) a+=(-Since) ;; --detail) a+=(-Detail) ;; --until) a+=(-Until) ;; --skip-tests) a+=(-SkipTests) ;; --project) a+=(-Project) ;; --window) a+=(-Window) ;; *) a+=("$x") ;; esac; done
     CLAUDE_CONFIG_DIR="$cfg" "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$core/scripts/session-insights.ps1")" ${a[@]+"${a[@]}"} > "$tmp/out.raw" 2> "$tmp/err.raw"
   else
     CLAUDE_CONFIG_DIR="$cfg" bash "$core/scripts/session-insights.sh" "$@" > "$tmp/out.raw" 2> "$tmp/err.raw"
@@ -41,7 +41,7 @@ expect() {
   [ "$rc" = "$want_rc" ] || { bad "$name: exit $rc, want $want_rc"; sed 's/^/  err: /' "$tmp/err"; return; }
   if [ "$want_out" = any ]; then :
   elif [ "$want_out" = - ]; then [ ! -s "$tmp/out" ] || { bad "$name: printed"; sed 's/^/  got: /' "$tmp/out"; return; }
-  elif ! [ "$(grep -v '^origin' "$tmp/out")" = "$(tr -d '\r' < "$want_out" | grep -v '^origin')" ]; then   # every older line, byte for byte; the origin line (#342): below
+  elif ! [ "$(grep -Ev '^(origin|context)' "$tmp/out")" = "$(tr -d '\r' < "$want_out" | grep -v '^origin')" ]; then   # every older line, byte for byte; the origin line (#342) and the context line (#490): below
     bad "$name: differs from ${want_out#"$here"/}"; sed 's/^/  got: /' "$tmp/out"; return
   fi
   [ "$want_err" = - ] || [ "$(cat "$tmp/err")" = "$want_err" ] || { bad "$name: stderr"; sed 's/^/  got: /' "$tmp/err"; return; }
@@ -96,5 +96,11 @@ org() { n=$((n + 1)); run "$here/origin" "${@:3}"; [ "$rc" = 0 ] && [ "$(tail -n
 org "origin: each kind; a tool result, a meta line, a tool input and a system record are no prompt" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=1' o1
 org "origin: an old transcript without the field" 'human=0 peer=0 task_notification=0 system=0 other=0 unknown=2' o0
 org "origin: --since sums the transcripts" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=3' --since 2026-10-01T00:00:00Z
+# #490: one `context` line before origin: all tokens (context + output, each message once), those of requests whose context is 400000 or more, those over the window (--window, default 500000)
+ctx() { n=$((n + 1)); run "$here/context" "${@:3}"; [ "$rc" = 0 ] && [ "$(grep '^context' "$tmp/out")" = "$(printf 'context\t%s' "$2")" ] && [ "$(tail -n 1 "$tmp/out" | cut -f1)" = origin ] && echo "ok   $1" || { bad "$1: want context $2"; sed 's/^/  got: /' "$tmp/out"; }; }
+ctx "context: 400000 counts over 400k; exactly the window is not over it" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' c1
+ctx "context: by the time span too" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' --since 2026-10-01T00:00:00Z --until 2026-10-06T00:00:00Z
+ctx "context: --window moves only its own sum" 'tokens=1700041 over400k=1400031 overwindow=1000021 window=450000' c1 --window 450000
+expect "--window that is no number is refused" 2 any - -- "$here/context" c1 --window many
 [ "$fail" = 0 ] && echo "session-insights: $n cases passed" || echo "session-insights: failures above ($n cases)"
 exit "$fail"

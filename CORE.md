@@ -316,9 +316,9 @@ The continuous work:
    after it ends (a finding handled, or an `ERROR` once), never a second one beside it, and not at all
    with the list empty. A
    subscription (`SendMessage(to: <its name>, notify_when_idle: true)`; for an assistant, the `subscribe:` line start-worker prints)
-   stays allowed only for a session no message is expected from: one whose brief names no report
+   stays allowed only for a session no message is expected from: an assistant, or one whose brief names no report
    address (a session the coordinator did not brief, e.g. one the owner started and asked it to watch);
-   every role the core starts reports by message, so none of them. **One subscription per expected
+   every role the core starts reports by message, so none of the other roles. **One subscription per expected
    report** where one is used. The watcher's findings: `STOPPED <id> <name>` (stopped, failed, or
    done with its process ended, without its report reaching you) → its branch, PR and `claude logs <id>`; one gone `done`
    while it still had work (a lead whose worker's report fell back to you included) is resumed by its
@@ -613,7 +613,8 @@ never assumed (below).
   tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
   <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
   <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
-  and role. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
+  and role. New last columns `own_cost machine fix_now` (#490): a subagent's own reading by `--agent`, never summed; the verifier's
+  line by `--findings`, as it wrote it, nobody re-counts it. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
   done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
   row is written when it is stopped — whose start has no row yet (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
   then — a missed row is seen on the next cycle, not weeks later.

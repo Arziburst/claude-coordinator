@@ -670,6 +670,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   a variable followed by `:` is read as a drive-qualified name and the file stops parsing:
   write `"${Issue}: $title"`, not `"$Issue: $title"` (it broke a project's start-worker wrapper).
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
+  In a `.sh`, a `case` inside `$( )` writes `(` before its patterns (`(sh) ... ;;`): on bash 3.2 the first `)` of a pattern closes the substitution (#489).
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
 - **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.
@@ -751,7 +752,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
-  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only): the owner's
+  `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only), and `claude agents --json --all` once after a merge for the sessions line (the task's other finished sessions, printed below the run rows line: rows first, then `claude rm`; the worker's own is among them): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
   runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
@@ -762,7 +763,11 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   journaled by the coordinator; two PRs go in two runs (`.ps1 -File` does not repeat a parameter); blank words are no words, a usage error.
   `scripts/start-worker` saves the copy (#387): a worker or a lead whose contract has `bounds:`, in a repository with
   `coordinator/briefs/`, copies it to `coordinator/briefs/<branch>-contract.md` (a branch's `/` as `-`) just before the launch, over
-  an older copy, one line naming it, never committed; a contract of a task with no `bounds:` needs no copy. **The folder (#387):** `land`
+  an older copy, one line naming it, never committed; a contract of a task with no `bounds:` needs no copy.
+  **The copy goes stale (#394):** a restart whose contract has no `bounds:` keeps the old copy, and the queue reads it (a false, loud stop);
+  a contract tightened needs a restart, else the queue checks the older copy;
+  a bound raised on a running task: edit the saved copy too, or the queue stops falsely (a fresh start-worker round recopies; `--over-bounds-ok` exists);
+  `no contract` on a PR with important files is the signal to look. **The folder (#387):** `land`
   (`--dry-run` too) refuses, before any PR merges, a folder that is not a repository's root, or whose origin lacks an open PR's
   branch: a usage error naming the folder, exit 1. A PR from a fork has no branch on origin: only the root holds for it.
   Origin unreadable: exit 1 with a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch
@@ -807,7 +812,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   sh` proves the file: every step there in exactly one shard of its OS, each shard with a step, the `if:` forms, the
   checkout and the `#need` step with none, and for a split set the union of the parts is the whole set, no case in two
   parts or in none (`parts sh`, by hand on macOS or Ubuntu: the whole set and every part really run, the counts summed,
-  a broken script failing its part alone). **Step times:** `scripts/ci-times.sh|.ps1
+  a broken script failing its part alone). It does not prove a step's input from another step: a step reading a file
+  under `$RUNNER_TEMP` that another step wrote runs in the shard of the step that writes it (#460). **Step times:** `scripts/ci-times.sh|.ps1
   [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>` and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
@@ -941,7 +947,12 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   sum of the project's spend counts it once. Its output shows as `out>=`, a lower bound: a subagent is
   never stopped, so it gets no `cost-state` record, and its transcript keeps only each answer's output
   count at the answer's start (measured: `out>=158` for a 1,500-word report). Its cost is therefore a
-  lower bound; the number that counts is its parent's, which holds it exactly. The task notification's
+  lower bound in output only: each cache write is priced by the 5-minute / 1-hour split in its own usage
+  (5 minutes at 1.25 times the input price, the rest at `prices.txt`'s write price); the number that counts is its parent's, which holds it exactly. **`runs add --in <parent> --tokens <n> --agent <agentId>`** (#490)
+  writes that reading into the row: tokens, start, wall, active, `own_cost` at `prices.txt` next to the log and `machine`
+  (`macos`, `linux`, `windows`); the cost cell stays `in <parent>`, `own_cost` is never summed; a transcript it cannot read leaves
+  the row as without `--agent`, with a note. `--findings "<the verifier's Fix now line>"` writes `fix_now`. These columns follow
+  the header, else CORE §7's 15, and only when set, so older rows and readers by the header stay as they are. The task notification's
   `subagent_tokens` is the subagent's last context size, not its spend (#232). **Time per run** (CORE §7a): for one session or subagent
   the last line is `time` and, after a tab, `wall=<m>m active=<m>m start=<UTC> end=<UTC>`, from the timestamps of every
   record in the files it counts (the transcript and its subagents', as one set): wall = the last minus

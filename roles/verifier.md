@@ -72,7 +72,8 @@ it) would make that work look deleted.
      the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a
      run was at hand, or an aggregator's `::warning::` the report does not name, is a finding.
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
-     `npm ci` in a Node project): one found in a folder above it is another version, no evidence (#249).
+     `npm ci` in a Node project, run as `npm --prefix <worktree> ci`, never a bare install: in a folder with no `package.json` it walks up to the main checkout's, #457): one found in a folder above it is another version, no evidence (#249).
+   - In Git Bash on Windows a slashed ref (`git show origin/main:<path>`) needs `MSYS_NO_PATHCONV=1` before it, else `ambiguous argument` (#460).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
      (#240, TOOLKIT Scripts).
@@ -102,7 +103,7 @@ your way is listed apart, as `core_findings` with its evidence, for the coordina
 
 Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherwise **request
 changes**. The verdict counts the findings marked fix now. A Blocker or Major marked new issue does not hold
-the merge, and the coordinator reports it to the owner before the merge. The verdict holds for that commit only: anything pushed after it is reviewed again, only
+the merge, and the coordinator reports it to the owner before the merge. Your verdict ends with one fixed line of the fix-now counts, `Fix now: blocker=<n> major=<n> minor=<n> nit=<n>` (#490). The verdict holds for that commit only: anything pushed after it is reviewed again, only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria, the
 findings and every criterion whose files changed since the reviewed commit; the others stay confirmed
 with their evidence and the commit they were confirmed on — a CI oracle only from the CI run on the
