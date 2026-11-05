@@ -291,5 +291,34 @@ expect "--check-core-report refuses a fourth proposal" 1 - "~line 121:" -- --che
 expect "--core-report without --id" 2 any - -- "$cr" --core-report --features "$cf"
 expect "--core-report with a --since that is no date" 2 any - -- "$cr" --core-report --id "$ID" --since 2026-13-01 --features "$cf"
 expect "--check-core-report of a missing file" 1 - "~retro: cannot read" -- --check-core-report "$(winpath "$tmp/none.md")" --features "$cf"
+# #490: `merged` from the project's own git log, first-parent subjects ending (#n) on origin's default branch, else HEAD; the root must be the
+# repository's top; no such subject in either week, or no repository (the cases above, P does not exist): the rows' count as before
+g="$tmp/g490"; mkdir -p "$g/sub"; gc() { GIT_COMMITTER_DATE="$1T12:00:00Z" GIT_AUTHOR_DATE="$1T12:00:00Z" git -C "$g" -c user.name=t -c user.email=t@t.invalid "${@:2}"; }
+git -C "$g" init -q; gc 2026-10-01 commit -q --allow-empty -m "fix: older (#1)"
+git -C "$g" checkout -q -b side; gc 2026-10-06 commit -q --allow-empty -m "fix: a side commit (#9)"; git -C "$g" checkout -q -
+gc 2026-10-06 commit -q --allow-empty -m "fix: one (#2)"; gc 2026-10-07 commit -q --allow-empty -m "feat: two (#3) (#4)"; gc 2026-10-08 commit -q --allow-empty -m "docs: no number"
+gc 2026-10-08 merge -q --no-ff -m "a merge" side; gc 2026-10-09 commit -q --allow-empty -m "fix: three (#5)"; gc 2026-10-13 commit -q --allow-empty -m "fix: later (#6)"
+tot="$(grep -a "^cost	total	" "$t/expected-local.txt" | cut -f3)"; rows="$(grep -a "^cost	merged	" "$t/expected-local.txt" | cut -f3)"
+expect "merged by the git log: a week and the previous one, a side commit and a plain subject not counted" 0 any - -- "$runs" --week 2026-10-07 --project "$(winpath "$g")" --no-insights
+grep -q '^cost	merged	3	1$' "$tmp/out" || bad "merged by the git log: $(grep '^cost	merged' "$tmp/out")"
+pm="$(awk -v t="$tot" 'BEGIN { c = int(t * 100 / 3 + 0.5); printf "%d.%02d", int(c / 100), c % 100 }')"
+grep -q "^cost	per_merged_task	$pm	—$" "$tmp/out" || bad "per_merged_task follows: $(grep '^cost	per_merged_task' "$tmp/out"), want $pm"
+expect "merged: a folder inside a repository is no source" 0 any - -- "$runs" --week 2026-10-07 --project "$(winpath "$g/sub")" --no-insights
+grep -q "^cost	merged	$rows	" "$tmp/out" || bad "a subfolder: $(grep '^cost	merged' "$tmp/out")"
+expect "merged: no such subject in either week is no source" 0 any - -- "$runs" --week 2026-08-05 --project "$(winpath "$g")" --no-insights
+grep -q '^cost	merged	0	0$' "$tmp/out" || bad "no subject: $(grep '^cost	merged' "$tmp/out")"
+# #490: spend by context size, the local report only: the share of tokens at 400k or more, the tokens over the window (the PROJECT.md row, else 500000)
+cp -R "$here/claude" "$tmp/cfg490"; cp "$here/context490.jsonl" "$tmp/cfg490/projects/C--work-acme-shop/"; cfg="$(winpath "$tmp/cfg490")"
+expect "context size, week against week, by the default window" 0 any - -- "$runs" --week 2026-10-07 --project "$P"
+grep -q '^cost	context_share_over_400k	72%	98%$' "$tmp/out" && grep -q '^cost	context_tokens_over_window	600000	600000$' "$tmp/out" || bad "context lines: $(grep context_ "$tmp/out")"
+mkdir -p "$tmp/w490"; cp "$here/coordinator/RUNS.tsv" "$tmp/w490/"; printf '| Coordinator window (one-time step `coordinator-window`) | **440000** | owner | 2026-01-01 | 500000 |\n' > "$tmp/w490/PROJECT.md"
+expect "context size: the window from PROJECT.md's row" 0 any - -- "$(winpath "$tmp/w490/RUNS.tsv")" --week 2026-10-07 --project "$P"
+grep -q '^cost	context_tokens_over_window	1050000	600000$' "$tmp/out" || bad "the row's window: $(grep context_ "$tmp/out")"
+cfg="$(winpath "$here/claude")"
+expect "context size: no transcripts, a dash" 0 any - -- "$runs" --week 2026-10-07 --project "$P" --no-insights
+grep -q '^cost	context_share_over_400k	—	—$' "$tmp/out" || bad "no insights: $(grep context_ "$tmp/out")"
+# #490: new last columns on every row (cells past the header): the reports read as before
+cp -R "$here/coordinator" "$tmp/c490"; awk -F'\t' 'BEGIN { OFS = FS } /^#/ || /^date/ || /^[ \t]*$/ { print; next } { for (i = NF + 1; i <= 15; i++) $i = ""; print $0, "0.12", "macos", "Fix now: blocker=0 major=1 minor=0 nit=0" }' "$here/coordinator/RUNS.tsv" > "$tmp/c490/RUNS.tsv"
+expect "old and new rows: the local report unchanged" 0 "$t/expected-local.txt" - -- "$(winpath "$tmp/c490/RUNS.tsv")" --week 2026-10-07 --project "$P"
 [ "$fail" = 0 ] && echo "retro: $n cases passed" || echo "retro: failures above ($n cases)"
 exit "$fail"

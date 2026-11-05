@@ -566,6 +566,23 @@ if (Test-Path -LiteralPath $pmd -PathType Leaf) {
   }
 }
 $Roots += "|$base/.claude/worktrees"
+# merged from the project's git log (#490, retro.sh): the week and the previous one, $null when there is no such source
+function PrCount([string]$a, [string]$b) {
+  $ga = @('-C', $Project, 'log', '--first-parent', $GitRef, "--since=${a}T00:00:00Z"); if ($b) { $ga += "--until=${b}T00:00:00Z" }
+  @(& { $ErrorActionPreference = 'Continue'; & git @ga --format=%s 2>$null } | Where-Object { [string]$_ -cmatch '\(#[0-9]+\)\s*$' }).Count
+}
+$GMW = $null; $GMP = 0; $cd0 = $null
+try { $cd0 = @(& { $ErrorActionPreference = 'Continue'; & git -C $Project rev-parse --show-cdup 2>$null }); $cdRc = $LASTEXITCODE } catch { $cdRc = 1 }
+if ($cdRc -eq 0 -and -not ($cd0 -join '')) {
+  $GitRef = @(& { $ErrorActionPreference = 'Continue'; & git -C $Project symbolic-ref -q refs/remotes/origin/HEAD 2>$null }) -join ''
+  if (-not $GitRef) { $GitRef = 'HEAD' }
+  if ($CoreReport) { $GMW = PrCount $WS '' } else { $GMW = PrCount $WS $WN; $GMP = PrCount $PS0 $WS }
+  if ($GMW + $GMP -eq 0) { $GMW = $null }
+}
+# the context line's window: PROJECT.md's row "Coordinator window", else 500000
+$CtxWin = '500000'; $pmd = Join-Path $dir 'PROJECT.md'
+if (Test-Path -LiteralPath $pmd -PathType Leaf) { foreach ($line in [IO.File]::ReadAllLines($pmd)) { $cells = $line.Split('|')
+  if ($cells.Count -ge 3 -and $cells[1] -cmatch '^[ \t]*[*]*Coordinator window' -and $cells[2] -cmatch '[0-9]{5,}') { $CtxWin = $Matches[0]; break } } }
 # the transcripts of each week: session-insights in its own process, as the .sh runs it; none when it fails
 $Ins = @{}
 if (-not $NoInsights -and $CoreReport) {
@@ -576,7 +593,7 @@ if (-not $NoInsights -and $CoreReport) {
 } elseif (-not $NoInsights) {
   $exe = (Get-Process -Id $PID).Path; $si = Join-Path $PSScriptRoot 'session-insights.ps1'
   foreach ($span in @(@('W', $WS, $WN), @('P', $PS0, $WS))) {
-    $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "$($span[1])T00:00:00Z" -Until "$($span[2])T00:00:00Z" -SkipTests -Project $Roots 2>$null })
+    $got = @(& { $ErrorActionPreference = 'Continue'; & $exe -NoProfile -ExecutionPolicy Bypass -File $si -Since "$($span[1])T00:00:00Z" -Until "$($span[2])T00:00:00Z" -SkipTests -Window $CtxWin -Project $Roots 2>$null })
     if ($LASTEXITCODE -eq 0) { $Ins[$span[0]] = $got }
   }
 }
@@ -679,6 +696,7 @@ foreach ($wk in 'W', 'P') {
     elseif ($fs[0] -ceq 'waiting') { $acc1.wmin = Kv $f1 'minutes' }
     elseif ($fs[0] -ceq 'cache') { $acc1.crw = Kv $f1 'rewrites' }
     elseif ($fs[0] -ceq 'reread') { $acc1.rrf = Kv $f1 'files' }
+    elseif ($fs[0] -ceq 'context') { $acc1.ctk = Kv $f1 'tokens'; $acc1.c4k = Kv $f1 'over400k'; $acc1.cwk = Kv $f1 'overwindow' }
     elseif ($fs[0] -ceq 'turns') { $acc1.calls = Kv $f1 'tool_calls' }
   }
   $Acc[$wk] = $acc1
@@ -799,8 +817,13 @@ foreach ($tid in $Order) {
   Fcast $tid $wk 'c'; Fcast $tid $wk 'a'; Fcast $tid $wk 'r'
 }
 $Val = @{}
+if ($null -ne $GMW) { $MG['W'] = $GMW; $MG['P'] = $GMP }
 foreach ($wk in 'W', 'P') {
   $cell = NewMap; $Val[$wk] = $cell
+  $acx = if ($Acc.ContainsKey($wk)) { $Acc[$wk] } else { $null }
+  $hasc = $null -ne $acx -and $acx.ContainsKey('ctk') -and $acx.ctk -gt 0
+  $cell['context_share_over_400k'] = if ($hasc) { Pct $acx.c4k $acx.ctk } else { $DASH }
+  $cell['context_tokens_over_window'] = if ($hasc) { "$($acx.cwk)" } else { $DASH }
   $cell['tasks'] = "$($NT[$wk])"; $cell['merged'] = "$($MG[$wk])"
   $cell['median_per_task'] = if ((LN "${wk}c") -ge 3) { Cents (IDiv ((Med2 "${wk}c") + 100) 200) } else { $DASH }
   $cell['total'] = Cents (IDiv (2 * ($TOT[$wk] + $coord[$wk]) + 100) 200); $cell['coordinator'] = Cents (IDiv (2 * $coord[$wk] + 100) 200)
@@ -868,7 +891,8 @@ if ($CoreReport) {
 if (-not $Public) {
   $out.Add("retro`tweek of $WS`tprevious week of $PS0"); $out.Add("axis`tmeasure`tweek`tprevious")
   foreach ($mm in $MEAS) { $ax = $mm.Substring(0, $mm.IndexOf(':')); $nm = $mm.Substring($mm.IndexOf(':') + 1); $out.Add("$ax`t$nm`t$($Val.W[$nm])`t$($Val.P[$nm])")
-    if ($nm -ceq 'coordinator') { $out.Add("cost`tassistants`t$($Val.W['assistants'])`t$($Val.P['assistants'])") } }   # local only
+    if ($nm -ceq 'coordinator') { $out.Add("cost`tassistants`t$($Val.W['assistants'])`t$($Val.P['assistants'])")   # local only
+      foreach ($cm in 'context_share_over_400k', 'context_tokens_over_window') { $out.Add("cost`t$cm`t$($Val.W[$cm])`t$($Val.P[$cm])") } } }
   $out.Add("kind`tname`ttasks`trework`tescalated`tfailed")
   $kl = [string[]]@(foreach ($kk in $KN.Keys) { $q3 = Rates $KN[$kk]; "kind`t$kk`t$($KN[$kk].n)`t$($q3[0])`t$($q3[1])`t$($q3[2])" })
   [Array]::Sort($kl, [StringComparer]::Ordinal); foreach ($l1 in $kl) { $out.Add($l1) }

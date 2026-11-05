@@ -407,5 +407,30 @@ mkdir "$L"; runio task --log "$L" --task 50; refused_io
 rmdir "$L"; : > "$L"; run task --log "$L"; code 2
 run task --log "$L" --task 50 --root x; code 2
 
+# #490: a verifier's count line and a subagent's own reading, new last columns past a header of CORE 7's 15 names (own_cost machine fix_now)
+F="Fix now: blocker=0 major=2 minor=1 nit=0"; AG=abc490; f() { lastline "$1" | awk -F'\t' -v i="$2" '{ print $i }'; }
+tx p490/parent490/subagents agent-$AG /x 2026-10-05T10:00:00Z 2026-10-05T10:03:00Z 2026-10-05T10:20:00Z 0
+case "$(uname -s)" in Darwin) os=macos ;; Linux) os=linux ;; *) os=windows ;; esac
+V=(--task 49 --role verifier --kind verifier --model opus --effort low --estimate - --estimate-time - --result pass --date 2026-10-31)
+fresh "add --in --agent: its tokens, start, wall, active and own cost from its transcript; the cost cell still in the parent, so summed once; the machine"
+printf '%s\n%s\n' "$H" "$OLD" > "$L"; printf 'claude-opus-5-5 1 1 1 1\n' > "$tmp/prices.txt"
+run add --log "$L" --in coordinator --tokens 1 --agent $AG "${V[@]}"; code 0
+[ "$(lastline "$L" | awk -F'\t' '{ print $8, $9, $11, $12, $13, $16, NF }')" = "63942 in coordinator 2026-10-05T10:00:00Z 20 3 0.0639 17" ] && [ "$(f "$L" 17)" = "$os" ] && ok || bad "own reading: $(lastline "$L")"
+fresh "add --agent, no prices file: start and machine, no own cost"; rm -f "$tmp/prices.txt"; printf '%s\n' "$H" > "$L"
+run add --log "$L" --in coordinator --tokens 1 --agent $AG "${V[@]}"; code 0; [ -z "$(f "$L" 16)" ] && [ "$(f "$L" 11)" = 2026-10-05T10:00:00Z ] && [ "$(f "$L" 17)" = "$os" ] && ok || bad "no prices: $(lastline "$L")"
+fresh "add --agent that cannot be read: the row as today, a note"; printf '%s\n' "$H" > "$L"
+run add --log "$L" --in coordinator --tokens 7 --agent nobody "${V[@]}"; code 0; has '^runs: .*nobody'
+[ "$(lastline "$L" | awk -F'\t' '{ print NF, $8, $9, $11 }')" = "15 7 in coordinator " ] && ok || bad "unread: $(lastline "$L")"
+run add --log "$L" --session $W1S --agent $AG "${A[@]}" --result done; code 2
+fresh "add --findings: the verifier's line as written, the last column; another form refused, the rework form named"; printf '%s\n%s\n' "$H" "$OLD" > "$L"
+run add --log "$L" --in 12 --tokens 1 --findings "$F" "${V[@]}"; code 0; [ "$(f "$L" 18)" = "$F" ] && [ -z "$(f "$L" 16)$(f "$L" 17)" ] && ok || bad "findings: $(lastline "$L")"
+cp "$L" "$L.before"; run add --log "$L" --in 12 --tokens 1 --findings "2 majors" "${V[@]}"; code 2; has 'Fix now: blocker=<n> major=<n> minor=<n> nit=<n>'; same "$L" "$L.before"
+run add --log "$L" --session $W1S "${A[@]}" --result rework; code 2; has "'rework <n>'"; same "$L" "$L.before"
+fresh "add --findings under a header naming the column: by the header"; printf '%s\tfix_now\tmachine\n' "$H" > "$L"
+run add --log "$L" --in 12 --tokens 1 --findings "$F" "${V[@]}"; code 0; [ "$(f "$L" 16)" = "$F" ] && [ "$(lastline "$L" | awk -F'\t' '{ print NF }')" = 17 ] && ok || bad "by header: $(lastline "$L")"
+fresh "run-stats: old rows with the new last columns read as without them"; printf '%s\n%s\n' "$H" "$OLD" > "$L"; printf '%s\n%s\t0.5\tmacos\t%s\n' "$H" "$OLD" "$F" > "$L.new"
+stats() { if [ "$kind" = sh ]; then bash "$core/scripts/run-stats.sh" "$1"; else "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/run-stats.ps1" "$1"; fi; }
+[ "$(stats "$L" 2>&1)" = "$(stats "$L.new" 2>&1)" ] && ok || bad "run-stats differs with new columns"
+
 echo "runs ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" = 0 ]

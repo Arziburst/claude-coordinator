@@ -102,7 +102,7 @@ your way is listed apart, as `core_findings` with its evidence, for the coordina
 
 Verdict: **approve <the reviewed commit>** only with no Blocker or Major; otherwise **request
 changes**. The verdict counts the findings marked fix now. A Blocker or Major marked new issue does not hold
-the merge, and the coordinator reports it to the owner before the merge. The verdict holds for that commit only: anything pushed after it is reviewed again, only
+the merge, and the coordinator reports it to the owner before the merge. Your verdict ends with one fixed line of the fix-now counts, `Fix now: blocker=<n> major=<n> minor=<n> nit=<n>` (#490). The verdict holds for that commit only: anything pushed after it is reviewed again, only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria, the
 findings and every criterion whose files changed since the reviewed commit; the others stay confirmed
 with their evidence and the commit they were confirmed on — a CI oracle only from the CI run on the

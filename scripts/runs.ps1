@@ -4,6 +4,7 @@
 #     -Role <role> -Kind <kind> -Model <m> -Effort <e> -Estimate <cost|-> -EstimateTime <t|-> -Result <word> [-Date <YYYY-MM-DD>]
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runs.ps1 add -Log <RUNS.tsv> -In <parent> -Tokens <n> -Task ...
 #     -Result <word> [-Date ...]   a subagent's row (a tester or verifier run as a subagent): no -Session
+#     [-Agent <agentId>] its own reading, [-Findings "Fix now: blocker=<n> major=<n> minor=<n> nit=<n>"] (#490, runs.sh's header)
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runs.ps1 check -Log <RUNS.tsv> -Root <project root>
 #     [-Self <session id>] [-Since <YYYY-MM-DD>]   (or: pwsh -File ...)
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runs.ps1 task -Log <RUNS.tsv> -Task <id>   read-only (#381):
@@ -19,10 +20,10 @@
 # Exit 0, 1 as runs.sh says or when claude agents fails, 2 on a usage error.
 param([Parameter(Position = 0)][string]$Command, [string]$Log, [string]$Session, [string]$Task, [string]$Role,
   [string]$Kind, [string]$Model, [string]$Effort, [string]$Estimate, [string]$EstimateTime, [string]$Result,
-  [string]$Date, [string]$In, [string]$Tokens, [string]$Root, [string]$Self, [string]$Since)
+  [string]$Date, [string]$In, [string]$Tokens, [string]$Root, [string]$Self, [string]$Since, [string]$Agent, [string]$Findings)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 19| ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
+function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 20| ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
 function Die([int]$Code, [string]$Msg) { [Console]::Error.WriteLine("runs: $Msg"); exit $Code }
 $Names = @('date', 'task', 'role', 'kind', 'model', 'effort', 'estimate', 'tokens', 'cost', 'result', 'start', 'wall', 'active', 'wait', 'estimate_time')
 # Plain <file>: its lines without the BOM and the CRs
@@ -85,6 +86,8 @@ if ($Command -ceq 'task') {
 if ($Command -ceq 'add') {
   foreach ($b in $bound) { if ('Root', 'Self', 'Since' -contains $b) { Show-Usage } }
   if (-not ($Task -and $Role -and $Kind -and $Model -and $Effort -and $Estimate -and $EstimateTime -and $Result)) { Show-Usage }
+  if ($Agent -and -not $In) { Show-Usage }
+  if ($Findings -and $Findings -cnotmatch '^Fix now: blocker=[0-9]+ major=[0-9]+ minor=[0-9]+ nit=[0-9]+$') { Die 2 '--findings is one line: Fix now: blocker=<n> major=<n> minor=<n> nit=<n>' }
   if ($Session) { if ($In -or $Tokens) { Show-Usage } }
   else {
     if (-not ($In -and $Tokens)) { Show-Usage }
@@ -95,13 +98,13 @@ if ($Command -ceq 'add') {
   }
   if (-not $Date) { $Date = [DateTime]::UtcNow.ToString('yyyy-MM-dd', $inv) }
   if ($Date -notmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') { Die 2 "--date must be YYYY-MM-DD: $Date" }
-  foreach ($v in $Task, $Role, $Kind, $Model, $Effort, $Estimate, $EstimateTime, $Date, $In, $Session) {
+  foreach ($v in $Task, $Role, $Kind, $Model, $Effort, $Estimate, $EstimateTime, $Date, $In, $Session, $Agent) {
     if ($v -match "[`t`r`n]") { Die 2 'a cell may not hold a tab or a line break' }
   }
   CanOpen $Log 'Read'; CanOpen $Log 'Write'
   $lines = Plain $Log; $c = Cols $lines
   $Row = @{ date = $Date; task = $Task; role = $Role; kind = $Kind; model = $Model; effort = $Effort; estimate = $Estimate
-    tokens = $Tokens; cost = ''; result = $Result; start = ''; wall = ''; active = ''; wait = ''; estimate_time = $EstimateTime }
+    tokens = $Tokens; cost = ''; result = $Result; start = ''; wall = ''; active = ''; wait = ''; estimate_time = $EstimateTime; own_cost = ''; machine = ''; fix_now = $Findings }
   if ($Session) {
     $st = SessionTokens $Session
     if ($null -eq $st) { Die 1 "no transcript for session $Session (session-tokens failed)" }
@@ -133,12 +136,29 @@ if ($Command -ceq 'add') {
     }
     $Row.cost = $cost
     if (-not $cost) { [Console]::Error.WriteLine("runs: session-tokens printed no cost line for $Session; the cost cell is left empty") }
-  } else { $Row.cost = "in $In" }
+  } else {
+    $Row.cost = "in $In"
+    if ($Agent) {
+      $global:LASTEXITCODE = 0; $pf = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $Log).Path) 'prices.txt'
+      $st = if (Test-Path -LiteralPath $pf -PathType Leaf) { @(& (Join-Path $PSScriptRoot 'session-tokens.ps1') $Agent -Prices $pf 2>$null) } else { @(& (Join-Path $PSScriptRoot 'session-tokens.ps1') $Agent 2>$null) }
+      $tot = ''; $tl = ''; $sum = 0.0; $has = $false; $unp = $false
+      if ($LASTEXITCODE -eq 0) { foreach ($y in $st) { $x = [string]$y; $f = @($x -split '\s+')
+        if ($f[0] -ceq 'total' -and -not $tot) { $tot = $f[1] } elseif ($f[0] -ceq 'time' -and -not $tl) { $tl = $x }
+        elseif ($f[0] -ceq 'context') { foreach ($k in $f) { if ($k -cmatch '^unpriced=([0-9]+)$') { if ($Matches[1] -ne '0') { $unp = $true } }
+          elseif ($k -cmatch '/\$([0-9.]+)$') { $sum += [double]::Parse($Matches[1], $inv); $has = $true } } } } }
+      if ($tot -and $tl) {
+        $Row.tokens = $tot; $Row.start = TimeKv $tl 'start'; $Row.wall = TimeKv $tl 'wall'; $Row.active = TimeKv $tl 'active'
+        $Row.machine = if ($IsMacOS) { 'macos' } elseif ($IsLinux) { 'linux' } else { 'windows' }
+        if ($has -and -not $unp) { $Row.own_cost = ($sum + 1e-12).ToString('0.0000', $inv) }
+      } else { [Console]::Error.WriteLine("runs: cannot read the transcript of subagent $Agent; its row stays in $In") }
+    }
+  }
   # the header's order (a column it does not name: empty), then the names it lacks in CORE 7's order
   $u = @{}; $out = New-Object 'System.Collections.Generic.List[string]'
   foreach ($h in $c) { $v = ''; if ($Row.ContainsKey($h) -and -not $u.ContainsKey($h)) { $v = $Row[$h]; $u[$h] = 1 }; $out.Add($v) }
   foreach ($h in $Names) { if (-not $u.ContainsKey($h)) { $out.Add($Row[$h]) } }
-  $line = $out -join "`t"
+  $tail = ''; foreach ($h in 'own_cost', 'machine', 'fix_now') { if (-not $u.ContainsKey($h)) { $tail += "`t" + $Row[$h] } }
+  $line = ($out -join "`t") + $tail.TrimEnd("`t")
   # the row as the file's last line, in its line ends; a last line without its end gets one first
   try {
     $p = (Resolve-Path -LiteralPath $Log).Path; $t = [IO.File]::ReadAllText($p)

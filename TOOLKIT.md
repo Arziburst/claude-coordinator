@@ -941,7 +941,11 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   sum of the project's spend counts it once. Its output shows as `out>=`, a lower bound: a subagent is
   never stopped, so it gets no `cost-state` record, and its transcript keeps only each answer's output
   count at the answer's start (measured: `out>=158` for a 1,500-word report). Its cost is therefore a
-  lower bound; the number that counts is its parent's, which holds it exactly. The task notification's
+  lower bound; the number that counts is its parent's, which holds it exactly. **`runs add --in <parent> --tokens <n> --agent <agentId>`** (#490)
+  writes that reading into the row: tokens, start, wall, active, `own_cost` at `prices.txt` next to the log and `machine`
+  (`macos`, `linux`, `windows`); the cost cell stays `in <parent>`, `own_cost` is never summed; a transcript it cannot read leaves
+  the row as without `--agent`, with a note. `--findings "<the verifier's Fix now line>"` writes `fix_now`. These columns follow
+  the header, else CORE §7's 15, and only when set, so older rows and readers by the header stay as they are. The task notification's
   `subagent_tokens` is the subagent's last context size, not its spend (#232). **Time per run** (CORE §7a): for one session or subagent
   the last line is `time` and, after a tab, `wall=<m>m active=<m>m start=<UTC> end=<UTC>`, from the timestamps of every
   record in the files it counts (the transcript and its subagents', as one set): wall = the last minus
