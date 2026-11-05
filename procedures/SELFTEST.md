@@ -45,7 +45,7 @@ passed here, so the owner can go back to a proven version. It does **not** repla
 The scripted steps use `scripts/selftest` from the core copy: the `.ps1` on Windows (it runs every
 `.ps1` script under Windows PowerShell 5.1 **and** pwsh where both exist), the `.sh` elsewhere. The
 options below are written in the `.sh` form; the `.ps1` takes them as its usage prints them (`-Project`,
-`-WorkerSettings`, `-EditRoot` …). Each
+`-WorkerSettings`, `-EditRoot` …). Each script
 prints `PASS` / `FAIL` / `SKIP` lines. Every session the test starts has `selftest` in its name, goes on
 the watch list right after its start, not subscribed (CORE §4, *Control*), and reports to the coordinator's current name
 (`--report-to`). Models: the light rung for everything (Haiku where the ladder has it), the lead one

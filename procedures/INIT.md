@@ -333,8 +333,8 @@ or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SEL
      and follow them, not the upstream text the link pointed to: the project is pinned to its copy;
      a newer upstream is only the one line of CORE §2 step 3.
   3. **Take over the running sessions** of this project (`claude agents --json`, its folder, its
-     `.claude/worktrees/` and the *Worktree roots* of `PROJECT.md`, CORE §1.17): subscribe to each (`notify_when_idle`, CORE §4 *Control*) — the old
-     session's subscriptions died with it — and match each to its task in the journal and the board.
+     `.claude/worktrees/` and the *Worktree roots* of `PROJECT.md`, CORE §1.17): put each on the watch list (CORE §4 *Control*) — the old
+     session's watcher died with it — and match each to its task in the journal and the board.
   4. Then the open questions and one "still so?" per section instead of the quiz; no dry run or
      self-test when the machine and the core commit are the same (CHECKLIST says so).
   5. **Autopilot on** (`PROJECT.md`) → recreate the tick (CORE §9, TOOLKIT *The periodic tick*).

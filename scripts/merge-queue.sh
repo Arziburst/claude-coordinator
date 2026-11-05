@@ -223,8 +223,18 @@ for item in "${prs[@]}"; do
   done <<< "$list"
   # the merge row of CORE §4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   n='<n>'; printf '%s' "$branch" | grep -qE '^[0-9]+-' && n="${branch%%-*}"
-  while IFS= read -r l; do echo "AFTER MERGE #$pr: $l"; done <<EOF
+  # the task's finished sessions of this project (tester, fix rounds, a lead's workers: named `#<n> ` or `#<n>.`) still listed, each with its rm; a failing listing or none found: no line (#493)
+  fin=""; [ "$n" = '<n>' ] || fin="$(claude agents --json --all 2>/dev/null </dev/null | tr -d '\r\n' | tr '}' '\n' | awk -v n="$n" -v R="$(pwd)|$(pwd -P)|$(pwd -W 2>/dev/null)" '
+    function f(k,  m) { if (!match($0, "\"" k "\": *\"[^\"]*\"")) return ""; m = substr($0, RSTART, RLENGTH); sub(/^[^:]*: *"/, "", m); sub(/"$/, "", m); return m }
+    function c(s) { gsub(/\\+/, "/", s); return tolower(s) }
+    BEGIN { split(R, rt, "|") }
+    { st = f("state"); nm = f("name"); cw = c(f("cwd")); ok = 0
+      for (i in rt) if (rt[i] != "" && (cw == c(rt[i]) || index(cw, c(rt[i]) "/") == 1)) ok = 1
+      if (ok && f("id") != "" && (st == "done" || st == "stopped" || st == "failed") && (index(nm, "#" n " ") == 1 || index(nm, "#" n ".") == 1))
+        printf "%sclaude rm %s (%s)", (k++ ? "; " : ""), f("id"), nm }')"
+  while IFS= read -r l; do [ -z "$l" ] || echo "AFTER MERGE #$pr: $l"; done <<EOF
 cleanup-worker --worktree .claude/worktrees/$branch (CORE §8)
+${fin:+other finished sessions of task $n are still listed: $fin}
 the run rows of task $n (branch $branch), then runs check, and the journal line (CORE §7)
 close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
 the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv --task $n --pr-json - --append
