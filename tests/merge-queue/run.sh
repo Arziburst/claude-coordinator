@@ -86,7 +86,18 @@ cat > "$tmp/bin/gh.ps1" <<'EOF'
 & bash (Join-Path $PSScriptRoot 'gh') @args
 exit $LASTEXITCODE
 EOF
-chmod +x "$tmp/bin/gh"
+# a stub `claude` (#493): `agents --json --all` prints $STUB_D/agents (none: an empty list), or fails when $STUB_D/agents-fail exists
+cat > "$tmp/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = agents ] || exit 1
+[ -f "$STUB_D/agents-fail" ] && { echo "claude: listing failed" >&2; exit 1; }
+cat "$STUB_D/agents" 2>/dev/null || echo '[]'
+EOF
+cat > "$tmp/bin/claude.ps1" <<'EOF'
+& bash (Join-Path $PSScriptRoot 'claude') @args
+exit $LASTEXITCODE
+EOF
+chmod +x "$tmp/bin/gh" "$tmp/bin/claude"
 export PATH="$tmp/bin:$PATH"
 
 case "$kind" in
@@ -157,6 +168,23 @@ $am77"
 got="$(printf '%s\n' "$out" | sed -n '/^MERGED #78:/,$p' | grep '^AFTER MERGE')"
 [ "$got" = "$am78" ] && ok || bad "after MERGED #78 (no number in its branch) expected exactly:
 $am78"
+fresh "after a merge: the task's other finished sessions of this project are named with their rm (#493)"
+qroot="$(pwd -W 2>/dev/null || pwd -P)"   # the folder as the listing gives it (Windows: C:/...)
+pr 77 $H77 466-feat; echo src/x.ts > "$STUB_D/files-77"; echo pass > "$STUB_D/checks-$H77"
+sess() { printf '  {\n    "id": "%s",\n    "sessionId": "5e550000-0000-4000-8000-0000000000%s",\n    "name": "%s",\n    "state": "%s"%s\n  }' "$1" "${1#a}" "$2" "$3" "${4:+,
+    \"cwd\": \"$4\"}"; }
+{ echo '['; sess a1 "#466 tester: x" done "$qroot/.claude/worktrees/466-feat"; echo ,; sess a2 "#466.1 worker: y" stopped "$qroot"; echo ,
+  sess a3 "#466 worker: still going" working "$qroot"; echo ,; sess a4 "#4660 another task" done "$qroot"; echo ,
+  sess a5 "#466 other folder" done "$qroot-other"; echo ,; sess a6 "#466 no folder" done; echo ,; sess a7 "#466 fix round" failed "$qroot"; echo; echo ']'; } > "$STUB_D/agents"
+run land 77 --poll 0; code 0; has "MERGED #77:"
+got="$(printf '%s\n' "$out" | grep 'other finished sessions')"
+[ "$got" = "AFTER MERGE #77: other finished sessions of task 466 are still listed: claude rm a1 (#466 tester: x); claude rm a2 (#466.1 worker: y); claude rm a7 (#466 fix round)" ] && ok || bad "expected exactly the sessions a1, a2, a7 in one line, got: $got"
+hasnt "claude rm a3"; hasnt "claude rm a4"; hasnt "claude rm a5"; hasnt "claude rm a6"; has "AFTER MERGE #77: cleanup-worker"
+fresh "after a merge: a failing listing or no matching session: no line, the merge stands (#493)"
+pr 77 $H77 466-feat; echo src/x.ts > "$STUB_D/files-77"; echo pass > "$STUB_D/checks-$H77"; touch "$STUB_D/agents-fail"
+run land 77 --poll 0; code 0; has "MERGED #77:"; hasnt "other finished sessions"; has "AFTER MERGE #77: the project's own after-merge duties"
+rm "$STUB_D/agents-fail"; sess a9 "#999 another task" done "$qroot" > "$STUB_D/agents.one"; { echo '['; cat "$STUB_D/agents.one"; echo ']'; } > "$STUB_D/agents"
+pr 77 $H77 466-feat; run land 77 --poll 0; code 0; has "MERGED #77:"; hasnt "other finished sessions"
 # no duty is run: every call of the stub is one the queue makes today, none to an issue, a board or a tracker
 x="$(grep -vE '^(pr (view|checks|merge|list) |api -X DELETE repos/[^ ]*/git/refs/heads/|api repos/[^ ]*/compare/|run list )' "$STUB_D/log")"; [ -z "$x" ] && ok || bad "gh called beyond today's: $x"
 

@@ -224,15 +224,21 @@ foreach ($item in $prs) {
   }
   # the merge row of CORE section 4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   $n = if ($branch -match '^([0-9]+)-') { $Matches[1] } else { '<n>' }
+  # the task's finished sessions of this project (tester, fix rounds, a lead's workers: named `#<n> ` or `#<n>.`) still listed, each with its rm; a failing listing or none found: no line (#493)
+  $fin = @(); $root = ($pwd.ProviderPath -replace '\\+', '/').TrimEnd('/')
+  if ($n -ne '<n>') { try { $ls = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"
+    if ($LASTEXITCODE -eq 0) { $js = $ls | ConvertFrom-Json; foreach ($s in @($js | ForEach-Object { $_ })) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"
+      if ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n.")) -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase))) { $fin += "claude rm $($s.id) ($nm)" } } } } catch { $fin = @() } }
   foreach ($l in @(
     "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
+    $(if ($fin.Count) { "other finished sessions of task $n are still listed: $($fin -join '; ')" }),
     "the run rows of task $n (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
     "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
     "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv -Task $n -PrJson:- -Append",
     "tell each AFFECTED PR's session to merge $base (CORE ${sect}4a)",
     "did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE ${sect}10)? an escape (CORE ${sect}12)?",
     "the project's own after-merge duties (PROJECT.md)"
-  )) { "AFTER MERGE #${pr}: $l" }
+  )) { if ($l) { "AFTER MERGE #${pr}: $l" } }
 }
 "merge-queue: $merged merged$(if ($left.Count) { ", left: $($left -join ', ')" })"
 if ($left.Count) { exit 3 }

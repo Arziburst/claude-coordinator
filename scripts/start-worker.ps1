@@ -607,7 +607,7 @@ $brief = $full   # $full as sent, before the escaping below: kept for after a co
 function LastLine([string]$id) {
   if ($asst) { return "subscribe: SendMessage(to: `"$Name`", notify_when_idle: true)" }
   if ($role -cin 'tester', 'worker', 'lead') { "board: move issue #$(if ($Name -match '^#([0-9]+)') { $Matches[1] } else { '<n>' }) to In Progress on the board, by the project's words (PROJECT.md) where it has none" }
-  "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: $(if ($id) { $id } else { $Name })"
+  "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: $(if ($id) { $id } else { $Name })$(if ($role -ceq 'lead') { ' @120' })"
 }
 if ($DryRun -and $lFile) { "[dry-run] brief through a file: $nChars characters of launch text, over 24000 - it would go to $lFile and the first message would point to it" }
 $where = if ($asst) { "the folder $adir/, questions to `"$ReportTo`"" } else { "working copy $wtFwd, report to `"$ReportTo`"" }

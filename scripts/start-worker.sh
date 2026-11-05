@@ -586,7 +586,7 @@ else
   # the brief as sent, kept by the session's id: hooks/after-compact.sh points the session back to it after
   # a compaction (a summary loses rules); briefs older than 14 days are pruned
   sid="$(claude agents --json 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -F "\"$jname\"" |
-    sed -n 's/.*"sessionId": *"\([0-9a-fA-F-]*\)".*/\1/p' | tail -n 1)"
+    sed -n 's/.*"sessionId": *"\([0-9a-fA-F-]*\)".*/\1/p' | tail -n 1)" || sid=""   # a session never listed: grep finds nothing, the start goes on (#370)
   if [ -n "$sid" ]; then
     mkdir -p "$bd" && printf '%s\n' "$full" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
     find "$bd" -name '*.md' -type f -mtime +14 -exec rm -f {} + 2>/dev/null || true
@@ -598,8 +598,9 @@ else
 fi
 if [ -n "$asst" ]; then echo "subscribe: SendMessage(to: \"$name\", notify_when_idle: true)"
 else
+  lead=""; [ "$role" != lead ] || lead=1   # a lead's entry is `<id> @120` (CORE section 4, Control; roles/lead.md)
   case "$role" in tester|worker|lead)
     bn="$(printf '%s' "$name" | sed -n 's/^#\([0-9][0-9]*\).*/\1/p')"
     echo "board: move issue #${bn:-<n>} to In Progress on the board, by the project's words (PROJECT.md) where it has none" ;;
   esac
-  echo "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: ${bgid:-$name}"; fi
+  echo "watch: keep one scripts/watch-sessions running on coordinator/watch.txt (a lead: its notes folder's watch.txt; CORE section 4, Control) and add this one line to the list: ${bgid:-$name}${lead:+ @120}"; fi

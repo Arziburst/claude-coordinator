@@ -1,7 +1,7 @@
 # Watch the sessions a report is awaited from, in place of subscribing to their idle notices (#342)
 # (Windows; macOS / Linux: watch-sessions.sh - the same output and exit codes): run as one background
 # command, it polls `claude agents --json --all` and ends - waking its caller once - only when a listed
-# session stopped, vanished or went quiet without its report.
+# session stopped, vanished, went quiet or ran long (LONG) without its report.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-sessions.ps1 -List <file> [-Interval <s>]
 #     [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-AgentsTimeout <s>] [-Once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
@@ -32,8 +32,9 @@
 # Exit codes: 0 a finding, EMPTY, or -Once with nothing found (nothing printed); 1 ERROR; 2 usage error.
 # Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time) and two per call ([IO.Path]::GetTempFileName) holding claude's
 # stdout and stderr - read from files, not a pipe, so a process left under a killed claude cannot hang
-# the watcher - removed as soon as they are read and on every way out. It never stops, messages or
-# changes a session.
+# the watcher - removed as soon as they are read and on every way out, except a file a process left under the listing still holds open
+# (Windows: it stays in the temp folder, nothing retries; #357). Such a process also inherits the watcher's own stdout and stderr, so a caller
+# that reads the watcher through a pipe waits for it after the watcher ended. It never stops, messages or changes a session.
 param([string]$List, [string]$Interval = '120', [string]$QuietMinutes = '20', [string]$QuietSeconds = '',
   [string]$LongMinutes = '45', [string]$LongSeconds = '', [string]$AgentsTimeout = '60', [switch]$Once)
 # a name is written as UTF-8, whatever the console's code page; the caller's console gets its own encoding

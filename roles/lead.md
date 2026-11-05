@@ -72,7 +72,8 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    no finding before it. Its findings, as the coordinator's (CORE §4
    *Control*): `STOPPED` → the worker's branch and log, resumed or restarted as the work needs;
    `GONE` → the line fixed or dropped; `QUIET` → `ListAgents` once, `waiting` to the coordinator, idle
-   → one SendMessage asking for its report or its state; `ERROR` → once more, then the coordinator.
+   → one SendMessage asking for its report or its state; `LONG` (working, its transcript unmoved past the limit) → look at what it runs against
+   its brief's limit, a legitimately long command gets ` @<n>` on its line, the line stops nothing; `ERROR` → once more, then the coordinator.
    A worker's message still wakes you as before; a wait on your branch moving (`git ls-remote origin
    <its branch>`) may run beside it. Gone `done` anyway: the worker's report falls back to the coordinator
    (roles/worker.md step 5), which resumes you by your full id with that report (TOOLKIT *Pause and
