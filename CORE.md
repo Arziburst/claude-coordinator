@@ -276,7 +276,7 @@ The continuous work:
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
    (an ERROR blocks delegation; a WARN is explained in the brief); start-worker runs it on the brief's
-   contract (or `--contract <file>`) and refuses to start on an ERROR.
+   contract (or `--contract <file>`, which a worker or a lead whose brief does not hold it receives in its launch text, #504) and refuses to start on an ERROR.
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Saved carts per account`, `#37 verifier: Saved carts
    per account`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's

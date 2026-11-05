@@ -40,9 +40,10 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (--dry-run too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
-# --contract only checks a contract; the session reads the brief alone (#331): a --contract whose text is
+# A worker's or a lead's --contract reaches the session (#504): a brief with no `acceptance:` line gets the contract, whole, at the end of
+# the launch text and of the kept brief, one WARN line saying so (--dry-run too). Any other --contract is only checked (#331): one whose text is
 # not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
-# WARN line, and the start goes on (--dry-run too); the brief is never changed.
+# WARN line, and the start goes on (--dry-run too); the brief file is never changed.
 # The tests_first gate (CORE §4 step 3, #276): a worker whose contract says `tests_first: yes` starts only
 # with the tester's tests - --tester-commit <sha>, a commit that is the worker's start point or an ancestor
 # of it (a reused worktree's HEAD, else the branch, else the base), or --tester-tests <path>, an existing
@@ -55,7 +56,7 @@
 # before anything is created (--dry-run too) - a lead's contract has `tests_first: no - the lead runs the
 # tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument (reading it from stdin is unconfirmed).
-# A launch text (first line + role + brief) over 24 000 characters goes through a file instead (#291):
+# A launch text (first line + role + brief + an added contract) over 24 000 characters goes through a file instead (#291):
 # <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
@@ -263,7 +264,7 @@ if [ -z "$contract" ]; then case "$crole" in worker|lead|"")
     on { buf = buf $0 "\n"; if ($0 ~ /^(id|intent|acceptance|non_goals|do_not_decide|tests_first):/) k = 1 }
     END { if (!done && on && k) printf "---\n%s---\n", buf }' "$brief" > "$ctmp"
   if [ -s "$ctmp" ]; then cfile="$ctmp" clabel="contract in the brief"
-  else echo "contract: none found in the brief - check-contract not run (CORE §4)"; fi ;;
+  else echo "contract: none found in the brief - check-contract not run (CORE §4); this session starts without a contract"; fi ;;
 esac; fi
 if [ -n "$cfile" ]; then
   crc=0; cout="$(bash "$(dirname "$0")/check-contract.sh" "$cfile" 2>&1)" || crc=$?
@@ -272,7 +273,11 @@ if [ -n "$cfile" ]; then
     index($0, F) == 1 { $0 = L substr($0, length(F) + 1) } { print }'
   [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
 fi
-if [ -n "$contract" ]; then
+# a worker's or a lead's --contract its brief does not hold goes into the launch text, whole (#504)
+cadd=""; if [ -n "$contract" ]; then case "$crole" in worker|lead|"") grep -Eq '^[[:space:]]*acceptance:' "$brief" || cadd=1 ;; esac; fi
+if [ -n "$cadd" ]; then
+  echo "WARN: --contract: the brief holds no acceptance: block - the contract goes into the launch text, whole (#504)"
+elif [ -n "$contract" ]; then
   # the contract's first `id:` and `title:` lines against the brief's lines, all trimmed
   cin="$(B="$(printf '\357\273\277')" awk 'BEGIN { B = ENVIRON["B"] } FNR == 1 { f++; if (index($0, B) == 1) $0 = substr($0, length(B) + 1) }
     { sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, "") }
@@ -430,6 +435,11 @@ full="$first
 ${roletext:+$roletext
 
 }$(cat "$brief")"
+if [ -n "$cadd" ]; then full="$full
+
+The contract of this task, whole (start-worker added it: your brief does not hold it):
+
+$(LC_ALL=C sed "1s/^$(printf '\357\273\277')//" "$contract" | tr -d '\r')"; fi
 # characters, not bytes, in any locale: UTF-8 continuation bytes are not counted
 nchars="$(printf '%s' "$full" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')"
 bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"

@@ -37,9 +37,10 @@
 # the end, holding any key check-contract requires, CONTRACT.md), is checked before anything is created (-DryRun too). An ERROR refuses
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
-# -Contract only checks a contract; the session reads the brief alone (#331): a -Contract whose text is
+# A worker's or a lead's -Contract reaches the session (#504): a brief with no `acceptance:` line gets the contract, whole, at the end of
+# the launch text and of the kept brief, one WARN line saying so (-DryRun too). Any other -Contract is only checked (#331): one whose text is
 # not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
-# WARN line, and the start goes on (-DryRun too); the brief is never changed.
+# WARN line, and the start goes on (-DryRun too); the brief file is never changed.
 # The tests_first gate (CORE section 4 step 3, #276): a worker whose contract says `tests_first: yes` starts
 # only with the tester's tests - -TesterCommit <sha>, a commit that is the worker's start point or an
 # ancestor of it (a reused worktree's HEAD, else the branch, else the base), or -TesterTests <path>, an
@@ -52,7 +53,7 @@
 # before anything is created (-DryRun too) - a lead's contract has `tests_first: no - the lead runs the
 # tester per sub-contract` (roles/lead.md step 3).
 # The brief is passed as the session's first prompt argument. Run with -DryRun first on a new machine.
-# A launch text (first line + role + brief) over 24 000 characters goes through a file instead (#291):
+# A launch text (first line + role + brief + an added contract) over 24 000 characters goes through a file instead (#291):
 # <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
@@ -265,7 +266,7 @@ if (-not $Contract -and $crole -in @('worker', 'lead', '')) {
   if ($found) {
     $cTmp = [IO.Path]::GetTempFileName(); $cFile = $cTmp; $cLabel = 'contract in the brief'
     [IO.File]::WriteAllText($cTmp, "---`n" + ($buf -join "`n") + "`n---`n", (New-Object System.Text.UTF8Encoding $false))
-  } else { "contract: none found in the brief - check-contract not run (CORE ${sect}4)" }
+  } else { "contract: none found in the brief - check-contract not run (CORE ${sect}4); this session starts without a contract" }
 }
 # the tests_first gate (CORE section 4 step 3, #276): a worker's contract with `tests_first: yes` needs the
 # tester's tests; a lead runs its own tester, a tester writes them
@@ -299,7 +300,10 @@ if ($Contract) {
   $trimmed = { param($f) [IO.File]::ReadAllText($f).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n" | ForEach-Object { $_.Trim(" `t") } }
   $want = @{}; foreach ($l in (& $trimmed $Contract)) { if ($l -cmatch '^(id|title):' -and -not $want.ContainsKey($Matches[1])) { $want[$Matches[1]] = $l } }
   $have = @(& $trimmed $BriefFile)
-  if ($want.Count -and -not @($want.Values | Where-Object { $have -ccontains $_ }).Count) {
+  # a worker's or a lead's -Contract its brief does not hold goes into the launch text, whole (#504)
+  $cAdd = $crole -in @('worker', 'lead', '') -and -not @($have -cmatch '^acceptance:').Count
+  if ($cAdd) { 'WARN: -Contract: the brief holds no acceptance: block - the contract goes into the launch text, whole (#504)' }
+  elseif ($want.Count -and -not @($want.Values | Where-Object { $have -ccontains $_ }).Count) {
     'WARN: -Contract only checks the contract - the session will not see it: its text (its id: and title: lines) is not in the brief; put the contract into the brief file (#331)'
   }
 }
@@ -454,6 +458,7 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):' -and $Matches[2] -ceq 'lead') {
   $first = $first.Substring(0, $i) + "`nYour notes folder: $notes - the one exception to `"never change files outside it`": beside your worktree, never inside it; your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)." + $first.Substring($i)
 }
 $full = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
+if ($cAdd) { $full = $full.TrimEnd("`n") + "`n`nThe contract of this task, whole (start-worker added it: your brief does not hold it):`n`n" + [IO.File]::ReadAllText($Contract).Replace("`r", '').TrimEnd("`n") }
 # characters as the .sh counts them: a surrogate pair is one
 $nChars = $full.Length - [regex]::Matches($full, '[\uDC00-\uDFFF]').Count
 $cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
