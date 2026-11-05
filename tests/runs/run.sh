@@ -416,6 +416,16 @@ fresh "add --in --agent: its tokens, start, wall, active and own cost from its t
 printf '%s\n%s\n' "$H" "$OLD" > "$L"; printf 'claude-opus-5-5 1 1 1 1\n' > "$tmp/prices.txt"
 run add --log "$L" --in coordinator --tokens 1 --agent $AG "${V[@]}"; code 0
 [ "$(lastline "$L" | awk -F'\t' '{ print $8, $9, $11, $12, $13, $16, NF }')" = "63942 in coordinator 2026-10-05T10:00:00Z 20 3 0.0639 17" ] && [ "$(f "$L" 17)" = "$os" ] && ok || bad "own reading: $(lastline "$L")"
+fresh "add --agent: each cache write priced by its own 5m/1h split (5m at 1.25 x input, 1h at the write price), the pair alike"; AG2=def490
+d="$CLAUDE_CONFIG_DIR/projects/p490/parent490/subagents"; mkdir -p "$d"; printf 'claude-opus-5-5 1 0 0 2\n' > "$tmp/prices.txt"; printf '%s\n' "$H" > "$L"
+while read -r n a b m; do
+  printf '{"type":"assistant","message":{"id":"msg_s%s","model":"claude-opus-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":%d,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":%d,"ephemeral_1h_input_tokens":%d},"output_tokens":0}},"timestamp":"2026-10-05T10:0%s:00Z"}\n' "$n" $((a + b)) "$a" "$b" "$m" >> "$d/agent-$AG2.jsonl"
+done <<'EOT'
+A 600 400 0
+B 1000 0 1
+EOT
+run add --log "$L" --in coordinator --tokens 1 --agent $AG2 "${V[@]}"; code 0
+[ "$(f "$L" 16)" = 0.0028 ] && ok || bad "split pricing (want 0.0028 = 600*1.25 + 400*2 + 1000*1.25): $(lastline "$L")"
 fresh "add --agent, no prices file: start and machine, no own cost"; rm -f "$tmp/prices.txt"; printf '%s\n' "$H" > "$L"
 run add --log "$L" --in coordinator --tokens 1 --agent $AG "${V[@]}"; code 0; [ -z "$(f "$L" 16)" ] && [ "$(f "$L" 11)" = 2026-10-05T10:00:00Z ] && [ "$(f "$L" 17)" = "$os" ] && ok || bad "no prices: $(lastline "$L")"
 fresh "add --agent that cannot be read: the row as today, a note"; printf '%s\n' "$H" > "$L"

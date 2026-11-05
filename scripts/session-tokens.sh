@@ -76,7 +76,7 @@ count() {
       while (match(r, /"usage":[ \t]*[{]/)) { u = substr(r, RSTART); r = substr(r, RSTART + RLENGTH) }
       o = num("output_tokens")
       if (!(id in out) || o > out[id]) { out[id] = o; mod[id] = m; inp[id] = num("input_tokens")
-        rd[id] = num("cache_read_input_tokens"); wr[id] = num("cache_creation_input_tokens") }
+        rd[id] = num("cache_read_input_tokens"); wr[id] = num("cache_creation_input_tokens"); w5[id] = num("ephemeral_5m_input_tokens") }
     }
     function line(n, i, o, r, w) { return sprintf("%s\t%.0f\tin=%.0f out>=%.0f cache_read=%.0f cache_write=%.0f", n, i + o + r + w, i, o, r, w) }
     END { for (id in out) { m = mod[id]; seen[m] = 1
@@ -85,7 +85,7 @@ count() {
             # the context bucket (#342), and the cost at the model line - exact, else the longest prefix of the model
             c = inp[id] + rd[id] + wr[id]; b = c < 100000 ? 1 : c < 200000 ? 2 : c < 400000 ? 3 : c <= 700000 ? 4 : 5; BN[b]++; BT[b] += c + out[id]
             k = ""; for (p in PI) if (p == m || (index(m, p) == 1 && length(p) > length(k))) { k = p; if (p == m) break }
-            if (k == "") np++; else BC[b] += inp[id] * PI[k] + out[id] * PO[k] + rd[id] * PR[k] + wr[id] * PW[k] }
+            if (k == "") np++; else BC[b] += inp[id] * PI[k] + out[id] * PO[k] + rd[id] * PR[k] + (wr[id] - (x = w5[id] > wr[id] ? wr[id] : w5[id])) * PW[k] + x * PI[k] * 1.25 }   # a 5-minute write costs 1.25 x input, the rest the 1-hour line
           for (m in seen) print line(m, MI[m], MO[m], MR[m], MW[m]) | "LC_ALL=C sort"
           close("LC_ALL=C sort")
           print line("total", I, O, R, W)
