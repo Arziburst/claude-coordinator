@@ -28,7 +28,7 @@
 # The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
 # exit 1. Origin unreadable: exit 1, a line saying so, never read as a missing branch. A limit: another repository whose origin has a branch of the same name passes. status: no folder check.
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
-# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads (Windows: merge-queue.ps1).
+# says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads, and `claude agents` once after a merge for the sessions line (Windows: merge-queue.ps1).
 set -uo pipefail
 
 usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
@@ -234,8 +234,8 @@ for item in "${prs[@]}"; do
         printf "%sclaude rm %s (%s)", (k++ ? "; " : ""), f("id"), nm }')"
   while IFS= read -r l; do [ -z "$l" ] || echo "AFTER MERGE #$pr: $l"; done <<EOF
 cleanup-worker --worktree .claude/worktrees/$branch (CORE §8)
-${fin:+other finished sessions of task $n are still listed: $fin}
 the run rows of task $n (branch $branch), then runs check, and the journal line (CORE §7)
+${fin:+other finished sessions of task $n are still listed; claude rm only after the run rows above: $fin}
 close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
 the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv --task $n --pr-json - --append
 tell each AFFECTED PR's session to merge $base (CORE §4a)

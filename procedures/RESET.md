@@ -40,6 +40,7 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
    - `remote`: the remote cannot be reached or does not take the branch: fix that first. `tag`: one reset a day.
    - `--confirm`, `--core-from`: the name as typed in step 3; a clean clone, from step 4.
    - `held by another process` (Windows): close what holds it and run it again; the tag was taken back.
+   - `FAILED`, or no `done` line (a partial move on Windows, a handle deeper in `coordinator/`): nothing is lost, the tag gives every file back; close the holder, remove what the message names, do not run again (one reset a day).
    The last line is `reset-coordinator: done tag=<tag> core=<sha>`. Delete the scratch clone.
 6. **End by printing these commands, and do nothing else in this session:**
    ```

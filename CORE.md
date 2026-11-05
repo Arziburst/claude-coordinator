@@ -316,7 +316,7 @@ The continuous work:
    after it ends (a finding handled, or an `ERROR` once), never a second one beside it, and not at all
    with the list empty. A
    subscription (`SendMessage(to: <its name>, notify_when_idle: true)`; for an assistant, the `subscribe:` line start-worker prints)
-   stays allowed only for a session no message is expected from: one whose brief names no report
+   stays allowed only for a session no message is expected from: an assistant, or one whose brief names no report
    address (a session the coordinator did not brief, e.g. one the owner started and asked it to watch);
    every role the core starts reports by message, so none of them. **One subscription per expected
    report** where one is used. The watcher's findings: `STOPPED <id> <name>` (stopped, failed, or
