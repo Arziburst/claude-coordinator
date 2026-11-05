@@ -50,6 +50,7 @@ if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; print
   printf 'backgrounded · b9%06d · %s\n' "$(wc -l < "$STUB_LOG.names" | tr -d ' ')" "$3"
 fi
 if [ "${1:-}" = agents ]; then
+  [ -z "${STUB_NOLIST:-}" ] || { echo '[]'; exit 0; }   # $STUB_NOLIST: the listing never has the started session (#370)
   all=""; case " $* " in *" --all "*) all=1 ;; esac
   a="$(sed 's/\\/\\\\/g; s/"/\\"/g' "$STUB_LOG.names" 2>/dev/null | awk '{ printf "{\"name\":\"%s\",\"sessionId\":\"5e550000-0000-4000-8000-%012d\"}\n", $0, NR }' | paste -sd, -)"
   [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
@@ -1799,6 +1800,20 @@ bw="board: move issue #77 to In Progress on the board, by the project's words (P
 [ "$(printf '%s\n' "$bo" | sed '/^== verifier/,$d' | grep -B1 '^watch:' | head -n 1)" = "$bw" ] || { echo "FAIL (board): the worker's line before watch: is not: $bw"; printf '%s\n' "$bo" | sed 's/^/    /'; fail=1; }
 printf '%s\n' "$bo" | sed -n '/^== verifier/,$p' | grep -q '^board:' && { echo "FAIL (board): a verifier got a board: line"; fail=1; }
 [ -s "$mtmp/gh-466.log" ] && { echo "FAIL (board): gh called: $(cat "$mtmp/gh-466.log")"; fail=1; }
+
+# --- a started session never listed, and a lead's watch line (#370 items 2 and 3) ---
+# the listing never has the session (a project whose listing is late): the start still exits 0, says so, and prints its watch: line
+export STUB_NOLIST=1
+check 0 "never listed: the start goes on" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 78-nolist --name "#78 worker: N"
+unset STUB_NOLIST
+expect_in "no sessionId in the listing"; expect_watch "$(stub_id)"
+# a lead's entry is `<id> @120`, a worker's the bare id (a dry run: the name)
+check 0 "a lead's real start: its watch line ends with @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 79-lead --name "#79 lead: L"
+expect_watch "$(stub_id) @120"
+check 0 "a worker's real start: no @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 80-w --name "#80 worker: W"
+expect_watch "$(stub_id)"; printf '%s\n' "$LAST" | grep '^watch:' | grep -q '@120' && { echo "FAIL: a worker's watch: line holds @120"; fail=1; }
+check 0 "a lead's dry run: its watch line ends with the name and @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 81-lead --name "#81 lead: D" --dry-run
+expect_watch "#81 lead: D @120"
 
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

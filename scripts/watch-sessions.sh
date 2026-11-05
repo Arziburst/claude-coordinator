@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Watch the sessions a report is awaited from, in place of subscribing to their idle notices (#342): run
 # as one background command, it polls `claude agents --json --all` and ends - waking its caller once -
-# only when a listed session stopped, vanished or went quiet without its report.
+# only when a listed session stopped, vanished, went quiet or ran long (LONG) without its report.
 #   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>]
 #                             [--long-minutes <m>] [--long-seconds <s>] [--agents-timeout <s>] [--once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
