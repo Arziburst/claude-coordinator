@@ -52,7 +52,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
      report (`coordinator window 500000 set, in force from the coordinator's next start, workers keep <n>`,
      the number `PROJECT.md` names where it names one), and the owner's yes to step 4 runs it, as the
-     settings files above when auto mode refuses the edit. The same line when only the PreCompact hook is due.
+     settings files above when auto mode refuses the edit. The same line when only the PreCompact hook is due. `window-mark-hook` likewise, by its own line.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -89,7 +89,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    `coordinator/core/skills/coord-*` copied over `coordinator/skills/`, a `coord-*` the core no longer has
    removed, the project's own skills untouched (CORE §12b), committed in `coordinator/` — automatic, no separate question. Changes to `PROJECT.md` the owner approved are committed in `coordinator/`.
    Where the user settings' `statusLine` points at the machine's neutral copy, run `scripts/statusline --install` from the new core copy — automatic, it replaces that copy only by a newer version (TOOLKIT *Usage*).
-   Run the one-time checks the owner said yes to and `coordinator-window`; write a `CHECKLIST.md` line for every *Not done yet*
+   Run the one-time checks the owner said yes to, `coordinator-window` and `window-mark-hook`; write a `CHECKLIST.md` line for every *Not done yet*
    and *found* row — `done`, `failed`, `declined` or `n/a` — so a declined step is never asked again
    unless the owner asks.
 5. **Layout:** if `coordinator/` is not yet its own git repository hidden from the project's git
@@ -102,5 +102,5 @@ Run only on the owner's command ("update the core", "обнови ядро", any
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
 
-**The update's very end** (only when it set the window or the PreCompact hook): the coordinator prints the owner
+**The update's very end** (only when it set the window, the PreCompact hook or the window mark's hook): the coordinator prints the owner
 the commands of TOOLKIT *Pause and resume*, as RESET.md step 6 does; a session cannot restart itself.

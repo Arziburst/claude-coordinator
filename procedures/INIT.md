@@ -29,6 +29,7 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
   - **The coordinator's compaction window** — one-time step `coordinator-window` (ONE-TIME.md, #421):
     `autoCompactWindow` 500000, or the project's number, in the same local file; workers keep theirs in
     the worker safety file; one line in the summary (3.5), run on its yes; the window takes effect at the next start, as for an update.
+    With the status line installed, one-time step `window-mark-hook` the same way: the bar says `restart` until that start.
   - **Branch protection on the code host** — each protected branch (`PROJECT.md` *Protected
     branches*, question 14; not only the default branch) requires a PR, passing checks and (in the
     strict preset) a human review. This is the real enforcement; missing → ask the owner to enable it
@@ -290,6 +291,7 @@ grouped by section — asked, found, by default, and the differences with existi
 or fix these rows". On the yes, write `coordinator/CHECKLIST.md` ([ONE-TIME.md](../ONE-TIME.md)): a line for
 every catalog row — the settings as answered, the checks as run in the setup (`done`, `failed`, `n/a`)
 or offered and `declined`. Then the dry run (CORE §12a) and the self-test ([SELFTEST.md](SELFTEST.md)).
+At init's very end, when it set the window (`coordinator-window` or `window-mark-hook`), print the owner the commands of TOOLKIT *Pause and resume*, as UPDATE-CORE's end does, with or without the status line.
 
 ### 3.6 Scenarios
 
