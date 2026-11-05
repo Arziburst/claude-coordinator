@@ -227,7 +227,7 @@ foreach ($item in $prs) {
   # the task's finished sessions of this project (tester, fix rounds, a lead's workers: named `#<n> ` or `#<n>.`) still listed, each with its rm; a failing listing or none found: no line (#493)
   $fin = @(); $root = ($pwd.ProviderPath -replace '\\+', '/').TrimEnd('/')
   if ($n -ne '<n>') { try { $ls = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"
-    if ($LASTEXITCODE -eq 0) { foreach ($s in @($ls | ConvertFrom-Json)) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"
+    if ($LASTEXITCODE -eq 0) { $js = $ls | ConvertFrom-Json; foreach ($s in @($js | ForEach-Object { $_ })) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"
       if ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n.")) -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase))) { $fin += "claude rm $($s.id) ($nm)" } } } } catch { $fin = @() } }
   foreach ($l in @(
     "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
