@@ -534,14 +534,10 @@ fi
 # this machine)
 IW=none; IP=none
 win=""; [ ! -f "$dir/PROJECT.md" ] || win="$(LC_ALL=C awk -F '|' '$2 ~ /^[ \t]*[*]*Coordinator window/ && match($3, /[0-9][0-9][0-9][0-9][0-9]+/) { print substr($3, RSTART, RLENGTH); exit }' "$dir/PROJECT.md")"
-if [ -z "$win" ]; then   # no row: the project's settings, then the account's, else Claude Code's own window (1000000)
-  for f in "$proj/.claude/settings.local.json" "$proj/.claude/settings.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do
-    [ -f "$f" ] || continue
-    win="$(tr -d '\r' < "$f" | LC_ALL=C sed -n 's/.*"autoCompactWindow"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\)[^0-9.].*/\1/p;s/.*"autoCompactWindow"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\)$/\1/p' | head -n 1)"
-    case "$win" in ''|0|*[!0-9]*) win="" ;; *) break ;; esac
-  done
-fi
-win="${win:-1000000}"
+for f in "$proj/.claude/settings.local.json" "$proj/.claude/settings.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do   # no row: the settings' number
+  [ -n "$win" ] || win="$(LC_ALL=C sed -n 's/.*"autoCompactWindow"[[:space:]]*:[[:space:]]*\([1-9][0-9]*\).*/\1/p' "$f" 2>/dev/null | head -n 1)"
+done
+win="${win:-1000000}"   # else Claude Code's own window
 if [ "$noins" = 0 ] && [ "$core" = 1 ]; then
   IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
 elif [ "$noins" = 0 ]; then

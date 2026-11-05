@@ -583,12 +583,9 @@ if ($cdRc -eq 0 -and -not ($cd0 -join '')) {
 $CtxWin = ''; $pmd = Join-Path $dir 'PROJECT.md'
 if (Test-Path -LiteralPath $pmd -PathType Leaf) { foreach ($line in [IO.File]::ReadAllLines($pmd)) { $cells = $line.Split('|')
   if ($cells.Count -ge 3 -and $cells[1] -cmatch '^[ \t]*[*]*Coordinator window' -and $cells[2] -cmatch '[0-9]{5,}') { $CtxWin = $Matches[0]; break } } }
-if (-not $CtxWin) {
-  $cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
-  foreach ($f in @((Join-Path $Project '.claude/settings.local.json'), (Join-Path $Project '.claude/settings.json'), (Join-Path $cfgDir 'settings.json'))) {
-    if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
-    if (([IO.File]::ReadAllText($f)) -cmatch '"autoCompactWindow"\s*:\s*([0-9]+)(?![0-9.])' -and [long]$Matches[1] -gt 0) { $CtxWin = $Matches[1]; break }
-  }
+$cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+foreach ($f in @((Join-Path $Project '.claude/settings.local.json'), (Join-Path $Project '.claude/settings.json'), (Join-Path $cfgDir 'settings.json'))) {
+  if (-not $CtxWin -and (Test-Path -LiteralPath $f -PathType Leaf) -and ([IO.File]::ReadAllText($f)) -cmatch '"autoCompactWindow"\s*:\s*([1-9][0-9]*)') { $CtxWin = $Matches[1] }
 }
 if (-not $CtxWin) { $CtxWin = '1000000' }
 # the transcripts of each week: session-insights in its own process, as the .sh runs it; none when it fails
