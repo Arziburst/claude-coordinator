@@ -89,6 +89,7 @@ EOF
 # a stub `claude` (#493): `agents --json --all` prints $STUB_D/agents (none: an empty list), or fails when $STUB_D/agents-fail exists
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" = rm ] && { echo "rm $2" >> "$STUB_D/claude-rm"; [ ! -f "$STUB_D/rm-fail" ]; exit; }   # #521: rm logged, failing with $STUB_D/rm-fail
 [ "$1" = agents ] || exit 1
 [ -f "$STUB_D/agents-fail" ] && { echo "claude: listing failed" >&2; exit 1; }
 cat "$STUB_D/agents" 2>/dev/null || echo '[]'
@@ -134,7 +135,7 @@ pr() { echo "OPEN false $2 $3 main" > "$STUB_D/pr-$1"; }
 H11=a111111111111111111111111111111111111111 H13=c131313131313131313131313131313131313131 N13=d131313131313131313131313131313131313131
 # the cases below run from a repository's root whose origin has their open PRs' branches (#387); 1-a is off it: a merged PR's branch is gone
 git init -q --bare "$tmp/r.git"; git init -q -b main "$tmp/r"; cd "$tmp/r" || exit 1; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
-for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d 466-feat hotfix-x; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
+for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d 466-feat ARXVR-12-feat hotfix-x reception-flow; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
 
 fresh "up to date, green: merged; an open PR changing the same file is AFFECTED"
 pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "pass skipping" > "$STUB_D/checks-$H11"
@@ -190,6 +191,21 @@ rm "$STUB_D/agents-fail"; sess a9 "#999 another task" done "$qroot" > "$STUB_D/a
 pr 77 $H77 466-feat; run land 77 --poll 0; code 0; has "MERGED #77:"; hasnt "other finished sessions"
 # no duty is run: every call of the stub is one the queue makes today, none to an issue, a board or a tracker
 x="$(grep -vE '^(pr (view|checks|merge|list) |api -X DELETE repos/[^ ]*/git/refs/heads/|api repos/[^ ]*/compare/|run list )' "$STUB_D/log")"; [ -z "$x" ] && ok || bad "gh called beyond today's: $x"
+fresh "after a merge (#521): the task's finished sessions found by the worktree their kept brief names, any id; those with a run row removed, the rest named"
+export CLAUDE_CONFIG_DIR="$tmp/cfg"; kb="$tmp/cfg/coordinator/briefs"; mkdir -p "$kb" "$tmp/cfg/projects/q" coordinator; H82=8282828282828282828282828282828282828282 H83=8383838383838383838383838383838383838383
+printf 'date\ttask\trole\tkind\tmodel\teffort\testimate\ttokens\tcost\tresult\tstart\twall\tactive\twait\testimate_time\n' > coordinator/RUNS.tsv
+s5() { local s="5e550000-0000-4000-8000-0000000000${1#a}" t="2026-11-0${1#b}T10:00:00Z"; sess "$1" "$2" "$3" "$4"; printf '{"sessionId":"%s","type":"assistant","message":{"id":"m%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$s" "$1" "$t" > "$tmp/cfg/projects/q/$s.jsonl"
+  echo "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $qroot/.claude/worktrees/$5. Work only inside it." > "$kb/$s.md"; [ -z "${6:-}" ] || printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> coordinator/RUNS.tsv; }
+{ echo '['; s5 b1 "#ARXVR-12 worker: a" done "$qroot" ARXVR-12-feat row; echo ,; s5 b2 "#12 tester: b" stopped "$qroot" ARXVR-12-feat; echo ,; s5 b3 "#RECEPTION-FLOW worker: c" done "$qroot" reception-flow row; echo ,
+  s5 b4 "#ARXVR-12 worker: d" done "$qroot-other" ARXVR-12-feat row; echo ,; s5 b5 "#ARXVR-12 worker: e" working "$qroot" ARXVR-12-feat row; echo ,; s5 b6 "#ARXVR-12 worker: f" done "$qroot" ARXVR-12-other row; echo; echo ']'; } > "$STUB_D/agents"
+pr 82 $H82 ARXVR-12-feat; pr 83 $H83 reception-flow; echo src/x.ts > "$STUB_D/files-82"; echo src/y.ts > "$STUB_D/files-83"; echo pass > "$STUB_D/checks-$H82"; echo pass > "$STUB_D/checks-$H83"
+run land 82 83 --poll 0; code 0; has "AFTER MERGE #82: removed the finished sessions of this task whose run rows are written: b1 (#ARXVR-12 worker: a)"
+has "AFTER MERGE #82: other finished sessions of task <n> are still listed; claude rm only after the run rows above: claude rm b2 (#12 tester: b)"
+has "AFTER MERGE #83: removed the finished sessions of this task whose run rows are written: b3 (#RECEPTION-FLOW worker: c)"; has "AFTER MERGE #82: the run rows of task <n> (branch ARXVR-12-feat), then runs check"
+for x in b4 b5 b6; do hasnt "$x ("; done; [ "$(grep -c '^rm ' "$STUB_D/claude-rm" 2>/dev/null)" = 2 ] && grep -qx 'rm b1' "$STUB_D/claude-rm" && grep -qx 'rm b3' "$STUB_D/claude-rm" && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm" 2>/dev/null), want b1 and b3"
+touch "$STUB_D/rm-fail"; { echo '['; sess b1 "#ARXVR-12 worker: a" done "$qroot"; echo; echo ']'; } > "$STUB_D/agents"
+pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0; code 0; has "other finished sessions of task <n> are still listed; claude rm only after the run rows above: claude rm b1 (#ARXVR-12 worker: a)"
+rm -f coordinator/RUNS.tsv; rmdir coordinator; unset CLAUDE_CONFIG_DIR
 
 fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
 run land 11 --poll 0; code 0; called "api -X DELETE repos/"; called "/git/refs/heads/11-fix"; has "deleted the remote branch 11-fix"; hasnt "left the fork's branch"; own="$out"

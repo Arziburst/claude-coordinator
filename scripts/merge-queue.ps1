@@ -224,14 +224,23 @@ foreach ($item in $prs) {
   }
   # the merge row of CORE section 4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   $n = if ($branch -match '^([0-9]+)-') { $Matches[1] } else { '<n>' }
-  # the task's finished sessions of this project (tester, fix rounds, a lead's workers: named `#<n> ` or `#<n>.`) still listed, each with its rm; a failing listing or none found: no line (#493)
-  $fin = @(); $root = ($pwd.ProviderPath -replace '\\+', '/').TrimEnd('/')
-  if ($n -ne '<n>') { try { $ls = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"
-    if ($LASTEXITCODE -eq 0) { $js = $ls | ConvertFrom-Json; foreach ($s in @($js | ForEach-Object { $_ })) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"
-      if ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n.")) -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase))) { $fin += "claude rm $($s.id) ($nm)" } } } } catch { $fin = @() } }
+  # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
+  # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
+  # their rm; a failing listing or none found: no line
+  $fin = @(); $rmd = @(); $ms = $null; $root = ($pwd.ProviderPath -replace '\\+', '/').TrimEnd('/')
+  $bd = "$(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' })/coordinator/briefs"
+  try { $ls = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"
+    if ($LASTEXITCODE -eq 0) { $js = $ls | ConvertFrom-Json; foreach ($s in @($js | ForEach-Object { $_ })) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"; $kb = "$bd/$($s.sessionId).md"
+      if (-not ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and -not ($s.PSObject.Properties.Name -contains 'status') -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase)))) { continue }
+      if (Test-Path -LiteralPath $kb -PathType Leaf) { $f1 = "$(@(Get-Content -LiteralPath $kb -TotalCount 1))"; if (-not ($f1.Contains("/$branch. ") -or $f1.Contains("/$branch, "))) { continue } }
+      elseif ($n -eq '<n>' -or -not ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n."))) { continue }
+      if ($null -eq $ms) { $ms = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') check -Log 'coordinator/RUNS.tsv' -Root $root 2>$null } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $ms = @('-') } }
+      $rc = 1; if ($ms[0] -ne '-' -and -not @($ms | Where-Object { $_.StartsWith("MISSING $($s.id) ") }).Count) { $null = & { $ErrorActionPreference = 'Continue'; & claude rm $s.id 2>&1 }; $rc = $LASTEXITCODE }
+      if ($rc -eq 0) { $rmd += "$($s.id) ($nm)" } else { $fin += "claude rm $($s.id) ($nm)" } } } } catch { }
   foreach ($l in @(
     "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
     "the run rows of task $n (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
+    $(if ($rmd.Count) { "removed the finished sessions of this task whose run rows are written: $($rmd -join '; ')" }),
     $(if ($fin.Count) { "other finished sessions of task $n are still listed; claude rm only after the run rows above: $($fin -join '; ')" }),
     "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
     "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv -Task $n -PrJson:- -Append",

@@ -562,6 +562,28 @@ case "$role" in worker|lead|"")
     else echo "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a): $(printf '%s\n' "$fo" | head -n 1)"; fi
   fi ;;
 esac
+# the task's earlier finished sessions (#521): a finished one is listed with its launch folder only (measured), so it is
+# the task's when the brief kept by its sessionId names this worktree, else (no brief kept) by its name `#<id> ` or `#<id>.`;
+# removed only with its run row (runs check), never another project's, a running or waiting one; a failure: one line
+case "$role" in tester|worker|lead) tid="$(printf '%s' "$name" | sed -n 's/^#\([^ .]*\).*/\1/p')"
+  if [ "$dry" = 1 ]; then echo "[dry-run] the task's earlier finished sessions with a run row would be removed (claude rm)"
+  elif ! al="$(claude agents --json --all 2>/dev/null </dev/null)"; then echo "earlier sessions: the listing failed - none removed"
+  else rts="$(cd "$root" && pwd -P; pwd -W 2>/dev/null || true)" ms=""
+    while IFS="$(printf '\t')" read -r xid xsid xcwd xnm; do
+      xc="$(printf '%s' "$xcwd" | sed 's|\\\\*|/|g; s|/*$||')" in=""; [ ! -d "$xc" ] || xc="$(cd "$xc" && pwd -P)"; xc="$(printf '%s' "$xc" | tr 'A-Z' 'a-z')"
+      while IFS= read -r r; do r="$(printf '%s' "$r" | tr 'A-Z' 'a-z')"; case "$xc" in "$r"|"$r"/*) in=1 ;; esac; done <<< "$(printf '%s\n%s' "$root" "$rts")"
+      [ -n "$in" ] || continue
+      if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -F -e "/$branch. " -e "/$branch, " >/dev/null || continue
+      else case "$xnm" in "#$tid "*|"#$tid."*) [ -n "$tid" ] || continue ;; *) continue ;; esac; fi
+      [ -n "$ms" ] || ms="$(bash "$sd/runs.sh" check --log "$rl" --root "$root" 2>&1 </dev/null)" ||
+        { echo "earlier sessions: runs check failed - none removed: $(printf '%s\n' "$ms" | head -n 1)"; break; }
+      if printf '%s\n' "$ms" | grep -F "MISSING $xid " >/dev/null; then echo "earlier session $xid ($xnm) kept: no run row - write it first (scripts/runs add --log $rl --session $xid ..., CORE §7), then claude rm $xid"
+      elif claude rm "$xid" >/dev/null 2>&1 </dev/null; then echo "removed the earlier session $xid ($xnm): finished, its run row written"
+      else echo "earlier session $xid ($xnm): claude rm failed - remove it by hand"; fi
+    done <<< "$(printf '%s' "$al" | tr -d '\r\n' | tr '}' '\n' | awk 'function f(k,  m) { if (!match($0, "\"" k "\": *\"[^\"]*\"")) return ""; m = substr($0, RSTART, RLENGTH); sub(/^[^:]*: *"/, "", m); sub(/"$/, "", m); return m }
+      { s = f("state") } f("id") != "" && (s == "done" || s == "stopped" || s == "failed") && $0 !~ /"status":/ { print f("id") "\t" f("sessionId") "\t" f("cwd") "\t" f("name") }')"
+  fi ;;
+esac
 bgid=""
 if [ "$dry" = 1 ]; then
   [ -z "$lfile" ] || echo "[dry-run] brief through a file: $nchars characters of launch text, over 24000 - it would go to $lfile and the first message would point to it"
