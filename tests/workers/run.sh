@@ -50,8 +50,8 @@ if [ "${1:-}" = --bg ]; then printf 'cwd %s\n' "$(pwd -P)" >> "$STUB_LOG"; print
   printf 'backgrounded · b9%06d · %s\n' "$(wc -l < "$STUB_LOG.names" | tr -d ' ')" "$3"
 fi
 if [ "${1:-}" = agents ]; then
-  [ -z "${STUB_NOLIST:-}" ] || { echo '[]'; exit 0; }
-  [ -z "${STUB_LIST_FAIL:-}" ] || { echo "stub claude: listing failed" >&2; exit 1; }   # #521   # $STUB_NOLIST: the listing never has the started session (#370)
+  [ -z "${STUB_NOLIST:-}" ] || { echo '[]'; exit 0; }   # $STUB_NOLIST: the listing never has the started session (#370)
+  [ -z "${STUB_LIST_FAIL:-}" ] || [ "${3:-}" != --all ] || { echo "stub claude: listing failed" >&2; exit 1; }   # #521: only the --all listing fails
   all=""; case " $* " in *" --all "*) all=1 ;; esac
   a="$(sed 's/\\/\\\\/g; s/"/\\"/g' "$STUB_LOG.names" 2>/dev/null | awk '{ printf "{\"name\":\"%s\",\"sessionId\":\"5e550000-0000-4000-8000-%012d\"}\n", $0, NR }' | paste -sd, -)"
   [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
