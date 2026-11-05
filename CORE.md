@@ -276,7 +276,7 @@ The continuous work:
    toward the preset's parallel workers. One task per worker or lead with a **contract**
    ([CONTRACT.md](CONTRACT.md)); `scripts/check-contract` (.sh / .ps1) must pass before it goes out
    (an ERROR blocks delegation; a WARN is explained in the brief); start-worker runs it on the brief's
-   contract (or `--contract <file>`) and refuses to start on an ERROR.
+   contract (or `--contract <file>`, which a worker or a lead whose brief does not hold it receives in its launch text, #504) and refuses to start on an ERROR.
 3. **Delegate:** model and effort per §7, rigor per §5, **every session named with its role**:
    `#<task> <role>: <title>` (e.g. `#37 worker: Saved carts per account`, `#37 verifier: Saved carts
    per account`, `#37 lead: …` and its `#37.2 worker: …`), `researcher: <topic>`, the coordinator name of `PROJECT.md` (how: TOOLKIT); the role is the role file's
@@ -613,7 +613,8 @@ never assumed (below).
   tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
   <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
   <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
-  and role. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
+  and role. New last columns `own_cost machine fix_now` (#490): a subagent's own reading by `--agent`, never summed; the verifier's
+  line by `--findings`, as it wrote it, nobody re-counts it. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
   done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
   row is written when it is stopped — whose start has no row yet (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
   then — a missed row is seen on the next cycle, not weeks later.

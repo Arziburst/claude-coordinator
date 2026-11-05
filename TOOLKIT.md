@@ -197,8 +197,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
-  are printed, no contract found is one notice line and the start goes on. `--contract` / `-Contract` only
-  checks a contract: the session reads the brief alone, so the contract's text goes into the brief file;
+  are printed, no contract found is one notice line (the session starts without a contract) and the start goes on. A worker's or a lead's `--contract` / `-Contract`
+  whose brief holds no `acceptance:` block ends its launch text and kept brief, whole, one WARN line saying so (#504; past 24 000 characters the file route below). Any other is only checked (the brief file is never changed):
   a `--contract` whose `id:` and `title:` lines are both absent from the brief prints one WARN line saying
   so, and the start goes on (`--dry-run` too; the brief is never changed, #331). A worker whose contract has
   `tests_first: yes` is refused there too (CORE §4 step 3, #276) unless it gets the tester's tests:
@@ -948,7 +948,12 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   sum of the project's spend counts it once. Its output shows as `out>=`, a lower bound: a subagent is
   never stopped, so it gets no `cost-state` record, and its transcript keeps only each answer's output
   count at the answer's start (measured: `out>=158` for a 1,500-word report). Its cost is therefore a
-  lower bound; the number that counts is its parent's, which holds it exactly. The task notification's
+  lower bound in output only: each cache write is priced by the 5-minute / 1-hour split in its own usage
+  (5 minutes at 1.25 times the input price, the rest at `prices.txt`'s write price); the number that counts is its parent's, which holds it exactly. **`runs add --in <parent> --tokens <n> --agent <agentId>`** (#490)
+  writes that reading into the row: tokens, start, wall, active, `own_cost` at `prices.txt` next to the log and `machine`
+  (`macos`, `linux`, `windows`); the cost cell stays `in <parent>`, `own_cost` is never summed; a transcript it cannot read leaves
+  the row as without `--agent`, with a note. `--findings "<the verifier's Fix now line>"` writes `fix_now`. These columns follow
+  the header, else CORE §7's 15, and only when set, so older rows and readers by the header stay as they are. The task notification's
   `subagent_tokens` is the subagent's last context size, not its spend (#232). **Time per run** (CORE §7a): for one session or subagent
   the last line is `time` and, after a tab, `wall=<m>m active=<m>m start=<UTC> end=<UTC>`, from the timestamps of every
   record in the files it counts (the transcript and its subagents', as one set): wall = the last minus
@@ -1222,7 +1227,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
   `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
-  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now, and
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505), and
   `restart` beside the number when the window in force is not the one shown (below).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`

@@ -1700,7 +1700,7 @@ for f in cleanup-worker.sh cleanup-worker.ps1; do
     { echo "FAIL: the header of $f does not document exit code 6 (ASSISTANT KEPT)"; fail=1; }
 done
 
-# --- --contract only checks a contract: the session reads the brief alone (#331) ---
+# --- --contract with its text not in the brief: one WARN line (#331; a worker's or a lead's goes into the launch text, the last section, #504) ---
 # given --contract <file> whose text is not in the brief (its `id:` line and its `title:` line both absent
 # from the brief file): one line holding WARN and --contract (-Contract in the .ps1) says so, and the start
 # goes on - a real start calls claude, a dry run prints the line and creates nothing. With the contract's
@@ -1815,5 +1815,23 @@ expect_watch "$(stub_id)"; printf '%s\n' "$LAST" | grep '^watch:' | grep -q '@12
 check 0 "a lead's dry run: its watch line ends with the name and @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 81-lead --name "#81 lead: D" --dry-run
 expect_watch "#81 lead: D @120"
 
+# --- the contract reaches the session (#504): a worker's or a lead's --contract its brief does not hold (no `acceptance:` block) ends the launch text and the kept brief, whole ---
+c504="$tmp/c504.md"; tfno "$cc/budget-time-ok.md" | sed 's/^  budget\.time in whole.*/  Контракт "в кавычках" 504./' > "$c504"
+c504big="$tmp/c504-big.md"; LC_ALL=C awk '{ print } /^intent:/ { for (i = 1; i <= 1500; i++) print "  Строка контракта " i }' "$c504" > "$c504big"
+kept504() { printf '%s' "$tmp/cfg/coordinator/briefs/5e550000-0000-4000-8000-$(printf '%012d' "$(grep -nxF "$1" "$STUB_LOG.names" | tail -n 1 | cut -d: -f1)").md"; }
+ends504() { [ -f "$2" ] && [ "$(tr -d '\r' < "$2" | tail -n "$(wc -l < "$1" | tr -d ' ')")" = "$(cat "$1")" ] || { echo "FAIL ($3): $2 does not end with the contract, whole"; fail=1; }; }
+once504() { [ "$(tr -d '\r' < "$1" | grep -c '^acceptance:')" = 1 ] || { echo "FAIL ($2): not one acceptance: block in $1"; fail=1; }; }
+rm -f "$STUB_LOG.arg"; check 0 "#504: a worker's --contract, the brief without it" -- start "${F[@]}" --name "#504 worker: A" --branch 504-a --brief-file "$tmp/brief.md" --contract "$c504"
+ends504 "$c504" "$STUB_LOG.arg" "worker, the launch text"; once504 "$STUB_LOG.arg" "worker, the launch text"; ends504 "$c504" "$(kept504 "#504 worker: A")" "worker, the kept brief"; tr -d '\r' < "$STUB_LOG.arg" | grep -q '^Fix the thing\.$' || { echo "FAIL (worker): the brief is gone from the launch text"; fail=1; }
+rm -f "$STUB_LOG.arg"; check 0 "#504: a lead's long --contract goes through a file" -- start "${F[@]}" --name "#504 lead: B" --branch 504-b --brief-file "$tmp/brief.md" --contract "$c504big"
+expect_in "brief through a file"; f504="$(argfile "$(cat "$STUB_LOG.arg")")" || { echo "FAIL (lead): the first message names no file"; fail=1; }
+[ "$(wc -c < "$STUB_LOG.arg")" -lt 2000 ] || { echo "FAIL (lead): the first message is not short"; fail=1; }; ends504 "$c504big" "$f504" "lead, the file"; ends504 "$c504big" "$(kept504 "#504 lead: B")" "lead, the kept brief"
+{ printf 'Do it.\n\n'; cat "$c504"; } > "$tmp/brief-c504.md"; rm -f "$STUB_LOG.arg"
+check 0 "#504: a brief that holds the contract is not doubled" -- start "${F[@]}" --name "#504 worker: C" --branch 504-c --brief-file "$tmp/brief-c504.md" --contract "$c504"
+once504 "$STUB_LOG.arg" "holds it, the launch text"; once504 "$(kept504 "#504 worker: C")" "holds it, the kept brief"
+rm -f "$STUB_LOG.arg"; check 0 "#504: a tester's --contract is only checked" -- start "${F[@]}" --name "#504 tester: D" --branch 504-d --brief-file "$tmp/brief.md" --contract "$c504"
+grep -q '^acceptance:' "$STUB_LOG.arg" && { echo "FAIL (tester): the contract in its launch text"; fail=1; }
+for r in worker lead; do check 0 "#504: a $r with neither a contract in the brief nor --contract" -- start "${F[@]}" --name "#504 $r: E" --branch 504-e --brief-file "$tmp/brief.md" --dry-run
+  [ "$(printf '%s\n' "$LAST" | grep -c 'starts without a contract')" = 1 ] || { echo "FAIL ($r, no contract): not one line naming it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; done
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

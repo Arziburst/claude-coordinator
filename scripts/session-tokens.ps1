@@ -82,7 +82,7 @@ $reUsage = [regex]'"usage":[ \t]*[{]'
 $reTime = [regex]'"timestamp":[ \t]*"([^"]*)"'
 $reId = [regex]'"id":[ \t]*"(msg_[^"]*)"'
 $reModel = [regex]'"model":[ \t]*"([^"]*)"'
-$reNum = @('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens') |
+$reNum = @('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'ephemeral_5m_input_tokens') |
   ForEach-Object { [regex]('"' + $_ + '":[ \t]*([0-9]+)') }
 # the record's own timestamp, outside "message": the first on the line when it comes before "message"
 # (Claude Code 2.1.296 writes it there), else the last; a tool input inside the message may carry
@@ -193,8 +193,8 @@ function CountUsage([string[]]$Files) {
       $id = $g.Groups[1].Value
       $m = 'unknown'; $g = $reModel.Match($line); if ($g.Success) { $m = $g.Groups[1].Value }
       if ($m -ceq '<synthetic>') { continue }   # the CLI's own placeholder messages, all zeros
-      $u = $line.Substring($iu); $v = [long[]]@(0, 0, 0, 0)
-      for ($k = 0; $k -lt 4; $k++) { $g = $reNum[$k].Match($u); if ($g.Success) { $v[$k] = [long]$g.Groups[1].Value } }
+      $u = $line.Substring($iu); $v = [long[]]@(0, 0, 0, 0, 0)
+      for ($k = 0; $k -lt 5; $k++) { $g = $reNum[$k].Match($u); if ($g.Success) { $v[$k] = [long]$g.Groups[1].Value } }
       if (-not $best.ContainsKey($id) -or $v[1] -gt $best[$id].v[1]) { $best[$id] = @{ m = $m; v = $v } }
     }
   }
@@ -207,7 +207,8 @@ function CountUsage([string[]]$Files) {
     # the context bucket (#342), and the cost at the model's line - exact, else the longest prefix of the model
     $c = $b.v[0] + $b.v[2] + $b.v[3]; $i = if ($c -lt 100000) { 1 } elseif ($c -lt 200000) { 2 } elseif ($c -lt 400000) { 3 } elseif ($c -le 700000) { 4 } else { 5 }
     $BN[$i]++; $BT[$i] += $c + $b.v[1]; $q = ''; foreach ($x in $PRICE.Keys) { if ($x -ceq $b.m -or ($b.m.StartsWith($x, $O) -and $x.Length -gt $q.Length)) { $q = $x; if ($x -ceq $b.m) { break } } }
-    if ($q) { $BC[$i] += $b.v[0] * $PRICE[$q][0] + $b.v[1] * $PRICE[$q][1] + $b.v[2] * $PRICE[$q][2] + $b.v[3] * $PRICE[$q][3] } else { $np++ }
+    $x5 = [Math]::Min($b.v[4], $b.v[3])   # a 5-minute write costs 1.25 x input, the rest the 1-hour line
+    if ($q) { $BC[$i] += $b.v[0] * $PRICE[$q][0] + $b.v[1] * $PRICE[$q][1] + $b.v[2] * $PRICE[$q][2] + ($b.v[3] - $x5) * $PRICE[$q][3] + $x5 * $PRICE[$q][0] * 1.25 } else { $np++ }
   }
   $names = [string[]]@($per.Keys); [Array]::Sort($names, [StringComparer]::Ordinal)   # as LC_ALL=C sort
   foreach ($n in $names) { Line $n $per[$n] }

@@ -37,7 +37,9 @@ the owner's word it also files the project's anonymous report for the core's own
    word explains is listed as `unknown result: <value> ×<n>` — fix the log or the habit behind it.
 2. **Read the report** — five axes, this week and the previous one:
    - *cost* (dollars at API list price, CORE §7a *The unit*): tasks, merged tasks, the median cost per
-     task, the total (the tasks' and the coordinator's own lines), the cost per merged task;
+     task, the total (the tasks' and the coordinator's own lines), the cost per merged task; merged (#490):
+     first-parent subjects ending `(#n)` in the project's git log, no `gh`, no fetch (a stale local origin undercounts:
+     fetch first), else the task rows; in the local report the share of tokens at 400k or more and the tokens over the window;
    - *speed*: the medians of time to ready and of work, and — **apart, never mixed into the others** —
      the owner wait (its median, and the tasks still waiting);
    - *quality*: the rework, escalation and failure rates (of the tasks with runs), escaped bugs and per
