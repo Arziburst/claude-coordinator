@@ -818,7 +818,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
   failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (900 s
-  in the workflow, 15 minutes) as a `::warning::`, never a failure. The baseline is the median of the last three
+  in the workflow, 15 minutes) as a `::warning::`, never a failure; a job with 0 steps (GitHub gave it no runner) reads
+  `no runner`, whatever its seconds. The baseline is the median of the last three
   main runs per step and OS (`<os><TAB><seconds><TAB><name>`, a split set's parts a row each), raised only by a pull
   request's own diff: ci-times on three main runs, the new medians in the file. A worker's `ci_seconds` is the number
   ci-times measures on its PR's run (roles/worker.md).

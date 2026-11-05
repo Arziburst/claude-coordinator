@@ -1,0 +1,7 @@
+{"jobs":[
+{"name":"shard-OS (OS-1)","startedAt":"2026-11-04T16:52:10Z","completedAt":"2026-11-04T17:07:12Z","conclusion":"cancelled","status":"completed","steps":[]},
+{"name":"shard-OS (OS-2)","startedAt":"2026-11-04T16:52:10Z","completedAt":"2026-11-04T17:07:12Z","conclusion":"success","status":"completed","steps":[{"name":"A step","status":"completed"}]},
+{"name":"shard-OS (OS-3)","startedAt":"2026-11-04T16:52:10Z","completedAt":"2026-11-04T16:53:50Z","conclusion":"success","status":"completed","steps":[{"name":"A step","status":"completed"}]},
+{"name":"shard-OS (OS-4)","startedAt":"0001-01-01T00:00:00Z","completedAt":"0001-01-01T00:00:00Z","conclusion":"","status":"queued","steps":[]},
+{"name":"shard-other (other-1)","startedAt":"2026-11-04T16:52:10Z","completedAt":"2026-11-04T17:07:12Z","conclusion":"success","status":"completed","steps":[{"name":"A step","status":"completed"}]}
+]}

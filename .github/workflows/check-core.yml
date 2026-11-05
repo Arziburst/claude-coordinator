@@ -378,7 +378,7 @@ jobs:
           # selftest hooks reads the settings files with its awk JSON reader too
           PATH="$nojq" bash tests/selftest/hooks.sh sh
       # #405: the two long guard sets in five parts each (SG_PART=<k>/5: a case's part by its index in cases.txt; the sections
-      # after the cases in part 1, about 200 s more, so its shard holds nothing else), the same body in every part, on five
+      # after the cases in part 1, about 200 s more, so its shard holds less of the rest), the same body in every part, on five
       # shards of their OS
       - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
         if: matrix.shard == 'windows-1' && steps.need.outputs.guard == 'true'
@@ -792,8 +792,8 @@ jobs:
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=ubuntu '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
-          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-ubuntu ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
-            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-ubuntu ")) | select(.completedAt | startswith("0001") | not) | if (.steps | length) == 0 then "\(.name) no runner" else "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))" end' |
+            awk -v lim="$SHARD_LIMIT" '/ no runner$/ { print; next } { s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-ubuntu: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
   check-macos:
     name: check (macos-latest)
@@ -810,8 +810,8 @@ jobs:
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=macos '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
-          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-macos ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
-            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-macos ")) | select(.completedAt | startswith("0001") | not) | if (.steps | length) == 0 then "\(.name) no runner" else "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))" end' |
+            awk -v lim="$SHARD_LIMIT" '/ no runner$/ { print; next } { s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-macos: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
   check-windows:
     name: check (windows-latest)
@@ -828,6 +828,6 @@ jobs:
         run: |
           gh run view "$GITHUB_RUN_ID" --json jobs > "$RUNNER_TEMP/jobs.json" && bash scripts/ci-times.sh --baseline tests/ci-times.tsv "$RUNNER_TEMP/jobs.json" |
             awk -v os=windows '$1 == "wall" || $2 == os { if ($1 == "over") print "::warning::ci-times: " $0; else print }' || echo "::warning::ci-times could not read this run"
-          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-windows ")) | select(.completedAt | startswith("0001") | not) | "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))"' |
-            awk -v lim="$SHARD_LIMIT" '{ s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
+          gh run view "$GITHUB_RUN_ID" --json jobs --jq '.jobs[] | select(.name | startswith("shard-windows ")) | select(.completedAt | startswith("0001") | not) | if (.steps | length) == 0 then "\(.name) no runner" else "\(.name) \((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601))" end' |
+            awk -v lim="$SHARD_LIMIT" '/ no runner$/ { print; next } { s = $NF; sub(/ [0-9]+$/, ""); if (s > lim) print "::warning::" $0 " took " s " s, over the shard limit of " lim; else print $0 " took " s " s" }' || echo "::warning::the shards times could not be read"
           [ "$RESULT" = success ] || { echo "shard-windows: $RESULT - a shard failed, was cancelled or skipped"; exit 1; }
