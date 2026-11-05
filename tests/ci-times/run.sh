@@ -130,6 +130,15 @@ if [ "$kind" = sh ]; then wf="$core/.github/workflows/check-core.yml"; check_wf 
     wm "more than 20 jobs" '/^        shard: \[windows-1/ { sub(/\]/, ", w-a, w-b, w-c, w-d, w-e, w-f, w-g, w-h, w-i, w-j, w-k, w-l, w-m, w-n, w-o, w-p, w-q, w-r, w-s, w-t]") } 1'
     wm "more than 5 macos" '/^        shard: \[macos-1/ { $0 = "        shard: [macos-1, macos-2, macos-3, macos-4, macos-5, macos-6]" } 1'
   fi
+  # #487: each aggregator's own two lines of the workflow over fixture-run-no-runner.json: 0 steps and long, steps over the limit, steps under, no timing, another OS's job
+  if ! command -v jq >/dev/null 2>&1; then if [ -n "${CI:-}" ]; then bad aggregator "no jq in CI"; else echo "SKIP (aggregator) no jq"; fi
+  else for o in ubuntu macos windows; do
+    tr -d '\r' < "$wf" | awk -v j="  check-$o:" '$0 == j { p = 1; next } /^  [a-z]/ { p = 0 } p && /gh run view .* --jq / { print; getline; print }' > "$tmp/agg-$o.sh"
+    sed "s/OS/$o/g" "$here/fixture-run-no-runner.json" > "$tmp/agg.json"
+    got="$(gh() { jq -r "${@: -1}" "$tmp/agg.json" | tr -d '\r'; }; GITHUB_RUN_ID=1; SHARD_LIMIT=900; . "$tmp/agg-$o.sh" 2>&1)"
+    want="shard-$o ($o-1) no runner"$'\n'"::warning::shard-$o ($o-2) took 902 s, over the shard limit of 900"$'\n'"shard-$o ($o-3) took 100 s"
+    [ "$got" = "$want" ] || bad aggregator "$o: got: $got"
+  done; fi
 fi
 pl() { env "$1_PART=$3" "$1_LIST=1" bash "$2" sh </dev/null 2>/dev/null | tr -d '\r'; }   # pl <VAR> <run.sh> <part>: its section lines
 if [ "$kind" = parts ]; then   # #405: nothing lost, not vacuous: the whole set and each part, really run, on this OS and shell; under sh a part alone fails when what it checks is broken
