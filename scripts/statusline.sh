@@ -6,7 +6,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.sh --install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.sh --session-start    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 3
+# statusline-version: 4
 script_version() { tr -d '\r' 2>/dev/null < "$1" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
 if [ "${1:-}" = --install ]; then
   to="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/statusline"; copy="$to/$(basename "$0")"; have="$(script_version "$copy")"
@@ -71,17 +71,20 @@ window_stale() {
 }
 
 # A newer core: upstream's main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
-# itself never waits for the network), against the commit PROJECT.md records. Nothing when anything is missing.
+# itself never waits for the network), against the commit PROJECT.md records. Line 2 of the file: the record it was read
+# against; when that differs (an update) the mark is hidden and the file read again, at most every 10 minutes (#516).
 core_behind() {
-  local file="$dir/core-upstream.txt" sha rec
-  if [ ! -f "$file" ] || [ -z "$(find "$file" -mmin -720 2>/dev/null)" ]; then
+  local file="$dir/core-upstream.txt" sha rec had
+  rec="$(sed -n 's/^| Core (CORE .*commit `\([0-9a-f]\{7,40\}\)`.*/\1/p' "$root/coordinator/PROJECT.md" 2>/dev/null | head -n 1)"
+  had="$(sed -n 2p "$file" 2>/dev/null | tr -d '\r')"
+  if [ ! -f "$file" ] || [ -z "$(find "$file" -mmin -720 2>/dev/null)" ] || { [ "$had" != "$rec" ] && [ -z "$(find "$file" -mmin -10 2>/dev/null)" ]; }; then
     touch "$file"   # one reader at a time
-    ( r="$(git ls-remote "$core_url" refs/heads/main 2>/dev/null)"; [ -z "$r" ] || printf '%s' "$r" > "$file" ) </dev/null >/dev/null 2>&1 &
+    ( r="$(git ls-remote "$core_url" refs/heads/main 2>/dev/null)"; [ -z "$r" ] || printf '%s\n%s' "$r" "$rec" > "$file" ) </dev/null >/dev/null 2>&1 &
   fi
+  [ "$had" = "$rec" ] || return 1
   sha="$(head -n 1 "$file" 2>/dev/null | cut -c1-40)"
   case "$sha" in *[!0-9a-f]*|'') return 1 ;; esac
   [ "${#sha}" = 40 ] || return 1
-  rec="$(sed -n 's/^| Core (CORE .*commit `\([0-9a-f]\{7,40\}\)`.*/\1/p' "$root/coordinator/PROJECT.md" 2>/dev/null | head -n 1)"
   [ -n "$rec" ] || return 1
   case "$sha" in "$rec"*) return 1 ;; esac
   return 0
@@ -178,13 +181,17 @@ line_prog='
         | wave("#\(.n) \($st) \($sp)/\(.budget)$"; $p; 17; (if $whole < 80 then "green" elif $whole <= 100 then "yellow" else "red" end))
       else bar("#\(.n) \($st) \($sp)$"; 100; 17; "neutral") end;
   ((.model.display_name // "Claude") + (if .effort.level then " \(.effort.level)" else "" end)) as $model
+  | (.context_window | if type == "object" and .used_percentage != null then
+       ((.current_usage.input_tokens // 0) + (.current_usage.cache_read_input_tokens // 0) + (.current_usage.cache_creation_input_tokens // 0)) as $u
+       | $lim != "" and $u > ($lim | tonumber) else false end) as $over
   | [ (if $behind == "1" then gradient("core ↑") else empty end),
+      restartmark($over),
       (.context_window | if type == "object" and .used_percentage != null then
          ((.current_usage.input_tokens // 0) + (.current_usage.cache_read_input_tokens // 0) + (.current_usage.cache_creation_input_tokens // 0)) as $u
          | (if $lim != "" then ($lim | tonumber) else (.context_window_size // 0) end) as $t
          | (if $t > 0 then $u * 100 / $t else 0 end) as $p
-         | bar("\($model) · \($u | tok)/\($t | tok) \($p | floor)%"; $p; 34; ($p | level)), restartmark($lim != "" and $u > $t)
-       else $model, restartmark(false) end),
+         | bar("\($model) · \($u | tok)/\($t | tok) \($p | floor)%"; $p; 34; ($p | level))
+       else $model end),
       (.rate_limits.five_hour | if type == "object" and .used_percentage != null then bar("5h limit \(.used_percentage | floor)%"; .used_percentage; 14; (.used_percentage | level)) else empty end),
       (.rate_limits.seven_day | if type == "object" and .used_percentage != null then .used_percentage as $w
          | if (.resets_at | type) == "number" then ((100 - (.resets_at - $now) * 100 / 604800) | if . < 0 then 0 elif . > 100 then 100 else . end) as $g
