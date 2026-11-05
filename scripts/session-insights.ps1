@@ -12,12 +12,12 @@
 # "cache write= read= rewrites=" (a message writing over half its input to the cache, a transcript's first aside);
 # "reread files= reads=" (files the Read tool read 3+ times in one transcript; -Detail adds "reread_file <path> reads=",
 # file names for this machine only); "turns assistant= tool_calls=". One session is its transcript and its subagents'.
-# Before turns (#490): "context tokens= over400k= overwindow= window=" (-Window <n>, default 500000; session-insights.sh's header).
+# Before turns (#490): "context tokens= over400k= overwindow= window=" (-Window <n>, default 1000000; session-insights.sh's header).
 # Last (#342): "origin human= peer= task_notification= system= other= unknown=", the prompts by who started the turn - a user
 # record's top-level turnOrigin (any other value: other; a compact summary never counts); unknown = a user record with none
 # that is no tool result and not isMeta (an old transcript).
 # Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
-param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project, [string]$Window = '500000')
+param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project, [string]$Window = '1000000')
 # this script's output is written as UTF-8, whatever the console's code page; the caller's console gets its own
 # encoding back on every way out (the body runs inside try, the encoding is restored in finally)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }

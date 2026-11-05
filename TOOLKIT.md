@@ -68,11 +68,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   settings examples, the coordinator variant goes in its own settings (one-time step
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
   load it, and it stays silent in a session with a kept brief or working in a worktree (#217).
-  **The compaction window (#421):** the coordinator's is `autoCompactWindow` 500000, or the number in
-  `PROJECT.md` *Settings*, in the project's local `.claude/settings.json` (the one-time step
-  `coordinator-window`). Workers launched from the root load that file too (measured: 500k over the
-  account's 900k), and a number in the worker safety file wins over it, so the step writes there the number
-  workers ran with before.
+  **The compaction window (#421):** the core sets none for the coordinator (#519; 500000 of #421 is
+  removed at the next update): it runs with the account's `autoCompactWindow` or Claude Code's tuned window for the
+  model (1000000 on Haiku, Sonnet and Opus). A number of the project's own in `PROJECT.md` *Settings* is written as
+  `autoCompactWindow` in the project's local `.claude/settings.json` (the one-time step `coordinator-window`). Workers
+  launched from the root load that file too (measured: a project's number over the account's), and a number in the
+  worker safety file wins over it, so the step writes there the number workers ran with before. The retro's and
+  session-insights' `context` line counts over the window in force: that row, else the settings' number, else 1000000.
   **The checkpoint before a compaction (#342):** beside the coordinator's `SessionStart` entry, and only
   there (never a worker's or an assistant's settings), a `PreCompact` entry runs
   `scripts/hooks/before-compact.sh` (Windows `before-compact.ps1`) with a timeout above the listing's
@@ -1229,10 +1231,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   coloured bars with their text inside: `Opus 5.5 high · 837k/1M 83%` against the threshold set (`autoCompactWindow`
   from the project's local settings, the project's, the account's; else the model's window), `5h limit 14%` where
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
-  `Coordinator` also `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
-  `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`: the script never waits for
-  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505), and
-  `restart` beside the number when the window in force is not the one shown (below).
+  `Coordinator`, first `restart` when the window in force is not the one shown (below), then `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
+  `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against: after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
   when its process starts, a start or a `--resume`: a `--bg` session started at 300k, its file edited to 100k, ran to 238k with
@@ -1244,7 +1245,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the record differs from the file, when none is recorded and the project has the entry (it started before the entry, or was `/clear`ed), or past
   100% of a set window: a compaction comes first, or just after one large turn (151k under 100k, measured), which draws the mark until that compaction.
   A session cannot restart itself: the commands are in *Pause and resume*. The check: `/context` in the session
-  shows the window in force, `Tokens: … / 500k` (no model call); for what a new session would take,
+  shows the window in force, `Tokens: … / <window>` (no model call); for what a new session would take,
   `claude -p "/context" --no-session-persistence --output-format json` from the project's root in PowerShell or a macOS / Linux shell
   (in Git Bash with `MSYS_NO_PATHCONV=1`, or MSYS turns `/context` into a path and it goes to the model as a prompt).
   `--autocompact` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` win over the file; `modelSettings` by their own order (measured: user 250k under a project's 300k gives 300k, alone 250k; project 250k over it 250k; local 300k over that 300k); the bar reads none. `/autocompact <n>`

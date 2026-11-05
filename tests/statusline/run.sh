@@ -151,7 +151,7 @@ tasks_reset() { rm -f "$tmp/agents.body" "$tmp/stub/agents.json"; printf 'date\t
 budget() { printf -- '---\nid: %s\nbudget:\n  model: opus\n  cost: 10\n---\n' "$1" > "$root/coordinator/briefs/$1-contract.md"; }
 A=aaaaaaa000000000000000000000000000000000; B=bbbbbbb000000000000000000000000000000000
 core_row() { printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` at claude-coordinator commit `%s`; local edits: none |\n' "$(printf '%s' "$B" | cut -c1-7)" > "$root/coordinator/PROJECT.md"; }
-upstream() { printf '%s\trefs/heads/main' "$1" > "$up"; }
+upstream() { printf '%s\trefs/heads/main\n%s' "$1" "${2-$(printf '%s' "$B" | cut -c1-7)}" > "$up"; }   # line 2: the commit PROJECT.md recorded when the file was read (#516)
 waitfor() { local i=0; while [ $i -lt 20 ]; do grep -q "^$1" "$up" 2>/dev/null && return 0; sleep 1; i=$((i + 1)); done; return 1; }
 stamp() { local s=$(( $(date +%s) - $1 )); if date --version >/dev/null 2>&1; then date -d "@$s" +%Y%m%d%H%M.%S; else date -r "$s" +%Y%m%d%H%M.%S; fi; }
 gitcalls() { grep -c ls-remote "$tmp/stub/git.log" 2>/dev/null; }
@@ -225,6 +225,14 @@ bar_cases() {
     [ "$(gitcalls)" = 2 ] || no "wants a second git ls-remote, got $(gitcalls)"
     draw; is "$L400"
   else no "wants the detached git ls-remote's answer in core-upstream.txt"; fi
+  begin "an update (#516): the core changed since the file was read: no mark at once, read again, and still none when the core is the newest"
+  printf 0 > "$tmp/stub/git.sleep"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$tmp/stub/git.log"; core_row; upstream "$A" 1111111; touch -t "$(stamp 3600)" "$up"
+  draw; is "$L400"; waitfor "$B" || no "wants the file read again after the core changed"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote after the change, got $(gitcalls)"
+  [ "$(sed -n 2p "$up" | tr -d '\r\n')" = "$(printf '%s' "$B" | cut -c1-7)" ] || no "wants line 2 of the file to hold the recorded commit, got '$(sed -n 2p "$up")'"
+  draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants no further read, got $(gitcalls)"
+  begin "an update (#516): the core changed, upstream moved on meanwhile: the mark once the file is read against the new record"
+  printf '%s' "$A" > "$tmp/stub/git.head"; upstream "$A" 1111111; touch -t "$(stamp 3600)" "$up"; draw; is "$L400"; waitfor "$A" || no "wants the file read again"; draw; [ "$(first)" = "core ^" ] || no "wants the mark for a core behind, printed '$(plain)'"
+  begin "the same record, upstream equal: no mark, no read"; upstream "$B"; rm -f "$tmp/stub/git.log"; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"
   begin "the core mark with no PROJECT.md: nothing"; upstream "$A"; rm "$root/coordinator/PROJECT.md"; draw; is "$L400"; core_row
   begin "the wave: a task's fill has lighter cells, it and the core mark move with the clock"; agent w1 "#11 worker: x" working busy "$wt" 7 2026-11-04T11:00:00Z; draw
   u="$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")"; m="$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")"
@@ -238,21 +246,22 @@ bar_cases() {
 
   # The window mark (#499). The hook entry named in the project's settings; the record: <config>/coordinator/windows/<session id>.
   local HOOK='{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash /core/scripts/statusline.sh --session-start"}]}]}}'
-  local WIN="$root/.claude/settings.local.json" R="$cfg/coordinator/windows/t1" LR="$L400 $dot restart"
+  local WIN="$root/.claude/settings.local.json" R="$cfg/coordinator/windows/t1" LR="restart $dot $L400"
   upstream "$B"; rm -f "$root/.claude/settings.json" "$WIN"; rm -rf "$cfg/coordinator/windows"
   L6="$M high $dot 400k/600k 66%"
   begin "the mark: no record and no hook in the project: none, an older core's restart changes nothing"; fx "$C" "$M" high $W400; draw; is "$L400"
   begin "the mark: no record, the hook in the project: the session started before it, beside the number"; printf '%s' "$HOOK" > "$root/.claude/settings.json"; draw; is "$LR"
-  bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; g="$(sed -n 2p "$tmp/bars" | cut -f2)"; [ "$g" = restart ] || no "wants the mark right after the context bar, got '$g'"
+  bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; g="$(sed -n 1p "$tmp/bars" | cut -f2)"; [ "$g" = restart ] || no "wants the mark first, before the context bar, got '$g'"
+  begin "the mark right after core ^ where that shows: restart second, the context bar third"; upstream "$A"; draw; g="$(cut -f2 "$tmp/bars" | head -n 3 | tr '\n' '|')"; [ "$g" = "core ^|restart|$M high . 400k/1M 40%|" ] || no "wants core ^, restart, the context bar, got '$g'"; upstream "$B"
   begin "the hook on a start: the window recorded, prints nothing, no status file; the same window: no mark"; printf '{"autoCompactWindow":600000}' > "$WIN"; rm -f "$cfg/coordinator/statusline.json"
   hk startup t1; [ "$rc" = 0 ] && [ ! -s "$tmp/out" ] || no "wants exit 0 and no output, got $rc '$(cat "$tmp/out")'"; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 600000 ] || no "wants 600000 recorded, got '$(cat "$R" 2>/dev/null)'"
   [ ! -f "$cfg/coordinator/statusline.json" ] || no "wants no statusline.json from the hook"; draw; is "$L6"
-  begin "the file edited: the bar shows the file's number, the mark says restart"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "$M high $dot 400k/800k 50% $dot restart"
-  begin "a compaction and /clear do not record: the mark stays, /clear's new id has no record"; hk compact t1; hk clear t1; draw; is "$M high $dot 400k/800k 50% $dot restart"; hk clear t2; [ ! -f "$cfg/coordinator/windows/t2" ] || no "wants no record on /clear"
+  begin "the file edited: the bar shows the file's number, the mark says restart"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "restart $dot $M high $dot 400k/800k 50%"
+  begin "a compaction and /clear do not record: the mark stays, /clear's new id has no record"; hk compact t1; hk clear t1; draw; is "restart $dot $M high $dot 400k/800k 50%"; hk clear t2; [ ! -f "$cfg/coordinator/windows/t2" ] || no "wants no record on /clear"
   begin "a resume records: the mark goes"; hk resume t1; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 800000 ] || no "wants 800000 recorded on a resume, got '$(cat "$R" 2>/dev/null)'"; draw; is "$M high $dot 400k/800k 50%"
-  begin "the window removed from the file, then none at the start and one added: the mark"; rm "$WIN"; draw; is "$LR"; hk startup t1; [ ! -s "$R" ] || no "wants an empty record with no window set"; draw; is "$L400"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "$M high $dot 400k/800k 50% $dot restart"
-  begin "past 100% with the record equal: the mark; not a coordinator: none, with a differing record too"; printf '{"autoCompactWindow":300000}' > "$WIN"; hk startup t1; draw; is "$M high $dot 400k/300k 133% $dot restart"; fx "#11 worker: x" "$M" high $W400; draw; is "$M high $dot 400k/300k 133%"; printf 1 > "$R"; draw; is "$M high $dot 400k/300k 133%"
-  begin "before the first response: the mark beside the model"; printf '{"session_id":"t1","session_name":"%s","workspace":{"project_dir":"%s"},"model":{"display_name":"%s"},"effort":{"level":"high"}}\n' "$C" "$(jp "$root")" "$M" > "$tmp/in.json"; draw; is "$M high $dot restart"
+  begin "the window removed from the file, then none at the start and one added: the mark"; rm "$WIN"; draw; is "$LR"; hk startup t1; [ ! -s "$R" ] || no "wants an empty record with no window set"; draw; is "$L400"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "restart $dot $M high $dot 400k/800k 50%"
+  begin "past 100% with the record equal: the mark; not a coordinator: none, with a differing record too"; printf '{"autoCompactWindow":300000}' > "$WIN"; hk startup t1; draw; is "restart $dot $M high $dot 400k/300k 133%"; fx "#11 worker: x" "$M" high $W400; draw; is "$M high $dot 400k/300k 133%"; printf 1 > "$R"; draw; is "$M high $dot 400k/300k 133%"
+  begin "before the first response: the mark beside the model"; printf '{"session_id":"t1","session_name":"%s","workspace":{"project_dir":"%s"},"model":{"display_name":"%s"},"effort":{"level":"high"}}\n' "$C" "$(jp "$root")" "$M" > "$tmp/in.json"; draw; is "restart $dot $M high"
   begin "the hook's root: CLAUDE_PROJECT_DIR over a cwd in a subfolder; a session id that is no plain name writes nothing"; printf '{"autoCompactWindow":700000}' > "$WIN"; mkdir -p "$root/sub"; printf '{"session_id":"t3","cwd":"%s","source":"startup"}\n' "$(jp "$root/sub")" > "$tmp/hook.json"; CLAUDE_PROJECT_DIR="$(nat "$root")" hkrun; [ "$(tr -d '\r\n' < "$cfg/coordinator/windows/t3" 2>/dev/null)" = 700000 ] || no "wants 700000 recorded from the project's settings, got '$(cat "$cfg/coordinator/windows/t3" 2>/dev/null)'"; hk startup '../../evil'; [ ! -e "$cfg/evil" ] && [ ! -e "$cfg/coordinator/evil" ] || no "wants nothing written outside the folder"
   begin "the hook removes a record older than 30 days, keeps a newer one"; printf x > "$cfg/coordinator/windows/old"; touch -t "$(stamp 2678400)" "$cfg/coordinator/windows/old"; hk startup t1; [ ! -e "$cfg/coordinator/windows/old" ] || no "wants the old record gone"; [ -e "$cfg/coordinator/windows/t3" ] || no "wants a newer record kept"
   rm -f "$root/.claude/settings.json" "$WIN"

@@ -49,10 +49,10 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    - **Not done yet:** every row of the new core's [ONE-TIME.md](../ONE-TIME.md) with no line in
      `coordinator/CHECKLIST.md` for this project (a `project` row) or this machine (a `machine` row,
      by `hostname`), every row whose newest line is `failed`, and every `done` row that ONE-TIME's *Re-run on a change* says is offered again (the re-run is a condition to read, not a status a list can match). A setting is asked with its default
-     first; a check is offered as "run now? yes/no". `coordinator-window` is neither: one line in this
-     report (`coordinator window 500000 set, in force from the coordinator's next start, workers keep <n>`,
-     the number `PROJECT.md` names where it names one), and the owner's yes to step 4 runs it, as the
-     settings files above when auto mode refuses the edit. When only the PreCompact hook is due, the line names the hook, not the window (the window is not set then); when both are due, it names only the window. `window-mark-hook` likewise, by its own line.
+     first; a check is offered as "run now? yes/no". `coordinator-window` is neither: the core sets no window for the coordinator (#519). A project whose `PROJECT.md` *Settings* names a number of its own (Source `owner`) gets one line in this report
+     (`coordinator window <n> set, in force from the coordinator's next start, workers keep <w>`); a project whose local `.claude/settings.json` holds `autoCompactWindow` 500000 with no number of its own in `PROJECT.md`
+     gets one line for its removal (`coordinator window 500000 removed, in force from the coordinator's next start`): that key only, the window mark's hook
+     kept, a row of 500000 not from the owner reset to `none`. The owner's yes to step 4 runs it, as the settings files above when auto mode refuses the edit. When only the PreCompact hook is due, the line names the hook, not the window (the window is not set then); when both are due, it names only the window. `window-mark-hook` likewise, by its own line.
    - **No `CHECKLIST.md` yet** (a project initialized before it existed): build it first. A step whose
      value `PROJECT.md` or `BINDINGS.md` already holds is listed as *found*, with the file and the line
      it comes from, and confirmed by the owner in one summary; everything else goes into *Not done
@@ -102,5 +102,5 @@ Run only on the owner's command ("update the core", "обнови ядро", any
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
 
-**The update's very end** (only when it set the window, the PreCompact hook or the window mark's hook): the coordinator prints the owner
+**The update's very end** (only when it set or removed the window, the PreCompact hook or the window mark's hook): the coordinator prints the owner
 the commands of TOOLKIT *Pause and resume*, as RESET.md step 6 does; a session cannot restart itself. For a foreground coordinator that is `/exit`, then `claude --resume <its session id>` from the project's root; RESET.md's "NEW session, never --resume" is for a reset only.

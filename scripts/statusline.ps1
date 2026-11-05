@@ -5,7 +5,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.ps1 -Install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.ps1 -SessionStart    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 3
+# statusline-version: 4
 param([switch]$Install, [switch]$SessionStart)
 $ErrorActionPreference = 'SilentlyContinue'
 function Get-ScriptVersion([string]$f) {
@@ -148,25 +148,28 @@ function Format-Gradient([string]$text) {
 }
 
 # A newer core: upstream's main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
-# itself never waits for the network), against the commit PROJECT.md records. Nothing when anything is missing.
+# itself never waits for the network), against the commit PROJECT.md records. Line 2 of the file: the record it was read
+# against; when that differs (an update) the mark is hidden and the file read again, at most every 10 minutes (#516).
 function Test-CoreBehind {
 	$file = Join-Path $dir 'core-upstream.txt'
 	$item = Get-Item -LiteralPath $file
-	if (-not $item -or $item.LastWriteTime -lt (Get-Date).AddHours(-12)) {
+	$row = Select-String -LiteralPath (Join-Path $root 'coordinator/PROJECT.md') -Pattern '^\| Core \(CORE .*commit `([0-9a-f]{7,40})`' -ErrorAction SilentlyContinue | Select-Object -First 1
+	$rec = if ($row) { $row.Matches[0].Groups[1].Value } else { '' }
+	$lines = if ($item) { @((Get-Content -LiteralPath $file -Raw) -split "`r?`n") } else { @() }
+	$had = if ($lines.Count -gt 1) { $lines[1] } else { '' }
+	if (-not $item -or $item.LastWriteTime -lt (Get-Date).AddHours(-12) -or ($had -ne $rec -and $item.LastWriteTime -lt (Get-Date).AddMinutes(-10))) {
 		[IO.File]::AppendAllText($file, ''); [IO.File]::SetLastWriteTime($file, (Get-Date))   # one reader at a time
 		$q = $file -replace "'", "''"
-		$cmd = "`$r = git ls-remote $coreUrl refs/heads/main; if (`$r) { Set-Content -LiteralPath '$q' -Value `$r -NoNewline -Encoding ascii }"
+		$cmd = "`$r = git ls-remote $coreUrl refs/heads/main; if (`$r) { Set-Content -LiteralPath '$q' -Value (`$r + [char]10 + '$rec') -NoNewline -Encoding ascii }"
 		$code = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
 		$exe = (Get-Process -Id $PID).Path
 		if ($env:OS -eq 'Windows_NT') { Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $code) }
 		else { & sh -c "'$exe' -NoProfile -EncodedCommand $code </dev/null >/dev/null 2>&1 &" }
 	}
+	if ($had -ne $rec -or -not $rec) { return $false }
 	$head = (Get-Content -LiteralPath $file -Raw)
 	if ($head -notmatch '^([0-9a-f]{40})') { return $false }
-	$head = $Matches[1]
-	$row = Select-String -LiteralPath (Join-Path $root 'coordinator/PROJECT.md') -Pattern '^\| Core \(CORE .*commit `([0-9a-f]{7,40})`' | Select-Object -First 1
-	if (-not $row) { return $false }
-	return -not $head.StartsWith($row.Matches[0].Groups[1].Value)
+	return -not $Matches[1].StartsWith($rec)
 }
 
 $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
@@ -185,10 +188,10 @@ if ($cw -and $null -ne $cw.used_percentage) {
 	$used = [double]$u.input_tokens + [double]$u.cache_read_input_tokens + [double]$u.cache_creation_input_tokens
 	$limit = if ($set -gt 0) { $set } else { [double]$cw.context_window_size }
 	$pct = if ($limit -gt 0) { $used * 100 / $limit } else { 0 }
-	$parts += Format-Bar ('{0} {1} {2}/{3} {4}%' -f $model, [char]0x00B7, (Format-Tokens $used), (Format-Tokens $limit), [math]::Floor($pct)) $pct 34 (Get-LevelColour $pct)   # 34 holds the longest: Sonnet 5.5 medium, three-digit tokens, three-digit percent
 	if ($isCoordinator -and $root -and $set -gt 0 -and $used -gt $limit) { $restart = $true }
-} else { $parts += $model }
-if ($restart) { $parts += Format-Gradient 'restart' }
+	if ($restart) { $parts += Format-Gradient 'restart' }
+	$parts += Format-Bar ('{0} {1} {2}/{3} {4}%' -f $model, [char]0x00B7, (Format-Tokens $used), (Format-Tokens $limit), [math]::Floor($pct)) $pct 34 (Get-LevelColour $pct)   # 34 holds the longest: Sonnet 5.5 medium, three-digit tokens, three-digit percent
+} else { if ($restart) { $parts += Format-Gradient 'restart' }; $parts += $model }
 
 $rl = $j.rate_limits
 # The 5-hour limit only where Claude Code passes it (a plan with one): by its level.

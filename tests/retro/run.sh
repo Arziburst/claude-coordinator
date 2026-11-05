@@ -307,10 +307,13 @@ expect "merged: a folder inside a repository is no source" 0 any - -- "$runs" --
 grep -q "^cost	merged	$rows	" "$tmp/out" || bad "a subfolder: $(grep '^cost	merged' "$tmp/out")"
 expect "merged: no such subject in either week is no source" 0 any - -- "$runs" --week 2026-08-05 --project "$(winpath "$g")" --no-insights
 grep -q '^cost	merged	0	0$' "$tmp/out" || bad "no subject: $(grep '^cost	merged' "$tmp/out")"
-# #490: spend by context size, the local report only: the share of tokens at 400k or more, the tokens over the window (the PROJECT.md row, else 500000)
+# #490: spend by context size, the local report only: the share of tokens at 400k or more, the tokens over the window (the PROJECT.md row, else the settings' number, else Claude Code's 1000000)
 cp -R "$here/claude" "$tmp/cfg490"; cp "$here/context490.jsonl" "$tmp/cfg490/projects/C--work-acme-shop/"; cfg="$(winpath "$tmp/cfg490")"
 expect "context size, week against week, by the default window" 0 any - -- "$runs" --week 2026-10-07 --project "$P"
-grep -q '^cost	context_share_over_400k	72%	98%$' "$tmp/out" && grep -q '^cost	context_tokens_over_window	600000	600000$' "$tmp/out" || bad "context lines: $(grep context_ "$tmp/out")"
+grep -q '^cost	context_share_over_400k	72%	98%$' "$tmp/out" && grep -q '^cost	context_tokens_over_window	0	0$' "$tmp/out" || bad "context lines: $(grep context_ "$tmp/out")"
+printf '{"autoCompactWindow": 250000}\n' > "$tmp/cfg490/settings.json"
+expect "context size: the window from the account's settings" 0 any - -- "$runs" --week 2026-10-07 --project "$P"
+grep -q '^cost	context_tokens_over_window	1350000	600000$' "$tmp/out" || bad "the settings' window: $(grep context_ "$tmp/out")"
 mkdir -p "$tmp/w490"; cp "$here/coordinator/RUNS.tsv" "$tmp/w490/"; printf '| Coordinator window (one-time step `coordinator-window`) | **440000** | owner | 2026-01-01 | 500000 |\n' > "$tmp/w490/PROJECT.md"
 expect "context size: the window from PROJECT.md's row" 0 any - -- "$(winpath "$tmp/w490/RUNS.tsv")" --week 2026-10-07 --project "$P"
 grep -q '^cost	context_tokens_over_window	1050000	600000$' "$tmp/out" || bad "the row's window: $(grep context_ "$tmp/out")"
