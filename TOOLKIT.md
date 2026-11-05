@@ -1242,7 +1242,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the record differs from the file, when none is recorded and the project has the entry (it started before the entry, or was `/clear`ed), or past
   100% of a set window: a compaction comes first, or just after one large turn (151k under 100k, measured), which draws the mark until that compaction.
   A session cannot restart itself: the commands are in *Pause and resume*. The check: `/context` in the session
-  shows the window in force, `Tokens: … / 500k` (no model call); for what a new session would take,
+  shows the window in force, `Tokens: … / <window>` (no model call); for what a new session would take,
   `claude -p "/context" --no-session-persistence --output-format json` from the project's root in PowerShell or a macOS / Linux shell
   (in Git Bash with `MSYS_NO_PATHCONV=1`, or MSYS turns `/context` into a path and it goes to the model as a prompt).
   `--autocompact` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` win over the file; `modelSettings` by their own order (measured: user 250k under a project's 300k gives 300k, alone 250k; project 250k over it 250k; local 300k over that 300k); the bar reads none. `/autocompact <n>`
