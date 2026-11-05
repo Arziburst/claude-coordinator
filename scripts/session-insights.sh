@@ -14,6 +14,7 @@
 #                               title, after the colon, only names it); --project keeps the sessions whose
 #                               first cwd is the folder or inside it (\ read as /, case ignored, C:/x as /c/x);
 #                               several folders joined by | (the root and its worktree roots: root|root-wt)
+#   [--window <n>] the compaction window for the context line (default 500000)
 # One session is its transcript and its subagents'; each transcript is read in order on its own. Lines,
 # tab-separated, one kind per line, no header (nothing at all for a session without messages):
 #   block  <reason>  count=<n> changed=<n> retried=<n> around=<n> stopped=<n>   — per safety-guard reason
@@ -41,6 +42,8 @@
 #          transcript's first message writes its context for the first time and is not one
 #   reread  files=<n> reads=<n>   — files the Read tool read 3+ times in one transcript, and those reads;
 #          --detail adds "reread_file <path> reads=<n>" lines: file names, for this machine only
+#   context  tokens=<n> over400k=<n> overwindow=<n> window=<n>   — (#490) tokens of each message once, context (input +
+#          cache read + cache write) + output: all; of requests with a context of 400000 or more; of requests over the window
 #   turns  assistant=<n> tool_calls=<n>   — distinct messages and tool calls
 #   origin  human=<n> peer=<n> task_notification=<n> system=<n> other=<n> unknown=<n>   — the last line (#342): the
 #          prompts by who started the turn, a user record's top-level turnOrigin (any other value: other; a compact
@@ -48,14 +51,15 @@
 # A result whose call is not in the files read (or before --since) is skipped; so is a line that is no
 # record. Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error.
 set -eu
-usage() { sed -n '2,49s/^# \{0,1\}//p' "$0"; exit 2; }
-arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""
+usage() { sed -n '2,52s/^# \{0,1\}//p' "$0"; exit 2; }
+arg=""; since=""; till=""; mode=one; detail=0; skip=0; proj=""; win=500000
 while [ $# -gt 0 ]; do
   case "$1" in
     --detail) detail=1 ;;
     --since) [ $# -ge 2 ] && [ "$mode" = one ] || usage; mode=since; since="$2"; shift ;;
     --until) [ $# -ge 2 ] && [ -z "$till" ] || usage; till="$2"; shift ;;
     --skip-tests) skip=1 ;;
+    --window) [ $# -ge 2 ] && case "$2" in ''|*[!0-9]*) false ;; esac || usage; win="$2"; shift ;;
     --project) [ $# -ge 2 ] && [ -z "$proj" ] && [ -n "$2" ] || usage; proj="$2"; shift ;;
     -*) usage ;;
     *) [ -z "$arg" ] || usage; arg="$1" ;;
@@ -69,7 +73,7 @@ projects="$cfg/projects"
 
 # the records on stdin, every transcript followed by a line holding only \001
 insights() {
-  SINCE="$since" UNTIL="$till" DETAIL="$detail" LC_ALL=C awk '
+  SINCE="$since" UNTIL="$till" DETAIL="$detail" WIN="$win" LC_ALL=C awk '
     BEGIN { since = substr(ENVIRON["SINCE"], 1, 19); until = substr(ENVIRON["UNTIL"], 1, 19); detail = ENVIRON["DETAIL"] + 0
       MK = "Blocked by safety-guard: "; NO = "\001"; q = sprintf("%c", 39)
       SEP = "[ \t\n\r;&|()<>" q "\"`,=]+" }
@@ -259,6 +263,8 @@ insights() {
       for (id in out) { W += uw[id]; R += ur[id]; if (!(id in first) && uw[id] * 2 > ui[id] + uw[id] + ur[id]) rw++ }
       printf "cache\twrite=%.0f read=%.0f rewrites=%d\n", W, R, rw
       printf "reread\tfiles=%d reads=%d\n", rf, rr
+      for (id in out) { c = ui[id] + ur[id] + uw[id]; x = c + out[id]; CXT += x; if (c >= 400000) CX4 += x; if (c > ENVIRON["WIN"] + 0) CXW += x }
+      printf "context\ttokens=%.0f over400k=%.0f overwindow=%.0f window=%d\n", CXT, CX4, CXW, ENVIRON["WIN"] + 0
       for (i = 1; i <= nd; i++) print DL[i] | "LC_ALL=C sort"
       close("LC_ALL=C sort")
       printf "turns\tassistant=%d tool_calls=%d\n", na, nc

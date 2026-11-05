@@ -93,7 +93,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-02 | Automatic routing | per-kind model and effort learn from the run log | SPEND |
 | F-SPEND-03 | The run log | one line per finished run with tokens, cost, result and time | SPEND |
 | F-SPEND-04 | session-tokens | tokens, cost and time of one session from its transcript, and its requests by context size | SPEND |
-| F-SPEND-05 | Subagent cost | a subagent is read by its agentId and counted once | SPEND |
+| F-SPEND-05 | Subagent cost | a subagent is read by its agentId, its row carries its own cost out of the sum, and it is counted once | SPEND |
 | F-SPEND-06 | Account-wide spend and the ratio | limit percent per dollar from every transcript since a reset | SPEND |
 | F-SPEND-07 | Status files pruned | status files older than 7×24 hours and statusline temp files older than 1 hour are deleted | SPEND |
 | F-SPEND-08 | The status line | model, context and limits drawn and saved per session | SPEND |
@@ -102,7 +102,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-SPEND-11 | A lead's cost order | stop, read the cost, delete the status file, then remove | SPEND |
 | F-SPEND-12 | Task time | work, time to ready and owner wait from transcript timestamps; forecasts leave owner waits out | SPEND |
 | F-SPEND-13 | Session insights | guard blocks, refusals and what followed, tool errors, waits, cache rewrites and rereads from transcripts, the retro's input | SPEND |
-| F-SPEND-14 | The retro | the coordinator measured week against week on cost, speed, quality, predictability and stability; top three proposals; an anonymous summary as the owner chose | SPEND |
+| F-SPEND-14 | The retro | the coordinator measured week against week on cost (merged PRs from the git log, spend by context size), speed, quality, predictability and stability; top three proposals; an anonymous summary as the owner chose | SPEND |
 | F-SPEND-15 | The retro report for the core | on the owner's word, one anonymous fixed-template issue per project-period on how the core served it, numbers by the script, short lines by the coordinator, a checker before filing | SPEND |
 | F-SPEND-16 | A run's row by script | `runs add` writes a run's row from the transcript's numbers with a fixed result word; `runs check` lists finished runs with no row | SPEND |
 | F-STATE-01 | The state repository | `coordinator/` is its own git, hidden from the project's | STATE |

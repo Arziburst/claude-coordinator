@@ -5,6 +5,11 @@
 #                   --effort <e> --estimate <cost|-> --estimate-time <t|-> --result <word> [--date <YYYY-MM-DD>]
 #   scripts/runs.sh add --log <RUNS.tsv> --in <parent> --tokens <n> --task ... --result <word> [--date ...]
 #                   a subagent's row (a tester or verifier run as a subagent): no --session
+#   add ... [--findings "Fix now: blocker=<n> major=<n> minor=<n> nit=<n>"] the verifier's line as written, never re-counted (#490)
+#   add --in ... --agent <agentId>: where its transcript reads, tokens, start, wall, active from it, own_cost at the list prices
+#                   of prices.txt next to the log (never summed: the cost cell stays `in <parent>`), machine macos|linux|windows;
+#                   else the row without them and a note. New last columns own_cost machine fix_now: by the header, else after
+#                   CORE 7's 15, trailing empty ones not written.
 #   scripts/runs.sh check --log <RUNS.tsv> --root <project root> [--self <session id>] [--since <YYYY-MM-DD>]
 #   scripts/runs.sh task --log <RUNS.tsv> --task <id>   read-only (#381, start-worker's gate): one line `<worker rows> <spent>`,
 #                   the worker rows of exactly that id; spent, two decimals, the cost cells' leading numbers of the task's rows (before the first dot)
@@ -38,13 +43,13 @@
 # Exit 0 (check: also when it lists some), 1 as above or when claude agents fails, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
-usage() { sed -n '2,38s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+usage() { sed -n '2,43s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 die() { echo "runs: $2" >&2; exit "$1"; }
 [ $# -ge 1 ] || usage
 cmd="$1"; shift
 case "$cmd" in add|check|task) ;; *) usage ;; esac
 log="" session="" task="" role="" kind="" model="" effort="" est="" estt="" result="" date="" in="" tokens=""
-root="" self="" since=""
+root="" self="" since="" agent="" findings=""
 seen=""
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || usage
@@ -52,7 +57,7 @@ while [ $# -gt 0 ]; do
     --log) log="$2" ;; --session) session="$2" ;; --task) task="$2" ;; --role) role="$2" ;; --kind) kind="$2" ;;
     --model) model="$2" ;; --effort) effort="$2" ;; --estimate) est="$2" ;; --estimate-time) estt="$2" ;;
     --result) result="$2" ;; --date) date="$2" ;; --in) in="$2" ;; --tokens) tokens="$2" ;;
-    --root) root="$2" ;; --self) self="$2" ;; --since) since="$2" ;;
+    --root) root="$2" ;; --self) self="$2" ;; --since) since="$2" ;; --agent) agent="$2" ;; --findings) findings="$2" ;;
     *) usage ;;
   esac
   seen="$seen $1"; shift 2
@@ -83,6 +88,9 @@ if [ "$cmd" = add ]; then
   for o in $seen; do case "$o" in --root|--self|--since) usage ;; esac; done
   [ -n "$task" ] && [ -n "$role" ] && [ -n "$kind" ] && [ -n "$model" ] && [ -n "$effort" ] && [ -n "$est" ] &&
     [ -n "$estt" ] && [ -n "$result" ] || usage
+  [ -z "$agent" ] || [ -n "$in" ] || usage
+  [ -z "$findings" ] || printf '%s\n' "$findings" | grep -Eqx 'Fix now: blocker=[0-9]+ major=[0-9]+ minor=[0-9]+ nit=[0-9]+' ||
+    die 2 "--findings is one line: Fix now: blocker=<n> major=<n> minor=<n> nit=<n>"
   if [ -n "$session" ]; then [ -z "$in$tokens" ] || usage
   else [ -n "$in" ] && [ -n "$tokens" ] || usage
        printf '%s' "$tokens" | grep -Eq '^[0-9]+$' || die 2 "--tokens must be a number: $tokens"; fi
@@ -90,14 +98,14 @@ if [ "$cmd" = add ]; then
     die 2 "result '$result' is not one of: approved done pass 'rework <n>' escalated failed dropped ready"
   [ -n "$date" ] || date="$(date -u +%Y-%m-%d)"
   printf '%s\n' "$date" | grep -Eqx '[0-9]{4}-[0-9]{2}-[0-9]{2}' || die 2 "--date must be YYYY-MM-DD: $date"
-  for v in "$task" "$role" "$kind" "$model" "$effort" "$est" "$estt" "$date" "$in" "$session"; do
+  for v in "$task" "$role" "$kind" "$model" "$effort" "$est" "$estt" "$date" "$in" "$session" "$agent"; do
     case "$v" in *"$TAB"*|*"$CR"*|*'
 '*) die 2 "a cell may not hold a tab or a line break" ;; esac
   done
   canread "$log"
   # opened for appending, nothing written: a read-only file or one held open without sharing fails here
   { : >> "$log"; } 2>/dev/null && [ -w "$log" ] || die 1 "cannot write the run log $log"
-  cost="" start="" wall="" active=""
+  cost="" start="" wall="" active="" own="" machine=""
   if [ -n "$session" ]; then
     st="$(bash "$here/session-tokens.sh" "$session" | tr -d '\r')" || die 1 "no transcript for session $session (session-tokens failed)"
     tokens="$(printf '%s\n' "$st" | awk '$1 == "total" { print $2; exit }')"
@@ -120,16 +128,30 @@ if [ "$cmd" = add ]; then
     [ -n "$cost" ] || echo "runs: session-tokens printed no cost line for $session; the cost cell is left empty" >&2
   else
     cost="in $in"
+    if [ -n "$agent" ]; then
+      pf="$(dirname "$log")/prices.txt"
+      if [ -f "$pf" ]; then st="$(bash "$here/session-tokens.sh" "$agent" --prices "$pf" 2>/dev/null | tr -d '\r')"; else st="$(bash "$here/session-tokens.sh" "$agent" 2>/dev/null | tr -d '\r')"; fi
+      tl="$(printf '%s\n' "$st" | awk '$1 == "time" { print; exit }')"; tk="$(printf '%s\n' "$st" | awk '$1 == "total" { print $2; exit }')"
+      if [ -n "$tl" ] && [ -n "$tk" ]; then
+        tokens="$tk"; kv() { printf '%s\n' "$tl" | awk -v w="$1" '{ for (i = 2; i <= NF; i++) { n = index($i, "="); if (substr($i, 1, n - 1) == w) { v = substr($i, n + 1); sub(/m$/, "", v); print v } } }'; }
+        start="$(kv start)"; wall="$(kv wall)"; active="$(kv active)"
+        case "$(uname -s)" in Darwin) machine=macos ;; Linux) machine=linux ;; *) machine=windows ;; esac
+        own="$(printf '%s\n' "$st" | LC_ALL=C awk '$1 == "context" { for (i = 2; i <= NF; i++) { if ($i ~ /^unpriced=/) u = substr($i, 10) + 0; else if (n = index($i, "/$")) { s += substr($i, n + 2); h = 1 } } }
+          END { if (h && !u) printf "%.4f\n", s + 1e-12 }')"
+      else echo "runs: cannot read the transcript of subagent $agent; its row stays in $in" >&2; fi
+    fi
   fi
   c="$(cols "$log")"
   row="$(printf '%s\n' "date=$date" "task=$task" "role=$role" "kind=$kind" "model=$model" "effort=$effort" "estimate=$est" \
-    "tokens=$tokens" "cost=$cost" "result=$result" "start=$start" "wall=$wall" "active=$active" "wait=" "estimate_time=$estt" |
+    "tokens=$tokens" "cost=$cost" "result=$result" "start=$start" "wall=$wall" "active=$active" "wait=" "estimate_time=$estt" \
+    "own_cost=$own" "machine=$machine" "fix_now=$findings" |
     LC_ALL=C awk -v hd="$c" -v nn="$NAMES" '
     { i = index($0, "="); V[substr($0, 1, i - 1)] = substr($0, i + 1) }
     END { nh = split(hd, h, " "); m = split(nn, d, " "); o = ""
       for (i = 1; i <= nh; i++) { v = ""; if ((h[i] in V) && !(h[i] in u)) { v = V[h[i]]; u[h[i]] = 1 }; o = o (i > 1 ? "\t" : "") v }
       for (i = 1; i <= m; i++) if (!(d[i] in u)) o = o (o == "" && nh == 0 ? "" : "\t") V[d[i]]
-      print o }')"
+      x = split("own_cost machine fix_now", z, " "); t = ""; for (i = 1; i <= x; i++) if (!(z[i] in u)) t = t "\t" V[z[i]]
+      sub(/\t+$/, "", t); print o t }')"
   nl='
 '; [ "$(tr -cd '\r' < "$log" | wc -c | tr -d ' ')" = 0 ] || nl="$CR$nl"   # not grep: Git Bash's drops CRs
   pre=""; if [ -s "$log" ] && [ "$(tail -c 1 "$log" | wc -l | tr -d ' ')" = 0 ]; then pre="$nl"; fi

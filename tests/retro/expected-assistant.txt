@@ -6,6 +6,8 @@ cost	median_per_task	1.68	—
 cost	total	25.78	6.60
 cost	coordinator	4.00	3.00
 cost	assistants	4.50	0.40
+cost	context_share_over_400k	0%	0%
+cost	context_tokens_over_window	0	0
 cost	per_merged_task	3.68	—
 speed	ready_median	58	—
 speed	work_median	18	—

@@ -12,17 +12,20 @@
 # "cache write= read= rewrites=" (a message writing over half its input to the cache, a transcript's first aside);
 # "reread files= reads=" (files the Read tool read 3+ times in one transcript; -Detail adds "reread_file <path> reads=",
 # file names for this machine only); "turns assistant= tool_calls=". One session is its transcript and its subagents'.
+# Before turns (#490): "context tokens= over400k= overwindow= window=" (-Window <n>, default 500000; session-insights.sh's header).
 # Last (#342): "origin human= peer= task_notification= system= other= unknown=", the prompts by who started the turn - a user
 # record's top-level turnOrigin (any other value: other; a compact summary never counts); unknown = a user record with none
 # that is no tool result and not isMeta (an old transcript).
 # Exit 1 when no transcript is found or a prefix is ambiguous, 2 on a usage error. Reads the JSON as text, as the .sh.
-param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project)
+param([string]$Session, [string]$Since, [switch]$Detail, [string]$Until, [switch]$SkipTests, [string]$Project, [string]$Window = '500000')
 # this script's output is written as UTF-8, whatever the console's code page; the caller's console gets its own
 # encoding back on every way out (the body runs inside try, the encoding is restored in finally)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
+if ($Window -cnotmatch '^[0-9]+$') { exit 2 }   # the context line's window (session-insights.sh, #490)
+$Win = [long]$Window
 if ((-not $Session -and -not $Since) -or ($Session -and $Since) -or (-not $Since -and ($Until -or $SkipTests -or $Project))) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 18 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 19 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 $cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }   # Claude Code's override
@@ -352,6 +355,9 @@ function Insights([string[]]$Files) {
   foreach ($id in $usage.Keys) { $v = $usage[$id]; $W += $v.w; $R += $v.r; if (-not $first.Contains($id) -and $v.w * 2 -gt $v.i + $v.w + $v.r) { $rw++ } }
   "cache`twrite={0} read={1} rewrites={2}" -f $W, $R, $rw
   "reread`tfiles={0} reads={1}" -f $S.rf, $S.rr
+  $CT = [long]0; $C4 = [long]0; $CW = [long]0
+  foreach ($id in $usage.Keys) { $v = $usage[$id]; $c = [long]$v.i + $v.r + $v.w; $x = $c + $v.o; $CT += $x; if ($c -ge 400000) { $C4 += $x }; if ($c -gt $Win) { $CW += $x } }
+  "context`ttokens={0} over400k={1} overwindow={2} window={3}" -f $CT, $C4, $CW, $Win
   $lines = $detailLines.ToArray(); [Array]::Sort($lines, [StringComparer]::Ordinal); $lines
   "turns`tassistant={0} tool_calls={1}" -f $S.na, $S.nc
   "origin`thuman={0} peer={1} task_notification={2} system={3} other={4} unknown={5}" -f (Get0 $PO 'human'), (Get0 $PO 'peer'), (Get0 $PO 'task_notification'), (Get0 $PO 'system'), (Get0 $PO 'other'), (Get0 $PO 'unknown')

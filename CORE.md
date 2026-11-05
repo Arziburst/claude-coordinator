@@ -613,7 +613,8 @@ never assumed (below).
   tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
   <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
   <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
-  and role. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
+  and role. New last columns `own_cost machine fix_now` (#490): a subagent's own reading by `--agent`, never summed; the verifier's
+  line by `--findings`, as it wrote it, nobody re-counts it. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
   done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
   row is written when it is stopped — whose start has no row yet (`MISSING …`, else `ALL LOGGED`): run at each sync (§4) and before the retro, each one listed gets its row
   then — a missed row is seen on the next cycle, not weeks later.
