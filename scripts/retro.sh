@@ -32,7 +32,7 @@
 #                   coordinator, assistants (their own spend, apart from total; the local report only),
 #                   per_merged_task (total / merged), context_share_over_400k and context_tokens_over_window (the
 #                   session-insights context line, the local report only; the window: PROJECT.md's row "Coordinator
-#                   window", else 500000). merged (#490): first-parent subjects ending (#n) in the project's git log,
+#                   window", else the settings' autoCompactWindow, else 1000000). merged (#490): first-parent subjects ending (#n) in the project's git log,
 #                   origin's default branch, else HEAD, the root the repository's top, no fetch; none in either
 #                   week or no repository: the task rows with a result `merged`
 #   speed           ready_median, work_median, owner_wait_median (minutes, from the task rows; the owner wait
@@ -534,7 +534,14 @@ fi
 # this machine)
 IW=none; IP=none
 win=""; [ ! -f "$dir/PROJECT.md" ] || win="$(LC_ALL=C awk -F '|' '$2 ~ /^[ \t]*[*]*Coordinator window/ && match($3, /[0-9][0-9][0-9][0-9][0-9]+/) { print substr($3, RSTART, RLENGTH); exit }' "$dir/PROJECT.md")"
-win="${win:-500000}"
+if [ -z "$win" ]; then   # no row: the project's settings, then the account's, else Claude Code's own window (1000000)
+  for f in "$proj/.claude/settings.local.json" "$proj/.claude/settings.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do
+    [ -f "$f" ] || continue
+    win="$(tr -d '\r' < "$f" | LC_ALL=C sed -n 's/.*"autoCompactWindow"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\)[^0-9.].*/\1/p;s/.*"autoCompactWindow"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\)$/\1/p' | head -n 1)"
+    case "$win" in ''|0|*[!0-9]*) win="" ;; *) break ;; esac
+  done
+fi
+win="${win:-1000000}"
 if [ "$noins" = 0 ] && [ "$core" = 1 ]; then
   IW="$(bash "$here/session-insights.sh" --since "${WS}T00:00:00Z" --skip-tests --project "$roots" 2>/dev/null)" || IW=none
 elif [ "$noins" = 0 ]; then

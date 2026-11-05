@@ -64,11 +64,13 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   settings examples, the coordinator variant goes in its own settings (one-time step
   `after-compact-hook`) — the project's `.claude/settings.json` too: workers launched from the root
   load it, and it stays silent in a session with a kept brief or working in a worktree (#217).
-  **The compaction window (#421):** the coordinator's is `autoCompactWindow` 500000, or the number in
-  `PROJECT.md` *Settings*, in the project's local `.claude/settings.json` (the one-time step
-  `coordinator-window`). Workers launched from the root load that file too (measured: 500k over the
-  account's 900k), and a number in the worker safety file wins over it, so the step writes there the number
-  workers ran with before.
+  **The compaction window (#421):** the core sets none for the coordinator (#519; 500000 of #421 is
+  removed at the next update): it runs with the account's `autoCompactWindow` or Claude Code's tuned window for the
+  model (1000000 on Haiku, Sonnet and Opus). A number of the project's own in `PROJECT.md` *Settings* is written as
+  `autoCompactWindow` in the project's local `.claude/settings.json` (the one-time step `coordinator-window`). Workers
+  launched from the root load that file too (measured: a project's number over the account's), and a number in the
+  worker safety file wins over it, so the step writes there the number workers ran with before. The retro's and
+  session-insights' `context` line counts over the window in force: that row, else the settings' number, else 1000000.
   **The checkpoint before a compaction (#342):** beside the coordinator's `SessionStart` entry, and only
   there (never a worker's or an assistant's settings), a `PreCompact` entry runs
   `scripts/hooks/before-compact.sh` (Windows `before-compact.ps1`) with a timeout above the listing's

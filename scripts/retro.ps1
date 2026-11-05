@@ -579,10 +579,18 @@ if ($cdRc -eq 0 -and -not ($cd0 -join '')) {
   if ($CoreReport) { $GMW = PrCount $WS '' } else { $GMW = PrCount $WS $WN; $GMP = PrCount $PS0 $WS }
   if ($GMW + $GMP -eq 0) { $GMW = $null }
 }
-# the context line's window: PROJECT.md's row "Coordinator window", else 500000
-$CtxWin = '500000'; $pmd = Join-Path $dir 'PROJECT.md'
+# the context line's window: PROJECT.md's row "Coordinator window", else the settings' autoCompactWindow (the project's, the account's), else 1000000
+$CtxWin = ''; $pmd = Join-Path $dir 'PROJECT.md'
 if (Test-Path -LiteralPath $pmd -PathType Leaf) { foreach ($line in [IO.File]::ReadAllLines($pmd)) { $cells = $line.Split('|')
   if ($cells.Count -ge 3 -and $cells[1] -cmatch '^[ \t]*[*]*Coordinator window' -and $cells[2] -cmatch '[0-9]{5,}') { $CtxWin = $Matches[0]; break } } }
+if (-not $CtxWin) {
+  $cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+  foreach ($f in @((Join-Path $Project '.claude/settings.local.json'), (Join-Path $Project '.claude/settings.json'), (Join-Path $cfgDir 'settings.json'))) {
+    if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
+    if (([IO.File]::ReadAllText($f)) -cmatch '"autoCompactWindow"\s*:\s*([0-9]+)(?![0-9.])' -and [long]$Matches[1] -gt 0) { $CtxWin = $Matches[1]; break }
+  }
+}
+if (-not $CtxWin) { $CtxWin = '1000000' }
 # the transcripts of each week: session-insights in its own process, as the .sh runs it; none when it fails
 $Ins = @{}
 if (-not $NoInsights -and $CoreReport) {

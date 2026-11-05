@@ -96,10 +96,11 @@ org() { n=$((n + 1)); run "$here/origin" "${@:3}"; [ "$rc" = 0 ] && [ "$(tail -n
 org "origin: each kind; a tool result, a meta line, a tool input and a system record are no prompt" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=1' o1
 org "origin: an old transcript without the field" 'human=0 peer=0 task_notification=0 system=0 other=0 unknown=2' o0
 org "origin: --since sums the transcripts" 'human=1 peer=2 task_notification=1 system=1 other=1 unknown=3' --since 2026-10-01T00:00:00Z
-# #490: one `context` line before origin: all tokens (context + output, each message once), those of requests whose context is 400000 or more, those over the window (--window, default 500000)
+# #490: one `context` line before origin: all tokens (context + output, each message once), those of requests whose context is 400000 or more, those over the window (--window, default 1000000)
 ctx() { n=$((n + 1)); run "$here/context" "${@:3}"; [ "$rc" = 0 ] && [ "$(grep '^context' "$tmp/out")" = "$(printf 'context\t%s' "$2")" ] && [ "$(tail -n 1 "$tmp/out" | cut -f1)" = origin ] && echo "ok   $1" || { bad "$1: want context $2"; sed 's/^/  got: /' "$tmp/out"; }; }
-ctx "context: 400000 counts over 400k; exactly the window is not over it" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' c1
-ctx "context: by the time span too" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' --since 2026-10-01T00:00:00Z --until 2026-10-06T00:00:00Z
+ctx "context: 400000 counts over 400k; exactly the window is not over it" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' c1 --window 500000
+ctx "context: by the time span too" 'tokens=1700041 over400k=1400031 overwindow=500011 window=500000' --since 2026-10-01T00:00:00Z --until 2026-10-06T00:00:00Z --window 500000
+ctx "context: no --window, Claude Code's tuned window of 1000000" 'tokens=1700041 over400k=1400031 overwindow=0 window=1000000' c1
 ctx "context: --window moves only its own sum" 'tokens=1700041 over400k=1400031 overwindow=1000021 window=450000' c1 --window 450000
 expect "--window that is no number is refused" 2 any - -- "$here/context" c1 --window many
 [ "$fail" = 0 ] && echo "session-insights: $n cases passed" || echo "session-insights: failures above ($n cases)"
