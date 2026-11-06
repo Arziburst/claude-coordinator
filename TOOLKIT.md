@@ -671,7 +671,17 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   even after a `cd` into its own worktree; the same `pwsh -File` through the PowerShell tool runs
   (measured, #240). A check that starts PowerShell (a `.ps1`, a project script calling one) goes
   through the PowerShell tool there. The verifier and tester roles list it in `tools:`; where there is
-  no PowerShell tool (macOS, Linux) the name is ignored (measured).
+  no PowerShell tool (macOS, Linux) the name is ignored (measured), and a worker names its `.ps1` checks
+  `not run`: CI's pwsh jobs and the coordinator cover them (#530).
+- **What the isolation refuses in a worktree session** (Claude Code's own, not our guard; measured #530):
+  bash, pwsh or git together with a `$` expansion (`git status; echo rc=$?`: use `&&` / `||` instead of
+  `$?`), shell text handed to bash (`bash -c`, a heredoc into bash: run the command plainly), pwsh from
+  the Bash tool (the PowerShell tool on Windows), any git after a `cd` to the shared checkout (`git -C`
+  your worktree). It runs pipes, `;` and `&&` without `$` (`bash scripts/check-core.sh && echo done`,
+  `| tail -1`), a heredoc into cat, `x=1; echo $x` with no bash or git: no "one plain command per call" rule.
+- **Our guard's two, by design:** a worktree is removed by cleanup-worker or a plain `git worktree
+  remove`, never `--force`; a scratch upstream's branch is not named `main` (the guard and the deny rules
+  block a push to any `main`).
 - **Nothing to install.** `.sh`: bash 3.2 (the macOS default) with POSIX tools as macOS ships them
   (BSD `sed` / `awk` / `find`: no GNU-only flags, no `sed -i`, no `mapfile`, no `\{?`-style regex
   escapes). `.ps1`: Windows PowerShell 5.1 (also runs under PowerShell 7); ASCII source (write `§` as
