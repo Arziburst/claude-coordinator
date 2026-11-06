@@ -1235,8 +1235,8 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   coloured bars with their text inside: `Opus 5.5 high · 837k/1M 83%` against the threshold set (`autoCompactWindow`
   from the project's local settings, the project's, the account's; else the model's window), `5h limit 14%` where
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
-  `Coordinator`, first `restart` when the window in force is not the one shown (below), then `core ↑` when upstream's main differs from the commit `PROJECT.md` records (a detached
-  `git ls-remote` at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against: after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
+  `Coordinator`, first `restart` when the window in force is not the one shown (below), then `core ↑` when upstream's tag `stable` (else its main; main alone where `PROJECT.md`'s *Core source* is `main`, #495) differs from the commit `PROJECT.md` records (one detached
+  `git ls-remote` for both refs at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against: after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
   the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
@@ -1278,6 +1278,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   timer, so a session waiting with no events (a coordinator waiting on its workers) keeps its status
   file fresh.
 - API-key setups have no such data: budget by cost (`--max-budget-usd` on headless jobs) instead.
+
+**The tag `stable` (#495):** the commit the second machine checked; "update the core" and the `core ↑` mark take it when upstream has it, else `main`.
+The core's own coordinator moves it after the second machine's check passes (the sprint end, a checked change of a critical script), from its own checkout:
+`git tag -f stable <checked commit>` then `git push -f origin refs/tags/stable` (a lightweight tag, force-pushed; the first one the owner's word). A project that wants `main` sets its `PROJECT.md` *Settings* row *Core source* to `main` (PROJECT.template.md).
 
 ## Platform notes
 - macOS: the background-session host needs the *Files and Folders* and *Local Network* permissions.

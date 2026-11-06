@@ -6,7 +6,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.sh --install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.sh --session-start    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 4
+# statusline-version: 5
 script_version() { tr -d '\r' 2>/dev/null < "$1" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
 if [ "${1:-}" = --install ]; then
   to="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/statusline"; copy="$to/$(basename "$0")"; have="$(script_version "$copy")"
@@ -70,16 +70,19 @@ window_stale() {
   else cat "$root/.claude/settings.local.json" "$root/.claude/settings.json" 2>/dev/null | grep -Eq 'statusline\.(sh|ps1).*(--session-start|-SessionStart)'; fi
 }
 
-# A newer core: upstream's main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
+# A newer core: upstream's tag stable, else main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
 # itself never waits for the network), against the commit PROJECT.md records. Line 2 of the file: the record it was read
 # against; when that differs (an update) the mark is hidden and the file read again, at most every 10 minutes (#516).
 core_behind() {
-  local file="$dir/core-upstream.txt" sha rec had
+  local file="$dir/core-upstream.txt" sha rec had refs
   rec="$(sed -n 's/^| Core (CORE .*commit `\([0-9a-f]\{7,40\}\)`.*/\1/p' "$root/coordinator/PROJECT.md" 2>/dev/null | head -n 1)"
   had="$(sed -n 2p "$file" 2>/dev/null | tr -d '\r')"
   if [ ! -f "$file" ] || [ -z "$(find "$file" -mmin -720 2>/dev/null)" ] || { [ "$had" != "$rec" ] && [ -z "$(find "$file" -mmin -10 2>/dev/null)" ]; }; then
     touch "$file"   # one reader at a time
-    ( r="$(git ls-remote "$core_url" refs/heads/main 2>/dev/null)"; [ -z "$r" ] || printf '%s\n%s' "$r" "$rec" > "$file" ) </dev/null >/dev/null 2>&1 &
+    refs="refs/heads/main refs/tags/stable"   # the tag stable when upstream has it, else main; a project's row Core source `main`: main (#495)
+    ! grep -q '^| Core source[^|]*| `main` |' "$root/coordinator/PROJECT.md" 2>/dev/null || refs=refs/heads/main
+    ( r="$(git ls-remote "$core_url" $refs 2>/dev/null)"; m="$(printf '%s\n' "$r" | grep 'refs/heads/main$')"; r="$(printf '%s\n' "$r" | grep 'refs/tags/stable$' || printf '%s' "$m")"
+      [ -z "$r" ] || printf '%s\n%s\n%s' "$r" "$rec" "$m" > "$file" ) </dev/null >/dev/null 2>&1 &   # line 3: main's, a core at its head is not behind
   fi
   [ "$had" = "$rec" ] || return 1
   sha="$(head -n 1 "$file" 2>/dev/null | cut -c1-40)"
@@ -87,6 +90,7 @@ core_behind() {
   [ "${#sha}" = 40 ] || return 1
   [ -n "$rec" ] || return 1
   case "$sha" in "$rec"*) return 1 ;; esac
+  case "$(sed -n 3p "$file" 2>/dev/null | cut -c1-40)" in "$rec"*) return 1 ;; esac
   return 0
 }
 

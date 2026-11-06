@@ -249,7 +249,7 @@ through "Coordinator, settings" (#237).
 
 ### 3.4 Set up without asking
 
-- **The core** is always a local copy: clone claude-coordinator to a scratch folder, copy all its files except
+- **The core** is always a local copy: clone claude-coordinator to a scratch folder at the source of UPDATE-CORE step 2 (the tag `stable`, else main), copy all its files except
   `.git/`, `.github/` and `CLAUDE.md` (`tests/` included: the self-test reads it; the core's `CLAUDE.md`
   says "you are the coordinator", and Claude Code loads a nested `CLAUDE.md` into any session that reads
   files there — every worker reading its role) into
