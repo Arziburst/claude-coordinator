@@ -5,7 +5,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.ps1 -Install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.ps1 -SessionStart    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 4
+# statusline-version: 5
 param([switch]$Install, [switch]$SessionStart)
 $ErrorActionPreference = 'SilentlyContinue'
 function Get-ScriptVersion([string]$f) {
@@ -147,7 +147,7 @@ function Format-Gradient([string]$text) {
 	"$out$e[0m"
 }
 
-# A newer core: upstream's main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
+# A newer core: upstream's tag stable, else main, read at most once in 12 hours by a detached git ls-remote into a file (the status line
 # itself never waits for the network), against the commit PROJECT.md records. Line 2 of the file: the record it was read
 # against; when that differs (an update) the mark is hidden and the file read again, at most every 10 minutes (#516).
 function Test-CoreBehind {
@@ -160,7 +160,9 @@ function Test-CoreBehind {
 	if (-not $item -or $item.LastWriteTime -lt (Get-Date).AddHours(-12) -or ($had -ne $rec -and $item.LastWriteTime -lt (Get-Date).AddMinutes(-10))) {
 		[IO.File]::AppendAllText($file, ''); [IO.File]::SetLastWriteTime($file, (Get-Date))   # one reader at a time
 		$q = $file -replace "'", "''"
-		$cmd = "`$r = git ls-remote $coreUrl refs/heads/main; if (`$r) { Set-Content -LiteralPath '$q' -Value (`$r + [char]10 + '$rec') -NoNewline -Encoding ascii }"
+		# the tag stable when upstream has it, else main; a project's row Core source `main`: main (#495)
+		$refs = if (Select-String -LiteralPath (Join-Path $root 'coordinator/PROJECT.md') -Pattern '^\| Core source[^|]*\| `main` \|' -ErrorAction SilentlyContinue) { 'refs/heads/main' } else { 'refs/heads/main refs/tags/stable' }
+		$cmd = "`$r = @(git ls-remote $coreUrl $refs); `$l = @(`$r -match 'refs/tags/stable$') + @(`$r -match 'refs/heads/main$'); if (`$l) { Set-Content -LiteralPath '$q' -Value (`$l[0] + [char]10 + '$rec') -NoNewline -Encoding ascii }"
 		$code = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
 		$exe = (Get-Process -Id $PID).Path
 		if ($env:OS -eq 'Windows_NT') { Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $code) }

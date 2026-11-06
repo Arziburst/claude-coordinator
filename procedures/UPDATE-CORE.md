@@ -6,13 +6,16 @@ Run only on the owner's command ("update the core", "обнови ядро", any
 1. **Which core.** Read the claude-coordinator commit recorded in `PROJECT.md` for `coordinator/core/`.
    No `coordinator/core/` (an older remote core) → the plan is to create it at the latest commit
    (MIGRATE-LAYOUT), shown in the report.
-2. **What changed upstream:** clone claude-coordinator to a scratch folder; the commits and files since
-   the recorded commit. The core is the whole repository except `.git/`, `.github/` and `CLAUDE.md` —
+2. **What changed upstream:** clone claude-coordinator to a scratch folder; **the source** is the tag `stable` (the
+   commit the core's second machine checked, TOOLKIT *Usage*) when the clone has it (`git -C <clone> rev-parse -q --verify
+   refs/tags/stable`), else `main`; a project whose `PROJECT.md` *Settings* row *Core source* is `main` takes `main` (#495).
+   Check out the source's commit; the commits and files since the recorded commit up to it. "The latest commit" in step 1 is that commit. The core is the whole repository except `.git/`, `.github/` and `CLAUDE.md` —
    `tests/` included: the self-test reads it, so a copy without it fails its own checks. `CLAUDE.md`
    never: it tells a session it is the coordinator, and Claude Code loads it into every worker that
    reads the core's roles (`selftest scripts` fails on it). A local copy that still has `examples/`
    (removed upstream) drops it with the update.
 3. **Impact report to the owner, before changing anything:**
+   - its first lines: `source: stable <commit>` or `source: main <commit>` (`main`: no tag upstream, or the project asks for it);
    - per change: what it does and what it changes in this project's work (briefs, review, models, init);
    - every line of `PROJECT.md` / `BINDINGS.md` that now overlaps or disagrees with the new core — the
      project rule still wins, the owner decides whether to keep, adapt or drop it;

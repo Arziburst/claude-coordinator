@@ -30,6 +30,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Usage caps (CORE §9) | `<fill>` | `<fill>` | `<date>` | weekly 90%, short window 95%; over only with permission |
 | State repository: remote, branch, private (CORE §12b) | `<fill>` | `<fill>` | `<date>` | solo: the owner's account · team: the team's organization · local only (lost with the disk); branch `state`; always private; pointer in `CLAUDE.md`: yes / no (never in a client's repository) |
 | Core (CORE §2) | `<fill>` | `<fill>` | `<date>` | a local copy in `coordinator/core/` at claude-coordinator commit `<sha>`; local edits: `<list or none>` |
+| Core source (UPDATE-CORE step 2) | `stable` | default | `<date>` | **`stable`** — the tag `stable` (the commit the core's second machine checked), `main` while upstream has no tag · `main` — upstream's `main` as it stands |
 | Coordinator name (CORE §2) | `<fill>` | `<fill>` | `<date>` | `<Project> Coordinator` — always containing the English word `Coordinator`; the session is started with `claude --name "<name>"` or renamed with `/rename <name>` |
 | Core reports (procedures/CORE-FINDINGS.md) | `<fill>` | `<fill>` | `<date>` | **automatically** · show me each one first (client work) · no — by hand: how the core's own failures reach claude-coordinator |
 | Self-improvement summaries (procedures/RETRO.md) | `<fill>` | `<fill>` | `<date>` | **show me first** (the first week always) · send · only me — whether the retro sends its anonymous summary of numbers to claude-coordinator |

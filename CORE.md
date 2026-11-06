@@ -137,7 +137,7 @@ rule → ask the owner.
    docs (README, CLAUDE.md, contribution guide). The core (this whole repository except `.git/`,
    `.github/` and `CLAUDE.md`) is always a **local copy** in `coordinator/core/` at the claude-coordinator
    commit recorded in `PROJECT.md`, editable for the project. At start compare
-   that commit with upstream (`git ls-remote`); newer → one line to the owner ("the core is behind
+   that commit with upstream (`git ls-remote`: the tag `stable` when upstream has it, else `main`, UPDATE-CORE step 2); newer → one line to the owner ("the core is behind
    upstream; update?"), nothing applied. "Update the core" →
    [procedures/UPDATE-CORE.md](procedures/UPDATE-CORE.md), only on the owner's command. A project
    without `coordinator/core/` (an older remote core) gets one on the owner's yes (MIGRATE-LAYOUT).

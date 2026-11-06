@@ -9,7 +9,8 @@
 #   Install: `statusline.sh --install` / `statusline.ps1 -Install` copies the script itself to
 #     <config>/coordinator/statusline/<its file name>, unless a copy there holds the same or a newer version; exit 0.
 #   Version: a line `# statusline-version: <whole number>` in each script, raised with a change.
-#   Upstream's head: <config>/coordinator/core-upstream.txt, its first 40 characters the sha (the `git ls-remote` line).
+#   Upstream's head: <config>/coordinator/core-upstream.txt, its first 40 characters the sha (the `git ls-remote` line):
+#     the tag stable's when upstream has it, else main's; main's alone when PROJECT.md's row `| Core source ...` holds `main` (#495).
 #   The recorded commit: <project>/coordinator/PROJECT.md, the row `| Core (CORE ...` holding commit `<sha>`, a prefix.
 #   The project: workspace.project_dir of the status JSON. A task's budget: `  cost: <n>` in its briefs/<task>-contract.md, else
 #     (#505) under a `budget:` line in <config>/coordinator/briefs/<sessionId>.md, the first of its sessions in start order that holds one, a `#<task>.<n>` one never.
@@ -135,7 +136,8 @@ printf '#!/usr/bin/env bash\ncat "$STUB_D/agents.json" 2>/dev/null || echo "[]"\
 cat > "$tmp/bin/git" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_D/git.log"
-case "$*" in *ls-remote*) sleep "$(cat "$STUB_D/git.sleep")"; printf '%s\trefs/heads/main\n' "$(cat "$STUB_D/git.head")"; printf x >> "$STUB_D/git.done" ;; esac
+case "$*" in *ls-remote*) sleep "$(cat "$STUB_D/git.sleep")"; case "$*" in *refs/heads/main*) printf '%s\trefs/heads/main\n' "$(cat "$STUB_D/git.head")" ;; esac
+  case "$*" in *refs/tags/stable*) [ ! -f "$STUB_D/git.stable" ] || printf '%s\trefs/tags/stable\n' "$(cat "$STUB_D/git.stable")" ;; esac; printf x >> "$STUB_D/git.done" ;; esac
 EOF
 for s in claude git; do chmod +x "$tmp/bin/$s"; printf '& bash (Join-Path $PSScriptRoot %s) @args\nexit $LASTEXITCODE\n' "$s" > "$tmp/bin/$s.ps1"; printf '@bash "%%~dp0%s" %%*\r\n' "$s" > "$tmp/bin/$s.cmd"; done
 export PATH="$tmp/bin:$PATH"
@@ -233,6 +235,11 @@ bar_cases() {
   begin "an update (#516): the core changed, upstream moved on meanwhile: the mark once the file is read against the new record"
   printf '%s' "$A" > "$tmp/stub/git.head"; upstream "$A" 1111111; touch -t "$(stamp 3600)" "$up"; draw; is "$L400"; waitfor "$A" || no "wants the file read again"; draw; [ "$(first)" = "core ^" ] || no "wants the mark for a core behind, printed '$(plain)'"
   begin "the same record, upstream equal: no mark, no read"; upstream "$B"; rm -f "$tmp/stub/git.log"; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"
+  begin "the tag stable (#495): upstream holds it at the core's commit, main ahead: no mark, one ls-remote for both"; printf '%s' "$B" > "$tmp/stub/git.stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$B" || no "wants stable's commit in the file"
+  draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote, got $(gitcalls)"; grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants the tag asked, got '$(cat "$tmp/stub/git.log")'"
+  begin "the tag stable behind main, the core at main: the mark, against stable"; printf '%s' "$A" > "$tmp/stub/git.stable"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$A" || no "wants stable's commit in the file"; draw; [ "$(first)" = "core ^" ] || no "wants the mark against stable, printed '$(plain)'"
+  begin "a project that asks for main (PROJECT.md row Core source): main, not the tag"; printf '| Core source (CORE \302\2472) | `main` | owner, 2026-11-06 | 2026-11-06 | stable, main |\n' >> "$root/coordinator/PROJECT.md"; rm -f "$up" "$tmp/stub/git.log"; draw; waitfor "$B" || no "wants main's commit in the file"
+  draw; is "$L400"; ! grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants only main asked, got '$(cat "$tmp/stub/git.log")'"; rm -f "$tmp/stub/git.stable"; core_row
   begin "the core mark with no PROJECT.md: nothing"; upstream "$A"; rm "$root/coordinator/PROJECT.md"; draw; is "$L400"; core_row
   begin "the wave: a task's fill has lighter cells, it and the core mark move with the clock"; agent w1 "#11 worker: x" working busy "$wt" 7 2026-11-04T11:00:00Z; draw
   u="$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")"; m="$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")"
