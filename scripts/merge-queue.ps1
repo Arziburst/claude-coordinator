@@ -16,7 +16,7 @@
 # as AFFECTED, then the AFTER MERGE lines: the merge row of CORE section 4's event table, one thing a line with the PR's values, so its duties have
 # a trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
 # not make itself. -Shared: a file the project lets every task append to or regenerate (PROJECT.md
-# *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
+# *Shared files*); a glob, `*` crosses folders, `**/` zero or more (#529). status: each open PR's merge state, the CONFLICTING ones
 # (CI does not run on them) and the pairs of open PRs that change the same files outside -Shared; with
 # -Touches (a task's `touches`: a file, a folder or a glob), the open PRs changing anything under them,
 # as TOUCHES - the conflict foresight before a task (CORE section 4a; start-worker runs it).
@@ -76,14 +76,18 @@ function GhRc([string[]]$a) { $null = & gh @a 2>&1; $LASTEXITCODE }
 function PrView([string]$n) { -split (@(Q @('pr', 'view', $n, '--json', 'state,isDraft,headRefOid,headRefName,baseRefName,isCrossRepository', '--template', $T_PR)) -join ' ') }
 function Behind([string]$x, [string]$y) { "$(@(Q @('api', "repos/{owner}/{repo}/compare/$x...$y", '--template', '{{.behind_by}}')) -join '')" }
 function OpenPrs { Q @('pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,mergeable,mergeStateStatus,headRefName,files', '--template', $T_LIST) }
-function IsShared([string]$f) { foreach ($g in $globs) { if ($f -like $g) { return $true } }; $false }
+# the glob matches the path (-clike, -like with -Ci); each `**/` from $from on: none, or `*/` (one or more folders) (#529)
+function GlobMatch([string]$p, [string]$g, [int]$from = 0, [switch]$Ci) { $i = $g.IndexOf('**/', $from, [StringComparison]::Ordinal)
+  if ($i -lt 0) { if ($Ci) { return ($p -like $g) }; return ($p -clike $g) }
+  $a = $g.Substring(0, $i); $r = $g.Substring($i + 3); (GlobMatch $p ($a + $r) $i -Ci:$Ci) -or (GlobMatch $p ($a + '*/' + $r) ($i + 2) -Ci:$Ci) }
+function IsShared([string]$f) { foreach ($g in $globs) { if (GlobMatch $f $g -Ci) { return $true } }; $false }
 # Meet <a> <b> [all]: the items of a also in b (outside -Shared unless all), joined by ", "
 function Meet([string[]]$a, [string[]]$b, [switch]$All) {
   (@($a | Where-Object { $_ -and ($All -or -not (IsShared $_)) -and ($b -ccontains $_) }) -join ', ')
 }
 # Under <file>: inside one of -Touches - the path itself, a file below it, or a match of it as a glob
 function Under([string]$f) {
-  foreach ($t in $tl) { $b = $t.TrimEnd('/'); if ($f -ceq $b -or $f.StartsWith("$b/", [StringComparison]::Ordinal) -or $f -clike $t) { return $true } }
+  foreach ($t in $tl) { $b = $t.TrimEnd('/'); if ($f -ceq $b -or $f.StartsWith("$b/", [StringComparison]::Ordinal) -or (GlobMatch $f $t)) { return $true } }
   $false
 }
 function PrFiles([string]$l) { @(($l -split "`t") | Select-Object -Skip 4) }
@@ -133,7 +137,7 @@ foreach ($item in $prs) {
     if ($brc -eq 1) {   # which OVER stops (#419, the header); the list unreadable: every OVER stops
       $bimp = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-contract.ps1') -Important 2>&1 } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $bimp = @() }
       $bstop = @(); foreach ($bl in $bover) { $bg = $bl.Substring(0, $bl.LastIndexOf(' '))
-        if (-not $bimp -or @($bimp | Where-Object { $_ -clike $bg -or $bg -clike $_ }).Count) { $bstop += $bl } else { "bounds over, not important: $pr $bl" } }
+        if (-not $bimp -or @($bimp | Where-Object { (GlobMatch $_ $bg) -or (GlobMatch $bg $_) }).Count) { $bstop += $bl } else { "bounds over, not important: $pr $bl" } }
       $bover = $bstop; if (-not $bover) { $brc = 0 } }
     if ($brc -eq 1 -and $okPr -ceq $pr) { "BOUNDS #${pr}: over its bounds ($($bover -join ' ')) - passed on the owner's words: $okW" }
     elseif ($brc -eq 1) { $bover | ForEach-Object { "OVER BOUNDS $pr $_" }; $left += "#$pr (OVER BOUNDS)"; continue }

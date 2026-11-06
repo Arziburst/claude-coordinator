@@ -55,7 +55,7 @@
 # and title and intent as above. A project's own roles/admin.md (no such core file), src/auth/roles.ts,
 # `roles/` alone still warn; a core with no roles/ folder leaves nothing out.
 # Important components (#381): a contract one of whose `touches` items a glob of the list matches (the whole path, `*`
-# the one wildcard, it crosses folders), or a folder item whose path with its slash starts a glob or lies under its wildcard, must carry `bounds:`
+# the one wildcard, it crosses folders; `**/` zero or more folders, #529), or a folder item whose path with its slash starts a glob or lies under its wildcard, must carry `bounds:`
 # (lines `- <glob> <max added lines>`, each a whole number, at least one) and `wall:` (one non-empty line); missing or
 # malformed: one ERROR per field, naming the glob. The list: the defaults below and the row *Important components* of
 # the PROJECT.md two folders above this script's (a space-separated list; adds, never removes; `<fill>` adds nothing).
@@ -160,9 +160,12 @@ prog='
     function gmatch1(g, p,   n, a, i, k) { n = split(g, a, /[*]/); if (n == 1) return g == p; if (a[1] != "" && index(p, a[1]) != 1) return 0; p = substr(p, length(a[1]) + 1)
       for (i = 2; i < n; i++) if (a[i] != "") { k = index(p, a[i]); if (!k) return 0; p = substr(p, k + length(a[i])) }
       return length(p) >= length(a[n]) && substr(p, length(p) - length(a[n]) + 1) == a[n] }
+    # each `**/` from f on: none, or `*/` (one or more folders) (#529)
+    function gmz(g, p, f,   i, a, r) { i = index(substr(g, f + 1), "**/"); if (!i) return gmatch1(g, p); i += f; a = substr(g, 1, i - 1); r = substr(g, i + 3)
+      return gmz(a r, p, i - 1) || gmz(a "*/" r, p, i + 1) }
     function imp(t,   n, it, m, G, i, j, s, k) { gsub(/(^|[ \t\n])#[^\n]*/, " ", t); n = split(t, it, /[,\n]/); m = split(ENVIRON["IMP"], G, " ")
       for (j = 1; j <= m; j++) for (i = 1; i <= n; i++) { s = it[i]; gsub("^[ \t]*(\\[[ \t]*)?(-[ \t]+)?[\"" q "]?|[\"" q "]?[ \t]*\\]?[ \t]*$", "", s)
-        k = index(G[j], "*"); if (s != "" && (gmatch1(G[j], s) || (s ~ /\/$/ && (index(G[j], s) == 1 || (k && substr(s, 1, k - 1) == substr(G[j], 1, k - 1)))))) return G[j] }
+        k = index(G[j], "*"); if (s != "" && (gmz(G[j], s, 0) || (s ~ /\/$/ && (index(G[j], s) == 1 || (k && substr(s, 1, k - 1) == substr(G[j], 1, k - 1)))))) return G[j] }
       return "" }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)

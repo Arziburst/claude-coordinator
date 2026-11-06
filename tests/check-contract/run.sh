@@ -53,7 +53,7 @@
 #   tests/check-contract/run.sh ps pwsh             # check-contract.ps1 (or: ps powershell)
 # Exit 1 if the output or the exit code differs.
 # Important components (#381), the access point: a contract one of whose `touches` items (flow or block list, quotes
-# aside) a glob of the list matches - the whole path from the root, `*` crosses folders - must carry `bounds:` (lines
+# aside) a glob of the list matches - the whole path from the root, `*` crosses folders, `**/` is zero or more folders (#529) - must carry `bounds:` (lines
 # `- <glob> <max added lines>`, each a whole number, at least one; the bounds' globs need not be the important one)
 # and `wall:` (one non-empty line). Missing or malformed: one ERROR per missing or malformed field, its line
 # `<file>: ERROR ...` holding the word `bounds` or `wall` and the important glob; the exit and summary as any ERROR.
@@ -352,7 +352,7 @@ imk i-none3.md 'src/pay/a.sh' ''; iname="a project's glob with no project row"; 
 for d in proj fillp; do
   mkdir -p "$d/coordinator/core/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/coordinator/core/scripts/"
 done
-printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| Work mode | by task | owner | 2026-11-02 | - |\n| **Important components** (CONTRACT.md) | `src/pay/* lib/core/*` | owner | 2026-11-02 | added to the default list |\n' > proj/coordinator/PROJECT.md
+printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| Work mode | by task | owner | 2026-11-02 | - |\n| **Important components** (CONTRACT.md) | `src/pay/* lib/core/* src/i18n/**/*.test.*` | owner | 2026-11-02 | added to the default list |\n' > proj/coordinator/PROJECT.md
 printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| **Important components** (CONTRACT.md) | `<fill>` | `<fill>` | `<date>` | added to the default list |\n' > fillp/coordinator/PROJECT.md
 imk i-p1.md src/pay/a.sh "$W1"; imk i-p2.md lib/core/x.sh "$B1"; imk i-p3.md src/pay/a.sh "$B1$W1"; imk i-p4.md scripts/hooks/x.sh "$W1"
 ccore="$(pwd)/proj/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
@@ -361,6 +361,11 @@ iname="the row adds its second glob"; ierr i-p2.md wall 'lib/core/*'
 iname="a project's glob with both"; inone i-p3.md
 iname="the row removes no default"; ierr i-p4.md bounds 'scripts/hooks/*'
 iname="the row, a file none of the lists holds"; inone i-none1.md
+# a `**/` glob of the row: zero or more folders (#529); `*` alone still needs its slash
+imk i-p5.md src/i18n/x.test.ts "$W1"; imk i-p6.md src/i18n/a/b/x.test.ts "$B1"; imk i-p7.md 'src/i18nx.test.ts, src/i18n/x.spec.ts' ''
+iname="a **/ glob, a file directly in its folder"; ierr i-p5.md bounds 'src/i18n/**/*.test.*'
+iname="a **/ glob, a file two folders down"; ierr i-p6.md wall 'src/i18n/**/*.test.*'
+iname="a **/ glob, near misses"; inone i-p7.md
 ccore="$(pwd)/fillp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hooks/*'
 iname="a row still <fill>: adds nothing"; inone i-none3.md

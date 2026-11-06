@@ -6,6 +6,9 @@
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 function Stop2([string]$m) { $m; exit 2 }
+# the glob matches the path (-clike); each `**/` from $from on: none, or `*/` (one or more folders) (#529)
+function GlobMatch([string]$p, [string]$g, [int]$from = 0) { $i = $g.IndexOf('**/', $from, [StringComparison]::Ordinal); if ($i -lt 0) { return ($p -clike $g) }
+  $a = $g.Substring(0, $i); $r = $g.Substring($i + 3); (GlobMatch $p ($a + $r) $i) -or (GlobMatch $p ($a + '*/' + $r) ($i + 2)) }
 if ($args.Count -ne 2 -or -not "$($args[1])".Contains('...')) { Get-Content -LiteralPath $PSCommandPath -TotalCount 2 | ForEach-Object { [Console]::Error.WriteLine(($_ -creplace '^# ?', '')) }; exit 2 }
 $c = "$($args[0])"; $range = "$($args[1])"; $L = $null
 try { if (Test-Path -LiteralPath $c -PathType Leaf) { $L = @([IO.File]::ReadAllLines((Resolve-Path -LiteralPath $c).Path)) } } catch { }
@@ -27,7 +30,7 @@ $nums = @(& { $ErrorActionPreference = 'Continue'; & git -c core.quotePath=false
 if ($LASTEXITCODE -ne 0) { $top = @(& { $ErrorActionPreference = 'Continue'; & git rev-parse --show-toplevel 2>$null } | ForEach-Object { "$_" }); $top = if ($LASTEXITCODE -eq 0 -and $top.Count) { $top[0] } else { '(none)' }; Stop2 "check-bounds: cannot read $range in the repository ${top}: $($nums | Select-Object -First 1); run it from the project's root" }
 $over = @()
 foreach ($x in $b) { $g = $x[0]; $a = [long]0
-  foreach ($n in $nums) { $f = $n -split "`t", 3; if ($f.Count -lt 3 -or $f[2] -cnotlike $g) { continue }
+  foreach ($n in $nums) { $f = $n -split "`t", 3; if ($f.Count -lt 3 -or -not (GlobMatch ($f[2]) $g)) { continue }
     if ($f[0] -ceq '-') { "binary: $($f[2]) counts as 0" } else { $a += [long]$f[0] } }
   "$g $a/$($x[1])"; if ($a -gt [long]$x[1]) { $over += "check-bounds: OVER $g $a/$($x[1])" } }
 if ($over.Count) { $over; exit 1 }
