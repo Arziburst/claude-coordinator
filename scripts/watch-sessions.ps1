@@ -3,7 +3,7 @@
 # command, it polls `claude agents --json --all` and ends - waking its caller once - only when a listed
 # session stopped, vanished, went quiet or ran long (LONG) without its report.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-sessions.ps1 -List <file> [-Interval <s>]
-#     [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-AgentsTimeout <s>] [-Once]
+#     [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-EmptyMinutes <m>] [-EmptySeconds <s>] [-AgentsTimeout <s>] [-Once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
 # name; blank lines and comments ignored - a comment is a line whose first non-blank `#` is followed by a
 # blank or the line's end (`#12 worker: Fix` is a name); a UTF-8 BOM at its start is not part of the
@@ -23,7 +23,8 @@
 # (-LongMinutes, default 45; -LongSeconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
 #   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
-#   EMPTY: the list file is missing or holds no session (nothing to watch: it does not run)
+#   EMPTY: the list file is missing or holds no session at the start (nothing to watch: it does not run), or it went
+#   empty and stayed so -EmptyMinutes (default 30; -EmptySeconds); one watcher per list, CLAUDE_PID: as watch-sessions.sh says (#471, #528)
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with -Once there is no next poll)
 # -Interval: seconds between polls (default 120). -AgentsTimeout: seconds one claude agents call may
@@ -36,21 +37,22 @@
 # (Windows: it stays in the temp folder, nothing retries; #357). Such a process also inherits the watcher's own stdout and stderr, so a caller
 # that reads the watcher through a pipe waits for it after the watcher ended. It never stops, messages or changes a session.
 param([string]$List, [string]$Interval = '120', [string]$QuietMinutes = '20', [string]$QuietSeconds = '',
-  [string]$LongMinutes = '45', [string]$LongSeconds = '', [string]$AgentsTimeout = '60', [switch]$Once)
+  [string]$LongMinutes = '45', [string]$LongSeconds = '', [string]$EmptyMinutes = '30', [string]$EmptySeconds = '', [string]$AgentsTimeout = '60', [switch]$Once)
 # a name is written as UTF-8, whatever the console's code page; the caller's console gets its own encoding
 # back on every way out (the body runs inside try, the encoding is restored in finally)
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: -List <file> [-Interval <s>] [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-AgentsTimeout <s>] [-Once]'
+$usage = 'usage: -List <file> [-Interval <s>] [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-EmptyMinutes <m>] [-EmptySeconds <s>] [-AgentsTimeout <s>] [-Once]'
 function Usage([string]$m) { [Console]::Error.WriteLine("$m; $usage"); exit 2 }
 if (-not $List) { Usage 'missing -List' }
-foreach ($p in @(@('-Interval', $Interval), @('-QuietMinutes', $QuietMinutes), @('-QuietSeconds', $QuietSeconds), @('-LongMinutes', $LongMinutes), @('-LongSeconds', $LongSeconds), @('-AgentsTimeout', $AgentsTimeout))) {
+foreach ($p in @(@('-Interval', $Interval), @('-QuietMinutes', $QuietMinutes), @('-QuietSeconds', $QuietSeconds), @('-LongMinutes', $LongMinutes), @('-LongSeconds', $LongSeconds), @('-EmptyMinutes', $EmptyMinutes), @('-EmptySeconds', $EmptySeconds), @('-AgentsTimeout', $AgentsTimeout))) {
   if ($p[1] -ne '' -and $p[1] -notmatch '^[0-9]+$') { Usage "$($p[0]) takes a whole number (got $($p[1]))" }
 }
 if ($Interval -eq '') { Usage 'missing value for -Interval' }
 if ($AgentsTimeout -eq '' -or [int64]$AgentsTimeout -le 0) { Usage '-AgentsTimeout must be above 0' }
 $limit = [int64]$QuietMinutes * 60; if ($QuietSeconds -ne '') { $limit = [int64]$QuietSeconds }
 $llimit = [int64]$LongMinutes * 60; if ($LongSeconds -ne '') { $llimit = [int64]$LongSeconds }
+$elimit = [int64]$EmptyMinutes * 60; if ($EmptySeconds -ne '') { $elimit = [int64]$EmptySeconds }
 $t00 = [DateTime]::UtcNow
 
 # Entries: the list file's sessions as @(<own limit in seconds, or -1>, <entry>), the blanks around each
@@ -167,10 +169,21 @@ function Pick($ss, [string]$e) {
   , $line
 }
 
+# Still: ends the watcher, without a line, if a newer one owns the list or its coordinator is gone
+$me = [guid]::NewGuid().ToString(); $of = $null; $seen = $false; $e0 = $null
+function Still { if ($of) { $o = Get-Content -Raw -LiteralPath $of -ErrorAction SilentlyContinue; if ($o -and $o.Trim() -cne $me) { exit 0 } }
+  if ($env:CLAUDE_PID -and -not (Get-Process -Id $env:CLAUDE_PID -ErrorAction SilentlyContinue)) { exit 0 } }
 $fails = 0; $timers = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
 while ($true) {
+  if ($of) { Still }
   $ents = Entries
-  if ($ents.Count -eq 0) { 'EMPTY'; exit 0 }
+  if ($ents.Count -eq 0) { if ($null -eq $e0) { $e0 = [DateTime]::UtcNow }
+    if (-not $seen -or ([DateTime]::UtcNow - $e0).TotalSeconds -ge $elimit) { 'EMPTY'; exit 0 }
+    Start-Sleep -Seconds ([int]$Interval); continue }
+  if (-not $seen -and -not $Once) { $d = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'watch-sessions-own')
+    $of = Join-Path $d ([regex]::Replace([IO.Path]::GetFullPath([IO.Path]::Combine((Get-Location).Path, $List)), '[^A-Za-z0-9]', '-'))
+    try { [void][IO.Directory]::CreateDirectory($d); [IO.File]::WriteAllText($of, $me) } catch { } }
+  $seen = $true; $e0 = $null
   Agents
   if ($rc -ne 0) {
     $fails++
@@ -202,7 +215,7 @@ while ($true) {
     if ($now - $t0 -ge $lim) { $found += "QUIET $id $nm $([Math]::Floor(($now - $t0) / 60))" }
   }
   $timers = $quiet
-  if ($found.Count -gt 0) { $found; exit 0 }
+  if ($found.Count -gt 0) { if ($of) { Still }; $found; exit 0 }
   if ($Once) { exit 0 }
   Start-Sleep -Seconds ([int]$Interval)
 }

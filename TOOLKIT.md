@@ -351,7 +351,10 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1) — a call
   past `--agents-timeout` (default 60 s) is a failed poll: the watcher kills only the listing process
   it started itself (by its own `$!` / process handle), never a process under it or one looked up by
-  name or id — a descendant of a hung listing is left running.
+  name or id — a descendant of a hung listing is left running. A list that goes empty while it runs: it reads
+  the file every poll, without calling claude, and prints `EMPTY` only after `--empty-minutes` (default 30) (#471).
+  **One per list** (#528, measured: a background watcher outlives its coordinator's `claude stop`): with entries, a watcher (not `--once`) writes its token to
+  `<temp>/watch-sessions-own/<the list's full path, all but A-Za-z0-9 as ->`; it ends without a line when another token is there (a newer watcher) or `CLAUDE_PID`'s process is gone. It kills nothing.
   **LONG**, the one line for a session at work: state `working`, its transcript (`<config>/projects/<cwd, all but A-Za-z0-9 as ->/<sessionId>.jsonl`) unchanged for `--long-minutes` (default 45) or its line's `@<n>`, once per stretch; no transcript, no LONG. Look at what it runs, against its brief's limit; a legitimately long command gets `@<n>` in the watch list.
   **States, as measured:** the listing gives `state`, and `status` (`busy` / `idle`) only while the
   session's process lives — a live session between turns is `done` + `idle`, an exited one `done`

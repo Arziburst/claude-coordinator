@@ -314,7 +314,10 @@ The continuous work:
    (`run_in_background`, TOOLKIT *Messages between sessions*); it reads the list on every poll, prints
    nothing while the sessions work, and ends — one wakeup — only with a finding; it is started again
    after it ends (a finding handled, or an `ERROR` once), never a second one beside it, and not at all
-   with the list empty. A
+   with the list empty. One runs per list: a newer watcher of the list ends the older, and one whose
+   coordinator is gone ends by itself, without a line (#528; after a restart: just start it, kill none);
+   an end without a line asks for nothing — another watcher runs, or its coordinator is gone: start no
+   other. A list gone empty keeps it 30 minutes for the next session before its `EMPTY` (#471). A
    subscription (`SendMessage(to: <its name>, notify_when_idle: true)`; for an assistant, the `subscribe:` line start-worker prints)
    stays allowed only for a session no message is expected from: an assistant, or one whose brief names no report
    address (a session the coordinator did not brief, e.g. one the owner started and asked it to watch);
