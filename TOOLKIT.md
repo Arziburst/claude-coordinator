@@ -1281,8 +1281,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
 
 **The tag `stable` (#495):** the commit the second machine checked; "update the core" and the `core ↑` mark take it when upstream has it, else `main`.
 The core's own coordinator moves it after the second machine's check passes (the sprint end, a checked change of a critical script), from its own checkout:
-`git tag -f stable <checked commit>` then `git push -f origin refs/tags/stable` (a lightweight tag, force-pushed; the first one the owner's word).
-A project that wants `main` sets its `PROJECT.md` *Settings* row *Core source* to `main` (PROJECT.template.md).
+`git tag -f stable <checked commit>` then `git push -f origin refs/tags/stable` (a lightweight tag, force-pushed; the first one the owner's word). A project that wants `main` sets its `PROJECT.md` *Settings* row *Core source* to `main` (PROJECT.template.md).
 
 ## Platform notes
 - macOS: the background-session host needs the *Files and Folders* and *Local Network* permissions.
