@@ -21,11 +21,11 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
      `.claude/agents` link stays and keeps working on the new core copy, so a reset and its new init write
      nothing to `~/.claude/agents/`; the files there stay as they are. So do `statusline.json` (per account)
      and `agents/` under `~/.claude/coordinator/`, and other projects' files there.
-   - **New:** `coordinator/` holds only `.git` and `core/`, a clean copy of upstream's main: a reset is
+   - **New:** `coordinator/` holds only `.git` and `core/`, a clean copy of upstream's source (UPDATE-CORE step 2): a reset is
      also a core update, and local edits of the core go with it.
 3. **The project's name, typed by the owner.** The folder's name, exactly; it is what `--confirm` takes.
-4. **Clone upstream's main** to a scratch folder outside `coordinator/`:
-   `git clone --branch main https://github.com/Arziburst/claude-coordinator <scratch>/core`
+4. **Clone upstream's source** (the tag `stable`, else main: UPDATE-CORE step 2) to a scratch folder outside `coordinator/`:
+   `git clone --branch stable https://github.com/Arziburst/claude-coordinator <scratch>/core` (no tag: `--branch main`)
 5. **Run the script** from the project's root (macOS / Linux, then Windows):
    ```
    bash coordinator/core/scripts/reset-coordinator.sh --root . --confirm <name> --core-from <scratch>/core

@@ -162,7 +162,7 @@ function Test-CoreBehind {
 		$q = $file -replace "'", "''"
 		# the tag stable when upstream has it, else main; a project's row Core source `main`: main (#495)
 		$refs = if (Select-String -LiteralPath (Join-Path $root 'coordinator/PROJECT.md') -Pattern '^\| Core source[^|]*\| `main` \|' -ErrorAction SilentlyContinue) { 'refs/heads/main' } else { 'refs/heads/main refs/tags/stable' }
-		$cmd = "`$r = @(git ls-remote $coreUrl $refs); `$l = @(`$r -match 'refs/tags/stable$') + @(`$r -match 'refs/heads/main$'); if (`$l) { Set-Content -LiteralPath '$q' -Value (`$l[0] + [char]10 + '$rec') -NoNewline -Encoding ascii }"
+		$cmd = "`$r = @(git ls-remote $coreUrl $refs); `$m = @(`$r -match 'refs/heads/main$'); `$l = @(`$r -match 'refs/tags/stable$') + `$m; if (`$l) { Set-Content -LiteralPath '$q' -Value (`$l[0] + [char]10 + '$rec' + [char]10 + (`$m + '')[0]) -NoNewline -Encoding ascii }"   # line 3: main's, a core at its head is not behind
 		$code = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
 		$exe = (Get-Process -Id $PID).Path
 		if ($env:OS -eq 'Windows_NT') { Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $code) }
@@ -171,6 +171,7 @@ function Test-CoreBehind {
 	if ($had -ne $rec -or -not $rec) { return $false }
 	$head = (Get-Content -LiteralPath $file -Raw)
 	if ($head -notmatch '^([0-9a-f]{40})') { return $false }
+	if ($lines.Count -gt 2 -and $lines[2].StartsWith($rec)) { return $false }
 	return -not $Matches[1].StartsWith($rec)
 }
 

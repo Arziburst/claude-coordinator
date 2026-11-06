@@ -81,8 +81,8 @@ core_behind() {
     touch "$file"   # one reader at a time
     refs="refs/heads/main refs/tags/stable"   # the tag stable when upstream has it, else main; a project's row Core source `main`: main (#495)
     ! grep -q '^| Core source[^|]*| `main` |' "$root/coordinator/PROJECT.md" 2>/dev/null || refs=refs/heads/main
-    ( r="$(git ls-remote "$core_url" $refs 2>/dev/null)"; r="$(printf '%s\n' "$r" | grep 'refs/tags/stable$' || printf '%s\n' "$r" | grep 'refs/heads/main$')"
-      [ -z "$r" ] || printf '%s\n%s' "$r" "$rec" > "$file" ) </dev/null >/dev/null 2>&1 &
+    ( r="$(git ls-remote "$core_url" $refs 2>/dev/null)"; m="$(printf '%s\n' "$r" | grep 'refs/heads/main$')"; r="$(printf '%s\n' "$r" | grep 'refs/tags/stable$' || printf '%s' "$m")"
+      [ -z "$r" ] || printf '%s\n%s\n%s' "$r" "$rec" "$m" > "$file" ) </dev/null >/dev/null 2>&1 &   # line 3: main's, a core at its head is not behind
   fi
   [ "$had" = "$rec" ] || return 1
   sha="$(head -n 1 "$file" 2>/dev/null | cut -c1-40)"
@@ -90,6 +90,7 @@ core_behind() {
   [ "${#sha}" = 40 ] || return 1
   [ -n "$rec" ] || return 1
   case "$sha" in "$rec"*) return 1 ;; esac
+  case "$(sed -n 3p "$file" 2>/dev/null | cut -c1-40)" in "$rec"*) return 1 ;; esac
   return 0
 }
 
