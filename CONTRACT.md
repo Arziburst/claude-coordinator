@@ -86,6 +86,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   *Important components* matches, or a folder holding one (a project adds, never removes a default).
   check-contract refuses such a contract without them. `bounds:` is lines `- <glob> <max added lines>`, each a
   whole number; a file no bound matches is not limited, and a bound's glob need not be the important one.
+  A glob (bounds, touches, the important list) holds the whole path; `*` crosses folders; `**/` is zero or more folders (#529).
   `wall:` is one line: what really protects this component, and what this change only filters. **How a bound
   is chosen:** the smallest that can hold the criteria. A bound that cannot carry the criteria is the signal
   to ask what wall would hold, never to widen it silently. `scripts/check-bounds <contract> <base>...<head>`

@@ -42,10 +42,10 @@ if (Test-Path -LiteralPath $pf -PathType Leaf) {
     if ((($x[1] -creplace '\(.*', '') -creplace '[*`]', '').Trim() -cne 'Important components') { continue }
     $v = $x[2] -creplace '`', ''; if ($v -notmatch '<') { $Important += @(-split $v) }; break }
 }
-# the first glob of the list a touches item holds: a whole path, `*` the one wildcard; a folder item starting the glob or under its wildcard
+# the first glob of the list a touches item holds: a whole path, `*` the one wildcard, `**/` zero or more folders (#529); a folder item starting the glob or under its wildcard
 function Imp([string]$t) {
   $its = @(($t -creplace '(^|[ \t\n])#[^\n]*', ' ') -split '[,\n]' | ForEach-Object { $_ -creplace ('^[ \t]*(\[[ \t]*)?(-[ \t]+)?["' + "'" + ']?|["' + "'" + ']?[ \t]*\]?[ \t]*\z'), '' } | Where-Object { $_ })
-  foreach ($g in $Important) { $re = '^' + ([regex]::Escape($g) -creplace '\\\*', '.*') + '\z'
+  foreach ($g in $Important) { $re = '^' + ([regex]::Escape($g) -creplace '\\\*\\\*/', '(?:.*/)?' -creplace '\\\*', '.*') + '\z'
     $lit = $g.Substring(0, [Math]::Max(0, $g.IndexOf('*'))); $hasW = $g.Contains('*')
     foreach ($s in $its) { if ($s -cmatch $re -or ($s.EndsWith('/') -and ($g.StartsWith($s, [StringComparison]::Ordinal) -or ($hasW -and $s.StartsWith($lit, [StringComparison]::Ordinal))))) { return $g } } }
   ''

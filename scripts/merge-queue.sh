@@ -16,7 +16,7 @@
 # as AFFECTED, then the AFTER MERGE lines: the merge row of CORE §4's event table, one thing a line with the PR's values, so its duties have a
 # trigger (#242). The queue never resolves a conflict and never merges a commit it was not given or did
 # not make itself. --shared: a file the project lets every task append to or regenerate (PROJECT.md
-# *Shared files*); a glob, `*` crosses folders. status: each open PR's merge state, the CONFLICTING ones
+# *Shared files*); a glob, `*` crosses folders, `**/` zero or more (#529). status: each open PR's merge state, the CONFLICTING ones
 # (CI does not run on them) and the pairs of open PRs that change the same files outside --shared; with
 # --touches (a task's `touches`: a file, a folder or a glob), the open PRs changing anything under them,
 # as TOUCHES - the conflict foresight before a task (CORE §4a; start-worker runs it).
@@ -80,13 +80,16 @@ q() { local out; out="$(gh "$@" 2>&1)" || { printf 'gh %s %s failed%s: %s\n' "$1
 pr_view() { q pr view "$1" --json state,isDraft,headRefOid,headRefName,baseRefName,isCrossRepository --template "$T_PR"; }
 behind() { q api "repos/{owner}/{repo}/compare/$1...$2" --template "{{.behind_by}}"; }
 open_prs() { q pr list --state open --limit 200 --json number,mergeable,mergeStateStatus,headRefName,files --template "$T_LIST"; }
-is_shared() { local g; for g in ${shared[@]+"${shared[@]}"}; do case "$1" in $g) return 0 ;; esac; done; return 1; }
+# globmatch <path> <glob> [<from>]: the glob matches the path; each `**/` from <from> on: none, or `*/` (one or more folders) (#529)
+globmatch() { local f="${3:-0}" r a; r="${2:$f}"; case "$r" in *'**/'*) a="${2:0:$f}${r%%'**/'*}"; r="${r#*'**/'}"
+  globmatch "$1" "$a$r" ${#a} || globmatch "$1" "$a*/$r" $((${#a} + 2)) ;; *) case "$1" in $2) return 0 ;; esac; return 1 ;; esac; }
+is_shared() { local g; for g in ${shared[@]+"${shared[@]}"}; do globmatch "$1" "$g" && return 0; done; return 1; }
 # meet <lines a> <lines b> [all]: the lines of a also in b (outside --shared unless "all"), joined by ", "
 meet() { local f out=""; while IFS= read -r f; do [ -n "$f" ] || continue; [ -z "${3:-}" ] && is_shared "$f" && continue
            printf '%s\n' "$2" | grep -qxF -- "$f" && out="${out:+$out, }$f"; done <<< "$1"; printf '%s' "$out"; }
 # under <file>: inside one of --touches - the path itself, a file below it, or a match of it as a glob
 under() { local t; for t in ${touches[@]+"${touches[@]}"}; do case "$1" in "${t%/}"|"${t%/}"/*) return 0 ;; esac
-            case "$1" in $t) return 0 ;; esac; done; return 1; }
+            globmatch "$1" "$t" && return 0; done; return 1; }
 pr_files() { printf '%s\n' "$1" | cut -f5- | tr '\t' '\n'; }
 
 if [ "$mode" = status ]; then
@@ -136,7 +139,7 @@ for item in "${prs[@]}"; do
     if [ "$brc" = 1 ]; then   # which OVER stops (#419, the header); the list unreadable: every OVER stops
       bimp="$(bash "$(dirname "$0")/check-contract.sh" --important | tr -d '\r')" || bimp=""; bstop=""; bnl=$'\n'
       while IFS= read -r bl; do bg="${bl% *}"; bs=""; [ -n "$bimp" ] || bs=1
-        while IFS= read -r bi; do case "$bi" in $bg) bs=1 ;; esac; case "$bg" in $bi) bs=1 ;; esac; done <<<"$bimp"
+        while IFS= read -r bi; do globmatch "$bi" "$bg" && bs=1; globmatch "$bg" "$bi" && bs=1; done <<<"$bimp"
         if [ -n "$bs" ]; then bstop="$bstop${bstop:+$bnl}$bl"; else echo "bounds over, not important: $pr $bl"; fi; done <<<"$bover"
       bover="$bstop"; [ -n "$bover" ] || brc=0
     fi

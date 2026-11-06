@@ -3,13 +3,16 @@
 #   scripts/check-bounds.sh <contract> <base>...<head>      run from inside the repository
 # The bounds: the lines `- <glob> <max added lines>` under `bounds:` of the contract's block (its front matter, a
 # top-level `contract:`, else the file, as check-contract reads it). A glob holds the whole path from the root, `*`
-# crosses folders, letter case counts. Per bound the added lines of `git diff --numstat --no-renames` of the files it
-# matches (a file in two globs counts in both; a rename by its new path, all its lines added; a file no bound matches
+# crosses folders, `**/` is zero or more folders (#529), letter case counts. Per bound the added lines of
+# `git diff --numstat --no-renames` of the files it matches (a file in two globs counts in both; a rename by its new path, all its lines added; a file no bound matches
 # is not limited): `<glob> <added>/<max>`, a binary file it matches named before it, `binary: <path> counts as 0`.
 # Then `check-bounds: OK`, or one `check-bounds: OVER <glob> <added>/<max>` per bound over. No bound: the one line
 # `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, an unreadable contract or range, a malformed bound
 # (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound).
 usage() { sed -n '2,3s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+# globmatch <path> <glob> [<from>]: the glob matches the path; each `**/` from <from> on: none, or `*/` (one or more folders)
+globmatch() { local f="${3:-0}" r a; r="${2:$f}"; case "$r" in *'**/'*) a="${2:0:$f}${r%%'**/'*}"; r="${r#*'**/'}"
+  globmatch "$1" "$a$r" ${#a} || globmatch "$1" "$a*/$r" $((${#a} + 2)) ;; *) case "$1" in $2) return 0 ;; esac; return 1 ;; esac; }
 [ $# -eq 2 ] || usage
 c="$1" range="$2"; case "$range" in *...*) ;; *) usage ;; esac
 { [ -f "$c" ] && [ -r "$c" ]; } || { echo "check-bounds: cannot read $c"; exit 2; }
@@ -36,7 +39,7 @@ over=""
 while read -r g m; do
   a=0
   while IFS="$(printf '\t')" read -r x _ p; do
-    case "$p" in $g) [ -n "$p" ] || continue; if [ "$x" = - ]; then echo "binary: $p counts as 0"; else a=$((a + x)); fi ;; esac
+    [ -n "$p" ] && globmatch "$p" "$g" || continue; if [ "$x" = - ]; then echo "binary: $p counts as 0"; else a=$((a + x)); fi
   done <<IN
 $nums
 IN
