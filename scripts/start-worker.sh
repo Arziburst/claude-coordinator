@@ -3,7 +3,8 @@
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
-#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--dry-run]
+#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--dry-run]
+# --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <repo>/coordinator/RUNS.tsv.
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -89,7 +90,7 @@
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -112,6 +113,7 @@ while [ $# -gt 0 ]; do
     --tester-tests) need "$@"; ttests="$2"; shift 2 ;;
     --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
     --owner-ok) need "$@"; owok="$2"; shift 2 ;;
+    --runs) need "$@"; runs="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -129,7 +131,7 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--dry-run]" >&2
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--dry-run]" >&2
   [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
@@ -298,7 +300,7 @@ if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
     { printf '%s\n' "$tfv" >&2; echo "refused: check-contract could not read tests_first (CORE §4 step 3)" >&2; exit 1; }
   printf '%s\n' "$tfv" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | grep -Eq '^yes([[:space:],:;(]|$)' && tfyes=1 ;; esac; fi
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
-rl="$root/coordinator/RUNS.tsv" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
+rl="${runs:-$root/coordinator/RUNS.tsv}" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
 [ -z "$cfile" ] || rid="$(bash "$sd/check-contract.sh" --field id "$cfile" 2>/dev/null | tr -d '\r' || true)"
 if [ -n "$asst" ]; then rno="an assistant"
 elif ! case "$crole" in worker|lead|"") true ;; *) false ;; esac; then rno="a $crole"
@@ -536,12 +538,12 @@ fi
 [ -z "$ctmp" ] || { rm -f "$ctmp"; trap - EXIT HUP INT TERM; }
 [ -z "$notice" ] || echo "$notice"
 [ -z "$rolemsg" ] || echo "$rolemsg"
-# conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names - inline
+# conflict foresight (CORE §4a, #242): the open PRs changing what the brief's `touches` names (none: --contract's, #514) - inline
 # `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
 case "$role" in worker|lead|"")
   # a comment needs a blank before it (docs/c#.md is a path); blank and comment lines inside the list are skipped
-  tl="$(tr -d '\r' < "$brief" | awk '
+  tch() { tr -d '\r' < "$1" | awk '
     !on && /^[ \t]*touches:/ { s = $0; sub(/^[ \t]*touches:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/^#.*$/, "", s)
       if (s ~ /^\[/) { sub(/^\[/, "", s); sub(/\].*$/, "", s); print s; exit }
       if (s == "") { on = 1; next }
@@ -549,7 +551,8 @@ case "$role" in worker|lead|"")
     on && /^[ \t]*(#.*)?$/ { next }
     on && /^[ \t]*-[ \t]/ { s = $0; sub(/^[ \t]*-[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); out = out (out == "" ? "" : ",") s; next }
     on { exit }
-    END { if (on) print out }')"
+    END { if (on) print out }'; }
+  tl="$(tch "$brief")"; [ -n "$(printf '%s' "$tl" | tr -d ' ,')" ] || [ -z "$contract" ] || tl="$(tch "$contract")"
   if [ -z "$(printf '%s' "$tl" | tr -d ' ,')" ]; then
     echo "foresight: no touches in the brief - check the open PRs against the task yourself (CORE §4a)"
   else

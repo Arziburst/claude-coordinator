@@ -3,7 +3,8 @@
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
 #       -ReportTo <coordinator session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>]
-#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-DryRun]
+#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-Runs <log>] [-DryRun]
+# -Runs: the run log (as check-contract takes it, #525) for the round gate and the earlier sessions; default <repo>/coordinator/RUNS.tsv.
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -72,7 +73,7 @@
 # coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
-      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '')
+      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '', [string]$Runs = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -97,12 +98,12 @@ if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - i
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
-                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk))) {
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk), @('Runs', $Runs))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
@@ -309,7 +310,7 @@ if ($Contract) {
 }
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
 if (-not "$OwnerOk".Trim()) { $OwnerOk = '' }   # words of blanks only are no words
-$rl = Join-Path $root 'coordinator/RUNS.tsv'; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
+$rl = if ($Runs) { [IO.Path]::Combine((Get-Location).Path, $Runs) } else { Join-Path $root 'coordinator/RUNS.tsv' }; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
 $rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
        elseif (-not (Test-Path -LiteralPath $rl -PathType Leaf)) { 'no run log' } elseif ($gId.Contains('.')) { 'a sub-contract' } else { '' }
 if ($rno) { "round gate: $rno, no gate$okTail" }
@@ -575,13 +576,13 @@ if ($cCopy -and (Test-Path -LiteralPath "$root/coordinator/briefs" -PathType Con
 }
 if ($notice) { $notice }
 if ($roleMsg) { $roleMsg }
-# conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches` names - inline
+# conflict foresight (CORE section 4a, #242): the open PRs changing what the brief's `touches` names (none: -Contract's, #514) - inline
 # `touches: [a, b]` or a block list (`touches:` then one `- a` per line, as check-contract takes it, #258) -,
 # printed for the coordinator, never a stop - for a worker or a lead (gh missing or failing: a notice)
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 $fr = ''; if ($Name -cmatch '^(#\S* )?([a-z]+):') { $fr = $Matches[2] }
 if ($fr -in @('worker', 'lead', '')) {
-  $raw = @(); $bl = $briefText.Replace("`r", '') -split "`n"
+  $tch = { param([string]$text) $raw = @(); $bl = $text.Replace("`r", '') -split "`n"
   for ($i = 0; $i -lt $bl.Count; $i++) {
     if ($bl[$i] -cnotmatch '^[ \t]*touches:') { continue }
     # a comment needs a blank before it (docs/c#.md is a path); blank and comment lines inside the list are skipped
@@ -596,7 +597,8 @@ if ($fr -in @('worker', 'lead', '')) {
     }
     break
   }
-  $tl = @($raw | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ })
+  @($raw | ForEach-Object { $_.Trim().Trim('"', "'").Trim() } | Where-Object { $_ }) }
+  $tl = @(& $tch $briefText); if (-not $tl.Count -and $Contract) { $tl = @(& $tch ([IO.File]::ReadAllText($Contract))) }
   if (-not $tl.Count) {
     "foresight: no touches in the brief - check the open PRs against the task yourself (CORE ${sect}4a)"
   } else {

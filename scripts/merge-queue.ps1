@@ -2,7 +2,8 @@
 # steps, lines and codes; CORE section 4a): parallel work, serial merging - each PR merges main once, when
 # its turn comes, never after every other merge.
 #   powershell -File scripts\merge-queue.ps1 land -Pr <pr>[@<approved sha>],... [-Method squash|merge|rebase]
-#                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-OverBoundsOk <pr>:<the owner's words>] [-DryRun]
+#                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-OverBoundsOk <pr>:<the owner's words>] [-Runs <log>] [-DryRun]
+# -Runs: the run log (as check-contract takes it, #525) the finished sessions are judged by; default coordinator/RUNS.tsv.
 #   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...] [-Touches <path or glob>,...]
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
@@ -30,12 +31,12 @@
 # Exit codes: 0 every PR merged (status: always 0); 1 usage error or gh failed; 3 a PR was left (its line
 # says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads, and `claude agents` once after a merge for the sessions line.
 param([Parameter(Position = 0)][string]$Mode, [string]$Pr, [string]$Method = 'squash', [string]$Shared,
-      [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [string]$OverBoundsOk = '', [switch]$DryRun)
+      [string]$Touches, [string]$Poll = '60', [string]$Timeout = '120', [string]$OverBoundsOk = '', [string]$Runs = 'coordinator/RUNS.tsv', [switch]$DryRun)
 # native output (gh) is read and this script's own output written as UTF-8, whatever the console's code
 # page; the caller's console gets its own encoding back on every way out
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-OverBoundsOk <pr>:<words>] [-DryRun] | status [-Shared <glob>,...] [-Touches <path>,...]'
+$usage = 'usage: land -Pr <pr>[@<sha>],... [-Method squash|merge|rebase] [-Shared <glob>,...] [-Poll <s>] [-Timeout <min>] [-OverBoundsOk <pr>:<words>] [-Runs <log>] [-DryRun] | status [-Shared <glob>,...] [-Touches <path>,...]'
 function Usage([string]$m) { [Console]::Error.WriteLine($(if ($m) { "$m; $usage" } else { $usage })); exit 1 }
 if ($Mode -ne 'land' -and $Mode -ne 'status') { Usage '' }
 if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, merge or rebase' }
@@ -234,7 +235,7 @@ foreach ($item in $prs) {
       if (-not ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and -not ($s.PSObject.Properties.Name -contains 'status') -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase)))) { continue }
       if (Test-Path -LiteralPath $kb -PathType Leaf) { $f1 = "$(@(Get-Content -LiteralPath $kb -TotalCount 1))"; if (-not ($f1.Contains("/$branch. ") -or $f1.Contains("/$branch, "))) { continue } }
       elseif ($n -eq '<n>' -or -not ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n."))) { continue }
-      if ($null -eq $ms) { $ms = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') check -Log 'coordinator/RUNS.tsv' -Root $root 2>$null } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $ms = @('-') } }
+      if ($null -eq $ms) { $ms = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') check -Log ([IO.Path]::Combine($pwd.ProviderPath, $Runs)) -Root $root 2>$null } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $ms = @('-') } }
       $rc = 1; if ($ms[0] -ne '-' -and -not @($ms | Where-Object { $_.StartsWith("MISSING $($s.id) ") }).Count) { $null = & { $ErrorActionPreference = 'Continue'; & claude rm $s.id 2>&1 }; $rc = $LASTEXITCODE }
       if ($rc -eq 0) { $rmd += "$($s.id) ($nm)" } else { $fin += "claude rm $($s.id) ($nm)" } } } } catch { }
   foreach ($l in @(
@@ -243,7 +244,7 @@ foreach ($item in $prs) {
     $(if ($rmd.Count) { "removed the finished sessions of this task whose run rows are written: $($rmd -join '; ')" }),
     $(if ($fin.Count) { "other finished sessions of task $n are still listed; claude rm only after the run rows above: $($fin -join '; ')" }),
     "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
-    "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv -Task $n -PrJson:- -Append",
+    "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $Runs -Task $n -PrJson:- -Append",
     "tell each AFFECTED PR's session to merge $base (CORE ${sect}4a)",
     "did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE ${sect}10)? an escape (CORE ${sect}12)?",
     "the project's own after-merge duties (PROJECT.md)"

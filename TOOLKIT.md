@@ -215,7 +215,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   given `--tester-commit` / `--tester-tests` (a lead's task gets no task-level tester: its contract says
   `tests_first: no - the lead runs the tester per sub-contract`, roles/lead.md step 3, #289). `tests_first` comes from check-contract itself (`--field tests_first`, *Checks*):
   its contract block (the front matter, or a top-level `contract:`), never from the rest of the file. **The round
-  and money gate (#381):** for a worker or a lead, from `<repo>/coordinator/RUNS.tsv` through `scripts/runs task`:
+  and money gate (#381):** for a worker or a lead, from `<repo>/coordinator/RUNS.tsv` (or `--runs <log>` / `-Runs`, as check-contract takes it, which the earlier sessions' cleanup reads too, #525) through `scripts/runs task`:
   rounds = the id's worker rows plus this start; round 3 or later, or the task's rows summing to at least twice
   `budget.cost`, is refused with the numbers (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API
   list price`) unless `--owner-ok <the owner's words>` / `-OwnerOk`, printed; no log, no contract, a lead's
