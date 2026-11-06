@@ -76,7 +76,8 @@ it) would make that work look deleted.
    - In Git Bash on Windows a slashed ref (`git show origin/main:<path>`) needs `MSYS_NO_PATHCONV=1` before it, else `ambiguous argument` (#460).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
-     (#240, TOOLKIT Scripts).
+     (#240); on macOS (no PowerShell tool) it is named not run, covered by CI's pwsh jobs and the
+     coordinator. Which compound commands the isolation refuses and runs: TOOLKIT *Scripts* (#530).
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item. A test case that repeats another, or that costs much more than what
    it proves needs, is a finding of the PR that added it. A case closing a real route of a safety or money
