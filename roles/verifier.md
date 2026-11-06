@@ -66,7 +66,7 @@ it) would make that work look deleted.
    - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
      report says for each round whether its new or changed tests came from the tester (its commit) or
      from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
-   - **The bounds** (#381): a contract with `bounds:` gets `scripts/check-bounds <contract>
+   - **The bounds** (#381): a contract with `bounds:` gets `bash scripts/check-bounds.sh <contract>
      <base>...<head>` as an oracle; an `OVER` is a failed bound, its output your evidence.
    - **`ci_seconds`** (#373): the report's number against `scripts/ci-times <run id>` on the reviewed commit's run,
      the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a

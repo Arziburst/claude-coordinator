@@ -3,7 +3,7 @@
 # its turn comes, never after every other merge.
 #   powershell -File scripts\merge-queue.ps1 land -Pr <pr>[@<approved sha>],... [-Method squash|merge|rebase]
 #                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-OverBoundsOk <pr>:<the owner's words>] [-Runs <log>] [-DryRun]
-# -Runs: the run log (as check-contract takes it, #525) the finished sessions are judged by; default coordinator/RUNS.tsv.
+# -Runs: the run log (as check-contract takes it, #525) the finished sessions are judged by and the AFTER MERGE run-stats line names; default coordinator/RUNS.tsv.
 #   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...] [-Touches <path or glob>,...]
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base

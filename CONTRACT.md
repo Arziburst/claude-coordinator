@@ -59,8 +59,8 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   (only the owner can accept it). A criterion with no nameable check is a planning gap: fix it before
   the work starts.
 - **Test access points:** an interface a test needs (a status field, a flag, an endpoint, a command, a
-  test hook) is named in the contract — in a criterion or the free text — or by the tester at the top of
-  its test file; the worker implements it as written (#237).
+  test hook) is named in the contract — in a criterion or the free text — or by the tester in its report, which the
+  worker's brief carries on (a test file header only where the project allows comments, #518); the worker implements it as written (#237).
 - **`source`**: the catalog id the criterion comes from (procedures/SOURCES.md); the verifier checks the
   result against it. No source → the brief says the criterion is the coordinator's own reading.
 - **`non_goals`**: the two lines above are the default for every contract; add the task's own.

@@ -754,7 +754,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   --method squash --shared 'messages/*' --shared 'docs/decisions.md'` (Windows: `powershell -NoProfile
   -ExecutionPolicy Bypass -File <core>/scripts/merge-queue.ps1 land -Pr 12@5f3e2a1,14@9c0d1e2 -Method
   squash -Shared 'messages/*,docs/decisions.md'`), from the project's checkout, as a `run_in_background`
-  command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`). The method
+  command: it polls each PR's checks every minute (`--poll`), up to two hours (`--timeout`); `--runs <log>` names the run log (default coordinator/RUNS.tsv) its session cleanup and AFTER MERGE run-stats line read. The method
   and the shared globs come from `PROJECT.md` *Shared files*; `@<sha>` is the commit the verifier
   approved. `status` (the same globs) before planning; `status --touches <path>…` (`-Touches a,b`) lists
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
