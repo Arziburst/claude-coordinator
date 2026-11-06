@@ -3,7 +3,7 @@
 # merges main once, when its turn comes, never after every other merge.
 #   scripts/merge-queue.sh land <pr>[@<approved sha>]... [--method squash|merge|rebase] [--shared <glob>]...
 #                               [--poll <seconds>] [--timeout <minutes>] [--over-bounds-ok <pr>:<the owner's words>] [--runs <log>] [--dry-run]
-# --runs: the run log (as check-contract takes it, #525) the finished sessions are judged by; default coordinator/RUNS.tsv.
+# --runs: the run log (as check-contract takes it, #525) the finished sessions are judged by and the AFTER MERGE run-stats line names; default coordinator/RUNS.tsv.
 #   scripts/merge-queue.sh status [--shared <glob>]... [--touches <path or glob>]...
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base

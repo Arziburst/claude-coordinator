@@ -206,8 +206,8 @@ the report notes the interruption and the resume time.
      `selftest/<c>/st1` and push it where there is a remote".
    - **The contract goes into the brief file:** start-worker checks a lead's `--contract` and, when the brief has no
      `acceptance:` block, adds it to the launch text (#504, a WARN line); a brief holding it is read as is (#512). The lead's brief holds the filled `tests/selftest/contract.md` itself (#323, #331).
-   - **The budget stop:** the contract's `budget.cost` is below any real plan on purpose, so the lead
-     must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
+   - **The budget stop:** the contract's `budget.cost` is below its two workers' own cost alone (#496), so
+     the estimates cannot fit whatever the lead guesses of its own share, and the lead must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
      coordinator checks that no `#st1.<n>` session runs and no `selftest/<c>/st1.<n>` branch exists —
      a lead that started anyway is a FAIL of the role — then answers "go: the budget is now <the plan's
      total>".

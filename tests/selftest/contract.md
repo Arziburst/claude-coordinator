@@ -24,7 +24,7 @@ budget:
   model: haiku
   effort: low
   escalate_to: sonnet
-  cost: 0.1                        # below any real plan on purpose: the lead must stop and ask (SELFTEST)
+  cost: 0.01                       # below the workers' own cost alone, whatever the lead guesses of its own share: the lead must stop and ask (SELFTEST, #496)
 touches: [a.txt, b.txt]
 ---
 The coordinator's self-test (procedures/SELFTEST.md); <c> is the core commit under test, filled in by
