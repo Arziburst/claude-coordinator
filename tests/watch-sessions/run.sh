@@ -48,6 +48,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 bin="$tmp/bin"   # PATH takes this form; the paths handed to the script take the Windows form below
 command -v cygpath >/dev/null 2>&1 && { core="$(cygpath -m "$core")"; tmp="$(cygpath -m "$tmp")"; }
+mkdir -p "$tmp/temp"; export TMPDIR="$tmp/temp" TMP="$tmp/temp" TEMP="$tmp/temp"   # the owner files (#528) stay in the scratch
 
 # The stub's state folder $STUB_D:
 #   list-<n>    the sessions call <n> lists, `<id> <state> <name...>` per line (no status field), or
@@ -103,6 +104,7 @@ case "$kind" in
             --quiet-minutes) a+=(-QuietMinutes "$2"); shift 2 ;; --quiet-seconds) a+=(-QuietSeconds "$2"); shift 2 ;;
             --agents-timeout) a+=(-AgentsTimeout "$2"); shift 2 ;;
             --long-minutes) a+=(-LongMinutes "$2"); shift 2 ;; --long-seconds) a+=(-LongSeconds "$2"); shift 2 ;;
+            --empty-minutes) a+=(-EmptyMinutes "$2"); shift 2 ;; --empty-seconds) a+=(-EmptySeconds "$2"); shift 2 ;;
             --once) a+=(-Once); shift ;; *) a+=("$1"); shift ;;
           esac
         done
@@ -221,10 +223,10 @@ echo "$A working w-a" > "$STUB_D/list-2"
 run --list "$L" --interval 1
 code 0; has "^GONE $C\$"; hasnt "^(STOPPED|GONE|QUIET) $A"
 
-fresh "the list emptied while watching: EMPTY"
+fresh "the list emptied while watching, --empty-seconds 0: EMPTY"
 echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"
 printf ': > "%s"\n' "$L" > "$STUB_D/after-1"
-run --list "$L" --interval 1
+run --list "$L" --interval 1 --empty-seconds 0
 code 0; has "^EMPTY\$"; hasnt "^STOPPED"
 
 fresh "several findings at once: one line each, exit 0"
@@ -439,5 +441,27 @@ lfresh "LONG stops nothing and writes only under the temp folder"; age 3030; tou
 run --list "$L" --once; has "^LONG $A"; grep -qv '^agents --json --all$' "$STUB_D/log" && bad "another claude call" || ok
 [ "$T" -nt "$STUB_D.ref" ] && bad "the transcript changed" || ok
 [ "$(find "$HOME/.claude" "$STUB_D.cwd" -type f | wc -l | tr -d ' ')" = 2 ] && [ -n "$(ls -A "$TMPDIR/watch-sessions-long" 2>/dev/null)" ] && ok || bad "files: $(find "$HOME/.claude" "$STUB_D.cwd" "$TMPDIR" -type f)"
+
+# --- one watcher per list (#528) and a list gone empty (#471). CLAUDE_PID: a sleep of the test's own (its Windows pid
+# under Git Bash); bgw <tag> <args>: a watcher in the background; waitw <tag> <s>: its output and exit code (124: running)
+bgw() { local t="$1"; shift; ( cd "$STUB_D.cwd" && ws "$@" ) > "$STUB_D.o-$t" 2>&1 & eval "W_$t=$!"; }
+waitw() { local p t=0; eval "p=\$W_$1"; while kill -0 "$p" 2>/dev/null && [ $t -lt $(($2 * 10)) ]; do sleep 0.1; t=$((t + 1)); done
+  if kill -0 "$p" 2>/dev/null; then rc=124; else wait "$p"; rc=$?; fi; out="$(tr -d '\r' < "$STUB_D.o-$1")"; }
+fresh "a newer watcher of the list ends the older without a line; another list's runs on; all end with their coordinator"
+sleep 300 & SP=$!; export CLAUDE_PID="$(cat /proc/$SP/winpid 2>/dev/null || echo $SP)"
+echo $A > "$L"; echo $A > "$L.2"; echo "$A working w-a" > "$STUB_D/list-1"
+bgw a --list "$L" --interval 1; bgw o --list "$L.2" --interval 1; t=0
+while [ "$(cat "$STUB_D/n" 2>/dev/null || echo 0)" -lt 4 ] && [ $t -lt 300 ]; do sleep 0.1; t=$((t + 1)); done
+bgw b --list "$L" --interval 1
+waitw a 20; code 0; silent; waitw o 1; code 124; waitw b 1; code 124
+kill $SP; wait $SP 2>/dev/null; waitw o 20; code 0; silent; waitw b 20; code 0; silent; unset CLAUDE_PID
+fresh "the list emptied, filled again within --empty-seconds: no EMPTY, the watcher goes on to the finding"
+echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; echo "$A done w-a" > "$STUB_D/list-2"
+printf ': > "%s"; ( sleep 3; echo %s > "%s" ) > /dev/null 2>&1 &\n' "$L" $A "$L" > "$STUB_D/after-1"
+run --list "$L" --interval 1 --empty-seconds 30; code 0; hasnt "^EMPTY"; has "^STOPPED $A w-a\$"; calls -eq 2
+fresh "the list emptied and left empty: EMPTY once --empty-seconds passed, not before, claude not called meanwhile"
+echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; printf ': > "%s"\n' "$L" > "$STUB_D/after-1"; s0=$SECONDS
+run --list "$L" --interval 1 --empty-seconds 5; code 0; has "^EMPTY\$"; calls -eq 1
+[ $((SECONDS - s0)) -ge 5 ] && ok || bad "EMPTY after $((SECONDS - s0)) s, before the bound"
 echo "watch-sessions ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -3,7 +3,8 @@
 # as one background command, it polls `claude agents --json --all` and ends - waking its caller once -
 # only when a listed session stopped, vanished, went quiet or ran long (LONG) without its report.
 #   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>]
-#                             [--long-minutes <m>] [--long-seconds <s>] [--agents-timeout <s>] [--once]
+#                             [--long-minutes <m>] [--long-seconds <s>] [--empty-minutes <m>] [--empty-seconds <s>]
+#                             [--agents-timeout <s>] [--once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
 # name; blank lines and comments ignored - a comment is a line whose first non-blank `#` is followed by a
 # blank or the line's end (`#12 worker: Fix` is a name); a UTF-8 BOM at its start is not part of the
@@ -23,7 +24,10 @@
 # (--long-minutes, default 45; --long-seconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
 #   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
-#   EMPTY: the list file is missing or holds no session (nothing to watch: it does not run)
+#   EMPTY: the list file is missing or holds no session at the start (nothing to watch: it does not run), or it went
+#   empty and stayed so --empty-minutes (default 30; --empty-seconds for tests), read every poll, claude not called (#471)
+# One per list (#528): with entries, a watcher (not --once) writes its token to <temp>/watch-sessions-own/<the list's
+# full path, all but A-Za-z0-9 as ->; it ends without a line on another token there (a newer one) or CLAUDE_PID gone.
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
 #   (one failure is retried on the next poll; with --once there is no next poll)
 # --interval: seconds between polls (default 120). --agents-timeout: seconds one claude agents call may
@@ -36,8 +40,8 @@
 # watch-sessions.ps1, the same output and exit codes).
 set -u
 
-list="" interval=120 qmin=20 qsec="" lmin=45 lsec="" atimeout=60 once=0
-usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--long-minutes <m>] [--long-seconds <s>] [--agents-timeout <s>] [--once]"
+list="" interval=120 qmin=20 qsec="" lmin=45 lsec="" emin=30 esec="" atimeout=60 once=0
+usage="usage: --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>] [--long-minutes <m>] [--long-seconds <s>] [--empty-minutes <m>] [--empty-seconds <s>] [--agents-timeout <s>] [--once]"
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 2; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2); $usage" >&2; exit 2 ;; esac; }
 num() { need "$@"; case "$2" in *[!0-9]*) echo "$1 takes a whole number (got $2); $usage" >&2; exit 2 ;; esac; }
@@ -49,9 +53,11 @@ while [ $# -gt 0 ]; do
     --quiet-seconds) num "$@"; qsec="$2"; shift 2 ;;
     --long-minutes) num "$@"; lmin="$2"; shift 2 ;;
     --long-seconds) num "$@"; lsec="$2"; shift 2 ;;
+    --empty-minutes) num "$@"; emin="$2"; shift 2 ;;
+    --empty-seconds) num "$@"; esec="$2"; shift 2 ;;
     --agents-timeout) num "$@"; atimeout="$2"; shift 2 ;;
     --once) once=1; shift ;;
-    -h|--help) sed -n '2,36s/^# \{0,1\}//p' "$0"; exit 2 ;;
+    -h|--help) sed -n '2,40s/^# \{0,1\}//p' "$0"; exit 2 ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 2 ;;
   esac
 done
@@ -59,6 +65,7 @@ done
 [ "$atimeout" -gt 0 ] || { echo "--agents-timeout must be above 0; $usage" >&2; exit 2; }
 limit=$((qmin * 60)); [ -n "$qsec" ] && limit=$qsec
 llimit=$((lmin * 60)); [ -n "$lsec" ] && llimit=$lsec
+elimit=$((emin * 60)); [ -n "$esec" ] && elimit=$esec
 tab="$(printf '\t')" nl='
 '
 
@@ -152,10 +159,24 @@ pick() {
 # since <entry>: when the watcher first saw it quiet (empty: not quiet on the last poll)
 since() { printf '%s' "$timers" | E="$1" awk '{ i = index($0, "\t"); if (substr($0, i + 1) == ENVIRON["E"]) { print substr($0, 1, i - 1); exit } }'; }
 
-fails=0 timers=""
+# claim: this watcher owns the list; still: ends it, without a line, if a newer one does or its coordinator is gone
+me="$$.$RANDOM.$(date +%s)" of=""
+claim() { local d="${TMPDIR:-/tmp}/watch-sessions-own" p; p="$(cd "$(dirname "$list")" && pwd)/${list##*/}"
+  command -v cygpath >/dev/null 2>&1 && p="$(cygpath -m "$p")"; of="$d/$(printf '%s' "$p" | tr -c 'A-Za-z0-9' '-')"
+  { mkdir -p "$d" && echo "$me" > "$of"; } 2>/dev/null; }
+still() { local o; o="$(cat "$of" 2>/dev/null)"; [ -z "$o" ] || [ "$o" = "$me" ] || exit 0; [ -n "${CLAUDE_PID:-}" ] || return 0
+  if [ -r "/proc/$$/winpid" ]; then tasklist //FI "PID eq $CLAUDE_PID" //NH 2>/dev/null | grep -qw "$CLAUDE_PID" || exit 0
+  else kill -0 "$CLAUDE_PID" 2>/dev/null || exit 0; fi; }
+
+fails=0 timers="" seen="" e0=""
 while :; do
+  [ -z "$of" ] || still
   ents="$(entries)"
-  [ -n "$ents" ] || { echo EMPTY; exit 0; }
+  if [ -z "$ents" ]; then
+    [ -n "$seen" ] && [ "${e0:=$SECONDS}" ] && [ $((SECONDS - e0)) -lt "$elimit" ] || { echo EMPTY; exit 0; }
+    sleep "$interval"; continue
+  fi
+  [ -n "$seen" ] || { seen=1; [ "$once" = 1 ] || claim; }; e0=""
   agents
   if [ "$rc" != 0 ]; then
     fails=$((fails + 1))
@@ -185,7 +206,7 @@ while :; do
 $ents
 EOF
   timers="$quiet"
-  [ -n "$found" ] && { printf '%s' "$found"; exit 0; }
+  [ -n "$found" ] && { [ -z "$of" ] || still; printf '%s' "$found"; exit 0; }
   [ "$once" = 1 ] && exit 0
   sleep "$interval"
 done
