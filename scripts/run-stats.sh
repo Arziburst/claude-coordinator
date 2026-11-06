@@ -93,6 +93,11 @@
 # ready or a wait line is malformed; 2 on a usage error.
 usage() { sed -n '2,93s/^# \{0,1\}//p' "$0"; exit 2; }
 B="$(printf '\357\273\277')"   # a UTF-8 BOM, read as nothing
+# more: on a header line, the CORE 7 names it lacks as more fields, in that order - where runs add writes them (#497)
+more='
+function more(   i, m, d, s) { for (i = 1; i <= NF; i++) s[$i] = 1; m = split("date task role kind model effort estimate tokens cost result start wall active wait estimate_time", d, " ")
+  for (i = 1; i <= m; i++) if (!(d[i] in s)) $(NF + 1) = d[i] }
+'
 # a value in units of 1/10000 (four decimals, the rest dropped), `$` first allowed; -1 when it is no number
 units='function units(v,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); sub(/^[$]/, "", v)
     if (v !~ /^[0-9]+([.][0-9]+)?$/) return -1
@@ -271,7 +276,7 @@ taskrow() {
         if (NF != 2 || a < 0 || b < a) { print "run-stats: " ENVIRON["F"] ":" FNR ": not an owner wait (<asked UTC> <answered UTC>)" > "/dev/stderr"; exit 1 }
         print a, b }' "$wf")" || return 1
   fi
-  row="$(F="$f" T="$id" C="$C" G="$G" W="$W" B="$B" LC_ALL=C awk -F '\t' "$units$tfn"'
+  row="$(F="$f" T="$id" C="$C" G="$G" W="$W" B="$B" LC_ALL=C awk -F '\t' "$units$tfn$more"'
     BEGIN { T = ENVIRON["T"]; sub(/[.].*$/, "", T); ct = 2; cr = 3; ck = 4; cm = 5; cc = 9; cs = 10; cb = 11; cw = 12; ca = 13
       first = -1; ver = -1 }
     function col(c) { return c ? $c : "" }
@@ -279,7 +284,7 @@ taskrow() {
     function fail(m) { print "run-stats: task " T ": " m > "/dev/stderr"; bad = 1; exit 1 }
     { bom() }
     /^[ \t]*$/ || /^#/ { next }
-    $1 == "date" { nh = NF; ct = cr = ck = cm = cc = cs = cb = cw = ca = 0
+    $1 == "date" { nh = NF; more(); ct = cr = ck = cm = cc = cs = cb = cw = ca = 0
       for (i = NF; i >= 1; i--) { hd[i] = $i; if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
         if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "result") cs = i; if ($i == "start") cb = i
         if ($i == "wall") cw = i; if ($i == "active") ca = i }
@@ -345,7 +350,7 @@ esac
 [ -n "$f" ] || usage
 { [ -f "$f" ] && [ -r "$f" ]; } || { echo "run-stats: cannot read $f" >&2; exit 1; }
 # the file name and the pair via the environment: awk -v would read C:\Users as escapes (Git Bash)
-K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '\t' '
+K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '\t' "$more"'
   BEGIN { B = ENVIRON["B"]; mode = ENVIRON["MODE"]; ct = 2; cr = 3; ck = 4; cm = 5; ce = 7; cc = 9; cw = 12; ca = 13; cx = 15 }
   # a value in units of 1/10000 (four decimals, the rest dropped); -1 when it is no number
   function units(v, unit,   i, d) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
@@ -357,7 +362,7 @@ K="$kind" M="$model" MODE="$mode" B="$(printf '\357\273\277')" LC_ALL=C awk -F '
   function col(c) { return c ? $c : "" }
   { sub(/\r$/, ""); if (NR == 1 && index($0, B) == 1) $0 = substr($0, length(B) + 1) }
   /^[ \t]*$/ || /^#/ { next }
-  $1 == "date" { ct = cr = ck = cm = ce = cc = cw = ca = cx = 0
+  $1 == "date" { more(); ct = cr = ck = cm = ce = cc = cw = ca = cx = 0
     for (i = NF; i >= 1; i--) { if ($i == "task") ct = i; if ($i == "role") cr = i; if ($i == "kind") ck = i
       if ($i == "model") cm = i; if ($i == "cost") cc = i; if ($i == "wall") cw = i; if ($i == "active") ca = i   # the first of a name
       if ($i == "estimate") ce = i; if ($i == "estimate_time") cx = i }
