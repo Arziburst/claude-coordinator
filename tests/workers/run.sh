@@ -130,7 +130,7 @@ start() {
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
         --tester-commit) a+=(-TesterCommit "$2"); shift 2 ;; --tester-tests) a+=(-TesterTests "$2"); shift 2 ;;
-        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;;
+        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -582,6 +582,11 @@ done
 printf 'Do it.\ntouches: [docs/c#.md]   # the page\n' > "$tmp/brief-thash.md"
 STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tdocs/c#.md')" check 0 "start: the conflict foresight, a # in a path" -- start "${B[@]}" --brief-file "$tmp/brief-thash.md"
 expect_in "foresight: TOUCHES #31: 31-a - docs/c#.md"
+# a brief with no touches takes them from --contract (#514); the brief's own come first
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsort.sh\tlib/b.ts')" check 0 "start: the conflict foresight from --contract (#514)" -- start "${B[@]}" --brief-file "$tmp/brief.md" --contract "$tmp/budget-time-ok.md"
+expect_in "foresight: TOUCHES #31: 31-a - sort.sh"; case "$LAST" in *"no touches"*) echo "FAIL (#514): --contract's touches not read"; fail=1 ;; esac
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsort.sh\tlib/b.ts')" check 0 "start: the brief's touches before --contract's (#514)" -- start "${B[@]}" --brief-file "$tmp/brief-tcase.md" --contract "$tmp/budget-time-ok.md"
+expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"; case "$LAST" in *"- sort.sh"*) echo "FAIL (#514): --contract's touches over the brief's"; fail=1 ;; esac
 # --- the contract passes check-contract before a worker or a lead starts (CORE §4, #267): the one in the brief
 # (a block after a `---` line holding any key check-contract requires; a rule above it is no contract) or
 # --contract; the temporary copy of the brief's contract is removed (TMPDIR for .sh, TMP / TEMP for .ps1) ---
@@ -1854,5 +1859,18 @@ expect_in "earlier sessions: the listing failed - none removed"; expect_watch "$
 s521 1 done "#BIN-161 tester: a2" "$r5c" BIN-161-x   # its row is written above
 STUB_RM_FAIL="rm broke" check 0 "#521: a failing claude rm: one line, the start goes on" -- start "${F5[@]}" --branch BIN-161-x --name "#BIN-161 lead: l"
 expect_in "earlier session c5210001 (#BIN-161 tester: a2): claude rm failed - remove it by hand"; expect_watch "$(stub_id) @120"
+# --runs names the run log (#525); a backslash folder in another drive-letter case is the forward-slash one (#527): rows in $tmp/r525.tsv only
+r5b="$(printf '%s' "$r5c" | tr '/' '\\' | awk '{ c = substr($0, 1, 1); if (substr($0, 2, 1) == ":") c = (c == toupper(c)) ? tolower(c) : toupper(c); print c substr($0, 2) }')"
+head -n 1 "$r5/coordinator/RUNS.tsv" > "$tmp/r525.tsv"
+s525() { local sid="5e552500-0000-4000-8000-00000000000$1" t="2026-11-0$1T11:00:00Z"; printf 'c525000%s %s done %s\n' "$1" "$sid" "$2" >> "$STUB_LOG.sessions"; printf 'c525000%s\t%s\n' "$1" "$3" >> "$STUB_LOG.sessions.cwd"
+  printf '{"cwd":"x","sessionId":"%s","type":"assistant","message":{"id":"n%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$sid" "$1" "$t" > "$tmp/cfg/projects/p521/$sid.jsonl"
+  printf 'FIRST ACTION, before anything else: use the EnterWorktree tool with path = %s/.claude/worktrees/BIN-525-x. Work only inside it.\n' "$r5c" > "$tmp/cfg/coordinator/briefs/$sid.md"
+  printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> "$4"; }
+s525 1 "#BIN-525 worker: a" "$r5c" "$tmp/r525.tsv"; s525 2 "#BIN-525 worker: b" "$r5c" "$r5/coordinator/RUNS.tsv"
+s525 3 "#BIN-525 tester: c" "$r5b" "$tmp/r525.tsv"; s525 4 "#BIN-525 tester: d" "$r5b" "$r5/coordinator/RUNS.tsv"
+check 0 "#525, #527: --runs, a backslash folder" -- start "${F5[@]}" --branch BIN-525-x --name "#BIN-525 worker: next" --runs "$tmp/r525.tsv"
+for i in 1 3; do expect_in "removed the earlier session c525000$i"; grep -qx "rm c525000$i" "$STUB_LOG" || { echo "FAIL (#525): c525000$i not removed"; fail=1; }; done
+for i in "2 (#BIN-525 worker: b)" "4 (#BIN-525 tester: d)"; do expect_in "earlier session c525000$i kept: no run row"; i="${i%% *}"; grep -qx "rm c525000$i" "$STUB_LOG" && { echo "FAIL (#525): c525000$i removed"; fail=1; }; done
+expect_in "kept: no run row - write it first (scripts/runs add --log $tmp/r525.tsv --session c5250002"; expect_watch "$(stub_id)"
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

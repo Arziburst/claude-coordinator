@@ -2,7 +2,8 @@
 # Land approved PRs one at a time, in the order given (CORE §4a): parallel work, serial merging - each PR
 # merges main once, when its turn comes, never after every other merge.
 #   scripts/merge-queue.sh land <pr>[@<approved sha>]... [--method squash|merge|rebase] [--shared <glob>]...
-#                               [--poll <seconds>] [--timeout <minutes>] [--over-bounds-ok <pr>:<the owner's words>] [--dry-run]
+#                               [--poll <seconds>] [--timeout <minutes>] [--over-bounds-ok <pr>:<the owner's words>] [--runs <log>] [--dry-run]
+# --runs: the run log (as check-contract takes it, #525) the finished sessions are judged by; default coordinator/RUNS.tsv.
 #   scripts/merge-queue.sh status [--shared <glob>]... [--touches <path or glob>]...
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
@@ -31,10 +32,10 @@
 # says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads, and `claude agents` once after a merge for the sessions line (Windows: merge-queue.ps1).
 set -uo pipefail
 
-usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
+usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--runs <log>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
 mode="${1:-}"; [ $# -gt 0 ] && shift
 case "$mode" in land|status) ;; *) echo "$usage" >&2; exit 1 ;; esac
-method=squash poll=60 timeout=120 dry=0 prs=() shared=() touches=() ook=""
+method=squash poll=60 timeout=120 dry=0 prs=() shared=() touches=() ook="" rlog=coordinator/RUNS.tsv
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,6 +45,7 @@ while [ $# -gt 0 ]; do
     --poll) need "$@"; poll="$2"; shift 2 ;;
     --timeout) need "$@"; timeout="$2"; shift 2 ;;
     --over-bounds-ok) need "$@"; [ -z "$ook" ] || { echo "--over-bounds-ok: one per run, two PRs go in two runs; $usage" >&2; exit 1; }; ook="$2"; shift 2 ;;
+    --runs) need "$@"; rlog="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     [0-9]*) [ "$mode" = land ] || { echo "status takes no PR; $usage" >&2; exit 1; }; prs+=("$1"); shift ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 1 ;;
@@ -230,7 +232,7 @@ for item in "${prs[@]}"; do
   while IFS="$TAB" read -r xid xsid xnm; do [ -n "$xid" ] || continue
     if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -F -e "/$branch. " -e "/$branch, " >/dev/null || continue
     else case "$xnm" in "#$n "*|"#$n."*) [ "$n" != '<n>' ] || continue ;; *) continue ;; esac; fi
-    [ -n "$ms" ] || ms="$(bash "$(dirname "$0")/runs.sh" check --log coordinator/RUNS.tsv --root "$(pwd)" 2>/dev/null </dev/null)" || ms=-
+    [ -n "$ms" ] || ms="$(bash "$(dirname "$0")/runs.sh" check --log "$rlog" --root "$(pwd)" 2>/dev/null </dev/null)" || ms=-
     if [ "$ms" != - ] && ! printf '%s\n' "$ms" | grep -F "MISSING $xid " >/dev/null && claude rm "$xid" >/dev/null 2>&1 </dev/null; then rmd="${rmd:+$rmd; }$xid ($xnm)"
     else fin="${fin:+$fin; }claude rm $xid ($xnm)"; fi
   done <<< "$(claude agents --json --all 2>/dev/null </dev/null | tr -d '\r\n' | tr '}' '\n' | awk -v R="$(pwd)|$(pwd -P)|$(pwd -W 2>/dev/null)" '
@@ -246,7 +248,7 @@ the run rows of task $n (branch $branch), then runs check, and the journal line 
 ${rmd:+removed the finished sessions of this task whose run rows are written: $rmd}
 ${fin:+other finished sessions of task $n are still listed; claude rm only after the run rows above: $fin}
 close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
-the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats coordinator/RUNS.tsv --task $n --pr-json - --append
+the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $rlog --task $n --pr-json - --append
 tell each AFFECTED PR's session to merge $base (CORE §4a)
 did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE §10)? an escape (CORE §12)?
 the project's own after-merge duties (PROJECT.md)

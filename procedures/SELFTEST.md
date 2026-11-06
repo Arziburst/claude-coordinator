@@ -204,9 +204,8 @@ the report notes the interruption and the resume time.
      `selftest/<c>/st1.<n>`, `--report-to "#st1 lead: selftest <P>"`, the light model, `--effort low`, at most
      two at once, names `#st1.<n> worker: selftest <P> …`): "no PR: merge each approved sub-branch into
      `selftest/<c>/st1` and push it where there is a remote".
-   - **The contract goes into the brief file:** start-worker's `--contract` only checks a contract — the
-     session reads the brief alone (a `--contract` whose `id:` and `title:` lines are not in the brief is a
-     WARN line). The lead's brief holds the filled `tests/selftest/contract.md` itself (#323, #331).
+   - **The contract goes into the brief file:** start-worker checks a lead's `--contract` and, when the brief has no
+     `acceptance:` block, adds it to the launch text (#504, a WARN line); a brief holding it is read as is (#512). The lead's brief holds the filled `tests/selftest/contract.md` itself (#323, #331).
    - **The budget stop:** the contract's `budget.cost` is below any real plan on purpose, so the lead
      must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
      coordinator checks that no `#st1.<n>` session runs and no `selftest/<c>/st1.<n>` branch exists —

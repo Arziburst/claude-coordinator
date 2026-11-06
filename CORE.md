@@ -773,7 +773,7 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
   if the PR is verified merged, the copy clean and every commit on the remote** (no upstream = unpushed);
   a copy whose branch has no commit beyond its base and was never pushed, clean, has nothing to lose and
   goes without a PR (cleanup-worker, #257); otherwise report the leftovers, never delete them.
-  **A task's finished sessions** leave the list by themselves at a round's start (start-worker) and at the merge (merge-queue): found by the worktree the brief kept by their sessionId names (a finished session is listed with its launch folder only), else by the name `#<id> ` or `#<id>.`; removed (`claude rm`: the listing only) when `runs check` finds their run row, else named with the command that writes it; never running, waiting or another project's (#521).
+  **A task's finished sessions** leave the list by themselves at a round's start (start-worker) and at the merge (merge-queue): found by the worktree the brief kept by their sessionId names (a finished session is listed with its launch folder only), else by the name `#<id> ` or `#<id>.`; removed (`claude rm`: the listing only) when `runs check` finds their run row (in `--runs <log>` where the rows are kept elsewhere, #525), else named with the command that writes it; never running, waiting or another project's (#521).
 - **An assistant is never cleaned up** ([roles/assistant.md](roles/assistant.md)): no cleanup, batch,
   after-merge or self-test step stops or removes an `assistant: <name>` session or its folder
   (`coordinator/assistants/<name>/`) — cleanup-worker answers `ASSISTANT KEPT`, exit 6, and the

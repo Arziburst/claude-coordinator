@@ -113,7 +113,7 @@ case "$kind" in
           case "$x" in
           land|status) a+=("$x") ;; --method) a+=(-Method); nx=value ;; --shared) nx=shared ;; --touches) nx=touches ;;
           --poll) a+=(-Poll); nx=value ;; --timeout) a+=(-Timeout); nx=value ;; --dry-run) a+=(-DryRun) ;;
-          --over-bounds-ok) a+=(-OverBoundsOk); nx=value ;; --*) a+=("$x") ;;
+          --over-bounds-ok) a+=(-OverBoundsOk); nx=value ;; --runs) a+=(-Runs); nx=value ;; --*) a+=("$x") ;;
           [0-9]*) prs="${prs:+$prs,}$x" ;; *) a+=("$x") ;; esac; done
         [ -n "$prs" ] && a+=(-Pr "$prs"); [ -n "$sh" ] && a+=(-Shared "$sh"); [ -n "$tc" ] && a+=(-Touches "$tc")
         "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" "${a[@]}"; } ;;
@@ -205,6 +205,12 @@ has "AFTER MERGE #83: removed the finished sessions of this task whose run rows 
 for x in b4 b5 b6; do hasnt "$x ("; done; [ "$(grep -c '^rm ' "$STUB_D/claude-rm" 2>/dev/null)" = 2 ] && grep -qx 'rm b1' "$STUB_D/claude-rm" && grep -qx 'rm b3' "$STUB_D/claude-rm" && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm" 2>/dev/null), want b1 and b3"
 touch "$STUB_D/rm-fail"; { echo '['; sess b1 "#ARXVR-12 worker: a" done "$qroot"; echo; echo ']'; } > "$STUB_D/agents"
 pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0; code 0; has "other finished sessions of task <n> are still listed; claude rm only after the run rows above: claude rm b1 (#ARXVR-12 worker: a)"
+rm "$STUB_D/rm-fail" "$STUB_D/claude-rm"; head -n 1 coordinator/RUNS.tsv > "$tmp/q525.tsv"; L5="$tmp/q525.tsv"   # #525: --runs names the log; #527: a backslash folder, the drive letter in another case
+qb="$(printf '%s' "$qroot" | tr '/' '\\' | sed 's/\\/\\\\/g' | awk '{ c = substr($0, 1, 1); if (substr($0, 2, 1) == ":") c = (c == toupper(c)) ? tolower(c) : toupper(c); print c substr($0, 2) }')"
+{ echo '['; s5 b7 "#ARXVR-12 worker: g" done "$qroot" ARXVR-12-feat; echo ,; s5 b8 "#ARXVR-12 worker: h" done "$qb" ARXVR-12-feat; echo ,; s5 b9 "#ARXVR-12 worker: i" done "$qb" ARXVR-12-feat row; echo; echo ']'; } > "$STUB_D/agents"
+for b in 7 8; do printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t2026-11-0%sT10:00:00Z\t1\t1\t\t-\n' "$b" >> "$L5"; done
+pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0 --runs "$L5"; code 0; has "AFTER MERGE #82: removed the finished sessions of this task whose run rows are written: b7 (#ARXVR-12 worker: g); b8 (#ARXVR-12 worker: h)"
+has "claude rm only after the run rows above: claude rm b9 (#ARXVR-12 worker: i)"; has "run-stats $L5 "; [ "$(tr '\n' ' ' < "$STUB_D/claude-rm")" = "rm b7 rm b8 " ] && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm"), want b7 and b8"
 rm -f coordinator/RUNS.tsv; rmdir coordinator; unset CLAUDE_CONFIG_DIR
 
 fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
