@@ -71,8 +71,10 @@ plain() { LC_ALL=C awk '{ if (NR == 1 && substr($0, 1, 3) == "\357\273\277") $0 
 header() { plain "$1" | LC_ALL=C awk -F'\t' '
   NR == 1 { h = 0; for (i = 1; i <= NF; i++) if ($i == "date" || $i == "role") h++
     if (h >= 2) for (i = 1; i <= NF; i++) print $i; exit }'; }
-# cols <file>: the column names in the file's order (its header, else CORE 7's), space-separated
-cols() { local h; h="$(header "$1")"; if [ -n "$h" ]; then printf '%s\n' "$h" | tr '\n' ' '; else printf '%s' "$NAMES"; fi; }
+# cols <file>: the column names in the file's order (its header, then the CORE 7 names it lacks, as add
+# writes them; else CORE 7's), space-separated
+cols() { local h; h="$(header "$1")"; if [ -n "$h" ]; then printf '%s\n' "$h" | awk -v nn="$NAMES" '{ s[$0] = 1; printf "%s ", $0 }
+  END { m = split(nn, d, " "); for (i = 1; i <= m; i++) if (!(d[i] in s)) printf "%s ", d[i] }'; else printf '%s' "$NAMES"; fi; }
 # rowsof <file>: the data rows as they are (the header, comments and empty lines left out)
 rowsof() { plain "$1" | LC_ALL=C awk -F'\t' '
   NR == 1 { h = 0; for (i = 1; i <= NF; i++) if ($i == "date" || $i == "role") h++; if (h >= 2) next }

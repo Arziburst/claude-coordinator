@@ -35,6 +35,8 @@ param([string]$File, [string]$Kind, [string]$Model, [switch]$PerRun, [switch]$Ra
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 function Show-Usage { Get-Content -LiteralPath $PSCommandPath -TotalCount 31 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+# More <header fields>: then the CORE 7 names it lacks, in that order - where runs add writes them (#497)
+function More($f) { , @($f + @('date', 'task', 'role', 'kind', 'model', 'effort', 'estimate', 'tokens', 'cost', 'result', 'start', 'wall', 'active', 'wait', 'estimate_time' | Where-Object { $f -cnotcontains $_ })) }
 if ($Limits) {
   if ($File -or $Kind -or $Model -or $PerRun -or $Ratio -or $Task -or $PrJson -or $Waits -or $Append) { Show-Usage }
 } elseif ($Task -or $PrJson -or $Waits -or $Append) {
@@ -257,7 +259,7 @@ if ($Task) {
     if ($line -cmatch '^[ \t]*\z' -or $line -cmatch '^#') { continue }
     $f = $line.Split("`t")
     if ($f[0] -ceq 'date') {
-      $hd = $f
+      $hd = $f; $f = More $f
       $ct = [Array]::IndexOf($f, 'task'); $cr = [Array]::IndexOf($f, 'role'); $ck = [Array]::IndexOf($f, 'kind'); $cm = [Array]::IndexOf($f, 'model')
       $cc = [Array]::IndexOf($f, 'cost'); $cs = [Array]::IndexOf($f, 'result'); $cb = [Array]::IndexOf($f, 'start'); $cw = [Array]::IndexOf($f, 'wall'); $ca = [Array]::IndexOf($f, 'active')
       continue
@@ -367,6 +369,7 @@ foreach ($line in $L) {
   if ($line -cmatch '^[ \t]*\z' -or $line -cmatch '^#') { continue }
   $f = $line.Split("`t")
   if ($f[0] -ceq 'date') {
+    $f = More $f
     $ct = [Array]::IndexOf($f, 'task'); $cr = [Array]::IndexOf($f, 'role'); $ck = [Array]::IndexOf($f, 'kind')
     $cm = [Array]::IndexOf($f, 'model'); $cc = [Array]::IndexOf($f, 'cost'); $cw = [Array]::IndexOf($f, 'wall'); $ca = [Array]::IndexOf($f, 'active')
     $ce = [Array]::IndexOf($f, 'estimate'); $cx = [Array]::IndexOf($f, 'estimate_time')

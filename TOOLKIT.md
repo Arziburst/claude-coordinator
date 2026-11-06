@@ -991,8 +991,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   <role> -Kind <kind> -Model <m> -Effort <e> -Estimate:<cost|-> -EstimateTime:<t|-> -Result <word> [-Date
   <YYYY-MM-DD>]` — a `-` value goes as `-Estimate:-` / `-EstimateTime:-`: Windows PowerShell 5.1 `-File`
   refuses a bare `-` value) — after the stop and before `claude rm` (*The order* above). It appends one row
-  in the file's header order (else CORE §7's), its tokens, cost, start, wall and active read from
-  `session-tokens <id>`, and prints it. The result is one of `approved` `done` `pass` `rework <n>`
+  in the file's header order (else CORE §7's; the names an older header lacks after it, in CORE §7's order: `check`,
+  `task`, the duplicate refusal and run-stats read that same map, the header never rewritten, #497), its tokens,
+  cost, start, wall and active read from `session-tokens <id>`, and prints it. The result is one of `approved` `done` `pass` `rework <n>`
   `escalated` `failed` `dropped` (stopped without a result) `ready`; any other word is refused (exit 2), as
   is a missing transcript (exit 1) and a second row of the same session start and role (exit 1; an
   assistant's rows share their start and are allowed, their cost the session's since that assistant's

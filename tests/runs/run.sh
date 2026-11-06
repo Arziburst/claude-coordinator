@@ -235,6 +235,14 @@ printf '%s\n' "$H" > "$L"
 run add --log "$L" --session $W1S "${A[@]}" --result approved; code 0; cp "$L" "$L.before"
 run add --log "$L" --session $W1S "${A[@]}" --result approved; fails; same "$L" "$L.before"
 
+fresh "an old header without start wall active wait (#497): add writes them after it; the same session twice refused; check finds the row"
+printf 'date\ttask\trole\tkind\tmodel\teffort\testimate\ttokens\tcost\tresult\testimate_time\n' > "$L"
+run add --log "$L" --session $W1S "${A[@]}" --result approved; code 0
+[ "$(lastline "$L" | awk -F'\t' '{ print NF, $11, $12 }')" = "15 30-60 $(st $W1S start)" ] && ok || bad "the row: $(lastline "$L")"
+cp "$L" "$L.before"; run add --log "$L" --session $W1S "${A[@]}" --result approved; fails; same "$L" "$L.before"
+run check --log "$L" --root "$ROOT" --self $COS; code 0; same "$L" "$L.before"; hasnt "^MISSING $W1 "; has "^MISSING $W2 "
+run task --log "$L" --task 12; code 0; has '^1 '
+
 fresh "add: role assistant twice in one session - both written, the same start"
 printf '%s\n' "$H" > "$L"
 B=(--task hours --role assistant --kind assistant --model sonnet --effort low --estimate - --estimate-time - --result done)

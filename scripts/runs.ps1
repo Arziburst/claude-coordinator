@@ -44,8 +44,9 @@ function CanOpen([string]$f, [string]$a) {
   catch { if ($a -eq 'Write') { Die 1 "cannot write the run log $f" } else { Die 1 "cannot read the run log $f" } }
 }
 function IsHeader([string]$line) { $h = 0; foreach ($x in ($line -split "`t")) { if ($x -ceq 'date' -or $x -ceq 'role') { $h++ } }; $h -ge 2 }
-# Cols <lines>: the column names in the file's order (its header, else CORE 7's)
-function Cols($l) { if ($l.Count -and (IsHeader $l[0])) { , @($l[0] -split "`t") } else { , $Names } }
+# Cols <lines>: the column names in the file's order (its header, then the CORE 7 names it lacks, as add
+# writes them; else CORE 7's)
+function Cols($l) { if ($l.Count -and (IsHeader $l[0])) { $h = @($l[0] -split "`t"); , @($h + @($Names | Where-Object { $h -cnotcontains $_ })) } else { , $Names } }
 # RowsOf <lines>: the data rows split into cells (the header, comments and empty lines left out)
 function RowsOf($l) {
   $r = New-Object System.Collections.ArrayList

@@ -253,5 +253,13 @@ expect "task: --pr-json without --task is a usage error" 2 '*' - -- task-runs.ts
 expect "task: --task with --per-run is a usage error" 2 '*' - -- task-runs.tsv --task 40 --per-run
 expect "task: the waits from stdin is a usage error" 2 '*' - -- task-runs.tsv --task 40 --waits -
 expect "task: --task with a kind is a usage error" 2 '*' - -- task-runs.tsv --task 40 --kind ordinary
+# an old header (#497): no start wall active wait, estimate_time last; runs add writes those cells after it, in CORE 7's order
+old() { awk -F'\t' -v OFS='\t' '{ sub(/\r$/, "") } $1 == "date" { print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "estimate_time"; next }
+  /^#/ || /^$/ { print; next } { print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "-", $11, $12, $13, $14 }' "$1" > "$2"; }
+old tasks.tsv old-tasks.tsv; old task-runs.tsv old-task-runs.tsv
+expect "an old header: the cells after it read in CORE 7's order" 0 "$t/expected-tasks.txt" - -- old-tasks.tsv
+expect "an old header: --per-run as with the full header" 0 "$t/expected-per-run.txt" - -- old-tasks.tsv --per-run
+awk -F'\t' -v OFS='\t' '{ print $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "", $11, $12, $13, $14 }' "$k/expected-late.txt" > old-late.txt
+expect "an old header: --task reads start, wall and active after it" 0 old-late.txt - -- old-task-runs.tsv --task 40 --pr-json pr-late.json
 [ "$fail" = 0 ] && echo "run-stats: $n cases passed" || echo "run-stats: failures above ($n cases)"
 exit "$fail"
