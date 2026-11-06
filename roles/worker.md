@@ -24,7 +24,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    address and goes back to the tester. You may only make a test build or run — an import, a name, a
    path, a compile fix — without changing any check it makes, and you name each such edit in your report
    (`test_edits`); any other change to the tester's tests goes back to the tester. An access point a test
-   needs (named in the contract or at the top of the test file) is implemented as written. **Not
+   needs (named in the contract, or in the tester's report your brief carries) is implemented as written. **Not
    weakening**, on tests other than the tester's (the exceptions to the rule above, not a loosening;
    each named in `test_edits`): a wait of N cycles or ticks turned into a wait on time or on a state with
    the same value; a tolerance widened only on your PR's own new check, with a measured reason; a
@@ -59,7 +59,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    alone is a claim. What you could not run is a known gap, never a pass. A long local run never runs
    under a short tool timeout (a killed run looks like a crash): start it in the background and wait for
    it; what a test starts (a server, a browser, an app) ends with it (TOOLKIT *CI*). A check that starts `pwsh` or `powershell` (a `.ps1`) runs through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240, #408); not run that way, it is named as not run, never skipped silently.
-   With `bounds:`, run `scripts/check-bounds` before reporting; another route: name it, do not close it (#381).
+   With `bounds:`, run `bash scripts/check-bounds.sh` (Windows: `check-bounds.ps1`) before reporting; another route: name it, do not close it (#381).
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is
    this project; neither → put the whole report in your final output with "NOT DELIVERED: <the
