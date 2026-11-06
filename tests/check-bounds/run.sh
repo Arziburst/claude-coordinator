@@ -7,7 +7,8 @@
 #   scripts/check-bounds.sh <contract> <base>...<head>   (.ps1: the same two arguments, by position), run from
 #   inside the repository; the bounds are the lines `- <glob> <max added lines>` under `bounds:` of the
 #   contract's header (the front matter; a `bounds:` in the body below it is no bound; a CRLF file reads the same).
-#   A glob matches the whole path from the repository's root, `*` crosses folders, letter case counts.
+#   A glob matches the whole path from the repository's root, `*` crosses folders, letter case counts; `**/` is zero or
+#   more folders (#529: `src/**/x` matches `src/x`).
 #   In this order:
 #     one line per bound in the contract's order, `<glob> <added>/<max>`; a binary file a bound matches counts as 0
 #     and is named by one line `binary: <path> counts as 0` right before that bound's line (a binary file no
@@ -79,6 +80,10 @@ mk twoover 'src/* 4' 'lib/* 0'; t "two globs, both over" twoover 1 'src/* 5/4' '
 mk both 'src/three.txt 2' 'src/* 5'; t "a file in two globs counts in both" both 1 'src/three.txt 3/2' 'src/* 5/5' 'check-bounds: OVER src/three.txt 3/2'
 printf -- '---\nid: 1\ntitle: t\n---\n' > "$tmp/c/nob.md"; t "no bounds" nob 0 'check-bounds: no bounds'
 printf -- '---\nid: 1\ntitle: t\n---\nbounds:\n  - src/* 0\n' > "$tmp/c/body.md"; t "bounds in the body are no bounds" body 0 'check-bounds: no bounds'
+# `**/` (#529): zero or more folders, also at the start and twice; `*/` alone still needs a slash
+mk zero 'src/**/*.txt 5' '**/src/three.txt 3' '**/two.txt 2' '**/src/**/*.txt 5' 'src/**/two.txt 2' 'src/*/three.txt 0'
+t "a **/ matches zero or more folders" zero 0 'src/**/*.txt 5/5' '**/src/three.txt 3/3' '**/two.txt 2/2' '**/src/**/*.txt 5/5' 'src/**/two.txt 2/2' 'src/*/three.txt 0/0' 'check-bounds: OK'
+mk zover 'src/**/*.txt 4'; t "a **/ bound over, the file directly in the folder counted" zover 1 'src/**/*.txt 5/4' 'check-bounds: OVER src/**/*.txt 5/4'
 mk renamed 'new/* 10' 'old/* 0'; t "a renamed file counts by its new path" renamed 1 'new/* 11/10' 'old/* 0/0' 'check-bounds: OVER new/* 11/10'
 u "no argument"; u "no range" ../c/within.md; u "a range without three dots" ../c/within.md main
 u "a contract that cannot be read" ../c/absent.md "$R"; u "a range git cannot read" ../c/within.md main...no-such-branch

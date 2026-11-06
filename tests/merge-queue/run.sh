@@ -361,6 +361,11 @@ run status --touches messages --touches src/c.ts
 code 0; has "TOUCHES #31: 31-a - messages/en.json"; hasnt "TOUCHES #32"; has ", 2 touching the task"
 run status --touches src/a
 code 0; hasnt "TOUCHES"; has ", 0 touching the task"
+# `**/` is zero or more folders (#529): a file directly in the folder matches, in --touches and --shared alike
+run status --touches 'messages/**/*.json' --touches '**/b.ts'
+code 0; has "TOUCHES #31: 31-a - messages/en.json"; has "TOUCHES #32: 32-b - src/b.ts"; has "TOUCHES #33: 33-c - messages/en.json"; has ", 3 touching the task"
+run status --shared 'messages/**/*.json'
+code 0; has "OVERLAP #31 #32: src/a.ts"; hasnt "OVERLAP #31 #33"
 
 # the bounds (#381, the header): a real repository beside the stub - the PR's head is a real commit, the contract a file
 qg() { git -C "$tmp/q" -c user.email=t@t -c user.name=t "$@"; }
