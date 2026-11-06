@@ -210,7 +210,7 @@ qb="$(printf '%s' "$qroot" | tr '/' '\\' | sed 's/\\/\\\\/g' | awk '{ c = substr
 { echo '['; s5 b7 "#ARXVR-12 worker: g" done "$qroot" ARXVR-12-feat; echo ,; s5 b8 "#ARXVR-12 worker: h" done "$qb" ARXVR-12-feat; echo ,; s5 b9 "#ARXVR-12 worker: i" done "$qb" ARXVR-12-feat row; echo; echo ']'; } > "$STUB_D/agents"
 for b in 7 8; do printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t2026-11-0%sT10:00:00Z\t1\t1\t\t-\n' "$b" >> "$L5"; done
 pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0 --runs "$L5"; code 0; has "AFTER MERGE #82: removed the finished sessions of this task whose run rows are written: b7 (#ARXVR-12 worker: g); b8 (#ARXVR-12 worker: h)"
-has "claude rm only after the run rows above: claude rm b9 (#ARXVR-12 worker: i)"; has "run-stats $L5 "; [ "$(tr '\n' ' ' < "$STUB_D/claude-rm")" = "rm b7 rm b8 " ] && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm"), want b7 and b8"
+has "claude rm only after the run rows above: claude rm b9 (#ARXVR-12 worker: i)"; has "/q525.tsv "; [ "$(tr '\n' ' ' < "$STUB_D/claude-rm")" = "rm b7 rm b8 " ] && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm"), want b7 and b8"
 rm -f coordinator/RUNS.tsv; rmdir coordinator; unset CLAUDE_CONFIG_DIR
 
 fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"

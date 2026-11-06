@@ -1871,6 +1871,6 @@ s525 3 "#BIN-525 tester: c" "$r5b" "$tmp/r525.tsv"; s525 4 "#BIN-525 tester: d" 
 check 0 "#525, #527: --runs, a backslash folder" -- start "${F5[@]}" --branch BIN-525-x --name "#BIN-525 worker: next" --runs "$tmp/r525.tsv"
 for i in 1 3; do expect_in "removed the earlier session c525000$i"; grep -qx "rm c525000$i" "$STUB_LOG" || { echo "FAIL (#525): c525000$i not removed"; fail=1; }; done
 for i in "2 (#BIN-525 worker: b)" "4 (#BIN-525 tester: d)"; do expect_in "earlier session c525000$i kept: no run row"; i="${i%% *}"; grep -qx "rm c525000$i" "$STUB_LOG" && { echo "FAIL (#525): c525000$i removed"; fail=1; }; done
-expect_in "kept: no run row - write it first (scripts/runs add --log $tmp/r525.tsv --session c5250002"; expect_watch "$(stub_id)"
+expect_in "/r525.tsv --session c5250002 ..."; expect_watch "$(stub_id)"
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
