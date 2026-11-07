@@ -322,6 +322,11 @@ printf '\357\273\277%s\n%s\n' $A $B > "$L"; printf '%s done w-a\n%s working w-b\
 run --list "$L" --once
 code 0; has "^STOPPED $A w-a\$"; hasnt "GONE"
 
+fresh "a list file holding only a UTF-8 BOM and a comment: EMPTY"
+printf '\357\273\277# awaited\n' > "$L"
+run --list "$L" --once
+code 0; has "^EMPTY\$"
+
 # --- LONG: one long command (#467). A scratch home and temp folder per case; the transcript's age is set
 unset CLAUDE_CONFIG_DIR; SID=5e550000-0000-4000-8000-000000000001 ENC=-work-my-proj-v2--claude-worktrees-467-x
 lfresh() { fresh "$1"; export HOME="$STUB_D.home" USERPROFILE="$STUB_D.home" TMPDIR="$STUB_D.tmp" TMP="$STUB_D.tmp" TEMP="$STUB_D.tmp"
@@ -339,6 +344,7 @@ run --list "$L" --once; has "^LONG $A w-a 50\$"; run --list "$L" --interval 1; c
 lfresh "a new record starts a new stretch: under the limit nothing, past it LONG once more"; age 7200
 run --list "$L" --once; has "^LONG $A w-a 120\$"; age 5430; run --list "$L" --once --long-minutes 100; code 0; silent
 run --list "$L" --once; has "^LONG $A w-a 90\$"; run --list "$L" --once; code 0; silent
+lfresh "a line's @<n> holds LONG back, past the flag"; age 3030; echo "$A @120" > "$L"; run --list "$L" --once --long-seconds 0; code 0; silent
 lfresh "a line's @<n> sets a shorter limit than the default"; age 2000; echo "$A @30" > "$L"; run --list "$L" --once; code 0; has "^LONG $A w-a 33\$"
 lfresh "no transcript: no LONG"; rm -f "$T"; run --list "$L" --once --long-seconds 0; code 0; silent
 lfresh "LONG and STOPPED in one poll: both lines"; age 3030; echo "$B" >> "$L"; printf '%s working w-a\n%s done w-b\n' $A $B > "$STUB_D/list-1"
