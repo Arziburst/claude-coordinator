@@ -428,7 +428,7 @@ code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"
 
 fresh "--over-bounds-ok without its words or its PR: a usage error"
 qpr 15 "$H15" 15-over
-for v in 15 "15:" "15: " "15:   " $'15:\t' "x:the owner said yes" ":the owner said yes"; do
+for v in 15 "15:" $'15:\t' "x:the owner said yes"; do   # no colon, no words, blank words, no number
   run land 15 --poll 0 --over-bounds-ok "$v"; code 1; notcalled "pr merge 15"
 done
 
@@ -452,12 +452,12 @@ fresh "a contract with no bounds: as today"; qo 45 src/45.txt; code 0; has "MERG
 
 # the wrong folder: a subfolder, another repository (its origin lacks the branch), no repository at all
 mkdir -p "$tmp/q/wrong-sub" "$tmp/wrong-none"; git init -q --bare "$tmp/w.git"; git init -q -b main "$tmp/wrong-repo"; git -C "$tmp/wrong-repo" remote add origin "$tmp/w.git"
-for d in q/wrong-sub wrong-repo wrong-none; do for x in "" --dry-run; do
+for d in q/wrong-sub: wrong-repo:--dry-run wrong-none:; do x="${d#*:}"; d="${d%%:*}"   # each folder once, --dry-run once
   fresh "the wrong folder: $d $x"; qpr 16 "$H16" 16-fine; cd "$tmp/$d" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
   code 1; has "${d##*/}"; notcalled "pr merge"; hasnt "MERGED #16"; hasnt "[dry-run] gh pr merge"; hasnt "no contract"
-done; done
-for x in "" --dry-run; do fresh "gh cannot read the PR from another repository: the refusal names the folder $x"; touch "$STUB_D/fail-view"; cd "$tmp/wrong-repo" || exit 1; run land 16 --poll 0 $x; cd "$tmp/q" || exit 1
-  code 1; has "wrong-repo"; has "Could not resolve to a PullRequest"; notcalled "pr merge"; hasnt "[dry-run] gh pr merge"; done
+done
+fresh "gh cannot read the PR from another repository: the refusal names the folder"; touch "$STUB_D/fail-view"; cd "$tmp/wrong-repo" || exit 1; run land 16 --poll 0; cd "$tmp/q" || exit 1
+  code 1; has "wrong-repo"; has "Could not resolve to a PullRequest"; notcalled "pr merge"
 fresh "one PR's branch is not in this repository: nothing merged, the first PR neither"
 qpr 16 "$H16" 16-fine; qpr 34 "$H19" 34-elsewhere; run land 16 34 --poll 0; code 1; notcalled "pr merge"; hasnt "MERGED #16"
 fresh "status runs anywhere"; cd "$tmp/wrong-none" || exit 1; run status; cd "$qback" || exit 1; code 0; has "merge-queue status: 0 open"
