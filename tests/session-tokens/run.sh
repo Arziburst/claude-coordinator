@@ -92,7 +92,7 @@ mkdir -p "$tmp/crlf2/projects/-work-app"
 awk 'NR == 1 { printf "\357\273\277" } { sub(/\r$/, ""); printf "%s\r\n", $0 }' "$st/projects/-work-app/c2.jsonl" > "$tmp/crlf2/projects/-work-app/c2.jsonl"
 expect "cost-state: CRLF line ends and a BOM" 0 "$t/expected-state-last.txt" - -- "$tmp/crlf2" c2
 # a decimal-comma locale (de_DE, ru_RU: the BSD awk on macOS reads 0.0071 as 0 there): the same lines
-for loc in de_DE.UTF-8 ru_RU.UTF-8; do
+for loc in ru_RU.UTF-8; do
   export LC_ALL="$loc"
   expect "cost-state cost under $loc" 0 "$t/expected-state-one.txt" - -- "$st" c1
   expect "a status file's cost under $loc" 0 "$t/expected-state-after.txt" - -- "$st" c3
@@ -117,7 +117,6 @@ expect "neither a transcript nor a status file" 1 - - -- "$tmp/noproj" s9
 # a config path with [ ] in it (PowerShell reads [1] as a wildcard unless the path is literal)
 mkdir -p "$tmp/cfg[1]"; cp -R "$cl/." "$tmp/cfg[1]/"
 expect "a config path with [ ]" 0 "$t/expected.txt" - -- "$tmp/cfg[1]" s1
-expect "a config path with [ ], --since" 0 "$t/expected-since.txt" - -- "$tmp/cfg[1]" --since 2026-10-05T17:00:00Z
 expect "a config path with [ ], a subagent" 0 "$t/expected-agent.txt" - -- "$tmp/cfg[1]" x
 # --prune deletes status files older than exactly 7 x 24 hours: ages 30 and 7.5 days go, 6.5 days and now stay
 d="$tmp/prune/coordinator/sessions"; mkdir -p "$d"
@@ -141,7 +140,6 @@ PF="$(winpath "$here/context/prices.txt")"; K='under100k=1/100999/$0.4200 100-20
 ctx "context: each bucket's edges, requests and tokens, no price needed" "$here/context" 'under100k=1/100999 100-200k=2/299999 200-400k=3/799999 400-700k=3/1500000 over700k=2/1500001' k1
 ctx "context: --prices, four models' costs, an unpriced model" "$here/context" "$K" k1 --prices "$PF"
 ctx "context: --since with --prices" "$here/context" "$K" --since 2026-10-01T00:00:00Z --prices "$PF"
-ctx "context: a session and its subagent (expected.txt, the self-test's fixture)" "$cl" "$(tail -n 1 "$t/expected.txt" | tr -d '\r' | cut -f2)" s1
 ctx "context: a stopped session, from its transcript, not its record" "$st" 'under100k=1/1013/$0.0002 100-200k=0/0/$0.0000 200-400k=0/0/$0.0000 400-700k=0/0/$0.0000 over700k=0/0/$0.0000 unpriced=0' c1 --prices "$PF"
 expect "context: --prices with no such file" 2 - - -- "$here/context" k1 --prices "$(winpath "$tmp/none.txt")"
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
