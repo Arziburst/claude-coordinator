@@ -106,7 +106,9 @@ grep -v 'COORD_NO_PUSH' "$tmp/lines" | grep -v '^selftest hooks:' > "$tmp/nopush
 { [ "$rc" = 0 ] && [ "$(grep -c 'COORD_NO_PUSH' "$tmp/lines")" = 1 ] && ! grep -q '^FAIL' "$tmp/lines" &&
   grep -q '^selftest hooks: .* 0 fail' "$tmp/lines" && cmp -s "$tmp/nopush-want" "$tmp/nopush-got"; } ||
   { echo "FAIL (hooks COORD_NO_PUSH, on): expected exit 0, one line naming COORD_NO_PUSH, no FAIL and the rest unchanged, got exit $rc:"; sed 's/^/    /' "$tmp/lines"; fail=1; }
-nopoff zero '"env": { "COORD_NO_PUSH": "0" }'   # any value but "1" (one comparison); no key: good.json itself
+nopoff zero '"env": { "COORD_NO_PUSH": "0" }'
+nopoff true '"env": { "COORD_NO_PUSH": "true" }'
+nopoff none '"env": { "SOME_OTHER": "1" }'
 nopoff nested '"x": { "env": { "COORD_NO_PUSH": "1" } }'
 
 # the assistant's settings examples (#281, 281.1): each the matching worker example with the assistant's

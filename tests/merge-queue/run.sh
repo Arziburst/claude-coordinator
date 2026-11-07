@@ -428,7 +428,7 @@ code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"
 
 fresh "--over-bounds-ok without its words or its PR: a usage error"
 qpr 15 "$H15" 15-over
-for v in 15 "15:" $'15:\t' "x:the owner said yes"; do   # no colon, no words, blank words, no number
+for v in 15 "15:" $'15:\t' "x:the owner said yes" ":the owner said yes"; do   # no colon, no words, blank words, a number not digits, an empty number
   run land 15 --poll 0 --over-bounds-ok "$v"; code 1; notcalled "pr merge 15"
 done
 
