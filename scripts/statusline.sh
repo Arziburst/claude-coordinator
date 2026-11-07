@@ -79,6 +79,7 @@ core_behind() {
   rec="$(sed -n 's/^| Core (CORE .*commit `\([0-9a-f]\{7,40\}\)`.*/\1/p' "$root/coordinator/PROJECT.md" 2>/dev/null | head -n 1)"
   had="$(sed -n '2p;4p' "$file" 2>/dev/null | tr -d '\r' | tr '\n' ' ')"
   case " $had " in *" $rec "*) seen=1 ;; esac
+  [ -n "$rec" ] || seen=1   # no record: no mark (below), and no read past the 12 hours
   keep="$(printf '%s\n' $had | grep -vx "$rec" | head -n 8 | tr '\n' ' ')"   # line 4 of the next read
   if [ ! -f "$file" ] || [ -z "$(find "$file" -mmin -720 2>/dev/null)" ] || { [ -z "$seen" ] && [ -z "$(find "$file" -mmin -10 2>/dev/null)" ]; }; then
     touch "$file"   # one reader at a time

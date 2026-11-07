@@ -158,7 +158,7 @@ function Test-CoreBehind {
 	$rec = if ($row) { $row.Matches[0].Groups[1].Value } else { '' }
 	$lines = if ($item) { @((Get-Content -LiteralPath $file -Raw) -split "`r?`n") } else { @() }
 	$had = @((@($lines | Select-Object -Index 1, 3) -join ' ') -split ' ' | Where-Object { $_ })
-	$seen = $rec -and $had -contains $rec
+	$seen = -not $rec -or $had -contains $rec   # no record: no mark, and no read past the 12 hours
 	$keep = @($had | Where-Object { $_ -ne $rec } | Select-Object -First 8) -join ' '   # line 4 of the next read
 	if (-not $item -or $item.LastWriteTime -lt (Get-Date).AddHours(-12) -or (-not $seen -and $item.LastWriteTime -lt (Get-Date).AddMinutes(-10))) {
 		[IO.File]::AppendAllText($file, ''); [IO.File]::SetLastWriteTime($file, (Get-Date))   # one reader at a time
@@ -171,7 +171,7 @@ function Test-CoreBehind {
 		if ($env:OS -eq 'Windows_NT') { Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $code) }
 		else { & sh -c "'$exe' -NoProfile -EncodedCommand $code </dev/null >/dev/null 2>&1 &" }
 	}
-	if (-not $seen) { return $false }
+	if (-not $seen -or -not $rec) { return $false }
 	$head = (Get-Content -LiteralPath $file -Raw)
 	if ($head -notmatch '^([0-9a-f]{40})') { return $false }
 	if ($lines.Count -gt 2 -and $lines[2].StartsWith($rec)) { return $false }

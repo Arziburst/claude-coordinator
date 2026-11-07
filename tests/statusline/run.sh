@@ -250,6 +250,8 @@ bar_cases() {
   begin "two projects (#541): the other updated to main's head: no mark there, read again; the first keeps its mark"
   orow ccccccc; as "$other"; draw; is "$L400"; line2 ccccccc || no "wants the file read against the new record"; draw; is "$L400"
   as "$r0"; draw; [ "$(first)" = "core ^" ] || no "wants the first project's mark kept, printed '$(plain)'"; [ "$(gitcalls)" = 2 ] || no "wants two git ls-remote, got $(gitcalls)"
+  begin "a project whose Core row holds no commit: no mark, and no read inside 12 hours after the first"; rm -f "$tmp/stub/git.log"; touch -t "$(stamp 3600)" "$up"
+  printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` |\n' > "$other/coordinator/PROJECT.md"; as "$other"; draw; is "$L400"; sleep 3; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"; as "$r0"
   upstream "$B"; rm -f "$tmp/stub/git.log"
   begin "the tag stable (#495): upstream holds it at the core's commit, main ahead: no mark, one ls-remote for both"; printf '%s' "$B" > "$tmp/stub/git.stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$B" || no "wants stable's commit in the file"
   draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote, got $(gitcalls)"; grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants the tag asked, got '$(cat "$tmp/stub/git.log")'"
