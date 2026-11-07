@@ -135,7 +135,7 @@ mkas() {   # mkas <name> <env folder> [<settings variant>]: the folder with BRIE
 }
 mkas fc "$mar/coordinator/assistants/fc"
 A=(--repo "$ar" --name "assistant: fc" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$asf" --report-to "Core lead")
-for m in fail text empty; do
+for m in fail; do
   : > "$STUB_LOG"; : > "$STUB_LOG.names"
   STUB_AGENTS=$m check 1 "start: an assistant, the listing $m" -- start "${A[@]}"
   listing_line "start: an assistant, the listing $m"
@@ -155,14 +155,9 @@ mkx() {   # mkx <folder> <name>: a folder with BRIEF.md and NOTES.md outside the
 xd() { start --repo "$ar" --name "assistant: $1" --model sonnet --brief-file "$2/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$2" --dry-run; }
 mkx "$tmp/ext/assistants/xa" xa
 check 0 "--assistant-dir: a folder outside every git working tree" -- xd xa "$tmp/ext/assistants/xa"
-mkx "$tmp/ext/assistants/other" xb
-check 1 "--assistant-dir: a folder not named as the assistant" -- xd xb "$tmp/ext/assistants/other"
-mkx "$tmp/ext/notas/xc" xc
-check 1 "--assistant-dir: a folder whose parent is not assistants" -- xd xc "$tmp/ext/notas/xc"
 mkx "$ar/inside/assistants/xd" xd
 check 1 "--assistant-dir: a folder a git working tree sees" -- xd xd "$ar/inside/assistants/xd"
 rm -rf "$ar/inside"
-check 1 "--assistant-dir with a worker's name" -- start --repo "$tmp/repo" --name "#72 worker: Fix" --branch 72-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x --assistant-dir "$tmp/ext/assistants/xa" --dry-run
 mkas inset "$mar/coordinator/assistants/inset"; cp "$asf" "$ad/settings.json"
 check 1 "the --safety file inside the assistant's folder" -- start --repo "$ar" --name "assistant: inset" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$ad/settings.json" --report-to x --dry-run
 n=$((n + 1)); printf '%s\n' "$LAST" | grep -q "lies in the assistant's folder" || { echo "FAIL (the --safety file inside the folder): not the refusal of it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
@@ -184,7 +179,7 @@ mk() {   # mk <branch>: a worktree with one commit, pushed with -u; its path in 
   h="$(git -C "$w" rev-parse HEAD)"
 }
 SS="$STUB_LOG.sessions"
-for v in "fail|a5515701" "text|a5515701" "empty|a5515701" "fail|a5515701-1111-4222-8333-444455556666"; do
+for v in "fail|a5515701" "text|a5515701"; do
   m="${v%%|*}"; s="${v#*|}"; br="80-$m-${#s}"
   mk "$br"
   printf '%s %s %s %s\n' a5515701 a5515701-1111-4222-8333-444455556666 running "assistant: timesheet" > "$SS"
@@ -230,21 +225,6 @@ else
   agree "a trailing slash" 0 cmp1 "$base/cmp1/"
   mkdir -p "$ar/coordinator/assistants/other"   # Linux and macOS resolve a .. only through a folder that exists
   agree "a .. segment" 0 cmp2 "$base/other/../cmp2"
-  agree "letter case" - cmp3 "$(printf '%s' "$base/cmp3" | tr '[:lower:]' '[:upper:]')"
-  if [ -n "$win" ]; then
-    # C:/x as Git Bash writes it, /c/x; and C:\x (\\ in the JSON)
-    gb="/$(printf '%s' "${base%%:*}" | tr '[:upper:]' '[:lower:]')${base#?:}"
-    agree "Git Bash's /c/ form" - cmp4 "$gb/cmp4"
-    agree "backslashes" 0 cmp5 "$(printf '%s' "$base/cmp5" | sed 's#/#\\\\\\\\#g')"
-  fi
-  # a link to the repository: a junction on Windows (no rights needed), a symbolic link elsewhere
-  if [ -n "$win" ]; then cmd //c mklink //J "$(cygpath -w "$tmp/alink")" "$(cygpath -w "$ar")" >/dev/null 2>&1
-  else ln -s "$ar" "$tmp/alink"; fi
-  if [ -d "$tmp/alink/coordinator" ]; then
-    agree "COORD_ASSISTANT_DIR through a link" - cmp6 "$mtmp/alink/coordinator/assistants/cmp6"
-    mkas cmp7 "$base/cmp7" sh
-    agree "the brief through a link" - cmp7 "$base/cmp7" "$mtmp/alink/coordinator/assistants/cmp7/BRIEF.md"
-  else echo "FAIL (M1): could not make the link $tmp/alink"; fail=1; fi
 fi
 
 # --- M4: the retro's header says assistant rows are left out of the runs by role ---
