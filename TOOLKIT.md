@@ -1246,7 +1246,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   from the project's local settings, the project's, the account's; else the model's window), `5h limit 14%` where
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator`, first `restart` when the window in force is not the one shown (below), then `core ↑` when upstream's tag `stable` (else its main; main alone where `PROJECT.md`'s *Core source* is `main`, #495) differs from the commit `PROJECT.md` records (one detached
-  `git ls-remote` for both refs at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against: after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
+  `git ls-remote` for both refs at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against and line 4 earlier reads' records, any project's on the machine, so each project compares its own (#541): after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
   the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
