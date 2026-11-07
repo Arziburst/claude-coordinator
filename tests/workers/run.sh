@@ -389,7 +389,8 @@ check 0 "start: from the root, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --saf
 expect_in "notice: COORD_PROTECTED_ROOT is not set in "
 expect_in "safety-noprot.json: edit tools can reach the working copy (TOOLKIT Safety)"
 
-# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS): the PreToolUse guard (wrong path, none, a folder named -selftest), a stale worktree folder, coordinator/ kept out of git, an unreachable origin, the role heading the brief ---
+# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS): the PreToolUse guard (wrong path, none, one whose self-test prints nothing, a folder named -selftest), a flag where a value belongs, a stale worktree folder, a relative --worktree-root, an exclude file without a final newline, coordinator/ kept out of git (a dry run, ignored already), an unreachable origin, the role heading the brief ---
+in_dir() { local d="$1"; shift; (cd "$d" && "$@"); }
 # the PreToolUse guard path must exist, not only the self-test's
 gl="$(grep -n 'safety-guard\.' "$tmp/safety.json" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
 sed "${gl}s#scripts/hooks/#WRONG/hooks/#" "$tmp/safety.json" > "$tmp/safety-wrong.json"
@@ -403,6 +404,10 @@ expect_in "PowerShell shell"
 sed "${gl}s#safety-guard\.#other-tool.#" "$tmp/safety.json" > "$tmp/safety-none.json"
 check 1 "start: no PreToolUse guard" -- start --repo "$tmp/repo" --name "#32 worker: a" --branch 32-a "${W[@]}" --safety "$tmp/safety-none.json"
 expect_in "no PreToolUse safety-guard hook"
+mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/safety-guard.sh"; printf 'exit 0\n' > "$tmp/silent/safety-guard.ps1"
+sed "s#$core/scripts/hooks/#$mtmp/silent/#g" "$tmp/safety.json" > "$tmp/safety-silent.json"
+check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/repo" --name "#33 worker: a" --branch 33-a "${W[@]}" --safety "$tmp/safety-silent.json"
+expect_in "printed nothing"
 # #344: the guard's self-test entry is told by its argument, not by the path: a core under a folder whose name holds
 # -selftest / --self-test (any case) finds its guard hook and starts as anywhere else (dry run, not refused)
 for d in x-selftest; do
@@ -411,16 +416,37 @@ for d in x-selftest; do
   check 0 "start: the guard under a folder named $d" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a "${W[@]}" --safety "$tmp/safety-$d.json" --dry-run
   expect_in "[dry-run]"
 done
+check 1 "start: --model followed by a flag" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a --model --dry-run --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
+expect_in "missing value for"
+git -C "$tmp/repo" show-ref -q --verify refs/heads/34-a && { echo "FAIL: --model --dry-run created a branch"; fail=1; }
 # a stale folder where the worktree goes is refused, never entered
 mkdir -p "$tmp/repo/.claude/worktrees/35-a" && echo junk > "$tmp/repo/.claude/worktrees/35-a/old.txt"
 check 1 "start: a stale folder at the worktree path" -- start --repo "$tmp/repo" --name "#35 worker: a" --branch 35-a "${W[@]}" --safety "$tmp/safety.json"
 expect_in "is not a worktree of"
+# a relative --worktree-root is taken from the current folder
+mkdir -p "$tmp/elsewhere"
+check 0 "start: a relative --worktree-root" -- in_dir "$tmp/elsewhere" start --repo "$tmp/repo" --name "#36 worker: a" --branch 36-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root wt
+[ "$(git -C "$tmp/elsewhere/wt/36-a" rev-parse --abbrev-ref HEAD 2>/dev/null)" = 36-a ] || { echo "FAIL: the worktree is not under the current folder"; fail=1; }
+[ -e "$tmp/repo/wt" ] && { echo "FAIL: the worktree went into the repository"; fail=1; }
+git -C "$tmp/repo" worktree remove "$tmp/elsewhere/wt/36-a" 2>/dev/null
+# an exclude file without a final newline: the new line is not glued to its last one
+git init -q -b main "$tmp/repo3" && g -C "$tmp/repo3" commit -q --allow-empty -m init
+mkdir -p "$tmp/repo3/coordinator" && echo x > "$tmp/repo3/coordinator/PROJECT.md"
+printf 'coordinator/' > "$tmp/repo3/.git/info/exclude"
+check 0 "start: an exclude file without a final newline" -- start --repo "$tmp/repo3" --name "#37 worker: a" --branch 37-a "${W[@]}" --safety "$tmp/safety.json"
+grep -qx 'coordinator/' "$tmp/repo3/.git/info/exclude" && grep -qx '/.claude/worktrees/' "$tmp/repo3/.git/info/exclude" &&
+  [ -z "$(git -C "$tmp/repo3" status --porcelain)" ] || { echo "FAIL: the exclude file was corrupted:"; sed 's/^/    /' "$tmp/repo3/.git/info/exclude"; fail=1; }
 # a coordinator/ state repository in a project that got `git init` after it: kept out of the project's
 # git with one info/exclude line (the common dir's), written by a real start only
 git init -q -b main "$tmp/repo5" && g -C "$tmp/repo5" commit -q --allow-empty -m init
 git init -q -b state "$tmp/repo5/coordinator" && echo x > "$tmp/repo5/coordinator/PROJECT.md"
+check 0 "start: a dry run, coordinator/ not ignored" -- start --repo "$tmp/repo5" --name "#42 worker: a" --branch 42-a "${W[@]}" --safety "$tmp/safety.json" --dry-run
+expect_in "[dry-run] add /coordinator/ to the repository's .git/info/exclude"
+grep -q 'coordinator' "$tmp/repo5/.git/info/exclude" && { echo "FAIL: the dry run wrote /coordinator/ to info/exclude"; fail=1; }
 check 0 "start: coordinator/ not ignored" -- start --repo "$tmp/repo5" --name "#42 worker: a" --branch 42-a "${W[@]}" --safety "$tmp/safety.json"
 expect_in "added /coordinator/ to the repository's .git/info/exclude"
+check 0 "start: coordinator/ ignored already" -- start --repo "$tmp/repo5" --name "#43 worker: a" --branch 43-a "${W[@]}" --safety "$tmp/safety.json"
+case "$LAST" in *"/coordinator/ to the repository"*) echo "FAIL: /coordinator/ added a second time"; fail=1 ;; esac
 [ "$(grep -c '^/coordinator/$' "$tmp/repo5/.git/info/exclude")" = 1 ] && [ -z "$(git -C "$tmp/repo5" status --porcelain)" ] ||
   { echo "FAIL: the project's git sees coordinator/:"; git -C "$tmp/repo5" status --short | sed 's/^/    /'; sed 's/^/    /' "$tmp/repo5/.git/info/exclude"; fail=1; }
 # an unreachable origin: the script's own message (Windows PowerShell 5.1 included)
@@ -440,7 +466,27 @@ check 0 "start: the role already in the brief" -- start --repo "$tmp/repo" --nam
 expect_in "already in the brief"
 git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/39-a"; git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/40-a"
 
-# --- findings of a macOS tester session (group WORKERS): an existing branch checked out into its worktree, a worktree root through a symlink ---
+# --- findings of a macOS tester session (group WORKERS): a guard path with a space (quoted, unquoted), a branch differing only in letter case, an existing branch checked out into its worktree, a worktree root through a symlink, names the JSON listing escapes ---
+# a quoted guard path with a space is accepted (selftest hooks accepts it); an unquoted one is refused
+mkdir -p "$tmp/core copy" && cp -R "$core/scripts" "$tmp/core copy/"
+sed -E "s#$core/scripts/hooks/(safety-guard\.(sh|ps1))#\\\\\"$mtmp/core copy/scripts/hooks/\\1\\\\\"#g" "$tmp/safety.json" > "$tmp/safety-space.json"
+grep -q 'core copy/scripts/hooks/safety-guard' "$tmp/safety-space.json" || { echo "FAIL: could not write the quoted guard path"; fail=1; }
+check 0 "start: a quoted guard path with a space" -- start --repo "$tmp/repo" --name "#44 worker: a" --branch 44-a "${W[@]}" --safety "$tmp/safety-space.json" --dry-run
+sed 's#\\"##g' "$tmp/safety-space.json" > "$tmp/safety-space-bare.json"
+check 1 "start: an unquoted guard path with a space" -- start --repo "$tmp/repo" --name "#44 worker: a" --branch 44-a "${W[@]}" --safety "$tmp/safety-space-bare.json" --dry-run
+expect_in "quote a path with a space"
+# a branch that differs from an existing one only in letter case (Windows, macOS: one branch file and
+# one worktree folder) is refused, with the worktree there and without it
+case "$(uname -s)" in Darwin|MINGW*|MSYS*|CYGWIN*)
+  check 0 "start: a branch for the letter-case checks" -- start --repo "$tmp/repo" --name "#45 worker: a" --branch 45-case "${W[@]}" --safety "$tmp/safety.json"
+  check 1 "start: a branch in another letter case, its worktree there" -- start --repo "$tmp/repo" --name "#45 worker: b" --branch 45-CASE "${W[@]}" --safety "$tmp/safety.json"
+  expect_in "differs only in letter case"
+  git -C "$tmp/repo" branch 46-case main
+  check 1 "start: a branch in another letter case, no worktree" -- start --repo "$tmp/repo" --name "#46 worker: a" --branch 46-Case "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/wt46"
+  expect_in "differs only in letter case"
+  [ -e "$tmp/wt46/46-Case" ] && { echo "FAIL: a worktree was added for a branch in another letter case"; fail=1; }
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/45-case" ;;
+esac
 # an existing branch in the same letter case is still checked out into its worktree
 git -C "$tmp/repo" branch 47-a main
 check 0 "start: an existing branch without a worktree" -- start --repo "$tmp/repo" --name "#47 worker: a" --branch 47-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/wt47"
@@ -454,7 +500,34 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
   expect_in "reusing worktree"
   git -C "$tmp/repo" worktree remove "$tmp/real48/48-a" 2>/dev/null ;;
 esac
+# a name that the JSON listing escapes is found at once, not after the 20 s wait; it reaches claude
+# intact (Windows PowerShell 5.1 drops a " from a native argument unless it is escaped)
+for nm in '#49 worker: a\b' '#50 worker: say "hi"'; do
+  br="$(printf '%s' "$nm" | cut -c2-3)-a"
+  : > "$STUB_LOG"
+  check 0 "start: the name $nm in the listing" -- start --repo "$tmp/repo" --name "$nm" --branch "$br" "${W[@]}" --safety "$tmp/safety.json"
+  case "$LAST" in *"not listed after"*) echo "FAIL: the name $nm was not found in the listing"; fail=1 ;; esac
+  grep -qF -- "--bg --name $nm --model" "$STUB_LOG" || { echo "FAIL: the name $nm did not reach claude intact:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/$br" 2>/dev/null
+done
 # --- findings of re-proving on Windows (start-worker) ---
+# a worktree folder is reused only with the requested branch checked out
+git -C "$tmp/repo" worktree add -q -b 52-other "$tmp/repo/.claude/worktrees/52-a" main
+check 1 "start: a worktree folder with another branch checked out" -- start --repo "$tmp/repo" --name "#52 worker: a" --branch 52-a "${W[@]}" --safety "$tmp/safety.json"
+expect_in "has 52-other checked out, not 52-a"
+git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/52-a"
+# with packed refs git creates a branch beside one that differs only in letter case (Windows, macOS):
+# start-worker refuses it although the exact name exists, and never enters the other branch's worktree
+case "$(uname -s)" in Darwin|MINGW*|MSYS*|CYGWIN*)
+  check 0 "start: a branch for the packed-refs check" -- start --repo "$tmp/repo" --name "#53 worker: a" --branch 53-case "${W[@]}" --safety "$tmp/safety.json"
+  git -C "$tmp/repo" pack-refs --all
+  if git -C "$tmp/repo" branch 53-CASE main 2>/dev/null; then
+    check 1 "start: a branch beside another in another letter case (packed refs)" -- start --repo "$tmp/repo" --name "#53 worker: b" --branch 53-CASE "${W[@]}" --safety "$tmp/safety.json"
+    expect_in "differs only in letter case from the existing 53-case"
+    git -C "$tmp/repo" update-ref -d refs/heads/53-CASE
+  else echo "FAIL: git did not create 53-CASE beside the packed 53-case"; fail=1; fi
+  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/53-case" ;;
+esac
 # the effort reaches claude as --effort (#211): it was dropped, every worker ran at the user's default
 check 1 "start: an effort outside the five levels" -- start "${S[@]}" --effort turbo
 expect_in "low, medium, high, xhigh or max"
@@ -484,10 +557,15 @@ case "$LAST" in *"no touches"*|*"src/a.ts"*) echo "FAIL: the block list was not 
 # first item and a blank line between items do not end the list; a `#` inside a path is no comment
 B=(--name "#12 worker: Fix" --repo "$tmp/repo" --branch 12-fix --model opus --safety "$tmp/safety.json" --report-to x --dry-run)
 printf 'Do it.\nTouches: the cart\ntouches: [lib/b.ts]\n' > "$tmp/brief-tcase.md"
-for b in tcase; do
+printf 'Do it.\ntouches:\n  # the main change\n  - lib/b.ts\n' > "$tmp/brief-tcomment.md"
+printf 'Do it.\ntouches:\n  - docs/\n\n  - lib/b.ts\nThe rest.\n' > "$tmp/brief-tblank.md"
+for b in tcase tcomment tblank; do
   STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight, brief-$b" -- start "${B[@]}" --brief-file "$tmp/brief-$b.md"
   expect_in "foresight: TOUCHES #31: 31-a - lib/b.ts"
 done
+printf 'Do it.\ntouches: [docs/c#.md]   # the page\n' > "$tmp/brief-thash.md"
+STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tdocs/c#.md')" check 0 "start: the conflict foresight, a # in a path" -- start "${B[@]}" --brief-file "$tmp/brief-thash.md"
+expect_in "foresight: TOUCHES #31: 31-a - docs/c#.md"
 # a brief with no touches takes them from --contract (#514); the brief's own come first
 STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsort.sh\tlib/b.ts')" check 0 "start: the conflict foresight from --contract (#514)" -- start "${B[@]}" --brief-file "$tmp/brief.md" --contract "$tmp/budget-time-ok.md"
 expect_in "foresight: TOUCHES #31: 31-a - sort.sh"; case "$LAST" in *"no touches"*) echo "FAIL (#514): --contract's touches not read"; fail=1 ;; esac
@@ -516,9 +594,13 @@ git -C "$tmp/repo" show-ref -q --verify refs/heads/67-check && { echo "FAIL: a b
 # a contract missing `id:`, and one left open at the brief's end, are still checked (never "none found");
 # a `---` block holding none of the contract's keys is no contract
 { printf 'Do it.\n\n'; tfno "$cc/budget-time-ok.md" | sed '/^id:/d'; } > "$tmp/brief-cnoid.md"
+{ printf 'Do it.\n\n'; sed '$d' "$cc/tests-first-missing.md"; } > "$tmp/brief-copen.md"
 printf 'Do it.\n---\nNotes: keep it short.\nsee: the docs\n---\nThe rest.\n' > "$tmp/brief-crule.md"
 check 1 "start: a contract in the brief without id is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-cnoid.md" --dry-run
 expect_in "contract in the brief: ERROR missing \`id\`"
+expect_in "refused: the contract fails check-contract"
+check 1 "start: an unclosed contract in the brief with an ERROR is refused" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-copen.md" --dry-run
+expect_in "contract in the brief: ERROR missing \`tests_first\`"
 expect_in "refused: the contract fails check-contract"
 check 0 "start: a --- block that is no contract" -- start --name "#67 worker: C" "${C[@]}" --brief-file "$tmp/brief-crule.md" --dry-run
 expect_in "contract: none found in the brief - check-contract not run (CORE §4)"
@@ -552,10 +634,14 @@ one_line() {   # one_line <text>: exactly one output line names the tester's tes
     { echo "FAIL: not exactly one line names the tester's tests ($1)"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 }
 : > "$STUB_LOG"
-check 1 "start: tests_first yes by --contract, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
-keep_start contract "$tmp/c276-yes.md"; expect_gate "c276-yes.md"; nothing_made 76-gate
-check 1 "start: tests_first yes in the brief, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md"
+check 1 "start: tests_first yes in the brief, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md" --dry-run
 keep_start brief "$tmp/brief-tfyes.md"; expect_gate "contract in the brief"; nothing_made 76-gate
+check 1 "start: tests_first yes by --contract, no tester flag, dry run" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --dry-run
+keep_start contract "$tmp/c276-yes.md"; expect_gate "c276-yes.md"; nothing_made 76-gate
+check 1 "start: tests_first yes by --contract, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
+expect_gate "c276-yes.md"; nothing_made 76-gate
+check 1 "start: tests_first yes in the brief, no tester flag" -- start --name "#76 worker: G" "${F[@]}" --branch 76-gate --brief-file "$tmp/brief-tfyes.md"
+expect_gate "contract in the brief"; nothing_made 76-gate
 git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/76-gate" 2>/dev/null; git -C "$tmp/repo" branch -q -D 76-gate 2>/dev/null
 # a valid --tester-commit: the reused worktree's HEAD (the tester's commit on the task branch), then an
 # ancestor of it; on a new branch, a commit of the base
@@ -716,6 +802,41 @@ gate_as() {   # gate_as <decision> <label>: the last start did what check-contra
 drop_gate() {   # drop_gate <branch>: a start these cases wrongly let through leaves nothing for the next case
   git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/$1" 2>/dev/null; git -C "$tmp/repo" branch -q -D "$1" 2>/dev/null; : > "$STUB_LOG"
 }
+# N1: a quoted tests_first value spanning lines reads as yes in check-contract - the gate refuses it too
+for qn in dq sq; do
+  if [ "$qn" = dq ]; then qc='"'; else qc="'"; fi
+  sed "s/^tests_first: yes\$/tests_first: ${qc}yes, because\\
+  it is cheap${qc}/" "$cc/budget-time-ok.md" > "$tmp/c276-span-$qn.md"
+  { printf 'contract:\n'; cbody "$tmp/c276-span-$qn.md"; } > "$tmp/c276-cspan-$qn.md"
+  { printf 'Do it.\n\n'; cat "$tmp/c276-span-$qn.md"; } > "$tmp/brief-span-$qn.md"
+  grep -q "^tests_first: ${qc}yes, because\$" "$tmp/c276-span-$qn.md" && grep -q "^  it is cheap${qc}\$" "$tmp/c276-span-$qn.md" &&
+    grep -q "^    it is cheap${qc}\$" "$tmp/c276-cspan-$qn.md" || { echo "FAIL: could not write the spanning contracts ($qn)"; fail=1; }
+  # the precondition: check-contract passes them (its own reading is yes: the gate's to agree with)
+  cc_run "$tmp/c276-span-$qn.md" > /dev/null || { echo "FAIL: check-contract does not pass c276-span-$qn.md"; fail=1; }
+  cc_run "$tmp/c276-cspan-$qn.md" > /dev/null || { echo "FAIL: check-contract does not pass c276-cspan-$qn.md"; fail=1; }
+  : > "$STUB_LOG"
+  check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md" --dry-run
+  keep_start contract "$tmp/c276-span-$qn.md"; expect_gate "c276-span-$qn.md"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), front matter, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-span-$qn.md"
+  expect_gate "c276-span-$qn.md"; nothing_made 86-gate; drop_gate 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), a contract: block, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cspan-$qn.md" --dry-run
+  keep_start contract "$tmp/c276-cspan-$qn.md"; expect_gate "c276-cspan-$qn.md"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag, dry run" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md" --dry-run
+  keep_start brief "$tmp/brief-span-$qn.md"; expect_gate "contract in the brief"; nothing_made 86-gate
+  check 1 "start: tests_first yes spanning lines ($qn), in the brief, no tester flag" -- start --name "#86 worker: G" "${F[@]}" --branch 86-gate --brief-file "$tmp/brief-span-$qn.md"
+  expect_gate "contract in the brief"; nothing_made 86-gate; drop_gate 86-gate
+done
+# N2: a valid tests_first yes contract saved with CR-only line endings - check-contract fails it (then
+# start-worker refuses on its ERROR) or passes it (then the gate refuses it); never a start without the tester
+tr '\n' '\r' < "$cc/budget-time-ok.md" > "$tmp/c276-cr.md"
+[ "$(tr -cd '\n' < "$tmp/c276-cr.md" | wc -c | tr -d ' ')" = 0 ] && grep -q 'tests_first: yes' "$tmp/c276-cr.md" ||
+  { echo "FAIL: could not write the CR-only contract"; fail=1; }
+crd=fail; cc_run "$tmp/c276-cr.md" > /dev/null && crd=yes
+: > "$STUB_LOG"
+check 1 "start: tests_first yes with CR-only line endings, no tester flag, dry run" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md" --dry-run
+keep_start contract "$tmp/c276-cr.md"; gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
+check 1 "start: tests_first yes with CR-only line endings, no tester flag" -- start --name "#87 worker: G" "${F[@]}" --branch 87-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cr.md"
+gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
 # the agreement guard: for every contract the gate's cases use, and the forms the round-2 review tried,
 # start-worker (no tester flag, dry run) does what check-contract reads: refuses on its ERROR, refuses at
 # the gate on yes, starts on no - by --contract, and in a brief for the front-matter forms; a start an earlier
@@ -853,14 +974,31 @@ rm -f "$STUB_LOG.arg"
 check 0 "start: a lead, the notes folder there already" -- start "${L[@]}" --name "#311 lead: Notes" --branch 311-lead --brief-file "$tmp/brief.md"
 [ "$(cat "$nwt/311-lead.lead/sub-1.md" 2>/dev/null)" = kept ] || { echo "FAIL: the existing notes folder's file did not survive the start"; fail=1; }
 names_notes "$(cat "$STUB_LOG.arg" 2>/dev/null)" 311-lead
+# a big brief: the launch file names the notes folder
+rm -f "$STUB_LOG.arg"
+check 0 "start: a lead, a big brief - the notes folder in the launch file" -- start "${L[@]}" --name "#312 lead: Notes" --branch 312-lead --brief-file "$tmp/brief-big.md"
+[ -d "$nwt/312-lead.lead" ] || { echo "FAIL: no notes folder $nwt/312-lead.lead after a lead's start with a big brief"; fail=1; }
+if f310="$(argfile "$(cat "$STUB_LOG.arg" 2>/dev/null)")"; then names_notes "$(cat "$f310" 2>/dev/null)" 312-lead
+else echo "FAIL: a lead's big brief went through no launch file"; fail=1; fi
 # a worker, a tester and a session with no role: no notes folder, none named
-for v in "#313 worker: N|313-w"; do
+for v in "#313 worker: N|313-w" "#313 tester: N|313-t" "Plain session|313-n"; do
   vn="${v%%|*}" vb="${v#*|}"; rm -f "$STUB_LOG.arg"
   check 0 "start: $vn - no notes folder" -- start "${L[@]}" --name "$vn" --branch "$vb" --brief-file "$tmp/brief.md"
   [ -e "$nwt/$vb.lead" ] && { echo "FAIL ($vn): a notes folder $vb.lead was made"; fail=1; }
   grep -qF "$vb.lead" "$STUB_LOG.arg" 2>/dev/null && { echo "FAIL ($vn): the launch text names a notes folder"; fail=1; }
 done
 for b in 310-lead 311-lead 312-lead 313-w 313-t 313-n; do git -C "$tmp/repo" worktree remove --force "$nwt/$b" 2>/dev/null; done
+# a lead's notes path that is another git worktree (a branch <x>.lead checked out there) is never used:
+# start-worker refuses (exit 1) before anything is created, naming the conflict (#310, round 2)
+git -C "$tmp/repo" worktree add -q -b 314-lead.lead "$nwt/314-lead.lead" main && echo precious > "$nwt/314-lead.lead/uncommitted.txt"
+: > "$STUB_LOG"
+check 1 "start: a lead whose notes path is another worktree - refused" -- start "${L[@]}" --name "#314 lead: Notes" --branch 314-lead --brief-file "$tmp/brief.md"
+printf '%s\n' "$LAST" | grep -qF "314-lead.lead" || { echo "FAIL: the refusal does not name the notes path 314-lead.lead"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -e "$nwt/314-lead" ] && { echo "FAIL: a refused lead's start created the worktree"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/314-lead && { echo "FAIL: a refused lead's start created the branch"; fail=1; }
+[ -s "$STUB_LOG" ] && { echo "FAIL: a refused lead's start called claude"; fail=1; }
+[ "$(cat "$nwt/314-lead.lead/uncommitted.txt" 2>/dev/null)" = precious ] || { echo "FAIL: the other worktree's file did not survive"; fail=1; }
+git -C "$tmp/repo" worktree remove --force "$nwt/314-lead" 2>/dev/null; git -C "$tmp/repo" worktree remove --force "$nwt/314-lead.lead" 2>/dev/null
 # the lead's first line - work only inside the worktree - names the notes folder as the exception, on
 # that line or the one right after it, in both launch shapes; a worker's and a tester's first two lines
 # stay as they were and name no notes folder
@@ -958,7 +1096,12 @@ ad="$tsd"; : > "$STUB_LOG"
 check 1 "start: an assistant, --brief-file NOTES.md" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/NOTES.md" --safety "$tsf"
 says "an assistant, --brief-file NOTES.md" BRIEF.md; asnothing "an assistant, --brief-file NOTES.md"
 mkas other; od="$ad"; ofs="$asf"; ad="$tsd"; : > "$STUB_LOG"
+check 1 "start: an assistant, another assistant's folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$od/BRIEF.md" --safety "$ofs"
+says "an assistant, another assistant's folder" assistants; asnothing "an assistant, another assistant's folder"
 # COORD_ASSISTANT_DIR missing, or naming another folder: refused, naming both
+: > "$STUB_LOG"
+check 1 "start: an assistant, no COORD_ASSISTANT_DIR" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tmp/safety.json"
+says "an assistant, no COORD_ASSISTANT_DIR" COORD_ASSISTANT_DIR assistants/timesheet; asnothing "an assistant, no COORD_ASSISTANT_DIR"
 : > "$STUB_LOG"
 check 1 "start: an assistant, COORD_ASSISTANT_DIR another folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$ofs"
 says "an assistant, COORD_ASSISTANT_DIR another folder" COORD_ASSISTANT_DIR assistants/other; says "an assistant, COORD_ASSISTANT_DIR another folder" assistants/timesheet
@@ -1205,10 +1348,16 @@ printf '5e1f7e57\t%s\n' "$(native "$tmp/project2")" > "$SS.cwd"
 STUB_HEADS="$h" check 0 "cleanup: the session in the folder that holds the worktree" -- cleanup --worktree "$w" --session 5e1f7e57
 expect_in "cleaned: 5e1f7e57"
 
-# --- findings of a macOS review: a session folder through a symlink (a junction on Windows) to the repository ---
+# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink (a junction on Windows) to the repository, no claude on PATH ---
+# a full sessionId typed in upper case is the listed session: here a foreign one, so nothing is removed
 mk 23-fix
 printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#23 worker: Fix" > "$SS"
 printf 'f0e1d2c3\t%s\n' "$(native "$tmp/other")" > "$SS.cwd"
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 5 "cleanup: a full sessionId in upper case" -- cleanup --worktree "$w" --session F0E1D2C3-1111-4222-8333-444455556666
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+[ -d "$w" ] || { echo "FAIL: an upper-case sessionId removed the worktree"; fail=1; }
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: an upper-case sessionId stopped or removed a session"; fail=1; }
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     # the listing gives the session's folder through a junction to the repository (C:\...): own
@@ -1223,6 +1372,15 @@ case "$(uname -s)" in
     STUB_HEADS="$h" check 0 "cleanup: the session's folder through a symlink" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
     expect_in "[dry-run] claude rm f0e1d2c3" ;;
 esac
+# no claude on PATH (only where the stub is the only claude): nothing can be removed - SESSION KEPT, exit 4
+nocl="$tmp/nocl"; mkdir -p "$nocl"; cp "$tmp/bin/gh" "$tmp/bin/gh.ps1" "$nocl/"
+p2="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$tmp/bin" | paste -sd: -)"
+if ! PATH="$nocl:$p2" command -v claude >/dev/null 2>&1; then
+  mk 25-fix
+  PATH="$nocl:$p2" STUB_HEADS="$h" check 4 "cleanup: no claude on PATH" -- cleanup --worktree "$w" --session 0d0d0d0d
+  expect_in "SESSION KEPT: 0d0d0d0d (claude rm failed: claude: command not found)"
+  [ -d "$w" ] || { echo "FAIL: no claude on PATH, the worktree was removed"; fail=1; }
+fi
 
 # --- a folder git could not delete (a just-stopped session still holding it, #238): git unregisters the
 # worktree but the folder stays - removed when empty, left with an error when not (the git wrapper: the set-up)
@@ -1272,12 +1430,34 @@ me 32-empty; git -C "$w" push -q -u origin 32-empty 2>/dev/null
 check 3 "cleanup: an empty branch pushed with -u" -- cleanup --worktree "$w"
 expect_in "NOT MERGED"
 kept 32-empty "pushed with -u"
+# its upstream configured but the remote branch and its local copy gone: still not "never pushed"
+me 33-empty; git -C "$w" push -q -u origin 33-empty 2>/dev/null; git -C "$w" push -q origin --delete 33-empty 2>/dev/null
+git -C "$tmp/repo" update-ref -d refs/remotes/origin/33-empty 2>/dev/null
+check 3 "cleanup: an empty branch with an upstream configured" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"
+kept 33-empty "upstream configured"
+# pushed without -u and its origin/<branch> not fetched (a narrow fetch refspec): ls-remote finds it
+me 34-empty; git -C "$w" push -q origin 34-empty 2>/dev/null
+git -C "$tmp/repo" update-ref -d refs/remotes/origin/34-empty 2>/dev/null
+git -C "$tmp/repo" config remote.origin.fetch '+refs/heads/main:refs/remotes/origin/main'
+check 3 "cleanup: an empty branch on origin, not fetched" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"
+git -C "$tmp/repo" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+kept 34-empty "on origin, not fetched"
 # a dirty worktree (an untracked file): refused as before
 me 35-empty; echo dirt > "$w/dirt.txt"
 STUB_GH_RC=1 check 3 "cleanup: an empty branch, untracked file" -- cleanup --worktree "$w"
 expect_in "NOT CLEAN"
 kept 35-empty "untracked file"
 rm -f "$w/dirt.txt"
+# a session of another folder: SESSION FOREIGN as for a merged branch, nothing touched
+me 36-empty; : > "$STUB_LOG"
+printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#36 worker: e" > "$SS"
+printf 'f0e1d2c3\t%s\n' "$(native "$tmp/other")" > "$SS.cwd"
+check 5 "cleanup: an empty branch, a foreign session" -- cleanup --worktree "$w" --session f0e1d2c3
+expect_in "SESSION FOREIGN: f0e1d2c3 ("
+kept 36-empty "foreign session"
+grep -q -e '^stop' -e '^rm' "$STUB_LOG" && { echo "FAIL: a foreign session of an empty branch was stopped or removed"; fail=1; }
 # a commit made after the checks, as its session stops: decided again before anything is deleted -
 # CHANGED, exit 3, the branch with the new commit and the worktree kept
 me 40-empty
@@ -1288,6 +1468,48 @@ expect_in "CHANGED: "
 expect_in " moved since the checks - left as is"
 kept 40-empty "a commit as the session stops"
 [ "$(git -C "$w" rev-list --count main..HEAD)" = 1 ] || { echo "FAIL: the commit made as the session stopped is gone"; fail=1; }
+# the removal fails (a locked worktree, as a folder a just-stopped session holds): the branch is put
+# back on the worktree at the same commit, and a run once the removal works removes it as EMPTY
+me 41-empty; git -C "$tmp/repo" worktree lock "$w"
+STUB_GH_RC=1 check 1 "cleanup: an empty branch, the removal fails" -- cleanup --worktree "$w"
+expect_in "REMOVE FAILED: git worktree remove "
+expect_in "; branch 41-empty put back at "
+kept 41-empty "the removal fails"
+git -C "$tmp/repo" worktree unlock "$w"
+STUB_GH_RC=1 check 0 "cleanup: an empty branch, run again once the removal works" -- cleanup --worktree "$w"
+expect_in "EMPTY: 41-empty has no commits beyond origin/main and was never pushed - removed"
+gone 41-empty "run again once the removal works"
+# git unregisters the worktree but leaves a file in the folder: the branch is put back in the repository
+me 42-empty; : > "$tmp/leave-folder"
+PATH="$gitw:$PATH" STUB_GH_RC=1 LEAVE_FILE=1 check 1 "cleanup: an empty branch, git leaves the folder with a file" -- cleanup --worktree "$w"
+expect_in "is no longer a worktree but not empty - left as is; branch 42-empty put back at "
+git -C "$tmp/repo" show-ref -q --verify refs/heads/42-empty || { echo "FAIL: the branch was not put back after the failed removal"; fail=1; }
+# pushed to another remote only (refs/remotes/backup/<branch>): not never pushed - the usual checks
+git init -q --bare "$tmp/backup.git" && git -C "$tmp/repo" remote add backup "$tmp/backup.git"
+me 43-empty; git -C "$w" push -q backup 43-empty 2>/dev/null
+STUB_GH_RC=1 check 3 "cleanup: an empty branch pushed to another remote" -- cleanup --worktree "$w"
+expect_in "UNKNOWN"
+kept 43-empty "pushed to another remote"
+git -C "$tmp/repo" remote remove backup
+# the main checkout's HEAD behind the base (origin/main moved on, local main did not): the branch is
+# still deleted with git branch -d (checked against its own commit, not the main checkout's HEAD)
+git clone -q "$tmp/remote.git" "$tmp/server2" 2>/dev/null && g -C "$tmp/server2" commit -q --allow-empty -m "main moves on" &&
+  git -C "$tmp/server2" push -q origin main 2>/dev/null
+git -C "$tmp/repo" fetch -q
+me 37-empty origin/main
+STUB_GH_RC=1 check 0 "cleanup: an empty branch ahead of the main checkout's HEAD" -- cleanup --worktree "$w"
+expect_in "EMPTY: 37-empty has no commits beyond origin/main and was never pushed - removed"
+gone 37-empty "ahead of the main checkout's HEAD"
+# no origin at all (a local-only repository): the base is the local main
+git init -q -b main "$tmp/local" && g -C "$tmp/local" commit -q --allow-empty -m init
+w="$tmp/local/.claude/worktrees/38-empty"; git -C "$tmp/local" worktree add -q -b 38-empty "$w" main
+STUB_GH_RC=1 check 0 "cleanup: an empty branch, no origin" -- cleanup --worktree "$w"
+expect_in "EMPTY: 38-empty has no commits beyond main and was never pushed - removed"
+[ -d "$w" ] && { echo "FAIL (no origin): the worktree is still there"; fail=1; }
+git -C "$tmp/local" show-ref -q --verify refs/heads/38-empty && { echo "FAIL (no origin): the branch is still there"; fail=1; }
+w="$tmp/local/.claude/worktrees/39-empty"; git -C "$tmp/local" worktree add -q -b 39-empty "$w" main && g -C "$w" commit -q --allow-empty -m one
+STUB_GH_RC=1 check 3 "cleanup: one commit, no origin" -- cleanup --worktree "$w"
+[ -d "$w" ] && git -C "$tmp/local" show-ref -q --verify refs/heads/39-empty || { echo "FAIL (one commit, no origin): touched"; fail=1; }
 
 # --- a lead's notes beside its worktree (#310): <worktree>.lead/ is removed with the worktree (one line
 # says so, naming the folder), kept whenever the worktree is left (a dry run, NOT CLEAN, NOT MERGED,
@@ -1300,6 +1522,8 @@ ngone() {   # ngone <branch> <what>: the notes folder is gone and one output lin
     { echo "FAIL ($2): no output line says the notes folder $1.lead was removed"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 }
 mk 50-lead; notes
+STUB_HEADS="$h" check 0 "cleanup: merged, dry run - the notes folder kept" -- cleanup --worktree "$w" --dry-run
+nkept "merged, dry run"
 STUB_HEADS="$h" check 0 "cleanup: merged - the notes folder removed with the worktree" -- cleanup --worktree "$w"
 ngone 50-lead "merged"
 me 51-lead origin/main; notes
@@ -1309,10 +1533,46 @@ mk 52-lead; notes; echo dirt > "$w/dirt.txt"
 STUB_HEADS="$h" check 3 "cleanup: NOT CLEAN - the notes folder kept" -- cleanup --worktree "$w"
 expect_in "NOT CLEAN"; nkept "not clean"
 rm -f "$w/dirt.txt"
+mk 53-lead; notes
+STUB_HEADS="" check 3 "cleanup: NOT MERGED - the notes folder kept" -- cleanup --worktree "$w"
+expect_in "NOT MERGED"; nkept "not merged"
+me 54-lead origin/main; notes
+printf '%s %s %s %s\n' e5454545 e5454545-1111-4222-8333-444455556666 running "#54 lead: n" > "$SS"
+printf 'e5454545\t%s\n' "$(native "$w")" > "$SS.cwd"
+STUB_STOP_COMMIT="$w" STUB_GH_RC=1 check 3 "cleanup: CHANGED - the notes folder kept" -- cleanup --worktree "$w" --session e5454545
+expect_in "CHANGED: "; nkept "changed"
+mk 55-lead; notes; : > "$tmp/leave-folder"
+PATH="$gitw:$PATH" STUB_HEADS="$h" LEAVE_FILE=1 check 1 "cleanup: a failed removal - the notes folder kept" -- cleanup --worktree "$w"
+expect_in "not empty - left as is"; nkept "failed removal"
 mk 56-lead
 STUB_HEADS="$h" check 0 "cleanup: merged, no notes folder - no error" -- cleanup --worktree "$w"
 expect_in "cleaned: "
 [ -d "$w" ] && { echo "FAIL (no notes folder): the worktree is still there"; fail=1; }
+# a lead's notes path that is another git worktree (a branch <x>.lead checked out there) is never removed:
+# its uncommitted file survives, it stays a listed, not prunable worktree, and one line names it as a
+# git working copy that was left (#310, round 2); the exit code is the script's choice
+nwtree() { git -C "$tmp/repo" worktree add -q -b "$1.lead" "$w.lead" main && echo precious > "$w.lead/uncommitted.txt"; }
+nwkept() {   # nwkept <branch> <what>
+  [ "$(cat "$w.lead/uncommitted.txt" 2>/dev/null)" = precious ] || { echo "FAIL ($2): the uncommitted file in $1.lead was removed"; fail=1; }
+  git -C "$tmp/repo" worktree list --porcelain | tr -d '\r' |
+    awk -v s="/$1.lead" 'BEGIN { RS = "" } { p = $2; if (substr(p, length(p) - length(s) + 1) == s) { f = 1; if ($0 ~ /prunable/) b = 1 } } END { exit !(f && !b) }' ||
+    { echo "FAIL ($2): the worktree $1.lead is no longer a listed, not prunable worktree"; git -C "$tmp/repo" worktree list --porcelain | sed 's/^/    /'; fail=1; }
+  printf '%s\n' "$LAST" | tr -d '\r' | grep -F "$1.lead" | sed 's#[^ ]*[/\\][^ ]*##g' | grep -qiE 'worktree|working copy' ||
+    { echo "FAIL ($2): no output line says the notes path $1.lead is a git working copy and was left"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+  git -C "$tmp/repo" worktree remove --force "$w.lead" 2>/dev/null
+}
+mk 57-lead; nwtree 57-lead; n=$((n + 1))
+LAST="$(STUB_HEADS="$h" cleanup --worktree "$w" 2>&1)"
+nwkept 57-lead "merged, the notes path a worktree"
+me 58-lead origin/main; nwtree 58-lead; n=$((n + 1))
+LAST="$(STUB_GH_RC=1 cleanup --worktree "$w" 2>&1)"
+nwkept 58-lead "empty branch, the notes path a worktree"
+# a worktree path given with a trailing backslash (Windows) - its notes folder goes with it, as in the .ps1
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
+  mk 59-lead; notes
+  STUB_HEADS="$h" check 0 "cleanup: merged, a trailing backslash - the notes folder removed" -- cleanup --worktree "$(native "$w")\\"
+  ngone 59-lead "a trailing backslash" ;;
+esac
 
 # --- an assistant is never cleaned up (#281): --session naming a session the listing calls `assistant: <name>`
 # (by its short id or full sessionId, running or stopped) changes nothing and exits 6 with one line
@@ -1328,7 +1588,7 @@ akept() {   # akept <what>: exit 6 checked; one line akl, nothing stopped or rem
   [ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify refs/heads/60-asst || { echo "FAIL ($1): the worktree or branch was removed"; fail=1; }
   grep -q a5515700 "$SS" || { echo "FAIL ($1): the assistant's session is gone"; fail=1; }
 }
-for v in "a5515700|"; do
+for v in "a5515700|" "a5515700-1111-4222-8333-444455556666|"; do
   vs="${v%%|*}" vd="${v#*|}"; : > "$STUB_LOG"
   STUB_HEADS="$h" check 6 "cleanup: an assistant by $vs${vd:+ $vd}" -- cleanup --worktree "$w" --session "$vs" $vd
   akept "an assistant by $vs${vd:+ $vd}"
@@ -1358,8 +1618,16 @@ K=(--repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to x --c
 check 0 "start: --contract, its text not in the brief" -- start --name "#331 worker: W" "${K[@]}" --branch 331-warn --brief-file "$tmp/brief.md"
 [ "$(cwarn)" = 1 ] || { echo "FAIL (--contract, its text not in the brief): not exactly one line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 grep -q -- '--bg' "$STUB_LOG" || { echo "FAIL (--contract, its text not in the brief): claude was not started"; fail=1; }
+: > "$STUB_LOG"
+check 0 "start: --contract, its text not in the brief, dry run" -- start --name "#331 worker: W" "${K[@]}" --branch 331-dry --brief-file "$tmp/brief.md" --dry-run
+[ "$(cwarn)" = 1 ] || { echo "FAIL (--contract, its text not in the brief, dry run): not exactly one line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+[ -d "$tmp/repo/.claude/worktrees/331-dry" ] && { echo "FAIL (dry run): a worktree was created"; fail=1; }
+git -C "$tmp/repo" show-ref -q --verify refs/heads/331-dry && { echo "FAIL (dry run): a branch was created"; fail=1; }
+grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL (dry run): claude was started"; fail=1; }
 check 0 "start: --contract, its text in the brief" -- start --name "#331 worker: W" "${K[@]}" --branch 331-dry --brief-file "$tmp/brief-c331.md" --dry-run
 [ "$(cwarn)" = 0 ] || { echo "FAIL (--contract, its text in the brief): a line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+check 0 "start: no --contract" -- start --name "#331 worker: W" --repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --report-to x --branch 331-dry --brief-file "$tmp/brief.md" --dry-run
+[ "$(cwarn)" = 0 ] || { echo "FAIL (no --contract): a line holding WARN and --contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 
 # --- the after-compact hook: one instruction into the context, as JSON (plain stdout never reaches the model)
 ac() { local role="$1"; shift

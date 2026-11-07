@@ -133,7 +133,7 @@ mkas() {   # mkas <name> <env folder> [<settings variant>]: the folder with BRIE
 }
 mkas fc "$mar/coordinator/assistants/fc"
 A=(--repo "$ar" --name "assistant: fc" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$asf" --report-to "Core lead")
-for m in fail; do
+for m in fail text; do
   : > "$STUB_LOG"; : > "$STUB_LOG.names"
   STUB_AGENTS=$m check 1 "start: an assistant, the listing $m" -- start "${A[@]}"
   listing_line "start: an assistant, the listing $m"
@@ -153,9 +153,14 @@ mkx() {   # mkx <folder> <name>: a folder with BRIEF.md and NOTES.md outside the
 xd() { start --repo "$ar" --name "assistant: $1" --model sonnet --brief-file "$2/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$2" --dry-run; }
 mkx "$tmp/ext/assistants/xa" xa
 check 0 "--assistant-dir: a folder outside every git working tree" -- xd xa "$tmp/ext/assistants/xa"
+mkx "$tmp/ext/assistants/other" xb
+check 1 "--assistant-dir: a folder not named as the assistant" -- xd xb "$tmp/ext/assistants/other"
+mkx "$tmp/ext/notas/xc" xc
+check 1 "--assistant-dir: a folder whose parent is not assistants" -- xd xc "$tmp/ext/notas/xc"
 mkx "$ar/inside/assistants/xd" xd
 check 1 "--assistant-dir: a folder a git working tree sees" -- xd xd "$ar/inside/assistants/xd"
 rm -rf "$ar/inside"
+check 1 "--assistant-dir with a worker's name" -- start --repo "$tmp/repo" --name "#72 worker: Fix" --branch 72-fix --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x --assistant-dir "$tmp/ext/assistants/xa" --dry-run
 mkas inset "$mar/coordinator/assistants/inset"; cp "$asf" "$ad/settings.json"
 check 1 "the --safety file inside the assistant's folder" -- start --repo "$ar" --name "assistant: inset" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$ad/settings.json" --report-to x --dry-run
 n=$((n + 1)); printf '%s\n' "$LAST" | grep -q "lies in the assistant's folder" || { echo "FAIL (the --safety file inside the folder): not the refusal of it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
