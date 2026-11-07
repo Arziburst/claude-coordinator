@@ -389,7 +389,7 @@ check 0 "start: from the root, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --saf
 expect_in "notice: COORD_PROTECTED_ROOT is not set in "
 expect_in "safety-noprot.json: edit tools can reach the working copy (TOOLKIT Safety)"
 
-# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS) ---
+# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS): the PreToolUse guard (wrong path, none, a folder named -selftest), a stale worktree folder, coordinator/ kept out of git, an unreachable origin, the role heading the brief ---
 # the PreToolUse guard path must exist, not only the self-test's
 gl="$(grep -n 'safety-guard\.' "$tmp/safety.json" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
 sed "${gl}s#scripts/hooks/#WRONG/hooks/#" "$tmp/safety.json" > "$tmp/safety-wrong.json"
@@ -440,7 +440,7 @@ check 0 "start: the role already in the brief" -- start --repo "$tmp/repo" --nam
 expect_in "already in the brief"
 git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/39-a"; git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/40-a"
 
-# --- findings of a macOS tester session (group WORKERS) ---
+# --- findings of a macOS tester session (group WORKERS): an existing branch checked out into its worktree, a worktree root through a symlink ---
 # an existing branch in the same letter case is still checked out into its worktree
 git -C "$tmp/repo" branch 47-a main
 check 0 "start: an existing branch without a worktree" -- start --repo "$tmp/repo" --name "#47 worker: a" --branch 47-a "${W[@]}" --safety "$tmp/safety.json" --worktree-root "$tmp/wt47"
@@ -1205,8 +1205,7 @@ printf '5e1f7e57\t%s\n' "$(native "$tmp/project2")" > "$SS.cwd"
 STUB_HEADS="$h" check 0 "cleanup: the session in the folder that holds the worktree" -- cleanup --worktree "$w" --session 5e1f7e57
 expect_in "cleaned: 5e1f7e57"
 
-# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink, a
-# non-ASCII letter in another case, no claude on PATH ---
+# --- findings of a macOS review: a session folder through a symlink (a junction on Windows) to the repository ---
 mk 23-fix
 printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#23 worker: Fix" > "$SS"
 printf 'f0e1d2c3\t%s\n' "$(native "$tmp/other")" > "$SS.cwd"

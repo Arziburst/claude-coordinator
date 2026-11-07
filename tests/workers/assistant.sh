@@ -19,9 +19,7 @@
 #     no claude rm, the worktree, the branch and the session kept, an exit code that keeps (3, 4, 5 or 6 - never 0
 #     or 1), one output line holding `claude agents`. With a working listing: cleaned as before (exit 0).
 #   - M1: start-worker.sh and start-worker.ps1 (--dry-run) give the same exit for COORD_ASSISTANT_DIR written with
-#     a trailing slash, in another letter case, in Git Bash's /c/ form, with backslashes, with a `..` segment,
-#     through a link (a junction on Windows) to the repository, and for the brief given through that link; a
-#     trailing slash, backslashes and a `..` segment are the same folder (both 0).
+#     a trailing slash and with a `..` segment; both are the same folder (both 0).
 #   - M4: scripts/retro.sh's header (its top comment) says, in the sentence of the run log's rows by role, that
 #     assistant rows are left out (`rows of the period by role` followed by `assistant` before the next period).
 set -u
