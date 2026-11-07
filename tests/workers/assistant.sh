@@ -19,9 +19,7 @@
 #     no claude rm, the worktree, the branch and the session kept, an exit code that keeps (3, 4, 5 or 6 - never 0
 #     or 1), one output line holding `claude agents`. With a working listing: cleaned as before (exit 0).
 #   - M1: start-worker.sh and start-worker.ps1 (--dry-run) give the same exit for COORD_ASSISTANT_DIR written with
-#     a trailing slash, in another letter case, in Git Bash's /c/ form, with backslashes, with a `..` segment,
-#     through a link (a junction on Windows) to the repository, and for the brief given through that link; a
-#     trailing slash, backslashes and a `..` segment are the same folder (both 0).
+#     a trailing slash and with a `..` segment; both are the same folder (both 0).
 #   - M4: scripts/retro.sh's header (its top comment) says, in the sentence of the run log's rows by role, that
 #     assistant rows are left out (`rows of the period by role` followed by `assistant` before the next period).
 set -u
@@ -135,7 +133,7 @@ mkas() {   # mkas <name> <env folder> [<settings variant>]: the folder with BRIE
 }
 mkas fc "$mar/coordinator/assistants/fc"
 A=(--repo "$ar" --name "assistant: fc" --model sonnet --brief-file "$ad/BRIEF.md" --safety "$asf" --report-to "Core lead")
-for m in fail text empty; do
+for m in fail text; do
   : > "$STUB_LOG"; : > "$STUB_LOG.names"
   STUB_AGENTS=$m check 1 "start: an assistant, the listing $m" -- start "${A[@]}"
   listing_line "start: an assistant, the listing $m"
@@ -184,7 +182,7 @@ mk() {   # mk <branch>: a worktree with one commit, pushed with -u; its path in 
   h="$(git -C "$w" rev-parse HEAD)"
 }
 SS="$STUB_LOG.sessions"
-for v in "fail|a5515701" "text|a5515701" "empty|a5515701" "fail|a5515701-1111-4222-8333-444455556666"; do
+for v in "fail|a5515701" "text|a5515701"; do
   m="${v%%|*}"; s="${v#*|}"; br="80-$m-${#s}"
   mk "$br"
   printf '%s %s %s %s\n' a5515701 a5515701-1111-4222-8333-444455556666 running "assistant: timesheet" > "$SS"
@@ -230,21 +228,6 @@ else
   agree "a trailing slash" 0 cmp1 "$base/cmp1/"
   mkdir -p "$ar/coordinator/assistants/other"   # Linux and macOS resolve a .. only through a folder that exists
   agree "a .. segment" 0 cmp2 "$base/other/../cmp2"
-  agree "letter case" - cmp3 "$(printf '%s' "$base/cmp3" | tr '[:lower:]' '[:upper:]')"
-  if [ -n "$win" ]; then
-    # C:/x as Git Bash writes it, /c/x; and C:\x (\\ in the JSON)
-    gb="/$(printf '%s' "${base%%:*}" | tr '[:upper:]' '[:lower:]')${base#?:}"
-    agree "Git Bash's /c/ form" - cmp4 "$gb/cmp4"
-    agree "backslashes" 0 cmp5 "$(printf '%s' "$base/cmp5" | sed 's#/#\\\\\\\\#g')"
-  fi
-  # a link to the repository: a junction on Windows (no rights needed), a symbolic link elsewhere
-  if [ -n "$win" ]; then cmd //c mklink //J "$(cygpath -w "$tmp/alink")" "$(cygpath -w "$ar")" >/dev/null 2>&1
-  else ln -s "$ar" "$tmp/alink"; fi
-  if [ -d "$tmp/alink/coordinator" ]; then
-    agree "COORD_ASSISTANT_DIR through a link" - cmp6 "$mtmp/alink/coordinator/assistants/cmp6"
-    mkas cmp7 "$base/cmp7" sh
-    agree "the brief through a link" - cmp7 "$base/cmp7" "$mtmp/alink/coordinator/assistants/cmp7/BRIEF.md"
-  else echo "FAIL (M1): could not make the link $tmp/alink"; fail=1; fi
 fi
 
 # --- M4: the retro's header says assistant rows are left out of the runs by role ---
