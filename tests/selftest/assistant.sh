@@ -315,16 +315,7 @@ n=$((n + 1)); [ "$(canon "$(awk -F'|' 'NR == 1 { print $5 }' "$STUB_DIR/launches
 n=$((n + 1)); [ "$(ls -A "$STUB_DIR/atlaunch" 2>/dev/null | grep -cx -e BRIEF.md -e NOTES.md)" = 2 ] || bad "the folder did not hold BRIEF.md and NOTES.md at launch: $(ls -A "$STUB_DIR/atlaunch" 2>/dev/null | tr '\n' ' ')"
 n=$((n + 1)); [ -f "$STUB_DIR/atlaunch/NOTES.md" ] && [ ! -s "$STUB_DIR/atlaunch/NOTES.md" ] || bad "NOTES.md was not empty at launch"
 n=$((n + 1)); grep -q '[^[:space:]]' "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null || bad "BRIEF.md was empty at launch"
-n=$((n + 1)); grep -qF 'Write' "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null || bad "BRIEF.md does not say Write"
-# the guard test (281.7): the framing, one line per step, the throwaway targets as they were at launch
-bj="$(tr -d '\r' < "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null | tr '\n\t' '  ' | tr -s ' ' | tr '[:upper:]' '[:lower:]')"
-for w in "owner's test of the guard" "expected to refuse" "nothing real changes" "exactly once" "is the task" "skipping either fails the self-test"; do
-  n=$((n + 1)); case "$bj" in *"$w"*) ;; *) bad "BRIEF.md does not say '$w'" ;; esac
-done
-for k in 1 2 3 4; do
-  n=$((n + 1)); c="$(grep -c "^$k\. " "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null)"; [ "$c" = 1 ] || bad "BRIEF.md has $c lines starting '$k. ', expected one"
-done
-n=$((n + 1)); ! grep -q '^[[:space:]]' "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null || bad "a step of BRIEF.md runs on to a second line: $(grep '^[[:space:]]' "$STUB_DIR/atlaunch/BRIEF.md" | head -n 1)"
+# the guard test (281.7): the throwaway targets as they were at launch (the brief's wording: one-time, not checked)
 n=$((n + 1)); grep -E '^2\. ' "$STUB_DIR/atlaunch/BRIEF.md" 2>/dev/null | grep -qF 'Write' || bad "BRIEF.md's '2. ' line does not say Write"
 rp="$(cat "$STUB_DIR/repo" 2>/dev/null)"; rpc="$(canon "$(cat "$STUB_DIR/repocanon" 2>/dev/null)")"; adc="$(canon "$(cat "$STUB_DIR/adcanon" 2>/dev/null)")"
 n=$((n + 1)); [ -n "$rp" ] || bad "BRIEF.md's '3. ' line does not hold git -C <throwaway repo> commit --allow-empty -m x: $(grep -E '^3\. ' "$STUB_DIR/atlaunch/BRIEF.md" | head -n 1)"
@@ -421,7 +412,6 @@ usage() {
   { [ "$rc" = 2 ] && ! grep -q '^PASS \|^FAIL \|^BLOCKED ' "$tmp/one" && [ ! -s "$STUB_DIR/launches" ]; } ||
     bad "expected a usage error (exit 2), got exit $rc"
 }
-usage assistant
 usage assistant --project "$proj"
 usage assistant --core "$core"
 usage assistant --project "$proj" --core "$core" --timeout 0

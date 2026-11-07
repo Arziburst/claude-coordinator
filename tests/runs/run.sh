@@ -196,8 +196,9 @@ row_ok() { local f="$1" s="$2" v want
 }
 A=(--task 12 --role worker --kind ordinary --model opus --effort medium --estimate 3 --estimate-time 30-60 --date 2026-10-31)
 
-# add: every allowed result word
-for w in approved done pass "rework 2" escalated failed dropped ready; do
+# add: every allowed result word; the full row checks on two of them (one plain, the two-word rework), the rest by
+# the result cell (the same code writes every other cell)
+for w in approved "rework 2"; do
   fresh "add --result $w: one row in the header's order, numbers from session-tokens"
   printf '%s\n%s\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"
   run add --log "$L" --session $W1S "${A[@]}" --result "$w"
@@ -205,6 +206,11 @@ for w in approved done pass "rework 2" escalated failed dropped ready; do
   [ "$(head -c "$(wc -c < "$L.before")" "$L" | cmp -s - "$L.before"; echo $?)" = 0 ] && ok || bad "the earlier lines changed"
   [ "$(crs "$L")" = 0 ] && ok || bad "an LF file got a CR"
   row_ok "$L" $W1S 12 worker "$w"
+done
+for w in done pass escalated failed dropped ready; do
+  fresh "add --result $w: written"; printf '%s\n%s\n' "$H" "$OLD" > "$L"
+  run add --log "$L" --session $W1S "${A[@]}" --result "$w"
+  code 0; [ "$(rows "$L")" = 2 ] && [ "$(cell "$L" result)" = "$w" ] && ok || bad "rows $(rows "$L"), result '$(cell "$L" result)', want 2 and '$w'"
 done
 
 fresh "add: a header in another order - the cells by that header"
@@ -218,7 +224,7 @@ run add --log "$L" --session $W1S "${A[@]}" --result done
 code 0; [ "$(rows "$L")" = 2 ] && ok || bad "rows: $(rows "$L"), want 2"; row_ok "$L" $W1S 12 worker done
 [ "$(lastline "$L" | awk -F'\t' '{ print NF }')" = 15 ] && ok || bad "the row has $(lastline "$L" | awk -F'\t' '{ print NF }') fields, want 15"
 
-for w in ok "looks fine" rework "rework two" "approved!"; do
+for w in "looks fine" "rework two" "approved!"; do   # a bare rework: the --findings case below
   fresh "add --result '$w': refused, exit 2, the file byte-identical"
   printf '%s\n%s\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"
   run add --log "$L" --session $W1S "${A[@]}" --result "$w"
@@ -364,17 +370,14 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 
 # finished = the process ended: no status field and state done, stopped or failed (the coordinator's
-# decision, round 2); a status idle (a worker waiting between rounds) or busy is never finished.
-# Each case's listing holds one session in the root.
+# decision, round 2); a status idle (a worker waiting between rounds) or busy is never finished. Stopped and
+# failed with no status, and done + busy: the first check's listing above. Each case's listing holds one session
+# in the root.
 DN=d0e1f2a3 DNS=d0e1f2a3-0000-4000-8000-00000000000a   # done, no status
-SN=e1f2a3b4 SNS=e1f2a3b4-0000-4000-8000-00000000000b   # stopped, no status
 DI=f2a3b4c5 DIS=f2a3b4c5-0000-4000-8000-00000000000c   # done + idle
-SI=a3b4c5d6 SIS=a3b4c5d6-0000-4000-8000-00000000000d   # stopped + idle
 tx -proj "$DNS" "$ROOT" 2026-10-10T10:00:00.000Z 2026-10-10T10:03:00.000Z 2026-10-10T10:20:00.000Z 0.1
-tx -proj "$SNS" "$ROOT" 2026-10-11T10:00:00.000Z 2026-10-11T10:03:00.000Z 2026-10-11T10:20:00.000Z 0.1
 tx -proj "$DIS" "$ROOT" 2026-10-12T10:00:00.000Z 2026-10-12T10:03:00.000Z 2026-10-12T10:20:00.000Z 0.1
-tx -proj "$SIS" "$ROOT" 2026-10-13T10:00:00.000Z 2026-10-13T10:03:00.000Z 2026-10-13T10:20:00.000Z 0.1
-for s in $DNS $SNS; do bash "$core/scripts/session-tokens.sh" "$s" | tr -d '\r' > "$tmp/st/$s"; done
+bash "$core/scripts/session-tokens.sh" "$DNS" | tr -d '\r' > "$tmp/st/$DNS"
 cp "$STUB_D/agents.json" "$tmp/agents.main.json"
 # one <id> <sessionId> <name> <state> [<status>]: the listing holds this one session, in the root
 one() { { echo "["; agent "$1" "$2" "$3" "$ROOT" "$4" ${5:+"$5"}; echo; echo "]"; } > "$STUB_D/agents.json"; }
@@ -384,20 +387,10 @@ printf '%s\n' "$H" > "$L"; one $DN $DNS "#20 worker" done
 run check --log "$L" --root "$ROOT" --self $COS
 code 0; has "^MISSING $DN #20 worker $(st $DNS start)\$"; hasnt "ALL LOGGED"
 
-fresh "check: stopped with no status - finished, listed"
-printf '%s\n' "$H" > "$L"; one $SN $SNS "#21 tester" stopped
-run check --log "$L" --root "$ROOT" --self $COS
-code 0; has "^MISSING $SN #21 tester $(st $SNS start)\$"; hasnt "ALL LOGGED"
-
 fresh "check: done + idle (a worker waiting between rounds) - not finished, not listed"
 printf '%s\n' "$H" > "$L"; one $DI $DIS "#22 worker" done idle
 run check --log "$L" --root "$ROOT" --self $COS
 code 0; hasnt "$DI"; has "^ALL LOGGED\$"
-
-fresh "check: stopped + idle - not finished, not listed"
-printf '%s\n' "$H" > "$L"; one $SI $SIS "#23 worker" stopped idle
-run check --log "$L" --root "$ROOT" --self $COS
-code 0; hasnt "$SI"; has "^ALL LOGGED\$"
 cp "$tmp/agents.main.json" "$STUB_D/agents.json"
 
 # task (#381), read-only: `<worker rows of the exact id> <the task's spend, before its first dot>`

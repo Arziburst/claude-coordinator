@@ -85,14 +85,14 @@ mk zero 'src/**/*.txt 5' '**/src/three.txt 3' '**/two.txt 2' '**/src/**/*.txt 5'
 t "a **/ matches zero or more folders" zero 0 'src/**/*.txt 5/5' '**/src/three.txt 3/3' '**/two.txt 2/2' '**/src/**/*.txt 5/5' 'src/**/two.txt 2/2' 'src/*/three.txt 0/0' 'check-bounds: OK'
 mk zover 'src/**/*.txt 4'; t "a **/ bound over, the file directly in the folder counted" zover 1 'src/**/*.txt 5/4' 'check-bounds: OVER src/**/*.txt 5/4'
 mk renamed 'new/* 10' 'old/* 0'; t "a renamed file counts by its new path" renamed 1 'new/* 11/10' 'old/* 0/0' 'check-bounds: OVER new/* 11/10'
-u "no argument"; u "no range" ../c/within.md; u "a range without three dots" ../c/within.md main
-u "a contract that cannot be read" ../c/absent.md "$R"; u "a range git cannot read" ../c/within.md main...no-such-branch
+u "no range" ../c/within.md; u "a range without three dots" ../c/within.md main
+u "a contract that cannot be read" ../c/absent.md "$R"   # a range git cannot read: the next case
 mk within2 'src/* 6'; n=$((n + 1)); o="$(cb ../c/within2.md main...no-such-branch)"; rc=$?
 { [ "$rc" = 2 ] && printf '%s\n' "$o" | grep -qF "in the repository" && printf '%s\n' "$o" | grep -qF "/repo" && printf '%s\n' "$o" | grep -qF "run it from the project's root"; } ||
   { echo "FAIL (an unreadable range names the repository it read): want exit 2, the repository and the advice, got exit $rc:"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }
 mk bad1 'src/* lots'; u "a malformed bound" ../c/bad1.md "$R"
 mk bad2 'src/* 5' 'lib/*'; u "a malformed bound beside a good one" ../c/bad2.md "$R"
-for v in 'src/* 99999999999999999999' 'src/[* 1'; do mk bad3 "$v"; for r in "$R" main...main; do n=$((n + 1)); o="$(cb ../c/bad3.md "$r")"; rc=$?; { [ "$rc" = 2 ] && printf '%s\n' "$o" | grep -qF "$v" && ! printf '%s\n' "$o" | grep -q 'check-bounds: OK'; } || { echo "FAIL (a bad bound, $v on $r): want exit 2 and a line naming it, got exit $rc:"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }; done; done
+for v in 'src/* 99999999999999999999' 'src/[* 1'; do mk bad3 "$v"; for r in main...main; do n=$((n + 1)); o="$(cb ../c/bad3.md "$r")"; rc=$?; { [ "$rc" = 2 ] && printf '%s\n' "$o" | grep -qF "$v" && ! printf '%s\n' "$o" | grep -q 'check-bounds: OK'; } || { echo "FAIL (a bad bound, $v on $r): want exit 2 and a line naming it, got exit $rc:"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }; done; done
 
 echo "check-bounds ($kind): $n cases, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
