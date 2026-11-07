@@ -446,7 +446,9 @@ word 'commit 3e15b27a9 failed' "commit ID failed" --
 word 'cannot run scripts/start-worker.ps1 now' "cannot run scripts/start-worker.ps1 now" -- PATH HOST
 word 'cannot run start-worker.ps1 now' "cannot run start-worker.ps1 now" -- PATH HOST
 fresh "signature: the technical words with digits are kept (guard)"
+for x in sha1 sha256 md5 utf8 utf16 base64 x64 x86 arm64 ipv4 ipv6 http2 oauth2; do word "$x failed" "$x failed" --; done
 word 'sha256 mismatch' "sha256" --
+word 'x64 build' "x64 build" --
 
 # --- file ---
 fresh "FIXED UPSTREAM: the exact signature on an issue closed as completed -> exit 3, nothing filed"
