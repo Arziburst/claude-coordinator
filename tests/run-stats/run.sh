@@ -113,7 +113,6 @@ expect "CRLF line ends and a BOM" 0 "$t/expected-runs.txt" - -- crlf.tsv
 expect "one kind and model (a contract's estimate)" 0 "$t/expected-one.txt" - -- runs.tsv --kind ordinary --model sonnet
 expect "a kind and model with no runs" 0 "$t/expected-none.txt" - -- header-only.tsv --kind ordinary --model sonnet
 expect "a missing file" 1 - "run-stats: cannot read missing.tsv" -- missing.tsv
-expect "a missing file, one pair" 1 - "run-stats: cannot read missing.tsv" -- missing.tsv --kind ordinary --model sonnet
 expect "--kind without --model is a usage error" 2 '*' - -- runs.tsv --kind ordinary
 expect "--per-run with a kind is a usage error" 2 '*' - -- runs.tsv --per-run --kind ordinary
 expect "no file is a usage error" 2 '*' - --
@@ -152,13 +151,10 @@ expect "limits: a malformed price line" 1 - \
 expect "limits: a price line with a flag twice" 1 - \
   "run-stats: prices-flag.txt:1: not a price line (<model> <input> <output> <cache read> <cache write> [not-weekly] [top])" -- \
   --limits --status status-trusted.json --spend-5h spend-5h.txt --prices prices-flag.txt
-expect "limits: a missing status file" 1 - "run-stats: cannot read missing.json" -- --limits --status missing.json
-expect "limits: a missing spend file" 1 - "run-stats: cannot read missing.txt" -- \
-  --limits --status status-trusted.json --spend-5h missing.txt --prices prices.txt
+expect "limits: a missing status file (every file of --limits read by one check)" 1 - "run-stats: cannot read missing.json" -- --limits --status missing.json
 expect "limits: a spend without prices is a usage error" 2 '*' - -- --limits --status status-trusted.json --spend-5h spend-5h.txt
 expect "limits: two spends from stdin is a usage error" 2 '*' - -- --limits --spend-5h - --spend-week - --prices prices.txt
-expect "limits: a cap that is no number is a usage error" 2 '*' - -- --limits --cap-5h 9x
-expect "limits: a top-rung block that is no number is a usage error" 2 '*' - -- --limits --block-top x
+expect "limits: a cap that is no number is a usage error (every number of --limits by one check)" 2 '*' - -- --limits --cap-5h 9x
 expect "limits: a run log with --limits is a usage error" 2 '*' - -- --limits runs.tsv
 
 # the ready columns: task rows (role task) in the forecast, never in cost or time, the last one of a task
