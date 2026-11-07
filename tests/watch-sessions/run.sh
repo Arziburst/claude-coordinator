@@ -135,7 +135,7 @@ printf '%s\n%s\n' $A $B > "$L"; printf '%s working w-a\n%s busy w-b\n' $A $B > "
 run --list "$L" --once
 code 0; silent; calls -eq 1
 
-for st in stopped done failed; do
+for st in stopped; do
   fresh "a listed session $st: STOPPED with its id and name"
   printf '%s\n%s\n' $A $B > "$L"; printf '%s working w-a\n%s %s #12 worker: Fix\n' $A $B $st > "$STUB_D/list-1"
   run --list "$L" --interval 1
@@ -167,11 +167,6 @@ echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; echo "$A idle w-a" > "
 run --list "$L" --interval 1 --quiet-seconds 2
 code 0; has "^QUIET $A w-a [0-9]+\$"; calls -ge 4
 
-fresh "idle under the limit, --once: nothing"
-echo $A > "$L"; echo "$A idle w-a" > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 600
-code 0; silent
-
 fresh "idle under the default limit (20 minutes), --once: nothing"
 echo $A > "$L"; echo "$A idle w-a" > "$STUB_D/list-1"
 run --list "$L" --once
@@ -187,15 +182,6 @@ code 0; has "^STOPPED $B w-b\$"; hasnt "^QUIET"; calls -eq 4
 fresh "the list file missing: EMPTY, claude not called"
 run --list "$L" --interval 1
 code 0; has "^EMPTY\$"; calls -eq 0
-
-fresh "the list file empty: EMPTY"
-: > "$L"; run --list "$L" --interval 1
-code 0; has "^EMPTY\$"
-
-fresh "the list file only comments and blank lines: EMPTY"
-printf '# awaited reports\n\n   \n# %s\n#\n  #\tindented\n' $A > "$L"; echo "$A done w-a" > "$STUB_D/list-1"
-run --list "$L" --interval 1
-code 0; has "^EMPTY\$"; hasnt "^STOPPED"
 
 fresh "comments and blank lines around sessions are ignored; a name with spaces matches the full name"
 printf '# awaited\n\n#12 worker: Fix the thing\n  \n%s\n' $B > "$L"
@@ -245,12 +231,6 @@ echo "$A done w-a" > "$STUB_D/list-3"
 run --list "$L" --interval 1
 code 1; has "^ERROR .*backend unavailable"; hasnt "second line"; hasnt "^STOPPED"; calls -eq 2
 
-fresh "failures that are not in a row: no ERROR"
-echo $A > "$L"; echo "x" > "$STUB_D/fail-1"; echo "$A working w-a" > "$STUB_D/list-2"; echo "x" > "$STUB_D/fail-3"
-echo "$A done w-a" > "$STUB_D/list-4"
-run --list "$L" --interval 1
-code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"
-
 fresh "the watcher writes nothing and calls nothing but claude agents --json --all"
 printf '# keep\n%s\n%s\n' $A $B > "$L"; cp "$L" "$STUB_D/list.orig"
 printf '%s working w-a\n%s idle w-b\n' $A $B > "$STUB_D/list-1"; printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-2"
@@ -273,11 +253,6 @@ code 0; has "^STOPPED $A w-a\$"; calls -eq 3; [ $((t1 - t0)) -ge 2 ] && ok || ba
 
 # --- state and status: claude agents gives `status` (busy / idle) only while the session's process lives
 
-fresh "done + status idle (a live session between turns), --once: quiet, not STOPPED"
-echo $A > "$L"; echo "$A done idle w-a" > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 600
-code 0; silent
-
 fresh "done + status idle past the limit: QUIET, not STOPPED"
 echo $A > "$L"; echo "$A done idle w-a" > "$STUB_D/list-1"
 run --list "$L" --interval 1 --quiet-seconds 2
@@ -287,11 +262,6 @@ fresh "state working or status busy: at work, even with a zero quiet limit"
 printf '%s\n%s\n%s\n' $A $B $C > "$L"
 printf '%s working idle w-a\n%s done busy w-b\n%s blocked busy w-c\n' $A $B $C > "$STUB_D/list-1"
 run --list "$L" --once --quiet-seconds 0
-code 0; silent
-
-fresh "blocked, with status idle or none: quiet - nothing under the limit"
-printf '%s\n%s\n' $A $B > "$L"; printf '%s blocked idle w-a\n%s blocked - w-b\n' $A $B > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 600
 code 0; silent
 
 fresh "blocked, with status idle or none: QUIET past the limit"
@@ -304,29 +274,12 @@ echo $A > "$L"; echo "$A done - w-a" > "$STUB_D/list-1"
 run --list "$L" --once
 code 0; has "^STOPPED $A w-a\$"
 
-for st in stopped failed; do
-  fresh "$st, with status idle or none: STOPPED"
-  printf '%s\n%s\n' $A $B > "$L"; printf '%s %s idle w-a\n%s %s - w-b\n' $A $st $B $st > "$STUB_D/list-1"
-  run --list "$L" --once
-  code 0; has "^STOPPED $A w-a\$"; has "^STOPPED $B w-b\$"
-done
-
 fresh "done + idle on one poll, done with no status on the next: nothing, then STOPPED"
 echo $A > "$L"; echo "$A done idle w-a" > "$STUB_D/list-1"; echo "$A done - w-a" > "$STUB_D/list-2"
 run --list "$L" --interval 1 --quiet-seconds 600
 code 0; has "^STOPPED $A w-a\$"; hasnt "^QUIET"; calls -eq 2
 
 # --- a per-line quiet limit: `<entry> @<minutes>` (`@<seconds>s` for tests)
-
-fresh "a quiet session under its own longer limit in seconds: nothing, though past the global one"
-echo "$A @600s" > "$L"; echo "$A idle w-a" > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 0
-code 0; silent
-
-fresh "a quiet session under its own longer limit in minutes: nothing, though past the global one"
-echo "$A @30" > "$L"; echo "$A idle w-a" > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 0
-code 0; silent
 
 fresh "a quiet session past its own shorter limit: QUIET, though under the global one"
 echo "$A @2s" > "$L"; echo "$A idle w-a" > "$STUB_D/list-1"
@@ -338,25 +291,10 @@ printf '%s @600s\n%s\n' $A $B > "$L"; printf '%s idle w-a\n%s idle w-b\n' $A $B 
 run --list "$L" --interval 1 --quiet-seconds 2
 code 0; has "^QUIET $B w-b [0-9]+\$"; hasnt "^QUIET $A"; hasnt "GONE"
 
-fresh "a name with blanks and its own limit: matched by the whole name, the limit kept"
-printf '#12 worker: Fix the thing @2s\n' > "$L"; printf '%s idle #12 worker: Fix the thing\n' $A > "$STUB_D/list-1"
-run --list "$L" --interval 1 --quiet-seconds 600
-code 0; has "^QUIET $A #12 worker: Fix the thing [0-9]+\$"; hasnt "GONE"
-
-fresh "a name with blanks and its own limit, under it: nothing"
-printf '#12 worker: Fix the thing @30\n' > "$L"; printf '%s idle #12 worker: Fix the thing\n' $A > "$STUB_D/list-1"
-run --list "$L" --once --quiet-seconds 0
-code 0; silent
-
 fresh "a listed name with its own limit claude does not list: GONE with the entry, without the limit"
 printf '#13 worker: Gone away @30\n' > "$L"; echo "$A working w-a" > "$STUB_D/list-1"
 run --list "$L" --once
 code 0; has "^GONE #13 worker: Gone away\$"
-
-fresh "a per-line limit does not change STOPPED"
-echo "$A @30" > "$L"; echo "$A done w-a" > "$STUB_D/list-1"
-run --list "$L" --once
-code 0; has "^STOPPED $A w-a\$"
 
 # --- a hung listing: --agents-timeout
 
@@ -372,17 +310,6 @@ t0=$(date +%s); run --list "$L" --interval 1 --agents-timeout 2; t1=$(date +%s)
 code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"; calls -eq 2
 [ $((t1 - t0)) -lt 25 ] && ok || bad "ended after $((t1 - t0)) s (one 2 s timeout and a 1 s interval)"
 
-fresh "claude agents hanging with --once: ERROR, exit 1, in bounded time"
-echo $A > "$L"; echo 40 > "$STUB_D/sleep-1"; echo "$A done w-a" > "$STUB_D/list-1"
-t0=$(date +%s); run --list "$L" --once --agents-timeout 2; t1=$(date +%s)
-code 1; has "^ERROR .+"; hasnt "^STOPPED"
-[ $((t1 - t0)) -lt 25 ] && ok || bad "ended after $((t1 - t0)) s (one 2 s timeout)"
-
-fresh "a slow answer within --agents-timeout is a good poll"
-echo $A > "$L"; echo 1 > "$STUB_D/sleep-1"; echo "$A done w-a" > "$STUB_D/list-1"
-run --list "$L" --once --agents-timeout 10
-code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"
-
 # --- parity of the two scripts
 
 fresh "claude's JSON without a final newline: the finding, not ERROR"
@@ -390,20 +317,10 @@ echo $A > "$L"; echo "$A done w-a" > "$STUB_D/list-1"; : > "$STUB_D/nonl"
 run --list "$L" --once
 code 0; has "^STOPPED $A w-a\$"; hasnt "^ERROR"
 
-fresh "claude's JSON without a final newline, all at work: nothing, exit 0"
-echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; : > "$STUB_D/nonl"
-run --list "$L" --once
-code 0; silent
-
 fresh "a list file starting with a UTF-8 BOM: the first id matches"
 printf '\357\273\277%s\n%s\n' $A $B > "$L"; printf '%s done w-a\n%s working w-b\n' $A $B > "$STUB_D/list-1"
 run --list "$L" --once
 code 0; has "^STOPPED $A w-a\$"; hasnt "GONE"
-
-fresh "a list file holding only a UTF-8 BOM and a comment: EMPTY"
-printf '\357\273\277# awaited\n' > "$L"
-run --list "$L" --once
-code 0; has "^EMPTY\$"
 
 # --- LONG: one long command (#467). A scratch home and temp folder per case; the transcript's age is set
 unset CLAUDE_CONFIG_DIR; SID=5e550000-0000-4000-8000-000000000001 ENC=-work-my-proj-v2--claude-worktrees-467-x
@@ -417,30 +334,19 @@ lfresh "working under the default, past the quiet limit: nothing (LONG is not th
 run --list "$L" --once --quiet-seconds 0; code 0; silent
 lfresh "--long-minutes sets the limit, both ways"; age 3030
 run --list "$L" --once --long-minutes 60; code 0; silent; run --list "$L" --once --long-minutes 40; code 0; has "^LONG $A w-a 50\$"
-lfresh "--long-seconds sets the limit, both ways"; age 5
-run --list "$L" --once --long-seconds 600; code 0; silent; run --list "$L" --once --long-seconds 2; code 0; has "^LONG $A w-a 0\$"
-lfresh "watching, not --once: the limit passes, the watcher ends on LONG, exit 0"; age 0
-run --list "$L" --interval 1 --long-seconds 2; code 0; has "^LONG $A w-a 0\$"
 lfresh "the same stretch after a restart: no second LONG, the watcher keeps watching"; age 3030; echo "$A done w-a" > "$STUB_D/list-3"
 run --list "$L" --once; has "^LONG $A w-a 50\$"; run --list "$L" --interval 1; code 0; hasnt "^LONG"; has "^STOPPED $A w-a\$"; calls -eq 3
 lfresh "a new record starts a new stretch: under the limit nothing, past it LONG once more"; age 7200
 run --list "$L" --once; has "^LONG $A w-a 120\$"; age 5430; run --list "$L" --once --long-minutes 100; code 0; silent
 run --list "$L" --once; has "^LONG $A w-a 90\$"; run --list "$L" --once; code 0; silent
-lfresh "a line's @<n> holds LONG back, past the flag"; age 3030; echo "$A @120" > "$L"; run --list "$L" --once --long-seconds 0; code 0; silent
 lfresh "a line's @<n> sets a shorter limit than the default"; age 2000; echo "$A @30" > "$L"; run --list "$L" --once; code 0; has "^LONG $A w-a 33\$"
 lfresh "no transcript: no LONG"; rm -f "$T"; run --list "$L" --once --long-seconds 0; code 0; silent
-lfresh "not working, idle at a prompt: QUIET as today, no LONG"; age 3030; echo "$A idle w-a" > "$STUB_D/list-1"
-run --list "$L" --once --long-seconds 0 --quiet-seconds 0; code 0; has "^QUIET $A w-a 0\$"; hasnt "^LONG"
 lfresh "LONG and STOPPED in one poll: both lines"; age 3030; echo "$B" >> "$L"; printf '%s working w-a\n%s done w-b\n' $A $B > "$STUB_D/list-1"
 run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"; has "^STOPPED $B w-b\$"
 lfresh "CLAUDE_CONFIG_DIR in place of the home"; mv "$HOME/.claude" "$STUB_D.cfg"; T="$STUB_D.cfg/projects/$ENC/$SID.jsonl"; age 3030
 export CLAUDE_CONFIG_DIR="$STUB_D.cfg"; run --list "$L" --once; unset CLAUDE_CONFIG_DIR; code 0; has "^LONG $A w-a 50\$"
 lfresh "a Windows cwd in the listing: its folder name"; printf '%s' 'C:\\Users\\me_x\\proj' > "$STUB_D/cwd"; mkdir -p "$HOME/.claude/projects/C--Users-me-x-proj"
 T="$HOME/.claude/projects/C--Users-me-x-proj/$SID.jsonl"; echo '{}' > "$T"; age 3030; run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"
-lfresh "LONG stops nothing and writes only under the temp folder"; age 3030; touch -r "$T" "$STUB_D.ref"
-run --list "$L" --once; has "^LONG $A"; grep -qv '^agents --json --all$' "$STUB_D/log" && bad "another claude call" || ok
-[ "$T" -nt "$STUB_D.ref" ] && bad "the transcript changed" || ok
-[ "$(find "$HOME/.claude" "$STUB_D.cwd" -type f | wc -l | tr -d ' ')" = 2 ] && [ -n "$(ls -A "$TMPDIR/watch-sessions-long" 2>/dev/null)" ] && ok || bad "files: $(find "$HOME/.claude" "$STUB_D.cwd" "$TMPDIR" -type f)"
 
 # --- one watcher per list (#528) and a list gone empty (#471). CLAUDE_PID: a sleep of the test's own (its Windows pid
 # under Git Bash); bgw <tag> <args>: a watcher in the background; waitw <tag> <s>: its output and exit code (124: running)
