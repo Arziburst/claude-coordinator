@@ -332,8 +332,8 @@ esac
 
 # The self-test's probe token (#259): a shell command holding the token of the project's
 # .claude/coordinator-probe.txt (CLAUDE_PROJECT_DIR; its first line, 16+ letters, digits and -) is blocked,
-# Bash and PowerShell alike; a command without it, a missing file, an edit tool's call, and a guard run
-# without CLAUDE_PROJECT_DIR from another folder block nothing.
+# Bash and PowerShell alike; a short or garbled token, a token on a later line, a missing file, an edit
+# tool's call, and a guard run without CLAUDE_PROJECT_DIR from another folder block nothing.
 mkdir -p "$tmp/probe/.claude" "$tmp/probe-other"
 pdm="$(winpath m "$tmp/probe")"
 ABS=()   # the hook command with its script as an absolute path, run from another folder
@@ -363,6 +363,9 @@ ptok block "the token in a PowerShell command" "$tk\n" PowerShell "echo $tk"
 ptok block "a UTF-8 BOM before the token" "\357\273\277$tk\r\n" Bash "echo $tk"
 ptok block "the token, then a second line (the run's timeout)" "$tk\n300\n" Bash "echo $tk"
 ptok allow "a command without the token" "$tk\n" Bash "echo coord-probe-0"
+ptok allow "a token of 15 characters" "abcdefghijklmno\n" Bash "echo abcdefghijklmno"
+ptok allow "a token with spaces" "coord probe 1791042522 4f1c\n" Bash "echo coord probe 1791042522 4f1c"
+ptok allow "the token on the second line" "\n$tk\n" Bash "echo $tk"
 ptok allow "no token file" - Bash "echo $tk"
 ptok allow "an edit tool's call holding the token" "$tk\n" Write "$tk"
 ptok allow "no CLAUDE_PROJECT_DIR, run from another folder" "$tk\n" Bash "echo $tk" nopd
