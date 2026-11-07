@@ -224,7 +224,7 @@ run add --log "$L" --session $W1S "${A[@]}" --result done
 code 0; [ "$(rows "$L")" = 2 ] && ok || bad "rows: $(rows "$L"), want 2"; row_ok "$L" $W1S 12 worker done
 [ "$(lastline "$L" | awk -F'\t' '{ print NF }')" = 15 ] && ok || bad "the row has $(lastline "$L" | awk -F'\t' '{ print NF }') fields, want 15"
 
-for w in "looks fine" "rework two"; do   # a bare rework: the --findings case below
+for w in "looks fine" "rework two" "approved!"; do   # a bare rework: the --findings case below
   fresh "add --result '$w': refused, exit 2, the file byte-identical"
   printf '%s\n%s\n' "$H" "$OLD" > "$L"; cp "$L" "$L.before"
   run add --log "$L" --session $W1S "${A[@]}" --result "$w"
