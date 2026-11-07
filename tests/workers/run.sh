@@ -855,7 +855,10 @@ reused() {   # reused <contract | brief> <file> <expected exit> <label>: a kept 
   return 1
 }
 gi=0
-for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/c276-cblock-yes.md" "$cc/quoted.md" "$cc/tests-first-missing.md" "$tmp/g276-crlf.md"; do
+for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c276-cblock-yes.md" "$tmp/c276-cblock-no.md" "$tmp/c276-body-yes.md" \
+  "$cc/budget-time.md" "$cc/quoted.md" "$cc/tests-first-missing.md" "$cc/tests-first-bad.md" "$cc/tests-first-no-reason.md" \
+  "$tmp/c276-span-dq.md" "$tmp/c276-span-sq.md" "$tmp/c276-cspan-dq.md" "$tmp/c276-cspan-sq.md" "$tmp/c276-cr.md" \
+  "$tmp/g276-crlf.md"; do
   gi=$((gi + 1)); gb="$(basename "$gf")"
   [ -f "$gf" ] || { echo "FAIL: the guard's fixture $gb is missing"; fail=1; continue; }
   cc_decide "$gf"; gd="$GD"; gw=1; [ "$gd" = no ] && gw=0
@@ -1347,8 +1350,16 @@ printf '%s %s %s %s\n' 5e1f7e57 5e1f7e57-1111-4222-8333-444455556666 running "#s
 printf '5e1f7e57\t%s\n' "$(native "$tmp/project2")" > "$SS.cwd"
 STUB_HEADS="$h" check 0 "cleanup: the session in the folder that holds the worktree" -- cleanup --worktree "$w" --session 5e1f7e57
 expect_in "cleaned: 5e1f7e57"
+# the same root in another letter case is the root where letter case in paths is ignored (Windows, macOS)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
+  mk 21-fix
+  printf '%s %s %s %s\n' 0a0b0c0d 0a0b0c0d-1111-4222-8333-444455556666 running "#21 worker: Fix" > "$SS"
+  printf '0a0b0c0d\t%s\n' "$(printf '%s' "$rp" | tr '[:lower:]' '[:upper:]')" > "$SS.cwd"
+  STUB_HEADS="$h" check 0 "cleanup: the root in another letter case" -- cleanup --worktree "$w" --session 0a0b0c0d
+  expect_in "cleaned: 0a0b0c0d" ;;
+esac
 
-# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink (a junction on Windows) to the repository, no claude on PATH ---
+# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink (a junction on Windows) to the repository, a non-ASCII letter in another case, no claude on PATH ---
 # a full sessionId typed in upper case is the listed session: here a foreign one, so nothing is removed
 mk 23-fix
 printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#23 worker: Fix" > "$SS"
@@ -1371,6 +1382,17 @@ case "$(uname -s)" in
     printf 'f0e1d2c3\t%s\n' "$tmp/repo-link" > "$SS.cwd"
     STUB_HEADS="$h" check 0 "cleanup: the session's folder through a symlink" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
     expect_in "[dry-run] claude rm f0e1d2c3" ;;
+esac
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
+  # a non-ASCII letter in another case is the same folder on APFS and NTFS (in a UTF-8 locale, as a
+  # session runs; Git Bash's tr folds ASCII only)
+  git clone -q "$tmp/remote.git" "$tmp/Ü/proj" 2>/dev/null
+  w="$tmp/Ü/proj/.claude/worktrees/24-fix"
+  git -C "$tmp/Ü/proj" worktree add -q -b 24-fix "$w" origin/main && g -C "$w" commit -q --allow-empty -m 24-fix && git -C "$w" push -q -u origin 24-fix 2>/dev/null
+  h="$(git -C "$w" rev-parse HEAD)"
+  printf 'f0e1d2c3\t%s%sü%sproj\n' "$(native "$tmp")" "$sep" "$sep" > "$SS.cwd"
+  LC_ALL=en_US.UTF-8 STUB_HEADS="$h" check 0 "cleanup: a non-ASCII letter in another case" -- cleanup --worktree "$w" --session f0e1d2c3 --dry-run
+  expect_in "[dry-run] claude rm f0e1d2c3" ;;
 esac
 # no claude on PATH (only where the stub is the only claude): nothing can be removed - SESSION KEPT, exit 4
 nocl="$tmp/nocl"; mkdir -p "$nocl"; cp "$tmp/bin/gh" "$tmp/bin/gh.ps1" "$nocl/"
