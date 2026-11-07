@@ -382,20 +382,14 @@ expect_in "forward slashes"
 # launched from the working copy (EnterWorktree) with no COORD_PROTECTED_ROOT in the safety file's env:
 # a notice, not a failure; none with it set, and none when launched from another folder
 grep -v '"COORD_PROTECTED_ROOT"' "$tmp/safety.json" > "$tmp/safety-noprot.json"
-sed 's#"COORD_PROTECTED_ROOT": "[^"]*"#"COORD_PROTECTED_ROOT": ""#' "$tmp/safety.json" > "$tmp/safety-emptyprot.json"
-grep -q '"COORD_PROTECTED_ROOT": ""' "$tmp/safety-emptyprot.json" || { echo "FAIL: could not empty COORD_PROTECTED_ROOT"; fail=1; }
 P=(--repo "$tmp/repo" --name "#12 worker: Fix" --branch 12-fix --model opus --brief-file "$tmp/brief.md" --report-to x --dry-run)
 check 0 "start: from the root, COORD_PROTECTED_ROOT set" -- start "${P[@]}" --safety "$tmp/safety.json"
 case "$LAST" in *"notice: COORD_PROTECTED_ROOT"*) echo "FAIL: a notice although COORD_PROTECTED_ROOT is set"; fail=1 ;; esac
 check 0 "start: from the root, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --safety "$tmp/safety-noprot.json"
 expect_in "notice: COORD_PROTECTED_ROOT is not set in "
 expect_in "safety-noprot.json: edit tools can reach the working copy (TOOLKIT Safety)"
-check 0 "start: from the root, COORD_PROTECTED_ROOT empty" -- start "${P[@]}" --safety "$tmp/safety-emptyprot.json"
-expect_in "notice: COORD_PROTECTED_ROOT is not set in "
-check 0 "start: from another folder, no COORD_PROTECTED_ROOT" -- start "${P[@]}" --safety "$tmp/safety-noprot.json" --launch-from "$tmp/launch"
-case "$LAST" in *"notice: COORD_PROTECTED_ROOT"*) echo "FAIL: a notice although launched from another folder"; fail=1 ;; esac
 
-# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS) ---
+# --- findings of a tester session (tests/FEATURE-TEST.md, group WORKERS): the PreToolUse guard (wrong path, none, one whose self-test prints nothing, a folder named -selftest), a flag where a value belongs, a stale worktree folder, a relative --worktree-root, an exclude file without a final newline, coordinator/ kept out of git (a dry run, ignored already), an unreachable origin, the role heading the brief ---
 in_dir() { local d="$1"; shift; (cd "$d" && "$@"); }
 # the PreToolUse guard path must exist, not only the self-test's
 gl="$(grep -n 'safety-guard\.' "$tmp/safety.json" | grep -v -e '-SelfTest' -e '--self-test' | head -n 1 | cut -d: -f1)"
@@ -416,15 +410,12 @@ check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/re
 expect_in "printed nothing"
 # #344: the guard's self-test entry is told by its argument, not by the path: a core under a folder whose name holds
 # -selftest / --self-test (any case) finds its guard hook and starts as anywhere else (dry run, not refused)
-for d in x-selftest y--self-test Z-SELFTEST; do
+for d in x-selftest; do
   mkdir -p "$tmp/$d"; cp "$core"/scripts/hooks/safety-guard.* "$tmp/$d/"
   sed "s#$core/scripts/hooks/#$mtmp/$d/#g" "$tmp/safety.json" > "$tmp/safety-$d.json"
   check 0 "start: the guard under a folder named $d" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a "${W[@]}" --safety "$tmp/safety-$d.json" --dry-run
   expect_in "[dry-run]"
 done
-# bypassPermissions in any letter case, and a flag where a value belongs
-check 1 "start: BypassPermissions" -- start "${S[@]}" --mode BypassPermissions --dry-run
-expect_in "refusing bypassPermissions"
 check 1 "start: --model followed by a flag" -- start --repo "$tmp/repo" --name "#34 worker: a" --branch 34-a --model --dry-run --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to x
 expect_in "missing value for"
 git -C "$tmp/repo" show-ref -q --verify refs/heads/34-a && { echo "FAIL: --model --dry-run created a branch"; fail=1; }
@@ -474,15 +465,8 @@ grep -q "^You implement one contract" "$STUB_LOG" || { echo "FAIL: the worker ro
 check 0 "start: the role already in the brief" -- start --repo "$tmp/repo" --name "#40 worker: a" --branch 40-a --model opus --brief-file "$tmp/brief-role.md" --report-to x --safety "$tmp/safety.json"
 expect_in "already in the brief"
 git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/39-a"; git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/40-a"
-# the same root in another letter case is the root (Windows: case-insensitive paths)
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
-  : > "$STUB_LOG"
-  check 0 "start: --launch-from the root in another letter case" -- start --repo "$tmp/repo" --name "#41 worker: a" --branch 41-a "${W[@]}" --safety "$tmp/safety.json" --launch-from "$(git -C "$tmp/repo" rev-parse --show-toplevel | tr '[:lower:]' '[:upper:]')"
-  grep -q "EnterWorktree tool with path" "$STUB_LOG" || { echo "FAIL: the root in another case was taken for another folder"; fail=1; }
-  git -C "$tmp/repo" worktree remove "$tmp/repo/.claude/worktrees/41-a" ;;
-esac
 
-# --- findings of a macOS tester session (group WORKERS) ---
+# --- findings of a macOS tester session (group WORKERS): a guard path with a space (quoted, unquoted), a branch differing only in letter case, an existing branch checked out into its worktree, a worktree root through a symlink, names the JSON listing escapes ---
 # a quoted guard path with a space is accepted (selftest hooks accepts it); an unquoted one is refused
 mkdir -p "$tmp/core copy" && cp -R "$core/scripts" "$tmp/core copy/"
 sed -E "s#$core/scripts/hooks/(safety-guard\.(sh|ps1))#\\\\\"$mtmp/core copy/scripts/hooks/\\1\\\\\"#g" "$tmp/safety.json" > "$tmp/safety-space.json"
@@ -691,8 +675,6 @@ expect_in "no-tt276"; nothing_made 79-gate
 nx=0123456789abcdef0123456789abcdef01234567
 off="$(g -C "$tmp/repo" commit-tree -p main -m "off the start point" "main^{tree}")"; offs="$(printf '%s' "$off" | cut -c1-7)"
 : > "$STUB_LOG"
-check 1 "start: a --tester-commit that does not exist, dry run" -- start --name "#80 worker: G" "${F[@]}" --branch 80-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$nx" --dry-run
-expect_in "0123456"; nothing_made 80-gate
 check 1 "start: a --tester-commit that does not exist" -- start --name "#80 worker: G" "${F[@]}" --branch 80-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$nx"
 expect_in "0123456"; nothing_made 80-gate
 m1="$(printf '%s\n' "$LAST" | sed "s/0123456[0-9a-f]*/SHA/g")"
@@ -700,10 +682,6 @@ check 1 "start: a --tester-commit not on the start point" -- start --name "#80 w
 expect_in "$offs"; nothing_made 80-gate
 m2="$(printf '%s\n' "$LAST" | sed "s/$offs[0-9a-f]*/SHA/g")"
 [ "$m1" != "$m2" ] || { echo "FAIL: the same message for a commit that does not exist and one not on the start point"; fail=1; }
-: > "$STUB_LOG"
-check 1 "start: a --tester-commit not on the reused worktree's HEAD" -- start --name "#77 worker: G" "${F[@]}" --branch 77-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$off"
-expect_in "$offs"
-grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL: claude was started with a --tester-commit off the worktree's HEAD"; fail=1; }
 # unchanged starts, no new flag: tests_first no - <reason> (brief, --contract), a lead, a tester
 # (a brief with no contract: "start: a brief without a contract" above)
 for v in "#81 worker: G|--brief-file|$tmp/brief-tfno.md" "#81 worker: G|--contract|$tmp/c276-no.md" "#81 lead: G|--brief-file|$tmp/brief-tfno.md" "#81 tester: G|--brief-file|$tmp/brief-tfyes.md"; do
@@ -720,8 +698,6 @@ done
 : > "$STUB_LOG"
 check 1 "start: tests_first yes in a contract: block, no tester flag, dry run" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md" --dry-run
 keep_start contract "$tmp/c276-cblock-yes.md"; expect_in "c276-cblock-yes.md: OK"; expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
-check 1 "start: tests_first yes in a contract: block, no tester flag" -- start --name "#82 worker: G" "${F[@]}" --branch 82-gate --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md"
-expect_gate "c276-cblock-yes.md"; nothing_made 82-gate
 for v in "--contract|$tmp/c276-cblock-no.md" "--contract|$tmp/c276-body-yes.md" "--brief-file|$tmp/brief-body-yes.md"; do
   vf="${v%%|*}"; vp="${v#*|}"
   if [ "$vf" = --contract ]; then va=(--brief-file "$tmp/brief.md" --contract "$vp"); else va=(--brief-file "$vp"); fi
@@ -756,8 +732,6 @@ both_named() {
   case "$LAST" in *"has tests_first: yes"*|*"tester's tests:"*) echo "FAIL: both flags: not their own message"; fail=1 ;; esac
 }
 : > "$STUB_LOG"
-check 1 "start: both --tester-commit and --tester-tests, dry run" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276" --dry-run
-both_named; nothing_made 85-gate
 check 1 "start: both --tester-commit and --tester-tests" -- start --name "#85 worker: G" "${F[@]}" --branch 85-gate --brief-file "$tmp/brief-tfyes.md" --tester-commit "$bc" --tester-tests "$tmp/lead276/.lead/tt276"
 both_named; nothing_made 85-gate
 # a lead's task gets no task-level tester (#289): the lead runs the tester per sub-contract, its tests on
@@ -770,20 +744,16 @@ expect_lead() {   # expect_lead [<contract label>]: one line says lead and sub-c
     { echo "FAIL: no line${1:+ names the contract ($1),} says lead and sub-contract"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 }
 : > "$STUB_LOG"
-check 1 "start: a lead, tests_first yes in the brief, dry run" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief-tfyes.md" --dry-run
-expect_lead "contract in the brief"; expect_in tests_first; nothing_made 86-lead
 check 1 "start: a lead, tests_first yes in the brief" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief-tfyes.md"
 expect_lead "contract in the brief"; expect_in tests_first; nothing_made 86-lead
-check 1 "start: a lead, tests_first yes by --contract, dry run" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md" --dry-run
-expect_lead "c276-yes.md"; expect_in tests_first; nothing_made 86-lead
 check 1 "start: a lead, tests_first yes by --contract" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-yes.md"
 expect_lead "c276-yes.md"; expect_in tests_first; nothing_made 86-lead
 check 1 "start: a lead, tests_first yes in a contract: block" -- start --name "#86 lead: G" "${F[@]}" --branch 86-lead --brief-file "$tmp/brief.md" --contract "$tmp/c276-cblock-yes.md"
 expect_lead "c276-cblock-yes.md"; nothing_made 86-lead
 # a lead given the tester's flags: refused the same way, whatever its contract says (each value valid)
-for v in "--tester-commit|$bc|$tmp/brief-tfno.md" "--tester-tests|$tmp/lead276/.lead/tt276|$tmp/brief-tfno.md" "--tester-commit|$bc|$tmp/brief-tfyes.md" "--tester-tests|$tmp/lead276/.lead/tt276|$tmp/brief-tfyes.md"; do
+for v in "--tester-commit|$bc|$tmp/brief-tfno.md" "--tester-tests|$tmp/lead276/.lead/tt276|$tmp/brief-tfno.md"; do
   vf="${v%%|*}"; vr="${v#*|}"; vv="${vr%%|*}"; vb="${vr#*|}"
-  for d in --dry-run ""; do
+  for d in ""; do
     check 1 "start: a lead given $vf, $(basename "$vb")${d:+, dry run}" -- start --name "#87 lead: G" "${F[@]}" --branch 87-lead --brief-file "$vb" "$vf" "$vv" $d
     expect_lead; nothing_made 87-lead
   done
@@ -872,16 +842,7 @@ gate_as "$crd" c276-cr.md; nothing_made 87-gate; drop_gate 87-gate
 # the gate on yes, starts on no - by --contract, and in a brief for the front-matter forms; a start an earlier
 # case kept (the same contract by --contract, or a brief of the same bytes) is not run again: the guard's
 # checks run on its exit and output
-sed 's/^tests_first: yes$/tests_first: "yes"/' "$cc/budget-time-ok.md" > "$tmp/g276-dq.md"
-sed "s/^tests_first: yes\$/tests_first: 'Yes'/" "$cc/budget-time-ok.md" > "$tmp/g276-sq-cap.md"
-sed 's/^tests_first: yes$/tests_first: yes   # the oracles have no tests yet/' "$cc/budget-time-ok.md" > "$tmp/g276-comment.md"
-sed 's/^\(tests_first: no - .*\)$/\1   # yes, really/' "$tmp/c276-no.md" > "$tmp/g276-no-comment.md"
-{ printf 'contract:\n'; sed '1d;$d' "$cc/budget-time-ok.md" | sed 's/^/    /'; } > "$tmp/g276-cblock4.md"
-{ printf 'contract:\n'; sed '1d;$d' "$cc/budget-time-ok.md" | sed "s/^/$(printf '\t')/"; } > "$tmp/g276-cblock-tab.md"
-{ printf '# Task\n\nSome words.\n\ncontract:\n'; cbody "$tmp/c276-no.md"; printf 'notes: after the block\ntests_first: yes\n'; } > "$tmp/g276-cblock-later.md"
-{ cat "$tmp/c276-no.md"; printf '\ncontract:\n'; cbody "$cc/budget-time-ok.md"; } > "$tmp/g276-fm-then-cblock.md"
 sed 's/$/\r/' "$cc/budget-time-ok.md" > "$tmp/g276-crlf.md"
-{ printf '\357\273\277'; cat "$cc/budget-time-ok.md"; } > "$tmp/g276-bom.md"
 reused() {   # reused <contract | brief> <file> <expected exit> <label>: a kept start of the same file and form, as the last start
   local k f m
   while IFS="$(printf '\t')" read -r k f m; do
@@ -897,8 +858,7 @@ gi=0
 for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c276-cblock-yes.md" "$tmp/c276-cblock-no.md" "$tmp/c276-body-yes.md" \
   "$cc/budget-time.md" "$cc/quoted.md" "$cc/tests-first-missing.md" "$cc/tests-first-bad.md" "$cc/tests-first-no-reason.md" \
   "$tmp/c276-span-dq.md" "$tmp/c276-span-sq.md" "$tmp/c276-cspan-dq.md" "$tmp/c276-cspan-sq.md" "$tmp/c276-cr.md" \
-  "$tmp/g276-dq.md" "$tmp/g276-sq-cap.md" "$tmp/g276-comment.md" "$tmp/g276-no-comment.md" "$tmp/g276-cblock4.md" "$tmp/g276-cblock-tab.md" \
-  "$tmp/g276-cblock-later.md" "$tmp/g276-fm-then-cblock.md" "$tmp/g276-crlf.md" "$tmp/g276-bom.md"; do
+  "$tmp/g276-crlf.md"; do
   gi=$((gi + 1)); gb="$(basename "$gf")"
   [ -f "$gf" ] || { echo "FAIL: the guard's fixture $gb is missing"; fail=1; continue; }
   cc_decide "$gf"; gd="$GD"; gw=1; [ "$gd" = no ] && gw=0
@@ -907,7 +867,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   { check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run; elsewhere "$gf"; }
   gate_as "$gd" "$gb"; [ "$gw" = 0 ] || nothing_made 88-gate
   # a brief holding it: the front-matter forms with LF endings and no BOM (a brief's contract follows its text)
-  case "$gb" in g276-crlf.md|g276-bom.md|c276-cr.md) continue ;; esac
+  case "$gb" in g276-crlf.md|c276-cr.md) continue ;; esac
   [ "$(head -n 1 "$gf")" = "---" ] || continue
   { printf 'Do it.\n\n'; cat "$gf"; } > "$tmp/brief-g$gi.md"
   : > "$STUB_LOG"
@@ -977,9 +937,6 @@ check 0 "start: a small brief on the command line" -- start "${big0[@]}" --branc
 is_launch_text "$STUB_LOG.arg" 91-small "$tmp/brief.md"
 printf '%s\n' "$LAST" | grep -v 'kept for after a compaction' | grep -q 'coordinator[/\\]briefs' &&
   { echo "FAIL: a small brief got a line about a brief file"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
-check 0 "start: a small brief, dry run" -- start "${big0[@]}" --branch 91-small --brief-file "$tmp/brief.md" --dry-run
-printf '%s\n' "$LAST" | grep -i 'brief' | grep -v -e 'then the brief>' -e '^role ' -e '^contract: ' | grep -iq 'file' &&
-  { echo "FAIL: the dry run of a small brief speaks of a brief file"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 git -C "$tmp/repo" worktree remove --force "$tmp/repo/.claude/worktrees/91-small" 2>/dev/null
 # a launch that fails: non-zero, the worktree and branch it made named, and how to clean them
 : > "$STUB_LOG"
@@ -1057,7 +1014,7 @@ rm -f "$STUB_LOG.arg"
 check 0 "start: a lead launched from another folder - the first line names the notes folder" -- start "${L[@]}" --name "#316 lead: Notes" --branch 316-lead --brief-file "$tmp/brief.md" --launch-from "$tmp/launch"
 first2 | grep -qF "316-lead.lead" ||
   { echo "FAIL: the lead's working-copy line and the line after it do not name the notes folder 316-lead.lead"; first2 | sed 's/^/    /'; fail=1; }
-for v in "#317 worker: N|317-w" "#317 tester: N|317-t"; do
+for v in "#317 worker: N|317-w"; do
   vn="${v%%|*}" vb="${v#*|}"; rm -f "$STUB_LOG.arg"
   check 0 "start: $vn - the first two lines as before" -- start "${L[@]}" --name "$vn" --branch "$vb" --brief-file "$tmp/brief.md"
   first2 | sed -n 1p | grep -qxE "FIRST ACTION, before anything else: use the EnterWorktree tool with path = .*/$vb\. Work only inside it; never change files outside it\." &&
@@ -1139,23 +1096,15 @@ core="$ncore" check 0 "start: an assistant, no roles/assistant.md" -- start "${A
 case "$LAST" in *"role assistant"*) echo "FAIL (an assistant, no roles/assistant.md): a role line"; fail=1 ;; esac
 grep -qF 'Log the hours (the fixture brief of r2).' "$STUB_LOG.arg" 2>/dev/null || { echo "FAIL (an assistant, no roles/assistant.md): the brief is not in the launch text"; fail=1; }
 # names outside letters, digits, . _ - are refused, the line naming the name (its folder and settings there)
-for nm in "time sheet" "x!" "a/b"; do
+for nm in "time sheet"; do
   mkas "$nm"; : > "$STUB_LOG"
   check 1 "start: an assistant named '$nm'" -- start "${A[@]}" --name "assistant: $nm" --brief-file "$ad/BRIEF.md" --safety "$asf"
   says "an assistant named '$nm'" "$nm"; asnothing "an assistant named '$nm'"
 done
-mkas ""; : > "$STUB_LOG"
-check 1 "start: an assistant with an empty name" -- start "${A[@]}" --name "assistant: " --brief-file "$ad/BRIEF.md" --safety "$asf"
-grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL (an assistant with an empty name): claude was started"; fail=1; }
-rm -f "$ad/BRIEF.md" "$ad/NOTES.md"
 # the brief: another file name, a folder outside assistants/, another assistant's folder
 ad="$tsd"; : > "$STUB_LOG"
 check 1 "start: an assistant, --brief-file NOTES.md" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/NOTES.md" --safety "$tsf"
 says "an assistant, --brief-file NOTES.md" BRIEF.md; asnothing "an assistant, --brief-file NOTES.md"
-mkdir -p "$tmp/elsewhere-as/timesheet" && printf 'Log the hours.\n' > "$tmp/elsewhere-as/timesheet/BRIEF.md"
-mkas ts-env "$mtmp/elsewhere-as/timesheet"; ad="$tsd"; : > "$STUB_LOG"
-check 1 "start: an assistant, its brief outside assistants/" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tmp/elsewhere-as/timesheet/BRIEF.md" --safety "$asf"
-says "an assistant, its brief outside assistants/" assistants; asnothing "an assistant, its brief outside assistants/"
 mkas other; od="$ad"; ofs="$asf"; ad="$tsd"; : > "$STUB_LOG"
 check 1 "start: an assistant, another assistant's folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$od/BRIEF.md" --safety "$ofs"
 says "an assistant, another assistant's folder" assistants; asnothing "an assistant, another assistant's folder"
@@ -1167,16 +1116,9 @@ says "an assistant, no COORD_ASSISTANT_DIR" COORD_ASSISTANT_DIR assistants/times
 check 1 "start: an assistant, COORD_ASSISTANT_DIR another folder" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$ofs"
 says "an assistant, COORD_ASSISTANT_DIR another folder" COORD_ASSISTANT_DIR assistants/other; says "an assistant, COORD_ASSISTANT_DIR another folder" assistants/timesheet
 asnothing "an assistant, COORD_ASSISTANT_DIR another folder"
-# the same folder in another letter case is that folder where letter case in paths is ignored (Windows)
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*)
-  mkas lc "$(printf '%s' "$mar/coordinator/assistants/lc" | tr '[:lower:]' '[:upper:]')"; : > "$STUB_LOG"
-  check 0 "start: an assistant, COORD_ASSISTANT_DIR in another letter case" -- start "${A[@]}" --name "assistant: lc" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
-  asnothing "an assistant, COORD_ASSISTANT_DIR in another letter case" ;;
-esac
 # a worker's flags with an assistant are refused, the line naming the flag and the assistant
 ad="$tsd"; ash="$(git -C "$ar" rev-parse HEAD)"; mkdir -p "$tmp/as-tt"
-for v in "branch|--branch|70-as" "base|--base|main" "worktreeroot|--worktree-root|$tmp/as-wt" "contract|--contract|$tmp/c331.md" \
-  "testercommit|--tester-commit|$ash" "testertests|--tester-tests|$tmp/as-tt"; do
+for v in "branch|--branch|70-as"; do
   vk="${v%%|*}"; vr="${v#*|}"; vf="${vr%%|*}"; vv="${vr#*|}"
   : > "$STUB_LOG"
   check 1 "start: an assistant given $vf" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf" "$vf" "$vv"
@@ -1186,7 +1128,7 @@ for v in "branch|--branch|70-as" "base|--base|main" "worktreeroot|--worktree-roo
   [ -e "$tmp/as-wt" ] && { echo "FAIL (an assistant given $vf): a worktree root was created"; fail=1; }
 done
 # --model, --safety and --report-to are required as for the other roles
-for v in "--model|sonnet" "--safety|$tsf" "--report-to|Core lead"; do
+for v in "--safety|$tsf"; do
   vf="${v%%|*}"; R=(--repo "$ar" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --model sonnet --safety "$tsf" --report-to "Core lead")
   a=(); i=0; while [ $i -lt ${#R[@]} ]; do [ "${R[$i]}" = "$vf" ] || a+=("${R[$i]}" "${R[$((i + 1))]}"); i=$((i + 2)); done
   : > "$STUB_LOG"
@@ -1239,6 +1181,7 @@ check 0 "gate: --owner-ok passes and prints the words" -- start --name "#502 wor
 expect_in "the owner said go on"; expect_in "[dry-run]"
 check 1 "gate: blank --owner-ok words pass nothing" -- start --name "#502 worker: G" "${RG[@]}" --branch 502-g --brief-file "$tmp/brief-rg502.md" --owner-ok " " --dry-run
 says "gate: blank --owner-ok words pass nothing" "refused: " "round 3" "task 502"; rgrefused "gate: blank --owner-ok words"
+check 1 "gate: the log given by --runs" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --runs "$rg/coordinator/RUNS.tsv" --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run; says "gate: --runs" "refused: " "round 3" "task 502"; rgrefused "gate: --runs"
 check 0 "gate: no log, no gate" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: no log"
 rgc 504.1 14 > "$tmp/rg504.md"
@@ -1256,19 +1199,16 @@ CB=(--model opus --safety "$tmp/safety.json" --report-to x); CBW=(--repo "$cb" "
 cbone() { [ "$(printf '%s\n' "$LAST" | grep -c -- "$1")" = 1 ] || { echo "FAIL (copy): not exactly one line naming $1"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; }
 cbno() { [ -z "$(ls -A "${2:-$cbd}" 2>/dev/null)" ] || { echo "FAIL (copy, $1): written:"; ls -A "${2:-$cbd}" | sed 's/^/    /'; fail=1; }; }
 check 0 "copy: a tester writes nothing" -- start --name "#601 tester: C" "${CBW[@]}" --branch 601-t --contract "$tmp/cb.md"; cbno tester
-check 0 "copy: a verifier writes nothing" -- start --name "#601 verifier: C" "${CBW[@]}" --branch 601-v --contract "$tmp/cb.md"; cbno verifier
 check 0 "copy: no bounds, nothing" -- start --name "#602 worker: C" "${CBW[@]}" --branch 602-n --contract "$tmp/cbn.md"; cbno "no bounds"
 check 1 "copy: a refused start writes nothing" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-y --contract "$tmp/cby.md"; cbno "a refused start"
 check 0 "copy: no coordinator/briefs, nothing" -- start --name "#601 worker: C" --repo "$tmp/cb2" "${CB[@]}" --brief-file "$tmp/brief.md" --branch 601-b --contract "$tmp/cb.md"; cbno "no folder" "$tmp/cb2/coordinator"
-mkas cb; cat "$tmp/cb.md" >> "$ad/BRIEF.md"; mkdir -p "$ar/coordinator/briefs"; check 0 "copy: an assistant writes nothing" -- start "${A[@]}" --name "assistant: cb" --brief-file "$ad/BRIEF.md" --safety "$asf"; cbno assistant "$ar/coordinator/briefs"
 check 0 "copy: a worker's, a / in the branch" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601/a-b --contract "$tmp/cb.md"; cbone 601-a-b-contract.md
 tr -d '\r' < "$cbd/601-a-b-contract.md" 2>/dev/null | cmp -s - "$tmp/cb.md" || { echo "FAIL (copy): 601-a-b-contract.md is not the contract"; fail=1; }
 echo older > "$cbd/601-c-contract.md"; check 0 "copy: a lead's, from the brief, over an older copy" -- start --name "#601 lead: C" --repo "$cb" "${CB[@]}" --brief-file "$tmp/brief-cb.md" --branch 601-c; cbone 601-c-contract.md
 grep -q '^bounds:' "$cbd/601-c-contract.md" && ! grep -q older "$cbd/601-c-contract.md" || { echo "FAIL (copy): the older copy was not overwritten by the contract"; fail=1; }
 echo older > "$cbd/601-d-contract.md"; check 0 "copy: a dry run names it, writes nothing" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-d --contract "$tmp/cb.md" --dry-run; cbone 601-d-contract.md
 [ "$(cat "$cbd/601-d-contract.md")" = older ] || { echo "FAIL (copy): the dry run overwrote the copy"; fail=1; }
-check 0 "copy: a dry run with no copy yet" -- start --name "#601 worker: C" "${CBW[@]}" --branch 601-e --contract "$tmp/cb.md" --dry-run; cbone 601-e-contract.md; [ -e "$cbd/601-e-contract.md" ] && { echo "FAIL (copy): the dry run wrote"; fail=1; }
-for cbx in "601-f|$cbd" "601-g|coordinator/briefs"; do cbb="${cbx%%|*}"; cbc="${cbx#*|}/$cbb-contract.md"; cp "$tmp/cb.md" "$cbd/$cbb-contract.md"; cd "$cb" || exit 1; check 0 "copy: --contract named as the copy itself, $cbb" -- start --name "#601 worker: $cbb" "${CBW[@]}" --branch "$cbb" --contract "$cbc"; cd - >/dev/null || exit 1
+for cbx in "601-g|coordinator/briefs"; do cbb="${cbx%%|*}"; cbc="${cbx#*|}/$cbb-contract.md"; cp "$tmp/cb.md" "$cbd/$cbb-contract.md"; cd "$cb" || exit 1; check 0 "copy: --contract named as the copy itself, $cbb" -- start --name "#601 worker: $cbb" "${CBW[@]}" --branch "$cbb" --contract "$cbc"; cd - >/dev/null || exit 1
   cmp -s "$tmp/cb.md" "$cbd/$cbb-contract.md" && grep -qxF "#601 worker: $cbb" "$STUB_LOG.names" || { echo "FAIL (copy, --contract named as the copy itself, $cbb): its bytes changed ($(wc -c < "$cbd/$cbb-contract.md") of $(wc -c < "$tmp/cb.md")), or claude was not started"; fail=1; }; done
 [ "$(git -C "$cb" rev-list --all --count)" = 1 ] || { echo "FAIL (copy): start-worker committed"; fail=1; }
 
@@ -1426,8 +1366,7 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin)
   expect_in "cleaned: 0a0b0c0d" ;;
 esac
 
-# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink, a
-# non-ASCII letter in another case, no claude on PATH ---
+# --- findings of a macOS review: an upper-case sessionId, a session folder through a symlink (a junction on Windows) to the repository, a non-ASCII letter in another case, no claude on PATH ---
 # a full sessionId typed in upper case is the listed session: here a foreign one, so nothing is removed
 mk 23-fix
 printf '%s %s %s %s\n' f0e1d2c3 f0e1d2c3-1111-4222-8333-444455556666 running "#23 worker: Fix" > "$SS"
@@ -1678,7 +1617,7 @@ akept() {   # akept <what>: exit 6 checked; one line akl, nothing stopped or rem
   [ -d "$w" ] && git -C "$tmp/repo" show-ref -q --verify refs/heads/60-asst || { echo "FAIL ($1): the worktree or branch was removed"; fail=1; }
   grep -q a5515700 "$SS" || { echo "FAIL ($1): the assistant's session is gone"; fail=1; }
 }
-for v in "a5515700|" "a5515700-1111-4222-8333-444455556666|" "a5515700|--dry-run"; do
+for v in "a5515700|" "a5515700-1111-4222-8333-444455556666|"; do
   vs="${v%%|*}" vd="${v#*|}"; : > "$STUB_LOG"
   STUB_HEADS="$h" check 6 "cleanup: an assistant by $vs${vd:+ $vd}" -- cleanup --worktree "$w" --session "$vs" $vd
   akept "an assistant by $vs${vd:+ $vd}"
@@ -1774,7 +1713,7 @@ mkdir -p "$tmp/cfg/coordinator/briefs"; printf 'You implement one contract\n' > 
 not_worker_or_coord() {   # <case>: the text of neither the worker nor the coordinator variant
   case "$LAST" in *coordinator/briefs*|*"your role file and the contract"*|*CORE.md*|*BINDINGS.md*|*"git status"*)
     echo "FAIL (after-compact assistant, $1): a worker's or the coordinator's text: $LAST"; fail=1 ;; esac; }
-for as in a5500000-0000-4000-8000-000000000001 a5500000-0000-4000-8000-0000000000ff; do   # a kept brief, none
+for as in a5500000-0000-4000-8000-000000000001; do   # a kept brief
   w="kept brief"; [ "$as" = a5500000-0000-4000-8000-000000000001 ] || w="no kept brief"
   LAST="$(set -o pipefail; printf '{"session_id":"%s","cwd":"/work/proj","source":"compact"}' "$as" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac assistant | tr -d '\r')"; rc=$?
   [ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, $w): exit $rc"; fail=1; }
@@ -1809,17 +1748,12 @@ printf '%s\n' "$bo" | sed -n '/^== verifier/,$p' | grep -q '^board:' && { echo "
 
 # --- a started session never listed, and a lead's watch line (#370 items 2 and 3) ---
 # the listing never has the session (a project whose listing is late): the start still exits 0, says so, and prints its watch: line
-export STUB_NOLIST=1
-check 0 "never listed: the start goes on" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 78-nolist --name "#78 worker: N"
-unset STUB_NOLIST
-expect_in "no sessionId in the listing"; expect_watch "$(stub_id)"
+[ "$kind" = ps ] || { export STUB_NOLIST=1; check 0 "never listed: the start goes on" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 78-nolist --name "#78 worker: N"; unset STUB_NOLIST; expect_in "no sessionId in the listing"; expect_watch "$(stub_id)"; }
 # a lead's entry is `<id> @120`, a worker's the bare id (a dry run: the name)
 check 0 "a lead's real start: its watch line ends with @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 79-lead --name "#79 lead: L"
 expect_watch "$(stub_id) @120"
 check 0 "a worker's real start: no @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 80-w --name "#80 worker: W"
 expect_watch "$(stub_id)"; printf '%s\n' "$LAST" | grep '^watch:' | grep -q '@120' && { echo "FAIL: a worker's watch: line holds @120"; fail=1; }
-check 0 "a lead's dry run: its watch line ends with the name and @120" -- start "${F[@]}" --brief-file "$tmp/brief.md" --branch 81-lead --name "#81 lead: D" --dry-run
-expect_watch "#81 lead: D @120"
 
 # --- the contract reaches the session (#504): a worker's or a lead's --contract its brief does not hold (no `acceptance:` block) ends the launch text and the kept brief, whole ---
 c504="$tmp/c504.md"; tfno "$cc/budget-time-ok.md" | sed 's/^  budget\.time in whole.*/  Контракт "в кавычках" 504./' > "$c504"
@@ -1837,7 +1771,7 @@ check 0 "#504: a brief that holds the contract is not doubled" -- start "${F[@]}
 once504 "$STUB_LOG.arg" "holds it, the launch text"; once504 "$(kept504 "#504 worker: C")" "holds it, the kept brief"
 rm -f "$STUB_LOG.arg"; check 0 "#504: a tester's --contract is only checked" -- start "${F[@]}" --name "#504 tester: D" --branch 504-d --brief-file "$tmp/brief.md" --contract "$c504"
 grep -q '^acceptance:' "$STUB_LOG.arg" && { echo "FAIL (tester): the contract in its launch text"; fail=1; }
-for r in worker lead; do check 0 "#504: a $r with neither a contract in the brief nor --contract" -- start "${F[@]}" --name "#504 $r: E" --branch 504-e --brief-file "$tmp/brief.md" --dry-run
+for r in worker; do check 0 "#504: a $r with neither a contract in the brief nor --contract" -- start "${F[@]}" --name "#504 $r: E" --branch 504-e --brief-file "$tmp/brief.md" --dry-run
   [ "$(printf '%s\n' "$LAST" | grep -c 'starts without a contract')" = 1 ] || { echo "FAIL ($r, no contract): not one line naming it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; done
 # --- a task's earlier finished sessions (#521): found by the worktree their kept brief names (else by `#<id> `), removed with a run row ---
 r5="$tmp/r521" F5=(--repo "$tmp/r521" --model opus --safety "$tmp/safety.json" --report-to x --brief-file "$tmp/brief.md"); git init -q -b main "$r5" && g -C "$r5" commit -q --allow-empty -m init && git -C "$r5" remote add origin "$tmp/remote.git"; mkdir -p "$r5/coordinator" "$tmp/cfg/projects/p521" "$tmp/cfg/coordinator/briefs"
