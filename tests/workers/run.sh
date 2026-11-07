@@ -867,7 +867,7 @@ for gf in "$tmp/c276-yes.md" "$tmp/c276-no.md" "$tmp/budget-time-ok.md" "$tmp/c2
   { check "$gw" "guard: --contract $gb (check-contract reads: $gd)" -- start --name "#88 worker: G" "${F[@]}" --branch 88-gate --brief-file "$tmp/brief.md" --contract "$gf" --dry-run; elsewhere "$gf"; }
   gate_as "$gd" "$gb"; [ "$gw" = 0 ] || nothing_made 88-gate
   # a brief holding it: the front-matter forms with LF endings and no BOM (a brief's contract follows its text)
-  case "$gb" in g276-crlf.md|g276-bom.md|c276-cr.md) continue ;; esac
+  case "$gb" in g276-crlf.md|c276-cr.md) continue ;; esac
   [ "$(head -n 1 "$gf")" = "---" ] || continue
   { printf 'Do it.\n\n'; cat "$gf"; } > "$tmp/brief-g$gi.md"
   : > "$STUB_LOG"
@@ -1073,6 +1073,13 @@ expect_no_line "watch:"
 : > "$STUB_LOG"
 check 1 "start: an assistant whose session exists" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf"
 says "an assistant whose session exists" "assistant: timesheet"; ad="$tsd"; asnothing "an assistant whose session exists"
+# a stopped (done) session of that name, listed by --all only: refused, the line naming it and its id
+mkas jira
+printf '%s %s %s %s\n' ab12cd34 ab12cd34-1111-4222-8333-444455556666 done "assistant: jira" > "$STUB_LOG.sessions"
+: > "$STUB_LOG"
+check 1 "start: an assistant whose stopped session is listed" -- start "${A[@]}" --name "assistant: jira" --brief-file "$ad/BRIEF.md" --safety "$asf"
+says "an assistant whose stopped session is listed" "assistant: jira" ab12cd34; asnothing "an assistant whose stopped session is listed"
+: > "$STUB_LOG.sessions"
 # roles/assistant.md heads the brief when the core has it (a copy of the core with a fixture role), by the role
 # mechanism; without it the brief goes alone
 acore="$mtmp/acore"; ncore="$mtmp/ncore"
@@ -1615,6 +1622,18 @@ for v in "a5515700|" "a5515700-1111-4222-8333-444455556666|"; do
   STUB_HEADS="$h" check 6 "cleanup: an assistant by $vs${vd:+ $vd}" -- cleanup --worktree "$w" --session "$vs" $vd
   akept "an assistant by $vs${vd:+ $vd}"
 done
+printf '%s %s %s %s\n' a5515700 a5515700-1111-4222-8333-444455556666 done "assistant: timesheet" > "$SS"
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: a stopped assistant" -- cleanup --worktree "$w" --session a5515700
+akept "a stopped assistant"
+# before the worktree checks: a worktree that does not exist, one with uncommitted changes
+: > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: an assistant, no such worktree" -- cleanup --worktree "$tmp/repo/.claude/worktrees/60-nope" --session a5515700
+akept "an assistant, no such worktree"
+echo dirt > "$w/dirt.txt"; : > "$STUB_LOG"
+STUB_HEADS="$h" check 6 "cleanup: an assistant, a worktree not clean" -- cleanup --worktree "$w" --session a5515700
+akept "an assistant, a worktree not clean"
+rm -f "$w/dirt.txt"
 # the negative control: `assistant:` later in the name is an ordinary session, cleaned as before (its own worktree)
 mk 61-asst
 printf '%s %s %s %s\n' c0ffee60 c0ffee60-1111-4222-8333-444455556666 running "#60 worker: assistant: tools" > "$SS"
@@ -1694,7 +1713,7 @@ mkdir -p "$tmp/cfg/coordinator/briefs"; printf 'You implement one contract\n' > 
 not_worker_or_coord() {   # <case>: the text of neither the worker nor the coordinator variant
   case "$LAST" in *coordinator/briefs*|*"your role file and the contract"*|*CORE.md*|*BINDINGS.md*|*"git status"*)
     echo "FAIL (after-compact assistant, $1): a worker's or the coordinator's text: $LAST"; fail=1 ;; esac; }
-for as in a5500000-0000-4000-8000-000000000001; do   # a kept brief, none
+for as in a5500000-0000-4000-8000-000000000001; do   # a kept brief
   w="kept brief"; [ "$as" = a5500000-0000-4000-8000-000000000001 ] || w="no kept brief"
   LAST="$(set -o pipefail; printf '{"session_id":"%s","cwd":"/work/proj","source":"compact"}' "$as" | CLAUDE_CONFIG_DIR="$cfgw" COORD_ASSISTANT_DIR="$adw" ac assistant | tr -d '\r')"; rc=$?
   [ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, $w): exit $rc"; fail=1; }
@@ -1703,6 +1722,11 @@ for as in a5500000-0000-4000-8000-000000000001; do   # a kept brief, none
   expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"; expect_in "$core/roles/assistant.md"
   not_worker_or_coord "$w"
 done
+# COORD_ASSISTANT_DIR with backslashes (Windows): printed in the forward-slash form
+if command -v cygpath >/dev/null 2>&1; then
+  LAST="$(printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff"}' | COORD_ASSISTANT_DIR="$(cygpath -w "$ad")" ac assistant | tr -d '\r')"
+  expect_in "$adw/BRIEF.md"; expect_in "$adw/NOTES.md"
+fi
 LAST="$(set -o pipefail; unset COORD_ASSISTANT_DIR; printf '%s' '{"session_id":"a5500000-0000-4000-8000-0000000000ff","cwd":"/work/proj"}' | CLAUDE_CONFIG_DIR="$cfgw" ac assistant | tr -d '\r')"; rc=$?
 [ "$rc" = 0 ] || { echo "FAIL (after-compact assistant, no COORD_ASSISTANT_DIR): exit $rc"; fail=1; }
 expect_in '"additionalContext":"The conversation was just compacted'
