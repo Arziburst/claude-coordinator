@@ -840,9 +840,9 @@ change that affects them.
   of work closed — in the owner's language, short: integrated and cleaned up, what runs (task, model,
   state), what is needed, the budget — a dollar figure says "at API list price", on a subscription with
   its share of the weekly limit (§7a). A progress line per integrated task if `PROJECT.md` defines one.
-- **Open questions:** every unanswered question goes on the journal's open-questions list, and so does a task the owner
-  approved that has not started, the same turn, removed when it starts or is dropped: the checkpoint carries it through a
-  compaction (#542); when the owner returns, **start with them**, preferably as a quiz (multiple choice, recommended first).
+- **Open questions:** every unanswered question goes on the journal's open-questions list, and so does a task the owner approved
+  and not started, the same turn, removed when it starts or is dropped: a compaction keeps it (#542); when the owner
+  returns, **start with them**, preferably as a quiz (multiple choice, recommended first).
 - **Journal** `LOG.md` next to `PROJECT.md`: one dated line per event that matters (started, merged,
   cleaned up, decided, verdicts, questions and answers — a question that holds a task up names the task
   and the UTC time it was asked and answered — the `--waits` input of `run-stats --task`, §7a).
