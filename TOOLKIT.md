@@ -809,11 +809,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the body and the shell it had in one job. The required checks are the aggregator jobs `check (ubuntu-latest)`,
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
-  stale runs on its next push, never a run on main. **How a step lands in a shard:** every shard holds about 5 to 11
-  minutes by the measured seconds (tests/ci-times.tsv): `ubuntu-1`, `macos-1` and `windows-1` the common steps, each
-  part of a split set a shard of its own (Ubuntu: the guard 1-5, workers 6-8; Windows: the guard 1-5, workers 6-8,
-  report-issue 9-10; macOS: 2 the workers' bash set, the guard without jq and watch-sessions), the other steps where the
-  seconds leave room; a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
+  stale runs on its next push, never a run on main. **How a step lands in a shard:** every shard holds about 6 to 8
+  minutes by the measured seconds (#426): `ubuntu-1`, `macos-1` and `windows-1` the common steps; every other step packed
+  longest first into the shortest shard of its OS, each part of a split set on a shard of its own (the workflow's
+  comment names the runs measured; Windows is bound by watch-sessions' one step); a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
   is rebalanced at the next CI audit. **How a case lands in a shard:** a set too long for one shard runs in parts by
   its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in five parts on
   Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/5 bash tests/safety-guard/run.sh ...` - case i of
