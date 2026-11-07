@@ -183,6 +183,11 @@ fresh "the list file missing: EMPTY, claude not called"
 run --list "$L" --interval 1
 code 0; has "^EMPTY\$"; calls -eq 0
 
+fresh "the list file only comments and blank lines: EMPTY"
+printf '# awaited reports\n\n   \n# %s\n#\n  #\tindented\n' $A > "$L"; echo "$A done w-a" > "$STUB_D/list-1"
+run --list "$L" --interval 1
+code 0; has "^EMPTY\$"; hasnt "^STOPPED"
+
 fresh "comments and blank lines around sessions are ignored; a name with spaces matches the full name"
 printf '# awaited\n\n#12 worker: Fix the thing\n  \n%s\n' $B > "$L"
 printf '%s working #12 worker: Fix the thing\n%s working w-b\n' $A $B > "$STUB_D/list-1"
@@ -231,6 +236,12 @@ echo "$A done w-a" > "$STUB_D/list-3"
 run --list "$L" --interval 1
 code 1; has "^ERROR .*backend unavailable"; hasnt "second line"; hasnt "^STOPPED"; calls -eq 2
 
+fresh "failures that are not in a row: no ERROR"
+echo $A > "$L"; echo "x" > "$STUB_D/fail-1"; echo "$A working w-a" > "$STUB_D/list-2"; echo "x" > "$STUB_D/fail-3"
+echo "$A done w-a" > "$STUB_D/list-4"
+run --list "$L" --interval 1
+code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"
+
 fresh "the watcher writes nothing and calls nothing but claude agents --json --all"
 printf '# keep\n%s\n%s\n' $A $B > "$L"; cp "$L" "$STUB_D/list.orig"
 printf '%s working w-a\n%s idle w-b\n' $A $B > "$STUB_D/list-1"; printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-2"
@@ -273,6 +284,13 @@ fresh "done with no status (its process ended): STOPPED"
 echo $A > "$L"; echo "$A done - w-a" > "$STUB_D/list-1"
 run --list "$L" --once
 code 0; has "^STOPPED $A w-a\$"
+
+for st in stopped failed; do
+  fresh "$st, with status idle or none: STOPPED"
+  printf '%s\n%s\n' $A $B > "$L"; printf '%s %s idle w-a\n%s %s - w-b\n' $A $st $B $st > "$STUB_D/list-1"
+  run --list "$L" --once
+  code 0; has "^STOPPED $A w-a\$"; has "^STOPPED $B w-b\$"
+done
 
 fresh "done + idle on one poll, done with no status on the next: nothing, then STOPPED"
 echo $A > "$L"; echo "$A done idle w-a" > "$STUB_D/list-1"; echo "$A done - w-a" > "$STUB_D/list-2"
@@ -364,6 +382,10 @@ lfresh "CLAUDE_CONFIG_DIR in place of the home"; mv "$HOME/.claude" "$STUB_D.cfg
 export CLAUDE_CONFIG_DIR="$STUB_D.cfg"; run --list "$L" --once; unset CLAUDE_CONFIG_DIR; code 0; has "^LONG $A w-a 50\$"
 lfresh "a Windows cwd in the listing: its folder name"; printf '%s' 'C:\\Users\\me_x\\proj' > "$STUB_D/cwd"; mkdir -p "$HOME/.claude/projects/C--Users-me-x-proj"
 T="$HOME/.claude/projects/C--Users-me-x-proj/$SID.jsonl"; echo '{}' > "$T"; age 3030; run --list "$L" --once; code 0; has "^LONG $A w-a 50\$"
+lfresh "LONG stops nothing and writes only under the temp folder"; age 3030; touch -r "$T" "$STUB_D.ref"
+run --list "$L" --once; has "^LONG $A"; grep -qv '^agents --json --all$' "$STUB_D/log" && bad "another claude call" || ok
+[ "$T" -nt "$STUB_D.ref" ] && bad "the transcript changed" || ok
+[ "$(find "$HOME/.claude" "$STUB_D.cwd" -type f | wc -l | tr -d ' ')" = 2 ] && [ -n "$(ls -A "$TMPDIR/watch-sessions-long" 2>/dev/null)" ] && ok || bad "files: $(find "$HOME/.claude" "$STUB_D.cwd" "$TMPDIR" -type f)"
 
 # --- one watcher per list (#528) and a list gone empty (#471). CLAUDE_PID: a sleep of the test's own (its Windows pid
 # under Git Bash); bgw <tag> <args>: a watcher in the background; waitw <tag> <s>: its output and exit code (124: running)

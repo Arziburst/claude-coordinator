@@ -137,7 +137,7 @@ cfield tf-cr.md
 [ "$PRC" != 0 ] || fval tf-cr.md 'yes'
 # usage parity (#288 item 1): the option with no key, and with an empty key, prints the usage (the header's
 # first line) and exits 2 in both shells - never a binding error, never the plain check
-for a in none; do
+for a in none empty; do
   if [ "$kind" = ps ] && [ $a = none ]; then FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" 2>&1)"; FRC=$?
   elif [ "$kind" = ps ]; then FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" '' budget-time-ok.md 2>&1)"; FRC=$?
   elif [ $a = none ]; then FO="$(bash "$core/scripts/check-contract.sh" "--$fopt" 2>&1)"; FRC=$?
@@ -149,6 +149,7 @@ done
 # the variants from an LF copy: a Windows checkout may hold runs-ordinary.md with CRLF, and sed's $ is before the \r
 tr -d '\r' < runs-ordinary.md > runs-lf.md
 sed 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-above.md
+sed 's/^  cost: 6$/  cost: 3/' runs-lf.md > runs-below.md
 sed 's/^  time: 40$/  time: 90/' runs-lf.md > runs-time.md
 sed -e '/^kind: /d' -e 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-nokind.md
 sed -e 's/^  model: opus$/  model: claude-opus-5-5/' -e 's/^  cost: 6$/  cost: 9/' runs-lf.md > runs-full.md
@@ -169,6 +170,9 @@ rname="a budget inside the range"; crun runs-ordinary.md --runs runs.tsv
 rexit 0; rhasnt 'WARN|ERROR|thin history|cannot read'
 rname="cost above the range"; crun runs-above.md --runs runs.tsv
 rexit 0; rhas "runs-above.md: WARN  $cost9"; rhasnt 'WARN  budget\.time|ERROR|cannot read'
+rname="cost below the range"; crun runs-below.md --runs runs.tsv
+rexit 0; rhas 'runs-below.md: WARN  budget.cost 3 is outside run-stats ordinary/opus: median 6.00, range 5.00-7.00, 5 tasks'
+rhasnt 'ERROR|cannot read'
 rname="time outside the range"; crun runs-time.md --runs runs.tsv
 rexit 0; rhas 'runs-time.md: WARN  budget.time 90 is outside run-stats ordinary/opus: median 40, range 30-50, 5 tasks'
 rhasnt 'WARN  budget\.cost|ERROR|cannot read'
@@ -290,7 +294,7 @@ imk() {   # imk <file> <touches items, empty: no touches line> <lines to add, as
   { sed -e '$d' -e '/^bounds:/,/^  - /d' -e "s#^tests_first: .*#tests_first: ${tfv:-no - tests/sort.sh checks it}#" -e 's#^touches: .*#touches: ['"$2"']#' runs-lf.md | { [ -n "$2" ] && cat || sed '/^touches: /d'; }; printf "$3"; printf -- '---\n'; } > "$1"
 }
 B1='bounds:\n  - some/glob/* 10\n'; W1='wall: the guard stops it\n'
-i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*'; do
+i=0; for v in 'scripts/hooks/x.sh|scripts/hooks/*' '.github/workflows/x.yml|.github/workflows/*'; do
   i=$((i + 1)); it="${v%%|*}"; ig="${v#*|}"
   imk "i-nob$i.md" "$it" "$W1"; iname="$it without bounds"; ierr "i-nob$i.md" bounds "$ig"
   imk "i-now$i.md" "$it" "$B1"; iname="$it without wall"; ierr "i-now$i.md" wall "$ig"
@@ -311,7 +315,7 @@ for w in bounds wall; do printf '%s\n' "$CO" | grep -F -- "i-dir2.md: ERROR " | 
 printf '%s\n' "$CO" | grep -qxF -- "i-dir2.md: FAIL (2 errors, 0 warnings)" || ifail "the summary is not 'i-dir2.md: FAIL (2 errors, 0 warnings)'"
 imk i-dirn.md 'docs/, scripts/hooksy/' ''; iname="folders holding no important glob"; inone i-dirn.md
 # a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
-i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n'; do
+i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do
   i=$((i + 1)); imk "i-bad$i.md" scripts/hooks/x.sh "$b$W1"; iname="a malformed bound: $b"; ierr "i-bad$i.md" bounds 'scripts/hooks/*'
 done
 imk i-wall1.md scripts/hooks/x.sh "${B1}wall:\n"; iname="an empty wall"; ierr i-wall1.md wall 'scripts/hooks/*'

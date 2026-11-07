@@ -136,6 +136,8 @@ project "THE GUARD: a scratch copy of the core's shape"
 echo core > "$root/CORE.md"; mkdir -p "$root/scripts"; echo check > "$root/scripts/check-core.sh"; git -C "$root" add -A; git -C "$root" commit -qm core
 refused "core's own repository" "${go[@]}"
 name="THE GUARD: --root ."; s="$(snap)"; cd "$root" || exit 1; rst "$SCR" . "${go[@]}"; cd "$tmp" || exit 1; code 1; has "core's own repository"; same "the state" "$(snap)" "$s"
+name="THE GUARD: a linked worktree of it"; git -C "$root" worktree add -q "$root-wt" -b wt; s="$(snap)"; t="$(th "$root-wt")"
+rst "$SCR" "$root-wt" --confirm proj-wt --core-from "$from"; code 1; has "core's own repository"; same "the state" "$(snap)" "$s"; same "the worktree" "$(th "$root-wt")" "$t"
 
 project "refused: --confirm missing"; refused "--confirm" --core-from "$from"
 name="refused: --confirm wrong"; refused "--confirm" --confirm other --core-from "$from"
@@ -165,11 +167,13 @@ chk "the tag holds the state" git -C "$st" cat-file -e "$tag:PROJECT.md"; chk "t
 
 
 # Beside the rest, last: no other case has a <config>/coordinator. $e starts the folder of proj-2, another project's
-project "the project's briefs and status files"; keep; cfg="$HOME/.claude/coordinator"; e="${pdir##*/}"; mkdir -p "$cfg/briefs" "$cfg/sessions" "$cfg/agents"; echo account > "$cfg/statusline.json"; printf 'shared\r\n' > "$cfg/agents/a.md"
+project "the project's briefs and status files: a refusal moves none"; keep; cfg="$HOME/.claude/coordinator"; e="${pdir##*/}"; mkdir -p "$cfg/briefs" "$cfg/sessions" "$cfg/agents"; echo account > "$cfg/statusline.json"; printf 'shared\r\n' > "$cfg/agents/a.md"
 ses() { mkdir -p "$HOME/.claude/projects/$1"; echo '{}' > "$HOME/.claude/projects/$1/$2.jsonl"; printf 'brief %s\r\nb\n' "$2" > "$cfg/briefs/$2.md"; printf '{"id":"%s"}' "$2" > "$cfg/sessions/$2.json"; }
 of() { (cd "$cfg" && for i in "$@"; do cksum "./briefs/$i.md" "./sessions/$i.json" 2>&1; done | LC_ALL=C sort -k3); }
 A=5e550000-0000-4000-8000-0000000000a1 W=5e550000-0000-4000-8000-0000000000a2 X=5e550000-0000-4000-8000-0000000000b1 Y=5e550000-0000-4000-8000-0000000000b2
 ses "$e" $A; ses "$e--claude-worktrees-w1" $W; ses "$e-2" $X; ses "$e-2--claude-worktrees-w1" $Y; mine="$(of $A $W)"; theirs="$(of $X $Y)"; shared="$(cksum "$cfg/statusline.json" "$cfg/agents/a.md")"; whole="$(th "$cfg")"
+echo '[{"number":7}]' > "$STUB_D/prs"; refused "open PR" "${go[@]}"; rm -f "$STUB_D/prs"; same "<config>/coordinator after a refusal" "$(th "$cfg")" "$whole"
+mkdir -p "$bare/hooks"; printf '#!/bin/sh\ncase "$1" in refs/tags/*) exit 1 ;; esac\n' > "$bare/hooks/update"; chmod +x "$bare/hooks/update"; rst "$st/core/scripts" "$root" "${go[@]}"; code 1; same "<config>/coordinator with the push refused" "$(th "$cfg")" "$whole"; rm -f "$bare/hooks/update"
 name="a reset takes the project's briefs and status files behind the tag"; rst "$st/core/scripts" "$root" "${go[@]}"; after
 for f in briefs/$A.md sessions/$A.json briefs/$W.md sessions/$W.json; do chk "$f is gone from <config>/coordinator" [ ! -e "$cfg/$f" ]; done; chk "the transcript stays" [ -f "$pdir/$A.jsonl" ]; chk "the worktree's transcript stays" [ -f "$pdir--claude-worktrees-w1/$W.jsonl" ]
 gc clone -q "$bare" "$tmp/restored2" 2>/dev/null; gc -C "$tmp/restored2" checkout -q "$tag" 2>/dev/null; same "the tag's before-reset-config" "$(th "$tmp/restored2/before-reset-config")" "$mine"
