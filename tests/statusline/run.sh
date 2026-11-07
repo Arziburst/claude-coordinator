@@ -235,6 +235,24 @@ bar_cases() {
   begin "an update (#516): the core changed, upstream moved on meanwhile: the mark once the file is read against the new record"
   printf '%s' "$A" > "$tmp/stub/git.head"; upstream "$A" 1111111; touch -t "$(stamp 3600)" "$up"; draw; is "$L400"; waitfor "$A" || no "wants the file read again"; draw; [ "$(first)" = "core ^" ] || no "wants the mark for a core behind, printed '$(plain)'"
   begin "the same record, upstream equal: no mark, no read"; upstream "$B"; rm -f "$tmp/stub/git.log"; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"
+  # #541: two projects on one machine, one config, on different cores; the file read once for each record, not again inside 12 hours
+  H=ccccccc000000000000000000000000000000000; r0="$root"; mkdir -p "$other/coordinator"
+  as() { root="$1"; fx "$C" "$M" high $W400; }
+  line2() { local i=0; while [ $i -lt 20 ]; do [ "$(sed -n 2p "$up" | tr -d '\r')" = "$1" ] && return 0; sleep 1; i=$((i + 1)); done; return 1; }
+  orow() { printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` at claude-coordinator commit `%s`; local edits: none |\n' "$1" > "$other/coordinator/PROJECT.md"; }
+  begin "two projects, different cores, both behind (#541): the other's first draw hides its mark and reads; then each shows its own"
+  printf '%s' "$H" > "$tmp/stub/git.head"; rm -f "$tmp/stub/git.log"; orow aaaaaaa; upstream "$H"; touch -t "$(stamp 3600)" "$up"
+  draw; [ "$(first)" = "core ^" ] || no "wants the mark in the first project, printed '$(plain)'"
+  as "$other"; draw; is "$L400"; line2 aaaaaaa || no "wants the file read against the other project's record"; draw; [ "$(first)" = "core ^" ] || no "wants the mark in the other project, printed '$(plain)'"
+  begin "two projects (#541): neither hides the other's mark, and no read again past 10 minutes"; touch -t "$(stamp 3600)" "$up"
+  as "$r0"; draw; [ "$(first)" = "core ^" ] || no "wants the first project's mark after the other's read, printed '$(plain)'"
+  as "$other"; draw; [ "$(first)" = "core ^" ] || no "wants the other project's mark, printed '$(plain)'"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote for both, got $(gitcalls)"
+  begin "two projects (#541): the other updated to main's head: no mark there, read again; the first keeps its mark"
+  orow ccccccc; as "$other"; draw; is "$L400"; line2 ccccccc || no "wants the file read against the new record"; draw; is "$L400"
+  as "$r0"; draw; [ "$(first)" = "core ^" ] || no "wants the first project's mark kept, printed '$(plain)'"; [ "$(gitcalls)" = 2 ] || no "wants two git ls-remote, got $(gitcalls)"
+  begin "a project whose Core row holds no commit: no mark, and no read inside 12 hours after the first"; rm -f "$tmp/stub/git.log"; touch -t "$(stamp 3600)" "$up"
+  printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` |\n' > "$other/coordinator/PROJECT.md"; as "$other"; draw; is "$L400"; sleep 3; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"; as "$r0"
+  upstream "$B"; rm -f "$tmp/stub/git.log"
   begin "the tag stable (#495): upstream holds it at the core's commit, main ahead: no mark, one ls-remote for both"; printf '%s' "$B" > "$tmp/stub/git.stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$B" || no "wants stable's commit in the file"
   draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote, got $(gitcalls)"; grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants the tag asked, got '$(cat "$tmp/stub/git.log")'"
   begin "the tag stable behind main, the core at main's head: no mark (a core ahead of stable)"; printf '%s' "$A" > "$tmp/stub/git.stable"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$A" || no "wants stable's commit in the file"; draw; is "$L400"
