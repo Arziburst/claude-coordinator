@@ -310,6 +310,17 @@ t0=$(date +%s); run --list "$L" --interval 1 --agents-timeout 2; t1=$(date +%s)
 code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"; calls -eq 2
 [ $((t1 - t0)) -lt 25 ] && ok || bad "ended after $((t1 - t0)) s (one 2 s timeout and a 1 s interval)"
 
+fresh "claude agents hanging with --once: ERROR, exit 1, in bounded time"
+echo $A > "$L"; echo 40 > "$STUB_D/sleep-1"; echo "$A done w-a" > "$STUB_D/list-1"
+t0=$(date +%s); run --list "$L" --once --agents-timeout 2; t1=$(date +%s)
+code 1; has "^ERROR .+"; hasnt "^STOPPED"
+[ $((t1 - t0)) -lt 25 ] && ok || bad "ended after $((t1 - t0)) s (one 2 s timeout)"
+
+fresh "a slow answer within --agents-timeout is a good poll"
+echo $A > "$L"; echo 1 > "$STUB_D/sleep-1"; echo "$A done w-a" > "$STUB_D/list-1"
+run --list "$L" --once --agents-timeout 10
+code 0; hasnt "^ERROR"; has "^STOPPED $A w-a\$"
+
 # --- parity of the two scripts
 
 fresh "claude's JSON without a final newline: the finding, not ERROR"

@@ -55,7 +55,9 @@ expect "--since with milliseconds" 0 "$t/expected-since.txt" - -- "$cl" --since 
 expect "--since without the Z" 0 "$t/expected-since.txt" - -- "$cl" --since 2026-10-05T17:00:00
 expect "--since Unix seconds (the status line's resets_at)" 0 "$t/expected-since.txt" - -- "$cl" --since 1791219600
 expect "--since with an offset other than Z is refused" 2 - - -- "$cl" --since 2026-10-05T17:00:00+02:00
+expect "--since a date only is refused" 2 - - -- "$cl" --since 2026-10-05
 expect "a usage object in a tool input before the message's own" 0 "$t/expected-tool-usage.txt" - -- "$here/edge" t1
+expect "a tool input with keys differing only by case" 0 "$t/expected-case-keys.txt" - -- "$here/edge" t6
 expect "--since: the record's own timestamp, before or after the message" 0 "$t/expected-order-since.txt" - -- "$here/order" --since 2026-10-05T17:00:00Z
 expect "an ambiguous prefix of status files only" 1 - "$(printf 'ambiguous id ab:\nab1\nab2')" -- "$here/edge" ab
 # the time line: a gap over 5 minutes left out of active, one of exactly 5 kept, a half minute rounded up,
@@ -63,6 +65,7 @@ expect "an ambiguous prefix of status files only" 1 - "$(printf 'ambiguous id ab
 tm="$here/time"
 expect "time: a gap over 5 minutes is not active" 0 "$t/expected-time-gap.txt" - -- "$tm" g1
 expect "time: a subagent working while the transcript is quiet is active" 0 "$t/expected-time-subagent.txt" - -- "$tm" g2
+expect "time: a subagent alone, by its agentId" 0 "$t/expected-time-agent.txt" - -- "$tm" g2t
 expect "time: a session with one record (wall=0m)" 0 "$t/expected-time-one.txt" - -- "$tm" g3
 expect "time: no record with a timestamp, no time line" 0 "$t/expected-time-none.txt" - -- "$tm" g4
 # a 12-minute tool call is work, a 12-minute gap after a result is not, two overlapping tool calls
@@ -71,6 +74,10 @@ expect "time: tool calls span their gaps, a gap after a result does not" 0 "$t/e
 # a 50-minute tool call gives 30 minutes of work; a question to a person (AskUserQuestion, and a tool
 # whose name ends in it) gives none, whether it waits 20 minutes or 3
 expect "time: a tool call's gap is capped at 30 minutes, a question to a person is idle" 0 "$t/expected-time-cap.txt" - -- "$tm" g6
+# the same transcript with CRLF line ends (a checkout on Windows, a copy through another tool)
+mkdir -p "$tmp/crlf/projects/-work-app"
+awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$tm/projects/-work-app/g1.jsonl" > "$tmp/crlf/projects/-work-app/g1.jsonl"
+expect "time: CRLF line ends" 0 "$t/expected-time-gap.txt" - -- "$tmp/crlf" g1
 # the cost-state record Claude Code appends at a normal stop: its numbers (exact out, thinking, its cost
 # before the status file's), the last of several, none after an assistant message, two models with keys
 # in another order (its subagent's messages not added again), a subagent by its agentId (no record)
@@ -105,10 +112,12 @@ printf 'cost\t$0.1000\n' > "$tmp/cost-ab1.txt"; printf 'cost\t$0.4182\n' > "$tmp
 expect "a status file only, by its full id" 0 "$tmp/cost-ab1.txt" - -- "$here/edge" ab1
 # no projects folder, the status file there: the cost line
 mkdir -p "$tmp/noproj/coordinator/sessions"; cp "$cl/coordinator/sessions/s1.json" "$tmp/noproj/coordinator/sessions/"
+expect "no projects folder, a status file" 0 "$tmp/cost-s1.txt" - -- "$tmp/noproj" s1
 expect "neither a transcript nor a status file" 1 - - -- "$tmp/noproj" s9
 # a config path with [ ] in it (PowerShell reads [1] as a wildcard unless the path is literal)
 mkdir -p "$tmp/cfg[1]"; cp -R "$cl/." "$tmp/cfg[1]/"
 expect "a config path with [ ]" 0 "$t/expected.txt" - -- "$tmp/cfg[1]" s1
+expect "a config path with [ ], a subagent" 0 "$t/expected-agent.txt" - -- "$tmp/cfg[1]" x
 # --prune deletes status files older than exactly 7 x 24 hours: ages 30 and 7.5 days go, 6.5 days and now stay
 d="$tmp/prune/coordinator/sessions"; mkdir -p "$d"
 stamp() {   # the local time $1 seconds ago, for touch -t: GNU date reads @<n>, BSD date -r <n>
@@ -130,6 +139,7 @@ ctx() { n=$((n + 1)); run "$2" "${@:4}"; [ "$rc" = 0 ] && [ "$(tail -n 1 "$tmp/o
 PF="$(winpath "$here/context/prices.txt")"; K='under100k=1/100999/$0.4200 100-200k=2/299999/$0.4500 200-400k=3/799999/$0.1320 400-700k=3/1500000/$0.2600 over700k=2/1500001/$0.1400 unpriced=1'
 ctx "context: each bucket's edges, requests and tokens, no price needed" "$here/context" 'under100k=1/100999 100-200k=2/299999 200-400k=3/799999 400-700k=3/1500000 over700k=2/1500001' k1
 ctx "context: --prices, four models' costs, an unpriced model" "$here/context" "$K" k1 --prices "$PF"
+ctx "context: --since with --prices" "$here/context" "$K" --since 2026-10-01T00:00:00Z --prices "$PF"
 ctx "context: a stopped session, from its transcript, not its record" "$st" 'under100k=1/1013/$0.0002 100-200k=0/0/$0.0000 200-400k=0/0/$0.0000 400-700k=0/0/$0.0000 over700k=0/0/$0.0000 unpriced=0' c1 --prices "$PF"
 expect "context: --prices with no such file" 2 - - -- "$here/context" k1 --prices "$(winpath "$tmp/none.txt")"
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"

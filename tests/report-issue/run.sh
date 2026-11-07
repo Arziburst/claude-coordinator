@@ -265,6 +265,13 @@ fresh "signature: a single-quoted path with a space (Program Files) is one path 
 same "cannot run 'C:\\Program Files\\Git\\bin\\bash.exe': not found" "cannot run 'D:\\Tools\\Git\\bin\\bash.exe': not found" \
   program files tools bash.exe '\bin'
 has "not found"
+fresh "signature: a quoted POSIX path with a space is one path token"
+same 'cannot open "/home/john smith/x": denied' 'cannot open "/home/ann lee/y": denied' john smith lee
+has "denied"
+fresh "signature: a UNC path with a \$ share and a space is one path token"
+same 'cannot read \\srv01\builds$\a b\x.log: denied' 'cannot read \\other\share\c d\y.log: denied' \
+  srv01 builds other share x.log y.log 'b\' 'd\' denied
+has "cannot read"
 fresh "signature: an scp-style remote is one token - no account, repository or host"
 same "failed to push some refs to 'git@github.com:acme/shop.git'" "failed to push some refs to 'git@gitlab.com:x/y.git'" \
   acme shop github.com gitlab.com shop.git y.git
@@ -292,9 +299,31 @@ has "cannot read"
 fresh "signature: after an unquoted POSIX path start the rest of the line is gone (Mobile Documents)"
 sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read /Users/jo/Library/Mobile Documents/com~apple~CloudDocs/acme-shop/runs.tsv'; code 0
 for x in acme mobile documents clouddocs; do hasnt "$x"; done; has "cannot read"
+fresh "signature: a path in parentheses with a space - the rest of the line is gone"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read the log (/home/jo smith/acme/x)'; code 0
+for x in acme smith; do hasnt "$x"; done; has "cannot read the log"
+fresh "signature: Windows relative and home paths - ..\\, .\\ and ~\\ are paths"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot run ..\acme-shop\build.ps1'; code 0
+hasnt acme; hasnt build.ps1; has "cannot run"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open .\acme-shop\x'; code 0
+hasnt acme; has "cannot open"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open ~\Documents\Acme Corp\x.txt'; code 0
+hasnt acme; hasnt corp; hasnt documents; has "cannot open"
+fresh "signature: a backtick-quoted path with a space is one path token"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open `/home/jo smith/x`'; code 0
+hasnt smith; has "cannot open"
+fresh "signature: a quoted file:// URL with a space is one URL token"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open "file:///C:/Users/Jo Smith/acme/x"'; code 0
+hasnt smith; hasnt acme; has "cannot open"
 fresh "signature: an e-mail in git's auto-detect message - no user, host or machine name"
 sig --source scripts/run-stats.sh --step commit --exit 128 --error "fatal: unable to auto-detect email address (got 'jo@DESKTOP-ACME7.(none)')"; code 0
 for x in jo acme desktop; do hasnt "$x"; done; has "unable to auto-detect email address"
+fresh "signature: a bare e-mail address - no name or domain"
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'committer jo.smith@acme.com not allowed'; code 0
+for x in jo smith acme; do hasnt "$x"; done; has "committer"; has "not allowed"
+fresh "signature: Name <e-mail> - no name or domain"
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'Author: Jo Smith <jo@acme.com>'; code 0
+for x in jo smith acme; do hasnt "$x"; done
 fresh "signature: bare host names are a token - no company or service name"
 sig --source scripts/run-stats.sh --step fetch --exit 128 --error 'ssh: Could not resolve hostname git.acme.internal: unknown'; code 0
 hasnt acme; has "could not resolve hostname"; has "unknown"
@@ -309,6 +338,14 @@ fresh "signature: a repository owner/name in a git remote message is a token"
 word 'remote: Permission to acme/shop.git denied' "permission to" -- acme shop
 fresh "signature: a branch name with a slash is a token, the words after it stay"
 word 'REMOVE FAILED: git branch -d feature/acme-login - left as is' "remove failed" "left as is" -- acme login
+fresh "signature: a relative path is a token"
+word 'error: open src/acme/config.json' "error: open" -- acme config
+fresh "signature: a Windows path without a drive, an env-variable path, a drive with no slash, ~user - tokens"
+word 'cannot read Users\jo\acme\x' "cannot read" -- acme jo users
+word 'cannot read %USERPROFILE%\acme\x' "cannot read" -- acme userprofile
+word 'cannot read $HOME/acme/x' "cannot read" -- acme home
+word 'cannot read D:acme\x' "cannot read" -- acme
+word 'cannot read ~jo/acme/x' "cannot read" -- acme jo
 fresh "signature: core paths stay as written, lower-cased (guard)"
 word 'cannot run scripts/start-worker.sh now' "cannot run scripts/start-worker.sh now" -- PATH HOST
 word 'see procedures/CORE-FINDINGS.md first' "see procedures/core-findings.md first" -- PATH HOST
@@ -321,6 +358,8 @@ sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot read BINDIN
 fresh "signature: v2.1.310 and 2.1.310 - one token"
 same 'needs core v2.1.310 or later' 'needs core 2.1.310 or later' 310
 has "needs core"; has "or later"
+fresh "signature: e.g. stays e.g. - no host"
+word 'set the model, e.g. opus' "set the model, e.g. opus" -- HOST
 fresh "signature: an IP address with a port - one token, whatever the port"
 same 'cannot connect to 10.1.2.3:8443 now' 'cannot connect to 10.9.9.9:22 now' 8443 '10.'
 has "cannot connect to"; has "now"
@@ -329,6 +368,8 @@ has "cannot connect to"; has "now"
 # The names below are in no core file (tests/ is no core text: acme is all over this file).
 fresh "signature: names as plain words are gone - only the core's words and the fixed tool-error words stay"
 word 'remote: Permission to x denied to jsmith.' "permission to" "denied to _" -- jsmith
+word 'ssh: Could not resolve hostname acmenas: unknown' "could not resolve hostname" "unknown" -- acmenas acme nas
+word "user $jose not allowed" "user _ not allowed" -- "$jose" jos
 fresh "signature: the same error with two different names - one signature"
 same 'remote: Permission to x denied to jsmith.' 'remote: Permission to x denied to abrown.' jsmith abrown
 fresh "signature: two errors that differ in a core word - two signatures (guard)"
@@ -355,6 +396,24 @@ hasnt "$ivan"; [ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" = 1 ] && ok || ba
 # --- signature, round 7 of #338: versions, control bytes, --source and --step, the tool-error words ---
 # A version keeps only its digits (a name glued to it is a word like any other); control bytes go before
 # the rules; --source and --step pass the same allowlist (a --source that is no core path is a token).
+# ver <error> <names...>: one signature; its words hold the version's digits as a token, none of the names
+ver() {
+  local e="$1" x w; shift
+  sig --source scripts/run-stats.sh --step st --exit 1 --error "$e"; code 0
+  w="${out#*: exit 1: }"
+  case "$w" in *N*) ok ;; *) bad "the version's digits are no token: [$w]" ;; esac
+  for x in "$@"; do hasnt "$x"; done; }
+fresh "signature: a version keeps only its digits - a name glued to it is gone"
+ver 'build 1.2.3-acme failed' acme
+ver 'requires sdk 2.1.0-zorblat.jsmith' zorblat jsmith
+ver 'tag v1.0.jsmith' jsmith
+ver 'release 2024.10.acme-shop' acme
+fresh "signature: build 1.2.3 failed and build 1.2.3-acme failed - failed kept, no name, they differ only by _"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3 failed'; code 0; s1="$out"; has failed
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3-acme failed'; code 0; has failed; hasnt acme
+# nous <sig>: the signature with each _ and the punctuation joining it to a word gone, spaces collapsed
+nous() { printf '%s' "$1" | sed -E 's/[-._]*_[-._]*/ /g; s/ +/ /g; s/ $//'; }
+[ -n "$s1" ] && [ "$(nous "$s1")" = "$(nous "$out")" ] && ok || bad "they differ in more than _: [$s1] [$out]"
 fresh "signature: control bytes go before the rules - \\001 and \\002, ESC sequences, BEL"
 sig --source scripts/run-stats.sh --step st --exit 1 --error "$(printf 'cannot read \001jsmith acme\002 now \033[31mred\033[0m bell\007 end')"; code 0
 hasnt jsmith; hasnt acme; has "cannot read"
@@ -368,6 +427,8 @@ for x in acme/deploy.sh; do
   case "${out%%: *}" in *[!A-Z]*|"") bad "--source $x is no token: [${out%%: *}]" ;; *) ok ;; esac
   hasnt acme; hasnt zorblat; hasnt deploy.sh
 done
+sig --source scripts/run-stats.sh --step "push to jsmith" --exit 1 --error 'cannot push'; code 0
+hasnt jsmith; has "scripts/run-stats.sh: push"
 fresh "signature: the fixed tool-error words - HTTP 403 and 401 differ"
 differ 'gh: Forbidden (HTTP 403)' 'gh: Unauthorized (HTTP 401)'
 
@@ -375,9 +436,15 @@ differ 'gh: Forbidden (HTTP 403)' 'gh: Unauthorized (HTTP 401)'
 # A user id, a machine name, a name with a year: letters and digits in one word say nothing of the error.
 # Kept: a version, a hex id (tokens), a core path or name, and the technical words below.
 fresh "signature: a word mixing letters and digits becomes _ - no user id, machine name or name with digits"
+word 'permission denied for user u123456 on desktop-7qj3k2l' "permission denied for user" "desktop" -- u123456 123456 qj k2l 3k
 word 'user jsmith1987 not allowed' "user _ not allowed" -- jsmith 1987
-fresh "signature: kept beside the rule - a core path (guard)"
+fresh "signature: the same error with two mixed names - one signature"
+same 'user u123456 not allowed' 'user u654321 not allowed' 123456 654321
+fresh "signature: kept beside the rule - versions, hex ids, core paths and names (guard)"
+word 'build 1.2.3 failed for u123456' "build N.N.N failed for" -- 123456
+word 'commit 3e15b27a9 failed' "commit ID failed" --
 word 'cannot run scripts/start-worker.ps1 now' "cannot run scripts/start-worker.ps1 now" -- PATH HOST
+word 'cannot run start-worker.ps1 now' "cannot run start-worker.ps1 now" -- PATH HOST
 fresh "signature: the technical words with digits are kept (guard)"
 word 'sha256 mismatch' "sha256" --
 
@@ -404,6 +471,12 @@ printf '77\tOPEN\t\tmerge-queue: the refused update\n' > "$STUB_D/exact"
 printf '+1\tsomeone-else\n+1\tstub-user\n' > "$STUB_D/reactions-77"
 file --keywords "merge-queue update refused"
 code 0; has "REPEAT #77"; count reaction 0; count create 0; count comment 0; readonly_else
+
+fresh "REPEAT, another account's reaction only: this account adds its own"
+printf '77\tOPEN\t\tmerge-queue: the refused update\n' > "$STUB_D/exact"
+printf '+1\tsomeone-else\nheart\tstub-user\n' > "$STUB_D/reactions-77"
+file --keywords "merge-queue update refused"
+code 0; has "REPEAT #77"; count reaction 1; count create 0
 
 fresh "REPEAT with --comment-file: the reaction and one comment with that text"
 printf '77\tOPEN\t\tmerge-queue: the refused update\n' > "$STUB_D/exact"
@@ -475,6 +548,23 @@ grep -qE -- '^issue create .*--title merge-queue stops when the update is refuse
   { bad "issue create without the title as given"; sed 's/^/    log: /' "$STUB_D/log"; }
 grep -q 'issues/55' "$STUB_D/log" && { bad "a call on #55"; sed 's/^/    log: /' "$STUB_D/log"; } || ok
 
+fresh "--regression with an open match too -> REPEAT the open one, nothing filed"
+printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n78\tOPEN\t\tRegression: merge-queue stops again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression
+code 0; has "REPEAT #78"; hasnt "FIXED UPSTREAM"; hasnt "FILED"; count reaction 1; count create 0; count comment 0; readonly_else
+
+fresh "--regression, no exact match, candidates -> CHECK as without it"
+printf '11\tOPEN\t\tmerge queue stops on a refused update\n' > "$STUB_D/keyword"
+file --keywords "merge-queue update refused" --regression
+code 4; has "CHECK"; has "#11"; count create 0; count reaction 0; readonly_else
+
+fresh "--regression, no exact match, no candidates -> FILED as without it, no Regression line"
+file --keywords "merge-queue update refused" --regression
+code 0; has "FILED #901"; count create 1; count reaction 0; readonly_else
+c="$(tr -d '\r' 2>/dev/null < "$STUB_D/created")"
+printf '%s\n' "$c" | grep -q '^Regression of' && bad "a Regression line with no closed match" || ok
+[ "$(printf '%s\n' "$c" | sed '/^$/d' | tail -n 1)" = "Signature: $SIG" ] && ok || bad "the body's last line is not Signature: <sig>"
+
 fresh "--regression --dry-run, a closed match: the would-be filing printed naming #55, no write"
 printf '55\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n' > "$STUB_D/exact"
 file --keywords "merge-queue update refused" --regression --dry-run
@@ -485,6 +575,13 @@ fresh "FIXED UPSTREAM: two closed-as-completed matches #12 and #80 -> the newest
 printf '12\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n80\tCLOSED\tCOMPLETED\tmerge-queue: the refused update again\n' > "$STUB_D/exact"
 file --keywords "merge-queue update refused"
 code 3; has "FIXED UPSTREAM #80"; hasnt "#12"; count create 0; count reaction 0; count comment 0; readonly_else
+
+fresh "--regression, two closed-as-completed matches #12 and #80 -> Regression of #80"
+printf '12\tCLOSED\tCOMPLETED\tmerge-queue: the refused update\n80\tCLOSED\tCOMPLETED\tmerge-queue: the refused update again\n' > "$STUB_D/exact"
+file --keywords "merge-queue update refused" --regression
+code 0; has "FILED #901"; count create 1; count reaction 0; count comment 0; readonly_else
+c="$(tr -d '\r' 2>/dev/null < "$STUB_D/created")"
+printf '%s\n' "$c" | grep -qE '^Regression of #80([^0-9]|$)' && ok || bad "no line Regression of #80 in the body: $(printf '%s\n' "$c" | grep '^Regression' )"
 
 # --- titles from the repository are untrusted data (round 6 of #338): anyone can write them --- (rawfile, clean, shsame: the set-up)
 # quoted <tag>: the line holding <tag> holds it between double quotes
@@ -517,6 +614,23 @@ clean; cut120 delta y 6; untrusted_before alpha bravo charlie delta IGNORE
 for x in alpha bravo charlie delta IGNORE; do quoted "$x"; done; has "$IGN"
 shsame --keywords "merge-queue update refused"
 
+# titled <tag>: the title is printed, cleaned, cut, quoted and marked untrusted (round 7: a title left out
+# fails)
+titled() {
+  clean
+  grep -qF IGNORE "$tmp/raw" && ok || bad "the issue's title is not printed"
+  cut120 IGNORE z 46; quoted IGNORE; untrusted_before IGNORE; }
+EXT="$(printf '\033[2J\033[31m%s %s' "$IGN" "$zs")"
+fresh "REPEAT: an exact match's title with escapes, an instruction, 250 characters - data like the CHECK titles"
+printf '77\tOPEN\t\t%s\n' "$EXT" > "$STUB_D/exact"
+rawfile --keywords "merge-queue update refused"
+code 0; has "REPEAT #77"; count reaction 1; count create 0; count comment 0; readonly_else
+titled; shsame --keywords "merge-queue update refused"
+fresh "FIXED UPSTREAM: an exact match's title with escapes, an instruction, 250 characters - data like the CHECK titles"
+printf '55\tCLOSED\tCOMPLETED\t%s\n' "$EXT" > "$STUB_D/exact"
+rawfile --keywords "merge-queue update refused"
+code 3; has "FIXED UPSTREAM #55"; count create 0; count reaction 0; count comment 0; readonly_else
+titled; shsame --keywords "merge-queue update refused"
 
 # --- titles, round 7 of #338: bidi and zero-width characters, the cut keeps whole characters ---
 fresh "CHECK: bidi, zero-width and BOM characters removed; a 100-character Cyrillic title whole; the cut drops only a broken character"
@@ -552,6 +666,14 @@ for x in $FMT; do
 has "fmt"; has "end"
 l="$(grep '^#46 ' "$tmp/raw" | head -n 1)"
 case "$l" in *': ""') ok ;; *) bad "a title of format characters only does not print \"\": [$l]" ;; esac
+fresh "REPEAT: an exact match's title of format characters only prints \"\""
+printf '78\tOPEN\t\t%s\n' "$fmts" > "$STUB_D/exact"
+rawfile --keywords "merge-queue update refused"
+code 0; has "REPEAT #78"
+for x in $FMT; do
+  LC_ALL=C grep -qF "$(printf "$x")" "$tmp/raw" && bad "the character $x is in a printed title" || ok; done
+grep -qxF '#78 ""' "$tmp/raw" && ok || bad "the title line is not: #78 \"\""
+shsame --keywords "merge-queue update refused"
 
 # --- the .sh dry-run REPEAT says what the .ps1 says (round 7 of #338) ---
 fresh "--dry-run REPEAT: one line naming the reaction once, the same in .sh and .ps1"

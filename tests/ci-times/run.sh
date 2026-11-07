@@ -164,7 +164,7 @@ if [ "$kind" = parts ]; then   # #405: nothing lost, not vacuous: the whole set 
       ctl WK scripts/cleanup-worker.sh 's/^      exit 5/      :/' 'check 5 "cleanup: a session in $f"' 'FAIL (cleanup: a session in other): expected exit 5, got'
     else
       ctl RI scripts/report-issue.sh 's/\\342\\201\[\\240-\\244\\246-\\257\]\|//' 'fresh "CHECK: format characters' 'the character \342\201\240 is in a printed title'
-      ctl RI scripts/report-issue.sh 's/\? "\\001" x "\\002" : "_"/? "\\001" x "\\002" : x/' "word 'user jsmith1987 not allowed'" 'unexpected: 1987'
+      ctl RI scripts/report-issue.sh 's/\? "\\001" x "\\002" : "_"/? "\\001" x "\\002" : x/' "word 'build 1.2.3 failed for u123456'" 'unexpected: 123456'
     fi; echo "controls $v: $((SECONDS - t0)) s"; done
   [ "$fail" = 0 ] && echo "ci-times (parts ${PS[*]}): all pass" || echo "ci-times (parts ${PS[*]}): FAILURES"; exit "$fail"
 fi

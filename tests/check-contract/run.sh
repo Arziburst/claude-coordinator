@@ -104,7 +104,7 @@ fi
 # The worker names the option: set fopt to that name (`--<fopt> tests_first <file>` / `-<fopt> ...`)
 fopt=field
 sed 's/^tests_first: yes$/tests_first: yes   # the oracles have no tests yet/' budget-time-ok.md > tf-comment.md
-tr -d '\r' < budget-time-ok.md | awk '{ printf "%s\r\n", $0 }' > tf-crlf.md
+tr '\n' '\r' < budget-time-ok.md > tf-cr.md
 cfield() {   # cfield <file>: the option's output (no CRs) in FO, its exit in FRC; check-contract's own exit in PRC
   if [ "$kind" = ps ]; then
     FO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/check-contract.ps1" "-$fopt" tests_first "$1" 2>&1)"; FRC=$?
@@ -123,14 +123,18 @@ fval() {   # fval <file> <extended regex for the whole one line>: passes, and pr
 fval budget-time-ok.md 'yes'
 fval quoted.md 'no - tests/sort.sh and tests/empty.sh exist'
 fval tf-comment.md 'yes'
+fval tests-first-span.md 'yes, because[[:space:]]+it is cheap'
+fval tests-first-span-single.md 'yes, because[[:space:]]+it is cheap'
 for f in tests-first-missing.md; do
   cfield "$f"
   [ "$FRC" = 1 ] || { echo "FAIL: $fopt tests_first $f: expected exit 1 (the contract fails), got $FRC"; fail=1; }
   case "$f:$FO" in tests-first-no-reason.md:*"ERROR \`tests_first\` is neither"*|tests-first-missing.md:*"ERROR missing \`tests_first\`"*|missing.md:*"cannot read"*) ;;
     *) echo "FAIL: $fopt tests_first $f: check-contract's usual error is not there:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1 ;; esac
 done
-# a CRLF contract (a Windows checkout holds them): the same value as from its LF original
-fval tf-crlf.md 'yes'
+# whatever check-contract makes of a CR-only file, the option says the same (pass and the value, or fail)
+cfield tf-cr.md
+[ "$FRC" = "$PRC" ] || { echo "FAIL: $fopt tests_first tf-cr.md exits $FRC, check-contract itself $PRC"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
+[ "$PRC" != 0 ] || fval tf-cr.md 'yes'
 # usage parity (#288 item 1): the option with no key, and with an empty key, prints the usage (the header's
 # first line) and exits 2 in both shells - never a binding error, never the plain check
 for a in none; do
@@ -205,6 +209,10 @@ sed 's/^title: .*/title: Round the Price on the receipt/' g-base.md > g-title.md
 sed 's/^  stays as it was\.$/  stays as it was, as on an invoice./' g-base.md > g-intent.md
 sed 's/^touches: .*/touches: [scripts\/billing.sh, tests\/sort.sh]/' g-base.md > g-touches.md
 sed 's/^tests_first: .*/tests_first: yes/' g-touches.md > g-yes.md
+sed 's/^title: .*/title: Give new users the admin ROLES/' g-base.md > g-role.md
+sed "s/^  The list is sorted/  The customer's list is sorted/" g-base.md > g-customer.md
+sed 's/^title: .*/title: Keep personal  data out of the log/' g-base.md > g-personal.md
+sed 's/^touches: .*/touches: [scripts\/auth_token.sh]/' g-base.md > g-auth.md
 sed -e 's/^title: .*/title: Sort the access list and the money list/' -e 's/^touches: .*/touches: [scripts\/billing.sh]/' g-base.md > g-two.md
 sed -e 's/^title: .*/title: Sort the rolex, accessible and priceless lists/' \
     -e 's/^  stays as it was\.$/  stays as it was: an authority, a moneyed customers2 and repayments are no words of the list./' \
@@ -228,21 +236,42 @@ gname="a money word in the title, any case"; gwarn g-title.md title price
 gname="a money word in the intent's second line"; gwarn g-intent.md intent invoice
 gname="a money word in touches"; gwarn g-touches.md touches billing
 gname="the same with tests_first: yes"; gnone g-yes.md
+gname="a role word, plural, upper case"; gwarn g-role.md title role
+gname="a customer word before an apostrophe"; gwarn g-customer.md intent customer
+gname="personal data, two words"; gwarn g-personal.md title 'personal data'
+gname="auth before an underscore"; gwarn g-auth.md touches auth
 gname="two fields: the first field, the list's first word"; gwarn g-two.md title money
 gname="words inside other words"; gnone g-inner.md
 # the core's own role files in touches (#362): not read for the word list; a project's own and the rest still are
 sed 's/^touches: .*/touches: [roles\/assistant.md, tests\/sort.sh]/' g-base.md > g-core-role.md
+sed 's/^touches: .*/touches: [coordinator\/core\/roles\/worker.md, .\/roles\/lead.md]/' g-base.md > g-core-roles.md
 sed 's/^touches: .*/touches: [roles\/assistant.md, scripts\/billing.sh]/' g-base.md > g-core-billing.md
+sed 's/^touches: .*/touches: [roles\/assistant.md, scripts\/permission.sh]/' g-base.md > g-core-perm.md
 sed 's/^touches: .*/touches: [roles\/admin.md]/' g-base.md > g-proj-role.md
+sed 's/^touches: .*/touches: [src\/auth\/roles.ts]/' g-base.md > g-src-roles.md
+sed 's/^touches: .*/touches: [app\/models\/role.rb]/' g-base.md > g-model-role.md
+sed 's/^touches: .*/touches: [roles\/]/' g-base.md > g-roles-dir.md
+sed 's/^title: .*/title: Role text/' g-core-role.md > g-core-title.md
+sed 's/^touches: .*/touches: [roles\/worker.md]/' g-base.md > g-core-worker.md
 gname="a core role file in touches"; gnone g-core-role.md
+gname="core role files under coordinator/core/ and ./"; gnone g-core-roles.md
 gname="a core role file and billing in touches"; gwarn g-core-billing.md touches billing
+gname="a core role file and a permission file: the permission"; gwarn g-core-perm.md touches permission
 gname="a project's own roles/admin.md"; gwarn g-proj-role.md touches role
+gname="src/auth/roles.ts"; gwarn g-src-roles.md touches role
+gname="app/models/role.rb"; gwarn g-model-role.md touches role
+gname="roles/ alone"; gwarn g-roles-dir.md touches role
+gname="a core role file in touches, role in the title"; gwarn g-core-title.md title role
 # the core is the one check-contract runs from (its ../roles/), not the working directory: copies of the scripts
-for d in nocore; do
+for d in nocore onlyworker; do
   mkdir -p "$d/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/scripts/"
 done
+mkdir onlyworker/roles; cp "$core/roles/worker.md" onlyworker/roles/
 ccore="$(pwd)/nocore"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 gname="a core with no roles/ folder: nothing left out"; gwarn g-core-role.md touches role
+ccore="$(pwd)/onlyworker"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+gname="a core whose roles/ holds only worker.md: assistant.md"; gwarn g-core-role.md touches role
+gname="a core whose roles/ holds only worker.md: worker.md"; gnone g-core-worker.md
 ccore=""
 # important components (#381): `bounds:` and `wall:` on a contract touching one (the header)
 ifail() { echo "FAIL: important $iname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
@@ -309,13 +338,17 @@ iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hook
 ccore=""
 # tests_first: yes names a bound (#390, the header); `no` with none stays today's: quoted.md in expected.txt, i-none1..3 above
 tfm='`tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)'
-tfv=yes imk i-tf1.md sort.sh ''
-iname="tests_first: yes and no bound"; ierr i-tf1.md "$tfm" tests_first
+tfv=yes imk i-tf1.md sort.sh ''; tfv='yes - a reason' imk i-tf2.md sort.sh ''; tfv=yes imk i-tf3.md sort.sh 'bounds:\n'; tfv=yes imk i-tf4.md sort.sh 'bounds:\n  # - sort.sh 10\n'
+for f in 1 2 3 4; do iname="tests_first: yes and no bound ($f)"; ierr "i-tf$f.md" "$tfm" tests_first; done
 tfv=yes imk i-tfk.md sort.sh "$B1"; iname="tests_first: yes with a bound"; inone i-tfk.md
 tfv=yes imk i-tfi.md scripts/hooks/x.sh "$W1"; iname="tests_first: yes, an important file, no bound"; crun i-tfi.md; [ "$CRC" = 1 ] || ifail "exit $CRC, want 1"
 printf '%s\n' "$CO" | grep -qxF -- "i-tfi.md: ERROR $tfm" || ifail "no tests_first ERROR"
 printf '%s\n' "$CO" | grep -F -- 'i-tfi.md: ERROR ' | grep -F -- 'bounds' | grep -qF -- 'scripts/hooks/*' || ifail "its own ERROR is gone"
 printf '%s\n' "$CO" | grep -qxF -- 'i-tfi.md: FAIL (2 errors, 0 warnings)' || ifail "the summary is not 2 errors"
+tfv=yes imk i-tfm.md scripts/hooks/x.sh "bounds:\n  - x lots\n$W1"; iname="tests_first: yes, an important file, a malformed bound"; ierr i-tfm.md bounds 'scripts/hooks/*'
+rname="tests_first: yes and no bound, --runs"; crun i-tf1.md --runs runs.tsv; rexit 1; rhas "i-tf1.md: ERROR $tfm"
+cfield i-tf1.md; [ "$FRC" = 1 ] && case "$FO" in *"i-tf1.md: ERROR $tfm"*) true ;; *) false ;; esac ||
+  { echo "FAIL: $fopt tests_first i-tf1.md: expected exit 1 and the ERROR, got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
 # the same output and exit codes from both versions, on every contract above at once
 if [ "$kind" = ps ]; then
   set -- i-*.md

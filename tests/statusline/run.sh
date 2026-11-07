@@ -244,7 +244,8 @@ bar_cases() {
   as "$r0"; upstream "$B"; rm -f "$tmp/stub/git.log"
   begin "the tag stable (#495): upstream holds it at the core's commit, main ahead: no mark, one ls-remote for both"; printf '%s' "$B" > "$tmp/stub/git.stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$B" || no "wants stable's commit in the file"
   draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote, got $(gitcalls)"; grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants the tag asked, got '$(cat "$tmp/stub/git.log")'"
-  begin "the tag stable and main elsewhere, the core behind: the mark, against stable"; printf '%s' "$A" > "$tmp/stub/git.stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$A" || no "wants stable's commit in the file"; draw; [ "$(first)" = "core ^" ] || no "wants the mark against stable, printed '$(plain)'"
+  begin "the tag stable behind main, the core at main's head: no mark (a core ahead of stable)"; printf '%s' "$A" > "$tmp/stub/git.stable"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$A" || no "wants stable's commit in the file"; draw; is "$L400"
+  begin "the tag stable and main elsewhere, the core behind: the mark, against stable"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up"; draw; waitfor "$A" || no "wants stable's commit in the file"; draw; [ "$(first)" = "core ^" ] || no "wants the mark against stable, printed '$(plain)'"
   begin "a project that asks for main (PROJECT.md row Core source): main, not the tag"; printf '| Core source (CORE \302\2472) | `main` | owner, 2026-11-06 | 2026-11-06 | stable, main |\n' >> "$root/coordinator/PROJECT.md"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; draw; waitfor "$B" || no "wants main's commit in the file"
   draw; is "$L400"; ! grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants only main asked, got '$(cat "$tmp/stub/git.log")'"; rm -f "$tmp/stub/git.stable"; core_row
   begin "the core mark with no PROJECT.md: nothing"; upstream "$A"; rm "$root/coordinator/PROJECT.md"; draw; is "$L400"; core_row
@@ -270,7 +271,7 @@ bar_cases() {
   rm -f "$root/.claude/settings.json" "$WIN"
 
   fx x "$M" high $W400 ",\"rate_limits\":{\"five_hour\":{\"used_percentage\":14},$(wk 30 502)}"
-  for t in "140|1 1 1 " "40|1 2 3 "; do
+  for t in "140|1 1 1 " "66|1 1 2 " "40|1 2 3 " "|1 1 1 "; do
     begin "the width '${t%%|*}': whole bars, on lines ${t#*|}"
     if [ -n "${t%%|*}" ]; then COLUMNS="${t%%|*}" draw; else draw; fi
     lines "${t#*|}"; bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; bar "5h limit 14%" 14 "green:2 grey:12"; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
