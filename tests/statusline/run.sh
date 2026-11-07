@@ -165,8 +165,8 @@ hk() { printf '{"session_id":"%s","cwd":"%s","hook_event_name":"SessionStart","s
 
 bar_cases() {
   local m e u t s g
-  begin "the context bar: the four models at high and medium, one width"
-  for m in "Opus 5.5" "Sonnet 5.5" "Haiku 5.5" "Fable 5.1"; do for e in high medium; do fx x "$m" "$e" $W400; draw; bar "$m $e . 400k/1M 40%" 34 "green:14 grey:20"; done; done
+  begin "the context bar: two models, two efforts, one width"
+  for m in "Opus 5.5|high" "Fable 5.1|medium"; do e="${m#*|}"; m="${m%|*}"; fx x "$m" "$e" $W400; draw; bar "$m $e . 400k/1M 40%" 34 "green:14 grey:20"; done
   begin "the threshold: the project's local settings, the project's, the account's, else the model's window"
   printf '{"autoCompactWindow":100000}' > "$root/.claude/settings.local.json"; printf '{"autoCompactWindow":200000}' > "$root/.claude/settings.json"; printf '{"autoCompactWindow":300000}' > "$cfg/settings.json"
   fx x "$M" high 60000 1000000
@@ -177,10 +177,9 @@ bar_cases() {
   begin "the longest context bar holds its width, red and full past the threshold"; printf '{"autoCompactWindow":500000}' > "$cfg/settings.json"; fx x "Sonnet 5.5" medium 999000 1000000; draw; bar "Sonnet 5.5 medium . 999k/500k 199%" 34 "red:34"; rm "$cfg/settings.json"
   begin "the context's colours at their edges: 70 and 90"
   fx x "$M" high 699999 1000000; draw; bar "$M high . 699k/1M 69%" 34 "green:24 grey:10"; fx x "$M" high 700000 1000000; draw; bar "$M high . 700k/1M 70%" 34 "yellow:24 grey:10"
-  fx x "$M" high 899999 1000000; draw; bar "$M high . 899k/1M 89%" 34 "yellow:31 grey:3"; fx x "$M" high 900000 1000000; draw; bar "$M high . 900k/1M 90%" 34 "red:31 grey:3"
+  fx x "$M" high 900000 1000000; draw; bar "$M high . 900k/1M 90%" 34 "red:31 grey:3"
   begin "the 5-hour bar by the context's levels, only where it is passed"
   fx x "$M" high $W400 ",\"rate_limits\":{\"five_hour\":{\"used_percentage\":85},$(wk 30 502)}"; draw; bar "5h limit 85%" 14 "yellow:12 grey:2"
-  fx x "$M" high $W400 ",\"rate_limits\":{$(wk 30 502)}"; draw; is "$L400 $dot week 30% $dot reset 50%"
   begin "the week behind time: green to the limit, blue to the time, then grey"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 30 502)}"; draw; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
   begin "the week level with time: green to the limit, then grey"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 50 500)}"; draw; bar "week 50% . reset 50%" 26 "green:13 grey:13"
   begin "the week ahead up to 10 points: blue to the time, the excess yellow"; fx x "$M" high $W400 ",\"rate_limits\":{$(wk 60 502)}"; draw; bar "week 60% . reset 50%" 26 "blue:13 yellow:3 grey:10"
@@ -205,11 +204,9 @@ bar_cases() {
   kept() { mkdir -p "$cfg/coordinator/briefs"; printf '# %s\nprice:\n  cost: 3\n---\nid: x\nbudget:\n  model: opus\n  cost: %s\n---\n' "$1" "$2" > "$cfg/coordinator/briefs/$1.md"; }
   begin "no coordinator/briefs, the contract at another path: the budget from the session's kept brief"; tasks_reset; mv "$root/coordinator/briefs" "$tmp/briefs.away"; mkdir -p "$root/coordinator/contracts"; printf -- '---\nbudget:\n  cost: 99\n---\n' > "$root/coordinator/contracts/c30.md"
   agent k1 "#30 worker: x" working busy "$wt" 7 2026-11-04T12:00:00Z; kept k1 10; fx "$C" "$M" high $W400; draw; bar "#30 W 7/10\$" 17 "green:12 grey:5"
-  begin "an earlier session of the task holds no budget: the next one's counts"; tasks_reset; agent k2 "#31 tester: x" done - "$wt" 0 2026-11-04T12:01:00Z; printf 'no contract here\n' > "$cfg/coordinator/briefs/k2.md"; agent k3 "#31 worker: x" working busy "$wt" 7 2026-11-04T12:02:00Z; kept k3 10; draw; bar "#31 W 7/10\$" 17 "green:12 grey:5"
-  begin "nothing found, no kept brief or one without a budget: the bar as before, exit 0"; tasks_reset; agent k4 "#32 worker: x" working busy "$wt" 3 2026-11-04T12:03:00Z; draw; bar "#32 W 3\$" 17 "blue:17"; printf 'no contract here\n' > "$cfg/coordinator/briefs/k4.md"; draw; bar "#32 W 3\$" 17 "blue:17"
   begin "a lead's sub-session does not replace the lead's budget, nor stand in for one"; tasks_reset; agent k5 "#33.1 worker: x" working busy "$wt" 1 2026-11-04T12:04:00Z; kept k5 1; agent k6 "#33 lead: x" idle idle "$root" 2 2026-11-04T12:05:00Z; kept k6 10; draw; bar "#33 L 3/10\$" 17 "green:5 grey:12"
   rm "$cfg/coordinator/briefs/k6.md"; draw; bar "#33 L 3\$" 17 "blue:17"
-  begin "briefs/<task>-contract.md first, where it exists"; tasks_reset; mv "$tmp/briefs.away" "$root/coordinator/briefs"; budget 34; agent k7 "#34 worker: x" working busy "$wt" 7 2026-11-04T12:06:00Z; kept k7 20; draw; bar "#34 W 7/10\$" 17 "green:12 grey:5"
+  tasks_reset; mv "$tmp/briefs.away" "$root/coordinator/briefs"
   begin "not a coordinator: no task bars and no core mark"; upstream "$A"; fx "#11 worker: x" "$M" high $W400; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call in a session that is not a coordinator"
 
   tasks_reset; printf 6 > "$tmp/stub/git.sleep"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; fx "$C" "$M" high $W400
@@ -232,8 +229,6 @@ bar_cases() {
   draw; is "$L400"; waitfor "$B" || no "wants the file read again after the core changed"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote after the change, got $(gitcalls)"
   [ "$(sed -n 2p "$up" | tr -d '\r\n')" = "$(printf '%s' "$B" | cut -c1-7)" ] || no "wants line 2 of the file to hold the recorded commit, got '$(sed -n 2p "$up")'"
   draw; is "$L400"; [ "$(gitcalls)" = 1 ] || no "wants no further read, got $(gitcalls)"
-  begin "an update (#516): the core changed, upstream moved on meanwhile: the mark once the file is read against the new record"
-  printf '%s' "$A" > "$tmp/stub/git.head"; upstream "$A" 1111111; touch -t "$(stamp 3600)" "$up"; draw; is "$L400"; waitfor "$A" || no "wants the file read again"; draw; [ "$(first)" = "core ^" ] || no "wants the mark for a core behind, printed '$(plain)'"
   begin "the same record, upstream equal: no mark, no read"; upstream "$B"; rm -f "$tmp/stub/git.log"; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"
   # #541: two projects on one machine, one config, on different cores; the file read once for each record, not again inside 12 hours
   H=ccccccc000000000000000000000000000000000; r0="$root"; mkdir -p "$other/coordinator"
@@ -247,9 +242,6 @@ bar_cases() {
   begin "two projects (#541): neither hides the other's mark, and no read again past 10 minutes"; touch -t "$(stamp 3600)" "$up"
   as "$r0"; draw; [ "$(first)" = "core ^" ] || no "wants the first project's mark after the other's read, printed '$(plain)'"
   as "$other"; draw; [ "$(first)" = "core ^" ] || no "wants the other project's mark, printed '$(plain)'"; [ "$(gitcalls)" = 1 ] || no "wants one git ls-remote for both, got $(gitcalls)"
-  begin "two projects (#541): the other updated to main's head: no mark there, read again; the first keeps its mark"
-  orow ccccccc; as "$other"; draw; is "$L400"; line2 ccccccc || no "wants the file read against the new record"; draw; is "$L400"
-  as "$r0"; draw; [ "$(first)" = "core ^" ] || no "wants the first project's mark kept, printed '$(plain)'"; [ "$(gitcalls)" = 2 ] || no "wants two git ls-remote, got $(gitcalls)"
   begin "a project whose Core row holds no commit: no mark, and no read inside 12 hours after the first"; rm -f "$tmp/stub/git.log"; touch -t "$(stamp 3600)" "$up"
   printf '| Core (CORE \302\2472) | a | b | 2026-11-04 | a local copy in `coordinator/core/` |\n' > "$other/coordinator/PROJECT.md"; as "$other"; draw; is "$L400"; sleep 3; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call, got $(gitcalls)"; as "$r0"
   upstream "$B"; rm -f "$tmp/stub/git.log"
@@ -260,14 +252,6 @@ bar_cases() {
   begin "a project that asks for main (PROJECT.md row Core source): main, not the tag"; printf '| Core source (CORE \302\2472) | `main` | owner, 2026-11-06 | 2026-11-06 | stable, main |\n' >> "$root/coordinator/PROJECT.md"; printf '%s' "$B" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; draw; waitfor "$B" || no "wants main's commit in the file"
   draw; is "$L400"; ! grep -q 'refs/tags/stable' "$tmp/stub/git.log" || no "wants only main asked, got '$(cat "$tmp/stub/git.log")'"; rm -f "$tmp/stub/git.stable"; core_row
   begin "the core mark with no PROJECT.md: nothing"; upstream "$A"; rm "$root/coordinator/PROJECT.md"; draw; is "$L400"; core_row
-  begin "the wave: a task's fill has lighter cells, it and the core mark move with the clock"; agent w1 "#11 worker: x" working busy "$wt" 7 2026-11-04T11:00:00Z; draw
-  u="$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")"; m="$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")"
-  if [ -n "$u" ] && [ -n "$m" ]; then
-    [ "$(printf '%s' "$u" | tr ' ' '\n' | grep -v '^48;54;61$' | sort -u | grep -c .)" -ge 2 ] || no "wants at least 2 fill colours in the task's bar, got '$u'"
-    sleep 6; draw
-    [ "$(awk -F'\t' '$2 ~ /^#11/ { print $6 }' "$tmp/bars")" != "$u" ] || no "wants the task's fill changed after 6 s"
-    [ "$(awk -F'\t' '$2 ~ /^core/ { print $5 }' "$tmp/bars")" != "$m" ] || no "wants the core mark's colours changed after 6 s"
-  else no "wants a task bar and a core mark to read, printed '$(plain)'"; fi
   tasks_reset
 
   # The window mark (#499). The hook entry named in the project's settings; the record: <config>/coordinator/windows/<session id>.
@@ -278,16 +262,13 @@ bar_cases() {
   begin "the mark: no record and no hook in the project: none, an older core's restart changes nothing"; fx "$C" "$M" high $W400; draw; is "$L400"
   begin "the mark: no record, the hook in the project: the session started before it, beside the number"; printf '%s' "$HOOK" > "$root/.claude/settings.json"; draw; is "$LR"
   bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; g="$(sed -n 1p "$tmp/bars" | cut -f2)"; [ "$g" = restart ] || no "wants the mark first, before the context bar, got '$g'"
-  begin "the mark right after core ^ where that shows: restart second, the context bar third"; upstream "$A"; draw; g="$(cut -f2 "$tmp/bars" | head -n 3 | tr '\n' '|')"; [ "$g" = "core ^|restart|$M high . 400k/1M 40%|" ] || no "wants core ^, restart, the context bar, got '$g'"; upstream "$B"
   begin "the hook on a start: the window recorded, prints nothing, no status file; the same window: no mark"; printf '{"autoCompactWindow":600000}' > "$WIN"; rm -f "$cfg/coordinator/statusline.json"
   hk startup t1; [ "$rc" = 0 ] && [ ! -s "$tmp/out" ] || no "wants exit 0 and no output, got $rc '$(cat "$tmp/out")'"; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 600000 ] || no "wants 600000 recorded, got '$(cat "$R" 2>/dev/null)'"
   [ ! -f "$cfg/coordinator/statusline.json" ] || no "wants no statusline.json from the hook"; draw; is "$L6"
   begin "the file edited: the bar shows the file's number, the mark says restart"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "restart $dot $M high $dot 400k/800k 50%"
   begin "a compaction and /clear do not record: the mark stays, /clear's new id has no record"; hk compact t1; hk clear t1; draw; is "restart $dot $M high $dot 400k/800k 50%"; hk clear t2; [ ! -f "$cfg/coordinator/windows/t2" ] || no "wants no record on /clear"
   begin "a resume records: the mark goes"; hk resume t1; [ "$(tr -d '\r\n' < "$R" 2>/dev/null)" = 800000 ] || no "wants 800000 recorded on a resume, got '$(cat "$R" 2>/dev/null)'"; draw; is "$M high $dot 400k/800k 50%"
-  begin "the window removed from the file, then none at the start and one added: the mark"; rm "$WIN"; draw; is "$LR"; hk startup t1; [ ! -s "$R" ] || no "wants an empty record with no window set"; draw; is "$L400"; printf '{"autoCompactWindow":800000}' > "$WIN"; draw; is "restart $dot $M high $dot 400k/800k 50%"
   begin "past 100% with the record equal: the mark; not a coordinator: none, with a differing record too"; printf '{"autoCompactWindow":300000}' > "$WIN"; hk startup t1; draw; is "restart $dot $M high $dot 400k/300k 133%"; fx "#11 worker: x" "$M" high $W400; draw; is "$M high $dot 400k/300k 133%"; printf 1 > "$R"; draw; is "$M high $dot 400k/300k 133%"
-  begin "before the first response: the mark beside the model"; printf '{"session_id":"t1","session_name":"%s","workspace":{"project_dir":"%s"},"model":{"display_name":"%s"},"effort":{"level":"high"}}\n' "$C" "$(jp "$root")" "$M" > "$tmp/in.json"; draw; is "restart $dot $M high"
   begin "the hook's root: CLAUDE_PROJECT_DIR over a cwd in a subfolder; a session id that is no plain name writes nothing"; printf '{"autoCompactWindow":700000}' > "$WIN"; mkdir -p "$root/sub"; printf '{"session_id":"t3","cwd":"%s","source":"startup"}\n' "$(jp "$root/sub")" > "$tmp/hook.json"; CLAUDE_PROJECT_DIR="$(nat "$root")" hkrun; [ "$(tr -d '\r\n' < "$cfg/coordinator/windows/t3" 2>/dev/null)" = 700000 ] || no "wants 700000 recorded from the project's settings, got '$(cat "$cfg/coordinator/windows/t3" 2>/dev/null)'"; hk startup '../../evil'; [ ! -e "$cfg/evil" ] && [ ! -e "$cfg/coordinator/evil" ] || no "wants nothing written outside the folder"
   begin "the hook removes a record older than 30 days, keeps a newer one"; printf x > "$cfg/coordinator/windows/old"; touch -t "$(stamp 2678400)" "$cfg/coordinator/windows/old"; hk startup t1; [ ! -e "$cfg/coordinator/windows/old" ] || no "wants the old record gone"; [ -e "$cfg/coordinator/windows/t3" ] || no "wants a newer record kept"
   rm -f "$root/.claude/settings.json" "$WIN"

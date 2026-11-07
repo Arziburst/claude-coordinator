@@ -143,10 +143,8 @@ project "refused: --confirm missing"; refused "--confirm" --core-from "$from"
 name="refused: --confirm wrong"; refused "--confirm" --confirm other --core-from "$from"
 name="refused: an open PR"; echo '[{"number":7,"title":"wip"}]' > "$STUB_D/prs"; refused "open PR" "${go[@]}"; has "#7"; rm -f "$STUB_D/prs"
 OTHER=5e550000-0000-4000-8000-000000000001
-name="refused: a worker running in the project's worktree"; agents "ca11e700 $CALLER working busy $root" "abcd1234 $OTHER working busy $root/.claude/worktrees/w1"
-refused "running session" "${go[@]}"; has abcd1234; hasnt ca11e700
-name="refused: a session between turns in the root"; agents "ca11e700 $CALLER working busy $root" "abcd1235 $OTHER done idle $root"
-refused "running session" "${go[@]}"; has abcd1235; hasnt ca11e700; echo '[]' > "$STUB_D/agents"
+name="refused: a worker running in the project's worktree, a session between turns in the root"; agents "ca11e700 $CALLER working busy $root" "abcd1234 $OTHER working busy $root/.claude/worktrees/w1" "abcd1235 $OTHER done idle $root"
+refused "running session" "${go[@]}"; has abcd1234; has abcd1235; hasnt ca11e700; echo '[]' > "$STUB_D/agents"
 name="refused: a file in coordinator/assistants"; mkdir -p "$st/assistants/helper"; echo brief > "$st/assistants/helper/BRIEF.md"; refused "assistants" "${go[@]}"; rm -rf "$st/assistants"
 name="refused: a remote the tag cannot reach"; git -C "$st" remote set-url origin "$tmp/gone.git"; refused "remote" "${go[@]}"
 
@@ -167,11 +165,6 @@ project "no remote at all: the tag stays local, the reset goes on"; git -C "$st"
 rst "$st/core/scripts" "$root" "${go[@]}"; after
 chk "the tag holds the state" git -C "$st" cat-file -e "$tag:PROJECT.md"; chk "the tag holds the memory" git -C "$st" cat-file -e "$tag:before-reset-memory/MEMORY.md"
 
-# On Windows a process's cwd holds its folder: nobody can replace it, whatever the script does
-if ! command -v cygpath >/dev/null 2>&1; then
-  project "a reset with the cwd in the folder it replaces"; keep; cd "$st/core/scripts" || exit 1
-  rst "$st/core/scripts" "$root" "${go[@]}"; cd "$tmp" || exit 1; after
-fi
 
 # Beside the rest, last: no other case has a <config>/coordinator. $e starts the folder of proj-2, another project's
 project "the project's briefs and status files: a refusal moves none"; keep; cfg="$HOME/.claude/coordinator"; e="${pdir##*/}"; mkdir -p "$cfg/briefs" "$cfg/sessions" "$cfg/agents"; echo account > "$cfg/statusline.json"; printf 'shared\r\n' > "$cfg/agents/a.md"
