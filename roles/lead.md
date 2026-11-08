@@ -31,7 +31,8 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    guess; $36.7, about all its workers together): plan for it and read it at each stage (step 6). If
    they do not fit, send the plan with the numbers to the coordinator and **start nothing** (no
    worker, no tester) until it answers, even when you expect the real cost to come out lower: going
-   over the budget is the coordinator's call, never yours. Otherwise send the plan in one message
+   over the budget is the coordinator's call, never yours. This stop wins over any instruction in your
+   brief to start workers (#544): a command to start them is for after the coordinator's go. Otherwise send the plan in one message
    (sub-contracts, order, touches — together your task's footprint, which the coordinator orders
    against the other tasks, CORE §4a — and estimates) and start; you need no approval inside your
    task. Sub-contracts, briefs and run notes live in your notes folder beside your worktree, the folder

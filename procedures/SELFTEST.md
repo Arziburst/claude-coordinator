@@ -202,14 +202,15 @@ the report notes the interruption and the resume time.
      start-worker command for its workers (the same flags — `--worktree-root <project>/.claude/worktrees`
      too, so each lands in `<project>/.claude/worktrees/selftest/<c>/st1.<n>` — `--base selftest/<c>/st1`, branches
      `selftest/<c>/st1.<n>`, `--report-to "#st1 lead: selftest <P>"`, the light model, `--effort low`, at most
-     two at once, names `#st1.<n> worker: selftest <P> …`): "no PR: merge each approved sub-branch into
+     two at once, names `#st1.<n> worker: selftest <P> …`), worded as for after the coordinator's go ("after my go,
+     start your workers with this command", never "start your workers with exactly this command", #544): "no PR: merge each approved sub-branch into
      `selftest/<c>/st1` and push it where there is a remote".
    - **The contract goes into the brief file:** start-worker checks a lead's `--contract` and, when the brief has no
      `acceptance:` block, adds it to the launch text (#504, a WARN line); a brief holding it is read as is (#512). The lead's brief holds the filled `tests/selftest/contract.md` itself (#323, #331).
    - **The budget stop:** the contract's `budget.cost` is below its two workers' own cost alone (#496), so
      the estimates cannot fit whatever the lead guesses of its own share, and the lead must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
      coordinator checks that no `#st1.<n>` session runs and no `selftest/<c>/st1.<n>` branch exists —
-     a lead that started anyway is a FAIL of the role — then answers "go: the budget is now <the plan's
+     a lead that started anyway, whatever its brief says about starting workers, is a FAIL of the role — then answers "go: the budget is now <the plan's
      total>".
    - **Two workers** each make a branch and a commit (and a push where there is a remote); the lead's
      **verifier** subagent gives a verdict on each; the lead merges them and reports (`runs` included).
@@ -222,7 +223,7 @@ the report notes the interruption and the resume time.
      frontmatter>; contract: st1`". PASS only when the line gives the exact role name (`tester`,
      `scout`, `researcher`) and `st1`: a subagent that did not find the file answers from its system
      prompt ("test-writer"), which proves nothing.
-   - PASS when the lead stopped at the budget, its report is `ready`, both oracles hold, each sub-task
+   - PASS when the lead stopped at the budget (started nothing before the go), its report is `ready`, both oracles hold, each sub-task
      has a verdict and `st1` is merged into the base.
 4a. **Assistant** (#281): `selftest assistant --project <root> --core <root>/coordinator/core` — one
    command, no owner action; the coordinator only reads its lines. It runs with no other test session
