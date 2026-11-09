@@ -1,160 +1,157 @@
-# The median seconds per step and OS of the last three check-core runs on main (#373): the baseline scripts/ci-times
+# The median seconds per step and OS of three check-core runs on main (#373): the baseline scripts/ci-times
 # reads with --baseline (a step over max(floor(b * 1.3), b + 60) is a warning in the check-<os> jobs). Raised only by a
-# pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 41584645981 (a4e608f),
-# 41555979259 (b5f0a28), 41457590582 (14eba92), all before the shards: the steps' shape changes the seconds.
-# The compaction rows (#342) are provisional: one run of their own pull request (41661637153, 6969cf7), not three medians of main.
-# #405: the rows of report-issue (PowerShell 7, Linux) and merge-queue (Git Bash, Windows PowerShell 5.1), over their line in every
-# run since the shards, hold the medians of 41686156714 (3d96f57), 41693993135 (e2a63b0), 41698437043 (f30d7a5). The split sets'
-# part rows (`- part <k>/<n>`: the guard sets in 5, the workers sets in 3, report-issue on Windows in 2) are provisional: the workers'
-# parts measured on one run of their own pull request (41771464759, 8f17328); the guard's parts on one run of five parts (41774407135,
-# 1e7259f; the four parts of 8f17328 took about twice that, a part's cases in one parallel job on four cores, #459); report-issue's
-# parts estimated from 41771464759's three-part steps until a run measures them; the whole sets' rows were replaced by them.
-# #449: the status line's rows hold one run of their own pull request (41836460206, d7d3060): the bars' cases, provisional.
-ubuntu	1	Set up job
-ubuntu	1	Run actions/checkout@v4
-ubuntu	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
+# pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 42597596546, 42466515969,
+# 42449662277, all on 13b7f4e, after the tests audit (#426: the trimmed sets and the rebalanced shards, PRs 545-554).
+ubuntu	6	Set up job
+ubuntu	9	Run actions/checkout@v4
+ubuntu	1	Which heavy steps run (a pull request - by the files it changes; any other run - all)
+ubuntu	14	The status line saves its files and leaves no temp file (bash)
+ubuntu	1	run-stats computes the forecast numbers of the fixture run logs (bash)
+ubuntu	85	run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
+ubuntu	32	safety-guard without jq (bash, the sed / awk JSON reader)
+ubuntu	194	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 1/3
+ubuntu	76	watch-sessions against a stub claude (bash)
+ubuntu	17	The checks on a project's cloned core copy (PowerShell 7, Linux)
+ubuntu	6	ci-times on its fixtures (PowerShell 7, Linux)
+ubuntu	2	Post Run actions/checkout@v4
+ubuntu	0	Complete job
 ubuntu	0	Which bash
 ubuntu	1	Links and section references (bash)
-ubuntu	7	Every script parses, and a broken one is reported (bash)
-ubuntu	3	selftest - the guard's settings and transcripts (bash)
-ubuntu	71	selftest - the guard's settings (PowerShell 7, Linux)
+ubuntu	3	Every script parses, and a broken one is reported (bash)
 ubuntu	18	selftest - the guard probes against a stub claude (bash)
-ubuntu	54	selftest - the guard probes against a stub claude (PowerShell 7, Linux)
-ubuntu	11	selftest - the throwaway assistant against a stub claude (bash)
-ubuntu	40	selftest - the throwaway assistant against a stub claude (PowerShell 7, Linux)
+ubuntu	37	selftest - the throwaway assistant against a stub claude (PowerShell 7, Linux)
 ubuntu	0	The example contract in CONTRACT.md passes the contract check (bash)
-ubuntu	2	check-contract on the fixture contracts (bash)
-ubuntu	82	check-contract on the fixture contracts (PowerShell 7, Linux)
-ubuntu	2	check-scripts on temporary folders (bash)
-ubuntu	2	check-scripts on temporary folders (PowerShell 7, Linux)
-ubuntu	3	check-core on a core copy with a wrapped feature field and a script without its pair (bash)
+ubuntu	71	check-contract on the fixture contracts (PowerShell 7, Linux)
+ubuntu	1	check-scripts on temporary folders (bash)
+ubuntu	3	check-scripts on temporary folders (PowerShell 7, Linux)
+ubuntu	2	check-core on a core copy with a wrapped feature field and a script without its pair (bash)
 ubuntu	4	check-core on a core copy with a wrapped feature field and a script without its pair (PowerShell 7, Linux)
-ubuntu	1	session-tokens counts the fixture exactly (bash)
-ubuntu	37	session-tokens counts the fixture exactly (PowerShell 7, Linux)
-ubuntu	1	session-insights reads the fixture transcripts (bash)
-ubuntu	29	session-insights reads the fixture transcripts (PowerShell 7, Linux)
-ubuntu	14	compaction keeps the checkpoint through the two hooks (bash)
-ubuntu	64	compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
-ubuntu	3	retro measures the fixture weeks (bash)
-ubuntu	120	retro measures the fixture weeks (PowerShell 7, Linux)
-ubuntu	15	The status line saves its files and leaves no temp file (bash)
-ubuntu	74	The status line saves its files and leaves no temp file (PowerShell 7, Linux)
-ubuntu	2	run-stats computes the forecast numbers of the fixture run logs (bash)
-ubuntu	72	run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
-ubuntu	42	safety-guard blocks and allows the shared cases (bash, with jq)
-ubuntu	45	safety-guard without jq (bash, the sed / awk JSON reader)
-ubuntu	364	safety-guard.ps1 under PowerShell 7 too (Linux) - part 1/5
-ubuntu	148	safety-guard.ps1 under PowerShell 7 too (Linux) - part 2/5
-ubuntu	171	safety-guard.ps1 under PowerShell 7 too (Linux) - part 3/5
-ubuntu	164	safety-guard.ps1 under PowerShell 7 too (Linux) - part 4/5
-ubuntu	172	safety-guard.ps1 under PowerShell 7 too (Linux) - part 5/5
-ubuntu	70	start-worker and cleanup-worker against temporary repositories (bash)
-ubuntu	125	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 1/3
-ubuntu	336	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 2/3
-ubuntu	376	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 3/3
-ubuntu	38	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
-ubuntu	60	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (PowerShell 7, Linux)
-ubuntu	4	merge-queue against a stub gh (bash)
-ubuntu	18	merge-queue against a stub gh (PowerShell 7, Linux)
-ubuntu	1	check-bounds on a throwaway repository (bash)
-ubuntu	9	check-bounds on a throwaway repository (PowerShell 7, Linux)
-ubuntu	14	report-issue against a stub gh (bash)
-ubuntu	205	report-issue against a stub gh (PowerShell 7, Linux)
-ubuntu	57	watch-sessions against a stub claude (bash)
-ubuntu	111	watch-sessions against a stub claude (PowerShell 7, Linux)
-ubuntu	4	runs against fixture transcripts and a stub claude (bash)
-ubuntu	20	runs against fixture transcripts and a stub claude (PowerShell 7, Linux)
-ubuntu	5	reset-coordinator on scratch projects (bash)
-ubuntu	35	reset-coordinator on scratch projects (PowerShell 7, Linux)
-ubuntu	2	selftest - the scripted steps (bash)
+ubuntu	62	safety-guard.ps1 under PowerShell 7 too (Linux) - part 4/5
+ubuntu	0	check-bounds on a throwaway repository (bash)
+ubuntu	5	runs against fixture transcripts and a stub claude (bash)
+ubuntu	2	reset-coordinator on scratch projects (bash)
+ubuntu	3	selftest - the scripted steps (bash)
 ubuntu	0	selftest - prepare and verify in a project's state repository (bash)
+ubuntu	5	The checks on a project's cloned core copy (bash)
+ubuntu	112	Both variants print the same (pwsh on Linux)
+ubuntu	55	safety-guard.ps1 under PowerShell 7 too (Linux) - part 5/5
+ubuntu	92	start-worker and cleanup-worker against temporary repositories (bash)
+ubuntu	9	merge-queue against a stub gh (bash)
+ubuntu	155	watch-sessions against a stub claude (PowerShell 7, Linux)
+ubuntu	41	runs against fixture transcripts and a stub claude (PowerShell 7, Linux)
+ubuntu	16	ci-times - the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr (bash)
+ubuntu	4	selftest - the guard's settings and transcripts (bash)
+ubuntu	80	selftest - the guard's settings (PowerShell 7, Linux)
+ubuntu	2	session-tokens counts the fixture exactly (bash)
+ubuntu	27	safety-guard blocks and allows the shared cases (bash, with jq)
+ubuntu	261	safety-guard.ps1 under PowerShell 7 too (Linux) - part 1/5
+ubuntu	58	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (PowerShell 7, Linux)
+ubuntu	17	reset-coordinator on scratch projects (PowerShell 7, Linux)
+ubuntu	1	session-insights reads the fixture transcripts (bash)
+ubuntu	5	retro measures the fixture weeks (bash)
+ubuntu	372	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 2/3
+ubuntu	31	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
+ubuntu	24	check-bounds on a throwaway repository (PowerShell 7, Linux)
+ubuntu	23	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (PowerShell 7, Linux)
+ubuntu	60	selftest - the guard probes against a stub claude (PowerShell 7, Linux)
+ubuntu	81	safety-guard.ps1 under PowerShell 7 too (Linux) - part 3/5
+ubuntu	307	start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux) - part 3/3
 ubuntu	1	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (bash)
-ubuntu	10	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (PowerShell 7, Linux)
+ubuntu	16	Both variants print the same - check-core and selftest scripts, which read every document (pwsh on Linux)
+ubuntu	2	check-contract on the fixture contracts (bash)
+ubuntu	36	session-insights reads the fixture transcripts (PowerShell 7, Linux)
+ubuntu	15	compaction keeps the checkpoint through the two hooks (bash)
+ubuntu	119	retro measures the fixture weeks (PowerShell 7, Linux)
+ubuntu	84	The status line saves its files and leaves no temp file (PowerShell 7, Linux)
+ubuntu	64	merge-queue against a stub gh (PowerShell 7, Linux)
 ubuntu	1	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
-ubuntu	10	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (PowerShell 7, Linux)
-ubuntu	4	The checks on a project's cloned core copy (bash)
-ubuntu	9	The checks on a project's cloned core copy (PowerShell 7, Linux)
-ubuntu	7	Both variants print the same - check-core and selftest scripts, which read every document (pwsh on Linux)
-ubuntu	78	Both variants print the same (pwsh on Linux)
-ubuntu	0	Post Run actions/checkout@v4
-ubuntu	0	Complete job
-macos	0	Set up job
-macos	2	Run actions/checkout@v4
-macos	0	Which heavy steps run (a pull request - by the files it changes; any other run - all)
+ubuntu	19	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (PowerShell 7, Linux)
+ubuntu	12	selftest - the throwaway assistant against a stub claude (bash)
+ubuntu	41	session-tokens counts the fixture exactly (PowerShell 7, Linux)
+ubuntu	75	compaction keeps the checkpoint through the two hooks (PowerShell 7, Linux)
+ubuntu	69	safety-guard.ps1 under PowerShell 7 too (Linux) - part 2/5
+ubuntu	11	report-issue against a stub gh (bash)
+ubuntu	126	report-issue against a stub gh (PowerShell 7, Linux)
+macos	1	Set up job
+macos	5	Run actions/checkout@v4
+macos	1	Which heavy steps run (a pull request - by the files it changes; any other run - all)
 macos	0	macOS runs the scripts with the system bash 3.2, not Homebrew's
-macos	1	Which bash
-macos	3	Links and section references (bash)
+macos	0	Which bash
+macos	2	Links and section references (bash)
 macos	3	Every script parses, and a broken one is reported (bash)
-macos	8	selftest - the guard's settings and transcripts (bash)
-macos	20	selftest - the guard probes against a stub claude (bash)
-macos	18	selftest - the throwaway assistant against a stub claude (bash)
+macos	7	selftest - the guard's settings and transcripts (bash)
+macos	18	selftest - the guard probes against a stub claude (bash)
 macos	0	The example contract in CONTRACT.md passes the contract check (bash)
-macos	3	check-contract on the fixture contracts (bash)
-macos	2	check-scripts on temporary folders (bash)
-macos	7	check-core on a core copy with a wrapped feature field and a script without its pair (bash)
+macos	1	check-scripts on temporary folders (bash)
+macos	6	check-core on a core copy with a wrapped feature field and a script without its pair (bash)
 macos	2	session-tokens counts the fixture exactly (bash)
-macos	2	session-insights reads the fixture transcripts (bash)
-macos	22	compaction keeps the checkpoint through the two hooks (bash)
-macos	5	retro measures the fixture weeks (bash)
-macos	18	The status line saves its files and leaves no temp file (bash)
-macos	2	run-stats computes the forecast numbers of the fixture run logs (bash)
-macos	99	safety-guard blocks and allows the shared cases (bash, with jq)
-macos	97	safety-guard without jq (bash, the sed / awk JSON reader)
-macos	175	start-worker and cleanup-worker against temporary repositories (bash)
-macos	37	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
-macos	14	merge-queue against a stub gh (bash)
-macos	1	check-bounds on a throwaway repository (bash)
-macos	37	report-issue against a stub gh (bash)
-macos	79	watch-sessions against a stub claude (bash)
-macos	8	runs against fixture transcripts and a stub claude (bash)
-macos	15	reset-coordinator on scratch projects (bash)
-macos	3	selftest - the scripted steps (bash)
+macos	18	compaction keeps the checkpoint through the two hooks (bash)
+macos	8	retro measures the fixture weeks (bash)
+macos	42	safety-guard blocks and allows the shared cases (bash, with jq)
+macos	41	safety-guard without jq (bash, the sed / awk JSON reader)
+macos	31	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
+macos	24	report-issue against a stub gh (bash)
+macos	98	watch-sessions against a stub claude (bash)
+macos	4	selftest - the scripted steps (bash)
 macos	1	selftest - prepare and verify in a project's state repository (bash)
 macos	4	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (bash)
 macos	4	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
-macos	6	The checks on a project's cloned core copy (bash)
+macos	5	The checks on a project's cloned core copy (bash)
 macos	1	Post Run actions/checkout@v4
-macos	2	Complete job
-windows	1	Set up job
-windows	7	Run actions/checkout@v4
-windows	1	Which heavy steps run (a pull request - by the files it changes; any other run - all)
+macos	3	Complete job
+macos	0	ci-times - the second macOS shard runs the scripts with the system bash 3.2 too (#405)
+macos	17	selftest - the throwaway assistant against a stub claude (bash)
+macos	3	check-contract on the fixture contracts (bash)
+macos	1	session-insights reads the fixture transcripts (bash)
+macos	17	The status line saves its files and leaves no temp file (bash)
+macos	2	run-stats computes the forecast numbers of the fixture run logs (bash)
+macos	179	start-worker and cleanup-worker against temporary repositories (bash)
+macos	26	merge-queue against a stub gh (bash)
+macos	1	check-bounds on a throwaway repository (bash)
+macos	7	runs against fixture transcripts and a stub claude (bash)
+macos	8	reset-coordinator on scratch projects (bash)
+macos	35	ci-times - the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr (bash)
+windows	11	Set up job
+windows	55	Run actions/checkout@v4
+windows	17	Which heavy steps run (a pull request - by the files it changes; any other run - all)
 windows	4	Links and section references (PowerShell)
 windows	5	Every script parses, and a broken one is reported (Windows PowerShell 5.1)
-windows	17	check-scripts.sh and .ps1 print the same on Windows (Git Bash, Windows PowerShell 5.1)
-windows	102	selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
-windows	61	selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
-windows	98	selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
-windows	9	selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
-windows	1	The example contract in CONTRACT.md passes the contract check (PowerShell)
-windows	140	check-contract on the fixture contracts (Windows PowerShell 5.1 and pwsh, console code page 866)
-windows	11	check-scripts on temporary folders (Git Bash, Windows PowerShell 5.1 and pwsh)
-windows	45	check-core on a core copy with a wrapped feature field and a script without its pair (Windows)
-windows	61	session-tokens counts the fixture exactly (PowerShell)
-windows	51	session-insights reads the fixture transcripts (PowerShell)
-windows	144	compaction keeps the checkpoint through the two hooks (PowerShell)
-windows	220	retro measures the fixture weeks (PowerShell)
-windows	120	The status line saves its files and leaves no temp file (PowerShell)
-windows	111	run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-windows	330	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
-windows	211	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/5
-windows	230	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 3/5
-windows	202	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 4/5
-windows	223	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 5/5
-windows	145	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 1/3
-windows	348	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 2/3
-windows	291	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 3/3
-windows	105	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
-windows	224	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
-windows	23	check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
-windows	306	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 1/2
-windows	306	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 2/2
-windows	313	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
-windows	201	runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
-windows	120	reset-coordinator on scratch projects (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
-windows	4	selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1, code page 866, a non-ASCII folder)
-windows	19	selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
-windows	50	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (Windows PowerShell 5.1 and pwsh, code page 866)
-windows	54	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Windows PowerShell 5.1 and pwsh)
-windows	26	The checks on a project's cloned core copy (Windows PowerShell 5.1)
-windows	2	Post Run actions/checkout@v4
+windows	0	The example contract in CONTRACT.md passes the contract check (PowerShell)
+windows	170	compaction keeps the checkpoint through the two hooks (PowerShell)
+windows	165	The status line saves its files and leaves no temp file (PowerShell)
+windows	49	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (Windows PowerShell 5.1 and pwsh, code page 866)
+windows	23	The checks on a project's cloned core copy (Windows PowerShell 5.1)
+windows	20	Post Run actions/checkout@v4
 windows	0	Complete job
+windows	21	check-scripts.sh and .ps1 print the same on Windows (Git Bash, Windows PowerShell 5.1)
+windows	108	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 5/5
+windows	68	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
+windows	277	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
+windows	12	selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
+windows	59	session-insights reads the fixture transcripts (PowerShell)
+windows	217	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
+windows	126	reset-coordinator on scratch projects (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+windows	13	check-scripts on temporary folders (Git Bash, Windows PowerShell 5.1 and pwsh)
+windows	145	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 1/3
+windows	222	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 2/2
+windows	49	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Windows PowerShell 5.1 and pwsh)
+windows	413	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+windows	34	selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
+windows	73	session-tokens counts the fixture exactly (PowerShell)
+windows	105	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 4/5
+windows	27	check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
+windows	252	runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+windows	54	selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
+windows	85	selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
+windows	238	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 2/3
+windows	14	ci-times on its fixtures (Windows PowerShell 5.1 and pwsh)
+windows	120	check-contract on the fixture contracts (Windows PowerShell 5.1 and pwsh, console code page 866)
+windows	206	retro measures the fixture weeks (PowerShell)
+windows	89	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 3/5
+windows	49	check-core on a core copy with a wrapped feature field and a script without its pair (Windows)
+windows	105	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/5
+windows	292	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 1/2
+windows	96	selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
+windows	114	run-stats computes the forecast numbers of the fixture run logs (PowerShell)
+windows	246	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 3/3
+windows	4	selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1, code page 866, a non-ASCII folder)
