@@ -38,6 +38,7 @@ ubuntu	55	safety-guard.ps1 under PowerShell 7 too (Linux) - part 5/5
 ubuntu	92	start-worker and cleanup-worker against temporary repositories (bash)
 ubuntu	9	merge-queue against a stub gh (bash)
 ubuntu	155	watch-sessions against a stub claude (PowerShell 7, Linux)
+ubuntu	15	cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
 ubuntu	41	runs against fixture transcripts and a stub claude (PowerShell 7, Linux)
 ubuntu	16	ci-times - the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr (bash)
 ubuntu	4	selftest - the guard's settings and transcripts (bash)
@@ -92,6 +93,7 @@ macos	41	safety-guard without jq (bash, the sed / awk JSON reader)
 macos	31	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
 macos	24	report-issue against a stub gh (bash)
 macos	98	watch-sessions against a stub claude (bash)
+macos	20	cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
 macos	4	selftest - the scripted steps (bash)
 macos	1	selftest - prepare and verify in a project's state repository (bash)
 macos	4	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (bash)
@@ -136,6 +138,7 @@ windows	145	start-worker and cleanup-worker against temporary repositories (Wind
 windows	222	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 2/2
 windows	49	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Windows PowerShell 5.1 and pwsh)
 windows	413	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
+windows	45	cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
 windows	34	selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
 windows	73	session-tokens counts the fixture exactly (PowerShell)
 windows	105	safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 4/5

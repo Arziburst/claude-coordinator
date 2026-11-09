@@ -508,7 +508,7 @@ jobs:
           bash tests/watch-sessions/run.sh ps powershell
           bash tests/watch-sessions/run.sh ps pwsh
       - name: cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
-        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1' || matrix.shard == 'windows-1') && steps.need.outputs.ccformats == 'true'
+        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2' || matrix.shard == 'windows-4') && steps.need.outputs.ccformats == 'true'
         run: |
           bash tests/cc-formats/run.sh sh
           bash tests/cc-formats/run.sh ps pwsh
