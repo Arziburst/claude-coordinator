@@ -413,7 +413,7 @@ gh_seg() {
   done
   [ "${1:-}" = create ] || return
   shift
-  [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)"
+  [ "${gh_env:-0}" = 1 ] && block "a pull request into another repository (gh pr create with GH_REPO or GH_HOST): only into the current one (#261)"
   [ $pre = 1 ] && block "a pull request into another repository (gh -R before pr create): only into the current one (#261)"
   local nx=""   # after create, -R x / --repo x / --repo=x naming the checkout's own origin passes (#560)
   for t in "$@"; do
@@ -430,7 +430,7 @@ own_repo() {
   local u v re='^([^/:]*)[/:]([^/]+/[^/]+)$'   # host, owner/repo
   [ "$dir" != "?" ] && u=$(git -C "$dir" remote get-url origin 2>/dev/null) && [ -n "$u" ] || return 1
   u=$(printf '%s\n%s' "$u" "$1" | tr 'A-Z' 'a-z'); v="${u#*$nl}"; u="${u%%$nl*}"; u="${u%/}"; u="${u%.git}"; u="${u#*://}"; u="${u#*@}"
-  [[ $u =~ $re ]] && { [ "$v" = "${BASH_REMATCH[2]}" ] || [ "$v" = "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}" ]; }
+  [[ $u =~ $re ]] && { { [ "${BASH_REMATCH[1]}" = github.com ] && [ "$v" = "${BASH_REMATCH[2]}" ]; } || [ "$v" = "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}" ]; }   # owner/repo: on github.com only
 }
 claude_seg() {
   local t verb="" nx=0
@@ -1165,7 +1165,7 @@ discard_seg() {   # discard_seg <dir> <subcommand> <its arguments>...
   eval "$ci"
   [ -n "$what" ] || return 0
   free_copy "$d" && return 0
-  [ "$d" = "?" ] && block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: give git -C the literal path, not a variable (#263, #456)"
+  [ "$d" = "?" ] && block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: write its literal path, not a shell variable after git -C or cd, --git-dir, --work-tree or GIT_DIR= (#263, #456)"
   block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
 # free_copy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
@@ -1203,12 +1203,12 @@ FREE_ROOTS_END
 # git worktree remove --force throws away what the worktree holds: the cleanup script checks first. Blocked in the project's
 # folders (own_forms) or the main checkout git works in, as written and on disk, and where unknown; a scratch copy elsewhere passes (#560)
 worktree_seg() {
-  local d="$1" t p="" f=0 c="" l keep m="removing a worktree of the project by force (use the cleanup script; a scratch copy outside the project passes by its literal path)"
+  local d="$1" t p="" f=0 c="" l keep s w m="removing a worktree of the project by force (use the cleanup script; a scratch copy outside the project passes by its literal path)"
   shift
   [[ ${1:-} == remove ]] || return
   shift
   for t in "$@"; do case "$t" in --force|-f|-ff) f=1 ;; -*) ;; *) [ -n "$p" ] || p="$t" ;; esac; done
-  [ $f = 1 ] || return 0; own_forms
+  [ $f = 1 ] || return 0; own_forms; s=$(canon_all "$sm" "$p")
   [ -n "$p" ] && p=$(compose "$d" "$p") && [ "$p" != "?" ] && [ ${#owns[@]} -gt 0 ] || block "$m"
   [ "$d" != "?" ] && c=$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); keep=("${owns[@]}")
   case "$c" in */.git) while IFS= read -r l; do l="${l#.}"; case "$l" in ''|.) ;; *) owns+=("$l") ;; esac; done <<WT_MAIN_END
@@ -1216,6 +1216,14 @@ $(canon_all "$sm" "${c%/.git}"; physical "$sm" "${c%/.git}")
 WT_MAIN_END
   ;; esac
   is_own "$p" && block "$m"
+  # git's suffix rule: a relative name that a registered worktree's path ends with (whole segments) is that worktree
+  case "$s" in /*|[A-Za-z]:*|.) s="" ;; esac
+  [ -z "$s" ] || while IFS= read -r l; do
+    case "$l" in "worktree "*) w="${l#worktree }" ;; *) continue ;; esac
+    case "/$(canon_all "$sm" "$w")" in */"$s") is_own "$w" && block "$m" ;; esac
+  done <<WT_LIST_END
+$(git -C "$d" worktree list --porcelain 2>/dev/null)
+WT_LIST_END
   owns=("${keep[@]}")
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
@@ -1581,8 +1589,8 @@ while IFS="$tab" read -r -a T; do
     find) find_seg "${A[@]:$((i + 1))}" ;;
     get-childitem|gci|ls|dir|get-item|gi) list_seg "${A[@]:$((i + 1))}" ;;
     claude) claude_seg "${A[@]:$((i + 1))}" ;;
-    gh) gh_env=0; gk=0   # GH_REPO= before gh (also after env): see gh_seg
-        while [ $gk -lt $i ]; do case "${A[$gk]}" in GH_REPO=*) gh_env=1 ;; esac; gk=$((gk + 1)); done
+    gh) gh_env=0; gk=0   # GH_REPO= or GH_HOST= (#560) before gh (also after env): see gh_seg
+        while [ $gk -lt $i ]; do case "${A[$gk]}" in GH_REPO=*|GH_HOST=*) gh_env=1 ;; esac; gk=$((gk + 1)); done
         [ -n "$asst" ] && asst_gh "${A[@]:$((i + 1))}"
         gh_seg "${A[@]:$((i + 1))}" ;;
   esac

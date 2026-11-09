@@ -265,7 +265,7 @@ function GhSeg([string[]]$a, [bool]$repoEnv) {
   }
   if ($i -ge $a.Count -or $a[$i] -cne 'create') { return }
   $i--   # the scan below skips pr and create: here, the word before create
-  if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
+  if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO or GH_HOST): only into the current one (#261)' }
   if ($pre) { Block 'a pull request into another repository (gh -R before pr create): only into the current one (#261)' }
   $nx = ''   # after create, -R x / --repo x / --repo=x naming the checkout's own origin passes (#560)
   foreach ($t in @($a | Select-Object -Skip ($i + 2))) {
@@ -281,7 +281,7 @@ function OwnRepo([string]$v) {   # as own_repo in safety-guard.sh: the origin of
   if ($LASTEXITCODE -ne 0 -or $o.Count -lt 1) { return $false }; $v = $v.ToLowerInvariant()
   $u = "$($o[0])".ToLowerInvariant() -replace '/\z', '' -replace '\.git\z', '' -replace '^.*?://', '' -replace '^.*?@', ''
   if ($u -cnotmatch '^([^:/]*)[:/]([^/]+/[^/]+)\z') { return $false }   # host, owner/repo
-  ($v -ceq $Matches[2]) -or ($v -ceq "$($Matches[1])/$($Matches[2])")
+  ($Matches[1] -ceq 'github.com' -and $v -ceq $Matches[2]) -or ($v -ceq "$($Matches[1])/$($Matches[2])")   # owner/repo: on github.com only
 }
 function ClaudeSeg([string[]]$a) {
   $verb = ''; $nx = $false
@@ -977,7 +977,7 @@ function DiscardSeg([string]$dd, [string]$sub, [string[]]$a) {
   if ($sub -ceq 'restore' -and ($w -or -not $s)) { $what = 'restore' }
   if (-not $what) { return }
   if (FreeCopy $dd) { return }
-  if ($dd -eq '?') { Block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: give git -C the literal path, not a variable (#263, #456)" }
+  if ($dd -eq '?') { Block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: write its literal path, not a shell variable after git -C or cd, --git-dir, --work-tree or GIT_DIR= (#263, #456)" }
   Block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
 # FreeCopy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
@@ -1013,11 +1013,17 @@ function WorktreeSeg([string]$dd, [string[]]$a) {
   $m = 'removing a worktree of the project by force (use the cleanup script; a scratch copy outside the project passes by its literal path)'
   $f = $false; $p = ''
   foreach ($t in @($a | Select-Object -Skip 1)) { if ($t -match '^(--force|-f|-ff)$') { $f = $true } elseif (-not $t.StartsWith('-') -and -not $p) { $p = $t } }
-  if (-not $f) { return }; if ($p) { $p = Compose $dd $p }; OwnForms
+  if (-not $f) { return }; $s = if ($p) { Canon $p -Keep:$smKeep } else { '' }; if ($p) { $p = Compose $dd $p }; OwnForms
   if (-not $p -or $p -eq '?' -or $script:owns.Count -eq 0) { Block $m }
   $keep = $script:owns; $c = if ($dd -ne '?') { "$(git -C $dd rev-parse --path-format=absolute --git-common-dir 2>$null)" } else { '' }
   if ($c -cmatch '/\.git\z') { $r = $c.Substring(0, $c.Length - 5); $script:owns += @(@(Canon $r -Keep:$smKeep) + @(Physical $r -Keep:$smKeep) | Where-Object { $_ -and $_ -ne '.' }) }
   if (IsOwn $p) { Block $m }
+  # git's suffix rule: a relative name that a registered worktree's path ends with (whole segments) is that worktree
+  if ($s -and $s -ne '.' -and $s -notmatch '^(/|[A-Za-z]:)') {
+    foreach ($l in @(git -C $dd worktree list --porcelain 2>$null)) {
+      if ("$l" -cmatch '^worktree (.+)$') { $w = $Matches[1]; if ("/$(Canon $w -Keep:$smKeep)".EndsWith("/$s", [StringComparison]::Ordinal) -and (IsOwn $w)) { Block $m } }
+    }
+  }
   $script:owns = $keep
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
@@ -1339,8 +1345,8 @@ for ($si = 0; $si -lt $script:segs.Count; $si++) {
     '^(get-childitem|gci|ls|dir|get-item|gi)$' { ListSeg $rest }
     '^claude$' { ClaudeSeg $rest }
     '^gh$' {
-      # GH_REPO= before gh (also after env): see GhSeg
-      $ghEnv = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^GH_REPO=') { $ghEnv = $true } }
+      # GH_REPO= or GH_HOST= (#560) before gh (also after env): see GhSeg
+      $ghEnv = $false; for ($k = 0; $k -lt $i; $k++) { if ($words[$k] -match '^GH_(REPO|HOST)=') { $ghEnv = $true } }
       if ($asst) { AsstGh $rest }
       GhSeg $rest $ghEnv
     }
