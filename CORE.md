@@ -264,7 +264,9 @@ The continuous work:
    must land together (one feature across several areas, three or more sub-contracts, more than one
    worker's context), give the whole task to a **lead** ([roles/lead.md](roles/lead.md)): a background
    session on an integration branch that splits it into sub-contracts, runs and verifies their
-   workers and returns one PR and one report. Once the verdict on its PR is given, the lead is closed:
+   workers and returns one PR and one report. Its workers start only on the coordinator's **go**, held by start-worker
+   (#558): the lead sends its plan; the coordinator checks it against the budget and answers with one line, `<time> go:
+   <its words>`, into `<the lead's worktree>.lead/go.txt` (the command: TOOLKIT *Working copies*), the same words to the lead. Once the verdict on its PR is given, the lead is closed:
    its session stopped, its spend read and the session removed (TOOLKIT *Usage*); its working copy
    stays until §8's cleanup after the merge, and the fresh worker reuses it. A small later round on
    that PR (a verifier finding, an owner change) goes to a **fresh worker** on the integration branch
