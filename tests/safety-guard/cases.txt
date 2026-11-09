@@ -297,6 +297,12 @@ allow	work	git worktree remove --force ../linked
 allow	work	git -C @PROJECT@ worktree remove -f ../linked
 allow	work	git -C ../linked worktree remove --force .
 allow	ps:work	git worktree remove --force ../linked
+allow	work	git worktree remove --force ../work-old/x
+# git's suffix rule: a name that a registered worktree's path ends with names that worktree, whatever the folder (15-reg: run.sh)
+block	work	git -C ../linked worktree remove --force 15-reg
+block	work	git -C ../linked worktree remove --force .claude/worktrees/15-reg
+block	work	cd ../linked && git worktree remove --force worktrees/15-reg
+block	ps:work	git -C ../linked worktree remove -f .claude\worktrees\15-reg
 allow	work	git worktree remove .claude/worktrees/12-fix
 allow	work	git worktree list
 allow	work	git worktree prune
@@ -622,6 +628,10 @@ allow	work	gh pr create --draft --title t --body-file b.md
 allow	work	gh issue create -R other/x --title t
 # #560: -R / --repo after create passes when it names the checkout's own origin (work's: https://github.com/Acme/Work.git)
 block	work	gh pr create --draft -R acme/work-old --title t
+block	work	gh pr create --draft -R acme/wor --title t
+block	dev	gh pr create --draft -R acme/work --title t
+allow	dev	gh pr create --draft -R gitlab.com/acme/work --title t
+block	work	GH_HOST=x gh pr create --draft -R acme/work --title t
 block	work	gh pr create --draft --repo other/work --title t
 block	work	gh pr create --draft -R acme/work -R other/x --title t
 block	work	gh pr create --draft -R gitlab.com/acme/work --title t
