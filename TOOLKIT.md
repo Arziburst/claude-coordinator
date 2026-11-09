@@ -685,6 +685,14 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   the Bash tool (the PowerShell tool on Windows), any git after a `cd` to the shared checkout (`git -C`
   your worktree). It runs pipes, `;` and `&&` without `$` (`bash scripts/check-core.sh && echo done`,
   `| tail -1`), a heredoc into cat, `x=1; echo $x` with no bash or git: no "one plain command per call" rule.
+- **Claude Code's formats (#559):** scripts read its internal formats as text (the transcript, `claude agents --json`,
+  the hook and status line payloads), which move without notice. `cc-formats.sh` / `.ps1` checks the fields the core
+  reads (its `#F` table: each field and its readers) against the real listing, the newest transcript and the status
+  line's recorded payload (`--payload`: a hook's): a missing one is `cc-formats: FAIL claude <version>: <format> <field>
+  (read by <scripts>)`, all present one PASS line. `selftest env` runs it when `claude --version` differs from this
+  machine's last PASS (`<config>/coordinator/cc-formats/version`): one line, the listing 5 s at most; a FAIL is for the
+  owner (the readers need a fix) and the next run probes again. No status line here (no `statusline.json`): one more
+  line first, `cc-formats: SKIP payload: ...`; the listing and the transcript decide, the version recorded at their PASS.
 - **Our guard's two, by design:** a worktree is removed by cleanup-worker or a plain `git worktree
   remove`, never `--force`; a scratch upstream's branch is not named `main` (the guard and the deny rules
   block a push to any `main`).
@@ -1252,7 +1260,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   Claude Code passes it, `week 92% · reset 50%` with the share of the 7 days gone; in a session whose name holds
   `Coordinator`, first `restart` when the window in force is not the one shown (below), then `core ↑` when upstream's tag `stable` (else its main; main alone where `PROJECT.md`'s *Core source* is `main`, #495) differs from the commit `PROJECT.md` records (one detached
   `git ls-remote` for both refs at most once in 12 hours into `<config>/coordinator/core-upstream.txt`, whose line 2 is the record it was read against and line 4 earlier reads' records, any project's on the machine, so each project compares its own (#541): after an update the mark is hidden and the file read again, at most every 10 minutes, #516: the script never waits for
-  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505).
+  the network), `#<task> <stage> <spent>/<budget>$` per task of this project's folder with a session at work now (the budget from `coordinator/briefs/<task>-contract.md`, else under `budget:` in the kept brief of the task's first session holding one, a `#<task>.<n>` session never; none: no budget, #505). A task id is any of letters, digits, `-` and `_` (`#558`, `#NBP-658`, `#426-1`); the bars sorted numbers first, then by name; the spent counts the RUNS.tsv rows of the contract's `id:` in the kept brief, else of the task's id (#570).
   Past `COLUMNS` less 4 a whole bar moves to the next line.
   **The window in force (#499, measured on 2.1.318, Windows, by real compactions):** a session reads `autoCompactWindow`
   when its process starts, a start or a `--resume`: a `--bg` session started at 300k, its file edited to 100k, ran to 238k with
