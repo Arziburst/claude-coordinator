@@ -16,7 +16,7 @@ w() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '
 bin="$tmp/bin"; cfg="$(w "$tmp/cfg")"; export CLAUDE_CONFIG_DIR="$cfg" STUB_DIR="$tmp/stub"; mkdir "$bin"
 cat > "$bin/claude" <<'EOF'
 #!/usr/bin/env bash
-case "$1" in --version) echo "$(cat "$STUB_DIR/version") (Claude Code)" ;; agents) [ ! -f "$STUB_DIR/hang" ] || exec sleep 7; cat "$STUB_DIR/agents.json" ;; esac
+case "$1" in --version) echo "$(cat "$STUB_DIR/version") (Claude Code)" ;; agents) [ ! -f "$STUB_DIR/hang" ] || exec sleep 8; cat "$STUB_DIR/agents.json" ;; esac
 EOF
 # Windows only (elsewhere PowerShell runs the bash stub itself, one PowerShell less a run): claude.ps1, which PowerShell finds first
 command -v cygpath >/dev/null 2>&1 && printf '%s\n' "& bash (Join-Path \$PSScriptRoot 'claude') @args" 'exit $LASTEXITCODE' > "$bin/claude.ps1"

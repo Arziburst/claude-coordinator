@@ -50,7 +50,7 @@ mkdir -p "$sd" || { echo "cc-formats: FAIL claude ${ver:-?}: cannot create $sd";
 bad=""; n=0
 # the listing, 5 s at most (past that the process this script started is killed)
 claude agents --json --all > "$sd/agents.json" 2>/dev/null </dev/null & pid=$!
-i=0; while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+t0=$SECONDS; while kill -0 "$pid" 2>/dev/null && [ $((SECONDS - t0)) -lt 5 ]; do sleep 0.1; done   # by the clock: a slow machine's loop is slower
 if kill -0 "$pid" 2>/dev/null; then { kill "$pid"; wait "$pid"; } 2>/dev/null; bad="$bad; agents: claude agents --json --all did not answer in 5 s"
 elif ! wait "$pid" || ! tr -d ' \t\r\n' < "$sd/agents.json" | grep -q '^\[.*\]$'; then bad="$bad; agents: claude agents --json --all printed no JSON list"; fi
 if [ -z "$tr" ]; then
