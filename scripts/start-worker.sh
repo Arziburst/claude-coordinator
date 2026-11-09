@@ -333,7 +333,7 @@ if [ -n "$gsub" ] && [ -z "$asst" ]; then
   [ -n "$gw" ] || for gf in ${gt:+"$gt.lead/go.txt"} ${gc:+"$gc.lead/go.txt"}; do
     gl1="$( { grep -m 1 '[^[:space:]]' "$gf" 2>/dev/null || true; } | tr -d '\r')"; [ -z "$gl1" ] || { gw="$gf: $gl1"; break; }
   done
-  [ -n "$gw" ] || { echo "refused: a lead's sub-task ($gsub) starts only after the coordinator's go - send the plan, wait for go: its go file ${gt:-<the lead's worktree>}.lead/go.txt, or --go \"<the coordinator's words>\" (roles/lead.md step 2)" >&2; exit 1; }
+  [ -n "$gw" ] || { echo "refused: a lead's sub-task ($gsub) starts only after the coordinator's go - send the plan, wait for go: its go file ${gt:-<the lead worktree>}.lead/go.txt, or --go \"<the coordinator's words>\" (roles/lead.md step 2)" >&2; exit 1; }
   echo "go gate: $gsub - passed on $gw"
 fi
 if [ "$crole" = lead ] && { [ -n "$tcommit" ] || [ -n "$ttests" ]; }; then
