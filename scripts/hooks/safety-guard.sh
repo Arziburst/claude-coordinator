@@ -418,8 +418,7 @@ gh_seg() {
   local nx=""   # after create, -R x / --repo x / --repo=x naming the checkout's own origin passes (#560)
   for t in "$@"; do
     if [ -n "$nx" ]; then own_repo "$t" || block "a pull request into another repository (gh pr create $nx): only into the current one (#261)"; nx=""; continue; fi
-    gh_repo_flag "$t" || continue
-    { [ "$t" = -R ] || [ "$t" = --repo ]; } && { nx="$t"; continue; }
+    gh_repo_flag "$t" || continue; { [ "$t" = -R ] || [ "$t" = --repo ]; } && { nx="$t"; continue; }
     [ "${t%%=*}" = --repo ] && own_repo "${t#*=}" && continue
     block "a pull request into another repository (gh pr create ${t%%=*}): only into the current one (#261)"
   done
@@ -428,12 +427,10 @@ gh_seg() {
 # own_repo <owner/repo or host/owner/repo>: the origin URL of the folder gh runs in names it, letter case ignored as
 # GitHub ignores it; an origin that cannot be read, or a folder that cannot be known, is not own
 own_repo() {
-  local u v h p
+  local u v re='^([^/:]*)[/:]([^/]+/[^/]+)$'   # host, owner/repo
   [ "$dir" != "?" ] && u=$(git -C "$dir" remote get-url origin 2>/dev/null) && [ -n "$u" ] || return 1
-  u=$(printf '%s\n%s' "$u" "$1" | tr 'A-Z' 'a-z'); v="${u#*$nl}"; u="${u%%$nl*}"
-  u="${u%/}"; u="${u%.git}"; u="${u#*://}"; u="${u#*@}"; h="${u%%[:/]*}"; p="${u#"$h"}"; p="${p#[:/]}"
-  case "$p" in */*/*) return 1 ;; ?*/?*) ;; *) return 1 ;; esac   # owner/repo, nothing more
-  [ "$v" = "$p" ] || [ "$v" = "$h/$p" ]
+  u=$(printf '%s\n%s' "$u" "$1" | tr 'A-Z' 'a-z'); v="${u#*$nl}"; u="${u%%$nl*}"; u="${u%/}"; u="${u%.git}"; u="${u#*://}"; u="${u#*@}"
+  [[ $u =~ $re ]] && { [ "$v" = "${BASH_REMATCH[2]}" ] || [ "$v" = "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}" ]; }
 }
 claude_seg() {
   local t verb="" nx=0
@@ -1203,22 +1200,17 @@ FREE_ROOTS_END
   done
   return 0
 }
-# git worktree remove --force throws away what the worktree holds: the cleanup script checks first. Blocked for a
-# path in the project's folders (own_forms: .claude/worktrees and the declared roots too) or in the main checkout
-# of the repository git works in, as written and as it lies on disk, and for one that cannot be known; a scratch
-# copy elsewhere (a job's tmp) passes (#560)
+# git worktree remove --force throws away what the worktree holds: the cleanup script checks first. Blocked in the project's
+# folders (own_forms) or the main checkout git works in, as written and on disk, and where unknown; a scratch copy elsewhere passes (#560)
 worktree_seg() {
   local d="$1" t p="" f=0 c="" l keep m="removing a worktree of the project by force (use the cleanup script; a scratch copy outside the project passes by its literal path)"
   shift
   [[ ${1:-} == remove ]] || return
   shift
   for t in "$@"; do case "$t" in --force|-f|-ff) f=1 ;; -*) ;; *) [ -n "$p" ] || p="$t" ;; esac; done
-  [ $f = 1 ] || return 0
-  [ -n "$p" ] && p=$(compose "$d" "$p") && [ "$p" != "?" ] || block "$m"
-  own_forms
-  [ ${#owns[@]} -gt 0 ] || block "$m"
-  [ "$d" != "?" ] && c=$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-  keep=("${owns[@]}")
+  [ $f = 1 ] || return 0; own_forms
+  [ -n "$p" ] && p=$(compose "$d" "$p") && [ "$p" != "?" ] && [ ${#owns[@]} -gt 0 ] || block "$m"
+  [ "$d" != "?" ] && c=$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); keep=("${owns[@]}")
   case "$c" in */.git) while IFS= read -r l; do l="${l#.}"; case "$l" in ''|.) ;; *) owns+=("$l") ;; esac; done <<WT_MAIN_END
 $(canon_all "$sm" "${c%/.git}"; physical "$sm" "${c%/.git}")
 WT_MAIN_END
