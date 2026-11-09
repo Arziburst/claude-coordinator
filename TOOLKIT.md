@@ -709,7 +709,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **`reset-coordinator`** ([RESET.md](procedures/RESET.md), #446) takes the same double-dash arguments in both files, and runs
   from the folder it replaces. Nobody runs it on a real project to try it: `tests/reset-coordinator/run.sh sh|ps <powershell>`
   only, on scratch folders under a temp directory.
-- Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it);
+- Exceptions: `statusline.sh` needs `jq` for its display line (it saves the status file without it; `tests/statusline/run.sh sh` without it names its skipped bar cases in its summary, #553);
   `hooks/safety-guard.sh` uses `jq` when present and reads the JSON with `sed -E` and `awk` otherwise
   (both paths pass the same cases; CI runs it without `jq` and with macOS `/bin/bash`).
 - **Tests:** `tests/safety-guard/run.sh <hook command>` (the shared verdicts and the hook's self-test) and
@@ -822,7 +822,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the body and the shell it had in one job. The required checks are the aggregator jobs `check (ubuntu-latest)`,
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
-  stale runs on its next push, never a run on main. **How a step lands in a shard:** every shard holds about 6 to 8
+  stale runs on its next push, never a run on main. **What a pull request skips (#561):** a `#need` line whose one pattern is `!pr` is false
+  on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends the step before its `ps pwsh`) run on
+  main, the nightly and a manual run only; the guard's, the hooks' and the status line's run on a PR too. **How a step lands in a shard:** every shard holds about 6 to 8
   minutes by the measured seconds (#426): `ubuntu-1`, `macos-1` and `windows-1` the common steps; every other step packed
   longest first into the shortest shard of its OS, each part of a split set on a shard of its own (the workflow's
   comment names the runs measured; Windows is bound by watch-sessions' one step); a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
