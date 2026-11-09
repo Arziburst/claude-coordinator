@@ -7,6 +7,8 @@ name: check-core
 # test that reads another test's folder or fixture names it too. The step "Which heavy steps run" reads the
 # lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
 # without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
+# A line whose one pattern is !pr runs on no pull request, whatever it changes, and on every other run (#561): pwsh on Windows
+# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's and the hooks' keep it) and reset-coordinator (tests only).
 #need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$ ^scripts/start-worker\. ^scripts/cleanup-worker\. ^settings\.example ^scripts/check-contract\. ^scripts/check-core\. ^scripts/check-scripts\. ^scripts/statusline\.  # selftest's guard settings, transcripts, probes, the throwaway assistant, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template, the assistant's start, cleanup and settings examples, and the scripts selftest scripts runs (#312)
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
@@ -22,7 +24,8 @@ name: check-core
 #need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need watch      ^scripts/watch-sessions\. ^tests/watch-sessions/  # watch-sessions against a stub claude
 #need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
-#need reset      ^scripts/reset-coordinator\. ^tests/reset-coordinator/  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
+#need reset      !pr  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
+#need winpwsh    !pr  # pwsh on Windows in a non-hook script set: the gate line before a Windows step's last command, its ps pwsh
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 #need citimes    ^scripts/ci-times\. ^tests/ci-times ^tests/safety-guard/run\.sh$ ^tests/workers/ ^tests/report-issue/  # the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr, the split sets' parts (it lists and runs them)
 on:
@@ -84,7 +87,8 @@ jobs:
           set -f   # the patterns are not file names
           while read -r _ key pats; do
             need=false
-            if [ -n "$all" ]; then need=true
+            if [ "$pats" = '!pr' ]; then [ "$EVENT" = pull_request ] || need=true
+            elif [ -n "$all" ]; then need=true
             elif [ -z "$pats" ]; then echo "$key has no patterns: it runs"; need=true
             else
               for p in $pats; do
@@ -258,6 +262,7 @@ jobs:
         if: matrix.shard == 'windows-10' && steps.need.outputs.contract == 'true'
         run: |
           bash tests/check-contract/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/check-contract/run.sh ps pwsh
       - name: check-scripts on temporary folders (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
@@ -270,6 +275,7 @@ jobs:
         run: |
           bash tests/check-scripts/run.sh sh
           bash tests/check-scripts/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/check-scripts/run.sh ps pwsh
       - name: check-core on a core copy with a wrapped feature field and a script without its pair (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
@@ -282,6 +288,7 @@ jobs:
         run: |
           bash tests/check-core/run.sh sh
           bash tests/check-core/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/check-core/run.sh ps pwsh
       - name: session-tokens counts the fixture exactly (bash)
         if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.tokens == 'true'
@@ -294,6 +301,7 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-tokens/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/session-tokens/run.sh ps pwsh
       - name: session-insights reads the fixture transcripts (bash)
         if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-2') && steps.need.outputs.insights == 'true'
@@ -306,6 +314,7 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/session-insights/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/session-insights/run.sh ps pwsh
       - name: compaction keeps the checkpoint through the two hooks (bash)
         if: (matrix.shard == 'ubuntu-8' || matrix.shard == 'macos-1') && steps.need.outputs.compaction == 'true'
@@ -330,6 +339,7 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/retro/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/retro/run.sh ps pwsh
       - name: The status line saves its files and leaves no temp file (bash)
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.statusline == 'true'
@@ -342,6 +352,7 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/statusline/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/statusline/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (bash)
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.runstats == 'true'
@@ -354,6 +365,7 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/run-stats/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/run-stats/run.sh ps pwsh
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.guard == 'true'
@@ -487,12 +499,14 @@ jobs:
         run: |
           RI_PART=1/2 bash tests/report-issue/run.sh sh
           RI_PART=1/2 bash tests/report-issue/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           RI_PART=1/2 bash tests/report-issue/run.sh ps pwsh
       - name: report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 2/2
         if: matrix.shard == 'windows-9' && steps.need.outputs.reportissue == 'true'
         run: |
           RI_PART=2/2 bash tests/report-issue/run.sh sh
           RI_PART=2/2 bash tests/report-issue/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           RI_PART=2/2 bash tests/report-issue/run.sh ps pwsh
       - name: watch-sessions against a stub claude (bash)
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-1') && steps.need.outputs.watch == 'true'
@@ -505,6 +519,7 @@ jobs:
         run: |
           bash tests/watch-sessions/run.sh sh
           bash tests/watch-sessions/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/watch-sessions/run.sh ps pwsh
       - name: runs against fixture transcripts and a stub claude (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.runs == 'true'
@@ -517,6 +532,7 @@ jobs:
         run: |
           bash tests/runs/run.sh sh
           bash tests/runs/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/runs/run.sh ps pwsh
       - name: reset-coordinator on scratch projects (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.reset == 'true'
@@ -627,6 +643,7 @@ jobs:
         if: matrix.shard == 'windows-1' && steps.need.outputs.selftest == 'true'
         run: |
           bash tests/selftest/prepare.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/selftest/prepare.sh ps pwsh
       - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
         if: (matrix.shard == 'ubuntu-8' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
@@ -638,6 +655,7 @@ jobs:
         if: matrix.shard == 'windows-9' && steps.need.outputs.selftest == 'true'
         run: |
           bash tests/selftest/sandbox.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/selftest/sandbox.sh ps pwsh
       - name: The checks on a project's cloned core copy (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
@@ -754,6 +772,7 @@ jobs:
         if: matrix.shard == 'windows-4' && steps.need.outputs.citimes == 'true'
         run: |
           bash tests/ci-times/run.sh ps powershell
+          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/ci-times/run.sh ps pwsh
   shard-macos:
     strategy:

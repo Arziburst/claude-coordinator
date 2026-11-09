@@ -280,7 +280,9 @@ bar_cases() {
     lines "${t#*|}"; bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; bar "5h limit 14%" 14 "green:2 grey:12"; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
   done
 }
-if [ "$line" = yes ]; then bar_cases; else echo "skip the bars: no jq here (the .sh needs it for its line)"; fi
+bars=40; skipped=""   # #553: the cases bar_cases begins - checked when they run, named in the summary when they do not
+if [ "$line" = yes ]; then n0=$n; bar_cases; [ $((n - n0)) = "$bars" ] || bad "bar_cases began $((n - n0)) cases, bars=$bars says otherwise: set bars"
+else echo "skip the bars: no jq here (the .sh needs it for its line)"; skipped=", $bars bar cases skipped (no jq)"; fi
 
 begin "refreshInterval 5 on TOOLKIT's statusLine, no other"; grep -q '"statusLine".*"refreshInterval": 5}' "$core/TOOLKIT.md" || no "wants '\"refreshInterval\": 5' on the statusLine lines in TOOLKIT.md"
 ! grep '"statusLine"' "$core/TOOLKIT.md" | grep -q '"refreshInterval": 10' || no "wants no \"refreshInterval\": 10 on a statusLine line in TOOLKIT.md"
@@ -298,5 +300,5 @@ else
   in="$fixture"; script="$i/coordinator/statusline/statusline"; run "$tmp/copy"; [ "$line" = no ] || is "$want"; [ -f "$tmp/copy/coordinator/statusline.json" ] || no "wants the copy to save statusline.json"; script="$core/scripts/statusline"
 fi
 finish
-[ "$fail" = 0 ] && echo "statusline: $n cases passed" || echo "statusline: failures above ($n cases)"
+[ "$fail" = 0 ] && echo "statusline: $n cases passed$skipped" || echo "statusline: failures above ($n cases$skipped)"
 exit "$fail"
