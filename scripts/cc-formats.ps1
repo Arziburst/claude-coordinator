@@ -21,10 +21,20 @@ try {
   $a = 'agents --json --all'
   if ($cm.CommandType -eq 'ExternalScript') { $exe = (Get-Process -Id $PID).Path; $a = '-NoProfile -ExecutionPolicy Bypass -File "' + $cm.Path + '" ' + $a }
   elseif ($cm.Path -match '\.(cmd|bat)$') { $exe = $env:ComSpec; $a = '/d /s /c ""' + $cm.Path + '" ' + $a + '"' } else { $exe = $cm.Path }
+  # its whole tree in a job object: a child whose Windows parent is gone (an msys exec leaves one) is out of reach of
+  # taskkill /T and Kill($true), which follow parent ids, and holds the caller's inherited pipe open until it ends (#559)
+  $win = $env:OS -eq 'Windows_NT'; $job = [IntPtr]::Zero; if ($win) { try { Add-Type -Namespace CcFormats -Name Job -ErrorAction Stop -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr CreateJobObject(IntPtr a, IntPtr n);
+[DllImport("kernel32.dll")] public static extern bool AssignProcessToJobObject(IntPtr j, IntPtr p);
+[DllImport("kernel32.dll")] public static extern bool TerminateJobObject(IntPtr j, uint c);
+'@; $job = [CcFormats.Job]::CreateJobObject([IntPtr]::Zero, [IntPtr]::Zero) } catch { } }
   $p = Start-Process -FilePath $exe -ArgumentList $a -NoNewWindow -PassThru -RedirectStandardOutput $ao -RedirectStandardError $ae -ErrorAction Stop
   $null = $p.Handle   # keeps its exit code readable after it ends
-  if (-not $p.WaitForExit(5000)) {   # the whole tree ended, not only its wrapper: .NET Core's Kill(true); 5.1: taskkill /T
-    try { if ($PSVersionTable.PSVersion.Major -ge 6) { $p.Kill($true) } else { $null = & taskkill.exe /T /F /PID $p.Id 2>&1 } } catch { }
+  $inJob = $job -ne [IntPtr]::Zero -and [CcFormats.Job]::AssignProcessToJobObject($job, $p.Handle)
+  if (-not $p.WaitForExit(5000)) {   # the job ended; without one: taskkill /T (Windows), else Kill($true) (.NET Core)
+    if (-not ($inJob -and [CcFormats.Job]::TerminateJobObject($job, 1))) { $tk = $false
+      if ($win) { $null = & taskkill.exe /T /F /PID $p.Id 2>&1; $tk = $LASTEXITCODE -eq 0 }
+      if (-not $tk) { try { $p.Kill($true) } catch { } } }
     $bad += 'agents: claude agents --json --all did not answer in 5 s' }
   else { $p.WaitForExit(); $j = [IO.File]::ReadAllText($ao) -replace '\s', ''
     if ($p.ExitCode -ne 0 -or $j -notmatch '^\[.*\]$') { $bad += 'agents: claude agents --json --all printed no JSON list' } }
