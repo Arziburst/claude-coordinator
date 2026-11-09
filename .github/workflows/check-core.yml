@@ -526,7 +526,7 @@ jobs:
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2' || matrix.shard == 'windows-4') && steps.need.outputs.ccformats == 'true'
         run: |
           bash tests/cc-formats/run.sh sh
-          bash tests/cc-formats/run.sh ps pwsh
+          if [ "$RUNNER_OS" != Windows ] || [ '${{ steps.need.outputs.winpwsh }}' = true ]; then bash tests/cc-formats/run.sh ps pwsh; fi   # pwsh on Windows: not on a pull request (#561)
           if [ "$RUNNER_OS" = Windows ]; then bash tests/cc-formats/run.sh ps powershell; fi
       - name: runs against fixture transcripts and a stub claude (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.runs == 'true'
