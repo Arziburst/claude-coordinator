@@ -1,0 +1,57 @@
+# Claude Code's internal formats against the fields the core reads (#559; Windows; macOS / Linux: cc-formats.sh - the same
+# line and codes). The table of fields (`#F` lines) and what each part means: cc-formats.sh, beside this file.
+#   scripts/cc-formats.ps1 [-IfChanged] [-Transcript <file.jsonl>] [-Payload <file.json>]
+# Exit 0 PASS, 1 FAIL, 2 usage.
+param([switch]$IfChanged, [string]$Transcript = '', [string]$Payload = '')
+if ($args.Count -gt 0) { [Console]::Error.WriteLine('usage: cc-formats.ps1 [-IfChanged] [-Transcript <file.jsonl>] [-Payload <file.json>]'); exit 2 }
+$ErrorActionPreference = 'Continue'
+$cfg = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } elseif ($env:USERPROFILE) { "$env:USERPROFILE/.claude" } else { "$env:HOME/.claude" }
+$sd = "$cfg/coordinator/cc-formats"
+$cm = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+$ver = ''; if ($cm) { try { $ver = "$(& claude --version 2>$null | Select-Object -First 1)" -replace ' .*', '' } catch { $ver = '' } }
+$v = if ($ver) { $ver } else { '?' }
+if ($IfChanged) { if (-not $ver) { exit 0 }; if ("$(Get-Content -LiteralPath "$sd/version" -ErrorAction SilentlyContinue | Select-Object -First 1)" -eq $ver) { exit 0 } }
+try { $null = New-Item -ItemType Directory -Force -Path $sd -ErrorAction Stop } catch { "cc-formats: FAIL claude ${v}: cannot create $sd"; exit 1 }
+$bad = @(); $n = 0
+# the listing, 5 s at most, into the scratch folder (claude as PATH gives it: a .ps1 through this PowerShell, a .cmd / .bat through cmd)
+$ao = "$sd/agents.json"; $ae = "$sd/agents.err"
+try {
+  if (-not $cm) { throw 'no claude' }
+  $a = 'agents --json --all'
+  if ($cm.CommandType -eq 'ExternalScript') { $exe = (Get-Process -Id $PID).Path; $a = '-NoProfile -ExecutionPolicy Bypass -File "' + $cm.Path + '" ' + $a }
+  elseif ($cm.Path -match '\.(cmd|bat)$') { $exe = $env:ComSpec; $a = '/d /s /c ""' + $cm.Path + '" ' + $a + '"' } else { $exe = $cm.Path }
+  $p = Start-Process -FilePath $exe -ArgumentList $a -NoNewWindow -PassThru -RedirectStandardOutput $ao -RedirectStandardError $ae -ErrorAction Stop
+  $null = $p.Handle   # keeps its exit code readable after it ends
+  if (-not $p.WaitForExit(5000)) { try { $p.Kill() } catch { }; $bad += 'agents: claude agents --json --all did not answer in 5 s' }
+  else { $p.WaitForExit(); $j = [IO.File]::ReadAllText($ao) -replace '\s', ''
+    if ($p.ExitCode -ne 0 -or $j -notmatch '^\[.*\]$') { $bad += 'agents: claude agents --json --all printed no JSON list' } }
+} catch { $bad += 'agents: claude agents --json --all printed no JSON list' }
+Remove-Item -LiteralPath $ae -Force -ErrorAction SilentlyContinue
+if (-not $Transcript) {
+  foreach ($f in @(Get-ChildItem -Path "$cfg/projects/*/*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 50)) {
+    if (Get-Content -LiteralPath $f.FullName -Tail 2000 -Encoding UTF8 | Select-String -Quiet '"role": *"assistant"') { $Transcript = $f.FullName; break } }
+  if (-not $Transcript) { $bad += "transcript: none under $cfg/projects holds an assistant message" }
+}
+if (-not $Payload) { $Payload = "$cfg/coordinator/statusline.json" }
+if ($Transcript -and -not (Test-Path -LiteralPath $Transcript -PathType Leaf)) { $bad += "transcript: cannot read $Transcript" }
+if (-not (Test-Path -LiteralPath $Payload -PathType Leaf)) { $bad += "payload: cannot read $Payload" }
+# the input's lines, `": ` and `, "` closed up
+function Text([string]$fm) {
+  $l = switch ($fm) { 'agents' { Get-Content -LiteralPath $ao -Encoding UTF8 } 'transcript' { if ($Transcript) { Get-Content -LiteralPath $Transcript -Tail 2000 -Encoding UTF8 } }
+    'payload' { Get-Content -LiteralPath $Payload -Encoding UTF8 } }
+  @($l | ForEach-Object { $_ -replace '"\s*:\s*', '":' -replace ',\s*"', ',"' })
+}
+$rows = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'cc-formats.sh') | Where-Object { $_ -like '#F *' })
+foreach ($fm in 'agents', 'transcript', 'payload') {
+  if (@($bad | Where-Object { $_ -like "${fm}: *" }).Count) { continue }
+  $t = @(Text $fm)   # one line stays a list: -match on a list filters it
+  foreach ($r in $rows) {
+    $x = $r -split ' +'; if ($x[1] -ne $fm) { continue }
+    if ($x[3] -ne '-' -and -not @($t -match $x[3]).Count) { continue }
+    $n++; if (-not @($t -match $x[4]).Count) { $bad += "$fm $($x[2]) (read by $($x[5].Replace(',', ', ')))" }
+  }
+}
+if ($bad.Count) { "cc-formats: FAIL claude ${v}: $($bad -join '; ')"; exit 1 }
+if ($ver) { [IO.File]::WriteAllText("$sd/version", "$ver`n") }
+"cc-formats: PASS claude $v, $n fields"
+exit 0

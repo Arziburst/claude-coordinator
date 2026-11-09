@@ -262,6 +262,9 @@ env)
   for c in claude git; do
     if v="$($c --version 2>/dev/null | head -n 1 | sed "s/^$c version //")" && [ -n "$v" ]; then pass "$c $v"; else fail "$c not found"; fi
   done
+  # #559: Claude Code's formats, probed only when claude --version differs from this machine's last PASS (cc-formats)
+  l="$(bash "$here/cc-formats.sh" --if-changed 2>/dev/null)"
+  case "$l" in "cc-formats: PASS "*) pass "cc-formats ${l#cc-formats: PASS }" ;; "cc-formats: FAIL "*) fail "cc-formats ${l#cc-formats: FAIL }" ;; esac
   if v="$(gh --version 2>/dev/null | head -n 1 | sed "s/^gh version //")" && [ -n "$v" ]; then pass "gh $v"
   else skip "gh not installed: no PR flow"; repo=""; fi
   if [ -z "$repo" ]; then skip "GitHub: n/a (no --repo)"
