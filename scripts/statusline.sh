@@ -6,7 +6,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.sh --install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.sh --session-start    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 6
+# statusline-version: 7
 script_version() { tr -d '\r' 2>/dev/null < "$1" | sed -n 's/^# statusline-version: \([0-9][0-9]*\)$/\1/p' | head -n 1; }
 if [ "${1:-}" = --install ]; then
   to="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/statusline"; copy="$to/$(basename "$0")"; have="$(script_version "$copy")"
@@ -104,14 +104,15 @@ core_behind() {
 agents_prog='($root | gsub("\\\\"; "/") | rtrimstr("/")) as $b
   | sort_by(.startedAt // 0)[]
   | ((.cwd // "") | gsub("\\\\"; "/") | rtrimstr("/")) as $c | select($c == $b or ($c | startswith($b + "/")))
-  | ((.name // "") | capture("^#(?<n>[0-9]+)(?<s>\\.[0-9]+)?\\s+(?<r>\\w+):")) as $m
+  | ((.name // "") | capture("^#(?<n>[A-Za-z0-9_-]+)(?<s>\\.[0-9]+)?\\s+(?<r>\\w+):")) as $m
   | [$m.n, $m.r, (if .state == "working" or .state == "blocked" then "1" else "0" end), (if .status then "1" else "0" end), (.sessionId // "-"), (if $m.s then "1" else "0" end)] | @tsv'
 tasks_prog='($items | split("\n") | map(select(. != "") | split("\t"))) as $a
   | (split("\n") | map(rtrimstr("\r"))) as $rows
   | (($rows[0] // "") | split("\t")) as $h | ($h | index("cost")) as $ci | ($h | index("task")) as $ti | ($h | index("role")) as $ri | ($h | index("start")) as $si
   | {tester: "T", worker: "W", verifier: "V", lead: "L", researcher: "R"} as $letters
-  | reduce $a[] as $r ({}; .[$r[0]] = ((.[$r[0]] // {n: ($r[0] | tonumber), spent: 0, stage: "?", lead: false, working: false, live: {}, budget: 0})
+  | reduce $a[] as $r ({}; .[$r[0]] = ((.[$r[0]] // {n: $r[0], spent: 0, stage: "?", lead: false, working: false, live: {}, budget: 0, ids: []})
       | (if .budget > 0 then . else .budget = (($r[6] | tonumber?) // 0) end)
+      | if ($r[7] // "") != "" then .ids += [$r[7]] else . end
       | .spent += (($r[4] | tonumber?) // 0)
       | if $r[5] != "" then .live[$r[5]] = true else . end
       | if $r[1] == "lead" then .lead = true else . end
@@ -119,12 +120,13 @@ tasks_prog='($items | split("\n") | map(select(. != "") | split("\t"))) as $a
   | with_entries(select(.value.working))
   | if $ci == null or $ti == null or $ri == null then . else
       reduce ($rows[1:][] | split("\t")) as $c (.;
-        ((($c[$ti] // "") | split("."))[0] // "") as $n
+        ($c[$ti] // "") as $cell | (($cell | split("."))[0] // "") as $f   # the cell, or its part before a dot, is one of the task names (#570)
+        | (first(to_entries[] | select((if (.value.ids | length) > 0 then .value.ids else [.key] end) | any(.[]; . == $cell or . == $f)) | .key) // "") as $n
         | if .[$n] == null or ($c | length) <= $ci or $c[$ri] == "task" or ($si != null and (.[$n].live[$c[$si] // ""] // false)) then .
           else .[$n].spent += (($c[$ci] | capture("^(?<v>[0-9.]+)").v | tonumber?) // 0) end) end
-  | [.[]] | sort_by(.n)'
+  | [.[]] | sort_by((.n | test("^[0-9]+$")) as $d | [($d | not), (if $d then .n | tonumber else 0 end), .n])'   # numbers in order, then names
 task_json() {
-  local list items="" n role work live id sub cost tp start budget state="$root/coordinator"
+  local list items="" n role work live id sub cost tp start budget cid state="$root/coordinator"
   list="$(claude agents --json 2>/dev/null | jq -r --arg root "$root" "$agents_prog" 2>/dev/null)"
   [ -n "$list" ] || return
   while IFS="$tab" read -r n role work live id sub; do
@@ -139,7 +141,9 @@ LINES
     budget="$(sed -n 's/^[[:space:]]\{1,\}cost:[[:space:]]*\([0-9.]\{1,\}\).*/\1/p' "$state/briefs/$n-contract.md" 2>/dev/null | head -n 1)"
     # else what the session was started with, its kept brief: the first `cost:` under a `budget:` line; a lead's #<task>.<n> session has its own (#505)
     [ -n "$budget" ] || [ "$sub" = 1 ] || budget="$(awk '/^[ \t]*budget:/ { on = 1; next } on && /^[ \t]+cost:/ { if (match($0, /[0-9.]+/)) print substr($0, RSTART, RLENGTH); exit } on && /^[^ \t\r]/ { on = 0 }' "$dir/briefs/$id.md" 2>/dev/null)"
-    items="$items$n$tab$role$tab$work$tab$live$tab$cost$tab$start$tab$budget
+    # the contract's `id:` in the kept brief names the task's RUNS.tsv rows (#570)
+    cid=""; [ "$sub" = 1 ] || cid="$(sed -n 's/^id:[[:space:]]*\([^[:space:]]\{1,\}\).*/\1/p' "$dir/briefs/$id.md" 2>/dev/null | head -n 1)"
+    items="$items$n$tab$role$tab$work$tab$live$tab$cost$tab$start$tab$budget$tab$cid
 "
   done <<LINES
 $list

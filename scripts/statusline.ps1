@@ -5,7 +5,7 @@
 # ~/.claude/coordinator/statusline.json for the coordinator.
 #   statusline.ps1 -Install    copies this script to <config>/coordinator/statusline/, unless the same or a newer version is there
 #   statusline.ps1 -SessionStart    a coordinator's SessionStart hook: records the window this session starts with (TOOLKIT *Usage*)
-# statusline-version: 6
+# statusline-version: 7
 param([switch]$Install, [switch]$SessionStart)
 $ErrorActionPreference = 'SilentlyContinue'
 function Get-ScriptVersion([string]$f) {
@@ -250,17 +250,21 @@ function Get-KeptBudget([string]$path) { $on = $false
 function Get-TaskLine {
 	$state = Join-Path $root 'coordinator'
 	$letters = @{ tester = 'T'; worker = 'W'; verifier = 'V'; lead = 'L'; researcher = 'R' }
-	$tasks = @{}
+	$tasks = New-Object Collections.Hashtable ([StringComparer]::Ordinal)
 	$agents = (& claude agents --json 2>$null) -join "`n" | ConvertFrom-Json
 	$base = Get-Slashed $root
 	foreach ($a in @($agents | Sort-Object startedAt)) {
 		$c = Get-Slashed "$($a.cwd)"
 		if ($c -ne $base -and -not $c.StartsWith("$base/", [StringComparison]::OrdinalIgnoreCase)) { continue }
-		if ("$($a.name)" -notmatch '^#(\d+)(\.\d+)?\s+(\w+):') { continue }
+		if ("$($a.name)" -notmatch '^#([A-Za-z0-9_-]+)(\.\d+)?\s+(\w+):') { continue }   # any id: #558, #NBP-658, #426-1 (#570)
 		$n = $Matches[1]; $role = $Matches[3]; $sub = $Matches[2]
-		if (-not $tasks[$n]) { $tasks[$n] = @{ spent = 0.0; stage = '?'; lead = $false; working = $false; live = @{}; kept = @() } }
+		if (-not $tasks[$n]) { $tasks[$n] = @{ spent = 0.0; stage = '?'; lead = $false; working = $false; live = @{}; kept = @(); ids = @() } }
 		$t = $tasks[$n]
-		if (-not $sub) { $t.kept += "$($a.sessionId)" }   # a lead's #<task>.<n> session has its own budget
+		if (-not $sub) {   # a lead's #<task>.<n> session has its own budget; the kept brief's contract `id:` names the task's rows
+			$t.kept += "$($a.sessionId)"
+			$k = Select-String -LiteralPath (Join-Path $dir "briefs/$($a.sessionId).md") -Pattern '^id:\s*(\S+)' -CaseSensitive | Select-Object -First 1
+			if ($k) { $t.ids += $k.Matches[0].Groups[1].Value }
+		}
 		if ($role -eq 'lead') { $t.lead = $true }
 		if ($a.status) {
 			try {
@@ -282,13 +286,18 @@ function Get-TaskLine {
 		foreach ($r in ($rows | Select-Object -Skip 1)) {
 			$c = $r -split "`t"
 			if ($ci -lt 0 -or $ti -lt 0 -or $ri -lt 0 -or $c.Count -le $ci -or $c[$ri] -eq 'task') { continue }
-			$n = ($c[$ti] -split '\.')[0]
-			if (-not $tasks[$n]) { continue }
+			$cell = $c[$ti]; $first = ($cell -split '\.')[0]; $n = $null   # the cell, or its part before a dot, is one of the task's names
+			foreach ($k in $tasks.Keys) { $names = if ($tasks[$k].ids.Count) { $tasks[$k].ids } else { @($k) }
+				if ($names -ccontains $cell -or $names -ccontains $first) { $n = $k; break } }
+			if ($null -eq $n) { continue }
 			if ($si -ge 0 -and $si -lt $c.Count -and $c[$si] -and $tasks[$n].live[$c[$si]]) { continue }
 			if ($c[$ci] -match '^[0-9.]+') { $tasks[$n].spent += [double]::Parse($Matches[0], $inv) }
 		}
 	}
-	foreach ($n in ($tasks.Keys | Sort-Object { [int]$_ })) {
+	# numbers in numeric order, then the other ids by name, ordinal as jq sorts
+	$nums = @($tasks.Keys | Where-Object { $_ -match '^\d+$' } | Sort-Object { [double]$_ }); $names = [string[]]@($tasks.Keys | Where-Object { $_ -notmatch '^\d+$' })
+	[Array]::Sort($names, [StringComparer]::Ordinal)
+	foreach ($n in @($nums + $names)) {
 		$t = $tasks[$n]
 		$budget = 0.0
 		$m = Select-String -LiteralPath (Join-Path $state "briefs/$n-contract.md") -Pattern '^\s+cost:\s*([0-9.]+)' | Select-Object -First 1

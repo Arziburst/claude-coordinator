@@ -207,6 +207,20 @@ bar_cases() {
   begin "a lead's sub-session does not replace the lead's budget, nor stand in for one"; tasks_reset; agent k5 "#33.1 worker: x" working busy "$wt" 1 2026-11-04T12:04:00Z; kept k5 1; agent k6 "#33 lead: x" idle idle "$root" 2 2026-11-04T12:05:00Z; kept k6 10; draw; bar "#33 L 3/10\$" 17 "green:5 grey:12"
   rm "$cfg/coordinator/briefs/k6.md"; draw; bar "#33 L 3\$" 17 "blue:17"
   tasks_reset; mv "$tmp/briefs.away" "$root/coordinator/briefs"
+  # #570: any id of letters, digits, - and _; the kept brief's contract `id:` names the task's RUNS.tsv rows
+  kid() { mkdir -p "$cfg/coordinator/briefs"; printf '# %s\n---\nid: %s\nbudget:\n  cost: 10\n---\n' "$1" "$2" > "$cfg/coordinator/briefs/$1.md"; }
+  begin "any task id (#570): one bar per task, numbers first in order, then by name; rows by the contract's id; 426 never takes 426-1's"
+  tasks_reset; budget 426; s=2026-11-04T13:00
+  agent p1 "#NBP-658 worker: x" working busy "$wt" 1 "$s:01Z"; kid p1 NBP-658-glass-tab-bar; row NBP-658-glass-tab-bar tester 2.0000 ""
+  agent p2 "#BIN-161 tester: x" working busy "$wt" 2 "$s:02Z"
+  agent p3 "#RECEPTION-FLOW.1 worker: x" working busy "$wt" 1 "$s:03Z"; agent p4 "#RECEPTION-FLOW lead: x" idle idle "$root" 1 "$s:04Z"; kid p4 RECEPTION-FLOW; row RECEPTION-FLOW.1 tester 1.0000 ""
+  agent p5 "#426-1 worker: x" working busy "$wt" 1 "$s:05Z"; row 426-1 tester 4.0000 ""
+  agent p6 "#426 verifier: x" working busy "$wt" 1 "$s:06Z"; row 426 worker 3.0000 ""
+  agent p7 "#558 worker: x" working busy "$wt" 1 "$s:07Z"; agent p8 "#9 tester: x" working busy "$wt" 1 "$s:08Z"; agent p9 "#ab_c researcher: x" working busy "$wt" 1 "$s:09Z"
+  fx "$C" "$M" high $W400; draw
+  is "$L400 $dot #9 T 1\$ $dot #426 V 4/10\$ $dot #558 W 1\$ $dot #426-1 W 5\$ $dot #BIN-161 T 2\$ $dot #NBP-658 W 3/10\$ $dot #RECEPTION-FLOW L 3/10\$ $dot #ab_c R 1\$"
+  bar "#NBP-658 W 3/10\$" 17 "green:5 grey:12"; bar "#426 V 4/10\$" 17 "green:7 grey:10"; bar "#426-1 W 5\$" 17 "blue:17"; bar "#RECEPTION-FLOW L 3/10\$" 23 "green:7 grey:16"
+  tasks_reset; rm -f "$root/coordinator/briefs/426-contract.md"
   begin "not a coordinator: no task bars and no core mark"; upstream "$A"; fx "#11 worker: x" "$M" high $W400; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call in a session that is not a coordinator"
 
   tasks_reset; printf 6 > "$tmp/stub/git.sleep"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; fx "$C" "$M" high $W400
