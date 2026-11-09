@@ -130,7 +130,7 @@ start() {
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
         --tester-commit) a+=(-TesterCommit "$2"); shift 2 ;; --tester-tests) a+=(-TesterTests "$2"); shift 2 ;;
-        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;;
+        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; --go) a+=(-Go "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -364,7 +364,7 @@ mkdir -p "$lw/.lead" && echo notes > "$lw/.lead/x"
 rm "$lw/.lead/x" && rmdir "$lw/.lead"
 # a lead's integration branch, created locally and not pushed yet: the worker starts from the local one
 git -C "$tmp/repo" branch 20-lead main
-W1=(--repo "$tmp/repo" --name "#20.1 worker: Part" --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "#20 lead: Big")
+W1=(--repo "$tmp/repo" --name "#20.1 worker: Part" --model opus --brief-file "$tmp/brief.md" --safety "$tmp/safety.json" --report-to "#20 lead: Big" --go "go")
 check 0 "start: a base not on origin yet" -- start "${W1[@]}" --branch 20.1-part --base 20-lead
 expect_in "not on origin yet"
 [ "$(git -C "$tmp/repo" rev-parse 20.1-part)" = "$(git -C "$tmp/repo" rev-parse 20-lead)" ] || { echo "FAIL: 20.1-part did not start from the local base"; fail=1; }
@@ -1185,12 +1185,32 @@ check 1 "gate: the log given by --runs" -- start --name "#502 worker: G" --repo 
 check 0 "gate: no log, no gate" -- start --name "#502 worker: G" --repo "$rgr" --model opus --safety "$tmp/safety.json" --report-to x --branch 502-g --brief-file "$tmp/brief-rg502.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: no log"
 rgc 504.1 14 > "$tmp/rg504.md"
-check 0 "gate: a lead's sub-contract has no gate" -- start --name "#504.1 worker: G" "${RG[@]}" --branch 504-1-g --brief-file "$tmp/brief.md" --contract "$tmp/rg504.md" --dry-run
+check 0 "gate: a lead's sub-contract has no gate" -- start --name "#504.1 worker: G" "${RG[@]}" --go "go" --branch 504-1-g --brief-file "$tmp/brief.md" --contract "$tmp/rg504.md" --dry-run
 expect_in "[dry-run]"; rgone "gate: a lead's sub-contract"
 mkas rg; cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"
 check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
 expect_in "[dry-run]"; rgone "gate: an assistant"
 rm -f "$ar/coordinator/RUNS.tsv"
+
+# --- the lead's go gate (#558): a lead's sub-task (named `#<n>.<m>`, or reporting to a `#<n> lead:`) starts only on the coordinator's go ---
+gl="$tmp/repo/.claude/worktrees/558-lead"; git -C "$tmp/repo" worktree add -q --no-track -b 558-lead "$gl" main
+GS=(--repo "$tmp/repo" --model opus --safety "$tmp/safety.json" --brief-file "$tmp/brief.md" --base 558-lead --dry-run)
+gorefused() { says "$1" "refused: " "send the plan, wait for go"; case "$LAST" in *"[dry-run]"*) echo "FAIL ($1): the dry run went on"; fail=1 ;; esac; }
+check 1 "go: a sub-task by its name, no go" -- start "${GS[@]}" --name "#558.1 worker: G" --branch 558-1-g --report-to x; gorefused "go: by its name"
+check 1 "go: a sub-task reporting to a lead, no go" -- start "${GS[@]}" --name "#558 worker: G" --branch 558-2-g --report-to "#558 lead: L"; gorefused "go: reporting to a lead"
+check 1 "go: blank --go words are no go" -- start "${GS[@]}" --name "#558.1 worker: G" --branch 558-1-g --report-to x --go " "; gorefused "go: blank words"
+mkdir -p "$gl.lead"; printf '\n' > "$gl.lead/go.txt"
+check 1 "go: an empty go file is no go" -- start "${GS[@]}" --name "#558.1 worker: G" --branch 558-1-g --report-to x; gorefused "go: an empty go file"
+check 0 "go: --go passes and prints the words" -- start "${GS[@]}" --name "#558.1 worker: G" --branch 558-1-g --report-to x --go "go: the budget is now 9"
+says "go: --go" "go: the budget is now 9"; expect_in "[dry-run]"
+printf '2026-11-09T10:00:00Z go: the budget is now 12\n' > "$gl.lead/go.txt"
+check 0 "go: the go file beside the lead's notes" -- start "${GS[@]}" --name "#558.1 worker: G" --branch 558-1-g --report-to "#558 lead: L"
+says "go: the go file" "go.txt" "go: the budget is now 12"; expect_in "[dry-run]"
+for v in "#558 worker: G" "#558 lead: G"; do
+  check 0 "go: the coordinator's own start ($v) is unchanged" -- start "${F[@]}" --brief-file "$tmp/brief.md" --name "$v" --branch 558-c --dry-run
+  expect_in "[dry-run]"; expect_no_line "go gate"; case "$LAST" in *refused*) echo "FAIL (go: $v): refused"; fail=1 ;; esac
+done
+rm "$gl.lead/go.txt"; rmdir "$gl.lead"; git -C "$tmp/repo" worktree remove "$gl"; git -C "$tmp/repo" branch -q -D 558-lead
 
 # --- the contract's copy (#387, the header): real starts on the stub, its worktrees left to the temporary folder ---
 cb="$tmp/cbrepo" cbd="$tmp/cbrepo/coordinator/briefs"; git init -q -b main "$cb"; g -C "$cb" commit -q --allow-empty -m init; mkdir -p "$cbd"; git init -q -b main "$tmp/cb2"; g -C "$tmp/cb2" commit -q --allow-empty -m init

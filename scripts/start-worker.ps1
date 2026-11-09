@@ -69,11 +69,13 @@
 # The round and money gate (#381; the rules: start-worker.sh's top comment): round 3 or later, or the task's rows summing
 # to at least twice budget.cost, is refused unless -OwnerOk <the owner's words>, printed. A mistyped -OwnerOk is swallowed by
 # param() and the gate still refuses. Limits: a round given by a message passes no gate; a running session has no row yet.
+# The lead's go gate (#558; the rules: start-worker.sh's top comment): a lead's sub-task (named `#<n>.<m> ...`, or -ReportTo
+# a `#<n> lead: ...`) is refused unless -Go <the coordinator's words> or a line in <the lead's worktree>.lead/go.txt.
 # The contract's copy (#387): a worker or a lead whose contract (-Contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
 # coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
-      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '', [string]$Runs = '')
+      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '', [string]$Runs = '', [string]$Go = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -98,12 +100,12 @@ if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - i
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-Go <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
-                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk), @('Runs', $Runs))) {
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk), @('Runs', $Runs), @('Go', $Go))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
@@ -326,6 +328,18 @@ else {
     if (-not $OwnerOk) { Fail "refused: $rline - a third round or twice the estimate needs the owner's word: -OwnerOk <the owner's words> (CORE ${sect}6)" }
     "round gate: $rline - passed on the owner's words: $OwnerOk"
   } else { "round gate: $rline$okTail" }
+}
+# the lead's go gate (#558, the header): a lead's sub-task starts only after the coordinator's go
+$n0 = ($Name -split ' ', 2)[0]; $gSub = if ($n0 -like '#*.*') { "named $n0" } elseif ($ReportTo -like '#* lead:*') { "reporting to $ReportTo" } else { '' }
+if ($gSub -and -not $asst) {
+  $gw = if ("$Go".Trim()) { "the coordinator's words: $Go" } else { '' }; $gt = ''; $gwt = ''
+  foreach ($l in @(& { $ErrorActionPreference = 'Continue'; git -C $root worktree list --porcelain 2>$null })) {
+    if ($l -clike 'worktree *') { $gwt = $l.Substring(9) } elseif ($l -ceq "branch refs/heads/$Base" -and -not $gt) { $gt = $gwt } }
+  $gc = & { $ErrorActionPreference = 'Continue'; "$(git rev-parse --show-toplevel 2>$null)".Trim() }
+  if (-not $gw) { foreach ($gf in @(@($gt, $gc) | Where-Object { $_ } | ForEach-Object { "$_.lead/go.txt" })) {
+    if (Test-Path -LiteralPath $gf -PathType Leaf) { $g1 = @(Get-Content -LiteralPath $gf | Where-Object { "$_".Trim() })[0]; if ($g1) { $gw = "${gf}: $g1"; break } } } }
+  if (-not $gw) { Fail "refused: a lead's sub-task ($gSub) starts only after the coordinator's go - send the plan, wait for go: its go file $(if ($gt) { $gt } else { "<the lead's worktree>" }).lead/go.txt, or -Go `"<the coordinator's words>`" (roles/lead.md step 2)" }
+  "go gate: $gSub - passed on $gw"
 }
 if ($crole -eq 'lead' -and ($TesterCommit -or $TesterTests)) {
   Fail "refused: a lead's task gets no task-level tester - start the lead without -TesterCommit / -TesterTests; its contract has ``tests_first: no - the lead runs the tester per sub-contract`` (roles/lead.md step 3)"
