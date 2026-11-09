@@ -1,0 +1,10 @@
+[
+  {
+    "id": "a1b2c3d4",
+    "sessionId": "5e550000-0000-4000-8000-000000000001",
+    "cwd": "/work/project",
+    "name": "fixture",
+    "state": "working",
+    "startedAt": 1767225600000
+  }
+]

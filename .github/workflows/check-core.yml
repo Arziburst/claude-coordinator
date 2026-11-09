@@ -23,6 +23,7 @@ name: check-core
 #need bounds     ^scripts/check-bounds\. ^tests/check-bounds/  # check-bounds on a throwaway repository
 #need reportissue ^scripts/report-issue\. ^tests/report-issue/  # report-issue against a stub gh
 #need watch      ^scripts/watch-sessions\. ^tests/watch-sessions/  # watch-sessions against a stub claude
+#need ccformats  ^scripts/cc-formats\. ^tests/cc-formats/ ^scripts/selftest\.  # cc-formats against a stub claude (and selftest env's line)
 #need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
 #need reset      !pr  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
 #need winpwsh    !pr  # pwsh on Windows in a non-hook script set: the gate line before a Windows step's last command, its ps pwsh
@@ -521,6 +522,12 @@ jobs:
           bash tests/watch-sessions/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/watch-sessions/run.sh ps pwsh
+      - name: cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
+        if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2' || matrix.shard == 'windows-4') && steps.need.outputs.ccformats == 'true'
+        run: |
+          bash tests/cc-formats/run.sh sh
+          bash tests/cc-formats/run.sh ps pwsh
+          if [ "$RUNNER_OS" = Windows ]; then bash tests/cc-formats/run.sh ps powershell; fi
       - name: runs against fixture transcripts and a stub claude (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.runs == 'true'
         run: bash tests/runs/run.sh sh
