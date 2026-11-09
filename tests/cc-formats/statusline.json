@@ -1,0 +1,1 @@
+{"session_id":"5e550000-0000-4000-8000-000000000001","transcript_path":"/work/s.jsonl","cwd":"/work/project","model":{"id":"claude-fixture","display_name":"Fixture"},"workspace":{"project_dir":"/work/project"},"cost":{"total_cost_usd":0.25},"context_window":{"context_window_size":200000}}
