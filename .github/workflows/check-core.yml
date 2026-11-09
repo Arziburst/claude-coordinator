@@ -353,7 +353,6 @@ jobs:
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/statusline/run.sh ps powershell
-          [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/statusline/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (bash)
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.runstats == 'true'

@@ -824,7 +824,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
   stale runs on its next push, never a run on main. **What a pull request skips (#561):** a `#need` line whose one pattern is `!pr` is false
   on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends the step before its `ps pwsh`) run on
-  main, the nightly and a manual run only; the guard's and the hooks' run on a PR too. **How a step lands in a shard:** every shard holds about 6 to 8
+  main, the nightly and a manual run only; the guard's, the hooks' and the status line's run on a PR too. **How a step lands in a shard:** every shard holds about 6 to 8
   minutes by the measured seconds (#426): `ubuntu-1`, `macos-1` and `windows-1` the common steps; every other step packed
   longest first into the shortest shard of its OS, each part of a split set on a shard of its own (the workflow's
   comment names the runs measured; Windows is bound by watch-sessions' one step); a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
