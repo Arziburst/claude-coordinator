@@ -294,7 +294,7 @@ bar_cases() {
     lines "${t#*|}"; bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; bar "5h limit 14%" 14 "green:2 grey:12"; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
   done
 }
-bars=40; skipped=""   # #553: the cases bar_cases begins - checked when they run, named in the summary when they do not
+bars=41; skipped=""   # #553: the cases bar_cases begins - checked when they run, named in the summary when they do not
 if [ "$line" = yes ]; then n0=$n; bar_cases; [ $((n - n0)) = "$bars" ] || bad "bar_cases began $((n - n0)) cases, bars=$bars says otherwise: set bars"
 else echo "skip the bars: no jq here (the .sh needs it for its line)"; skipped=", $bars bar cases skipped (no jq)"; fi
 
