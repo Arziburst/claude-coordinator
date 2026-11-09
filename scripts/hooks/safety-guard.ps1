@@ -267,9 +267,31 @@ function GhSeg([string[]]$a, [bool]$repoEnv) {
   $i--   # the scan below skips pr and create: here, the word before create
   if ($repoEnv) { Block 'a pull request into another repository (gh pr create with GH_REPO): only into the current one (#261)' }
   if ($pre) { Block 'a pull request into another repository (gh -R before pr create): only into the current one (#261)' }
+  $nx = ''   # after create, -R x / --repo x / --repo=x naming the checkout's own origin passes (#560)
   foreach ($t in @($a | Select-Object -Skip ($i + 2))) {
-    if (GhRepoFlag $t) { Block "a pull request into another repository (gh pr create $(($t -split '=', 2)[0])): only into the current one (#261)" }
+    if ($nx) { if (-not (OwnRepo $t)) { Block "a pull request into another repository (gh pr create $nx): only into the current one (#261)" }; $nx = ''; continue }
+    if (-not (GhRepoFlag $t)) { continue }
+    if ($t -ceq '-R' -or $t -ceq '--repo') { $nx = $t; continue }
+    if ($t.StartsWith('--repo=', [StringComparison]::Ordinal) -and (OwnRepo $t.Substring(7))) { continue }
+    Block "a pull request into another repository (gh pr create $(($t -split '=', 2)[0])): only into the current one (#261)"
   }
+  if ($nx) { Block "a pull request into another repository (gh pr create $nx): only into the current one (#261)" }
+}
+# OwnRepo <owner/repo or host/owner/repo>: the origin URL of the folder gh runs in names it, letter case ignored as
+# GitHub ignores it; an origin that cannot be read, or a folder that cannot be known, is not own
+function OwnRepo([string]$v) {
+  if ($script:dir -eq '?') { return $false }
+  $o = @(git -C $script:dir remote get-url origin 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $o.Count -lt 1 -or -not "$($o[0])") { return $false }
+  $u = "$($o[0])".ToLowerInvariant(); $v = $v.ToLowerInvariant()
+  if ($u.EndsWith('/')) { $u = $u.Substring(0, $u.Length - 1) }
+  if ($u.EndsWith('.git')) { $u = $u.Substring(0, $u.Length - 4) }
+  $k = $u.IndexOf('://'); if ($k -ge 0) { $u = $u.Substring($k + 3) }
+  $k = $u.IndexOf('@'); if ($k -ge 0) { $u = $u.Substring($k + 1) }
+  $k = $u.IndexOfAny([char[]]@(':', '/')); if ($k -lt 0) { return $false }
+  $h = $u.Substring(0, $k); $p = $u.Substring($k + 1)
+  if ($p -cnotmatch '^[^/]+/[^/]+\z') { return $false }   # owner/repo, nothing more
+  ($v -ceq $p) -or ($v -ceq "$h/$p")
 }
 function ClaudeSeg([string[]]$a) {
   $verb = ''; $nx = $false
@@ -915,7 +937,7 @@ function GitSeg([string[]]$a, [bool]$redir = $false) {
     'update-ref' { UpdRefSeg $rest }
     'checkout' { DiscardSeg $deff 'checkout' $rest; CheckoutSeg $eff $rest }
     'switch' { DiscardSeg $deff 'switch' $rest; CheckoutSeg $eff $rest }
-    'worktree' { WorktreeSeg $rest }
+    'worktree' { WorktreeSeg $deff $rest }
     'clean' { DiscardSeg $deff 'clean' $rest }
     'reset' { DiscardSeg $deff 'reset' $rest }
     'restore' { DiscardSeg $deff 'restore' $rest }
@@ -965,6 +987,7 @@ function DiscardSeg([string]$dd, [string]$sub, [string[]]$a) {
   if ($sub -ceq 'restore' -and ($w -or -not $s)) { $what = 'restore' }
   if (-not $what) { return }
   if (FreeCopy $dd) { return }
+  if ($dd -eq '?') { Block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: give git -C the literal path, not a variable (#263, #456)" }
   Block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
 # FreeCopy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
@@ -993,10 +1016,31 @@ function FreeCopy([string]$dd) {
   }
   $true
 }
-# git worktree remove --force throws away what the worktree holds: the cleanup script checks first
-function WorktreeSeg([string[]]$a) {
+# git worktree remove --force throws away what the worktree holds: the cleanup script checks first. Blocked for a
+# path in the project's folders (OwnForms: .claude/worktrees and the declared roots too) or in the main checkout
+# of the repository git works in, as written and as it lies on disk, and for one that cannot be known; a scratch
+# copy elsewhere (a job's tmp) passes (#560)
+function WorktreeSeg([string]$dd, [string[]]$a) {
   if ($a.Count -eq 0 -or $a[0] -ne 'remove') { return }
-  foreach ($t in $a) { if ($t -match '^(--force|-f|-ff)$') { Block 'removing a worktree by force (use the cleanup script)' } }
+  $m = 'removing a worktree of the project by force (use the cleanup script; a scratch copy outside the project passes by its literal path)'
+  $f = $false; $p = ''
+  foreach ($t in @($a | Select-Object -Skip 1)) { if ($t -match '^(--force|-f|-ff)$') { $f = $true } elseif (-not $t.StartsWith('-') -and -not $p) { $p = $t } }
+  if (-not $f) { return }
+  if (-not $p) { Block $m }
+  $p = Compose $dd $p; if ($p -eq '?') { Block $m }
+  OwnForms
+  if ($script:owns.Count -eq 0) { Block $m }
+  $keep = $script:owns
+  if ($dd -ne '?') {
+    $c = @(git -C $dd rev-parse --path-format=absolute --git-common-dir 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $c.Count -ge 1 -and "$($c[0])" -match '/\.git$') {
+      $r = "$($c[0])"; $r = $r.Substring(0, $r.Length - 5)
+      $x = Canon $r -Keep:$smKeep; if ($x -and $x -ne '.') { $script:owns += $x }
+      $ph = Physical $r -Keep:$smKeep; if ($ph -and $ph -ne '.') { $script:owns += $ph }
+    }
+  }
+  if (IsOwn $p) { Block $m }
+  $script:owns = $keep
 }
 # --- the assistant mode (#281, COORD_ASSISTANT_DIR set): git and GitHub are read, never written ---
 # A git read that can run a command or write a file is refused too: git's settings and programs set on
