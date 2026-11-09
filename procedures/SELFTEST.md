@@ -211,7 +211,9 @@ the report notes the interruption and the resume time.
      the estimates cannot fit whatever the lead guesses of its own share, and the lead must send its plan and start nothing (roles/lead.md step 2). When the plan arrives, the
      coordinator checks that no `#st1.<n>` session runs and no `selftest/<c>/st1.<n>` branch exists —
      a lead that started anyway, whatever its brief says about starting workers, is a FAIL of the role — then answers "go: the budget is now <the plan's
-     total>".
+     total>", and writes that line into the lead's go file, `selftest/<c>/st1.lead/go.txt` beside its worktree (TOOLKIT
+     *Working copies*, #558). A start the gate refused before the go (start-worker's `refused: a lead's sub-task …
+     send the plan, wait for go`, no session, no branch) is the stop holding: PASS, not a FAIL.
    - **Two workers** each make a branch and a commit (and a push where there is a remote); the lead's
      **verifier** subagent gives a verdict on each; the lead merges them and reports (`runs` included).
    - **The coordinator** checks the oracles itself (`git show selftest/<c>/st1:a.txt` → `a`, `b.txt` →

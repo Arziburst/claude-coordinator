@@ -3,7 +3,7 @@
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
-#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--dry-run]
+#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--go <words>] [--dry-run]
 # --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <repo>/coordinator/RUNS.tsv.
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
@@ -85,12 +85,17 @@
 # anything is created) unless --owner-ok <the owner's words>, printed. No log, no contract, a lead's sub-contract, another
 # role or an assistant: one `round gate:` line, no gate. Limits: a round given by a message to a live session passes no
 # gate (CORE §6: a third round is always a fresh worker); a running session has no row yet, its spend is not in the sum.
+# The lead's go gate (#558): a lead's sub-task - named `#<n>.<m> ...`, or --report-to a `#<n> lead: ...` - starts only on
+# the coordinator's go: --go <the coordinator's words>, or a go file, `<the lead's worktree>.lead/go.txt` with a line of
+# words (the lead's worktree: the one --base is checked out in, else the folder start-worker runs in); else refused
+# (exit 1, before anything is created, --dry-run too) naming roles/lead.md step 2. Passed: one `go gate:` line with
+# the words. The coordinator's own starts and an assistant: no gate, no line. Limit: the lead could write either itself.
 # The contract's copy (#387): a worker or a lead whose contract (--contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
 # coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs="" go=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -114,6 +119,7 @@ while [ $# -gt 0 ]; do
     --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
     --owner-ok) need "$@"; owok="$2"; shift 2 ;;
     --runs) need "$@"; runs="$2"; shift 2 ;;
+    --go) need "$@"; go="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -131,7 +137,7 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--dry-run]" >&2
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--go <the coordinator's words>] [--dry-run]" >&2
   [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
@@ -316,6 +322,19 @@ else
     [ -n "$owok" ] || { echo "refused: $rline - a third round or twice the estimate needs the owner's word: --owner-ok <the owner's words> (CORE §6)" >&2; exit 1; }
     echo "round gate: $rline - passed on the owner's words: $owok"
   else echo "round gate: $rline$okt"; fi
+fi
+# the lead's go gate (#558, the header): a lead's sub-task starts only after the coordinator's go
+gsub="" gw="" gt="" n0="${name%% *}"; case "$n0" in "#"*.*) gsub="named $n0" ;; esac
+[ -n "$gsub" ] || case "$report" in "#"*" lead:"*) gsub="reporting to $report" ;; esac
+if [ -n "$gsub" ] && [ -z "$asst" ]; then
+  case "$go" in *[![:space:]]*) gw="the coordinator's words: $go" ;; esac
+  gt="$(git -C "$root" worktree list --porcelain 2>/dev/null | B="branch refs/heads/$base" awk '/^worktree / { w = substr($0, 10) } $0 == ENVIRON["B"] && !f { print w; f = 1 }' || true)"
+  gc="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -n "$gw" ] || for gf in ${gt:+"$gt.lead/go.txt"} ${gc:+"$gc.lead/go.txt"}; do
+    gl1="$( { grep -m 1 '[^[:space:]]' "$gf" 2>/dev/null || true; } | tr -d '\r')"; [ -z "$gl1" ] || { gw="$gf: $gl1"; break; }
+  done
+  [ -n "$gw" ] || { echo "refused: a lead's sub-task ($gsub) starts only after the coordinator's go - send the plan, wait for go: its go file ${gt:-<the lead's worktree>}.lead/go.txt, or --go \"<the coordinator's words>\" (roles/lead.md step 2)" >&2; exit 1; }
+  echo "go gate: $gsub - passed on $gw"
 fi
 if [ "$crole" = lead ] && { [ -n "$tcommit" ] || [ -n "$ttests" ]; }; then
   echo "refused: a lead's task gets no task-level tester - start the lead without --tester-commit / --tester-tests; its contract has \`tests_first: no - the lead runs the tester per sub-contract\` (roles/lead.md step 3)" >&2; exit 1

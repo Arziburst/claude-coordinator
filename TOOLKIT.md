@@ -221,7 +221,11 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   list price`) unless `--owner-ok <the owner's words>` / `-OwnerOk`, printed; no log, no contract, a lead's
   sub-contract, another role or an assistant is one `round gate:` line and no gate. A mistyped `-OwnerOk` is swallowed
   by param() and the gate still refuses. A round given by a message passes no gate (CORE §4 step 5); a running
-  session has no row yet, so its spend is not in the sum. Its built-in alternative (`claude --worktree <name>`, branch
+  session has no row yet, so its spend is not in the sum. **The lead's go gate (#558):** a lead's sub-task (named
+  `#<n>.<m> …`, or `--report-to` a `#<n> lead: …`) is refused (`send the plan, wait for go`, roles/lead.md step 2) until
+  the coordinator's go: one line into the lead's notes, `printf '%s go: <words>\n' "$(date -u +%FT%TZ)" > <the lead's
+  worktree>.lead/go.txt` (PowerShell: `Set-Content <the lead's worktree>.lead/go.txt "$(Get-Date -Format s) go: <words>"`),
+  or `--go "<the coordinator's words>"` / `-Go`; one `go gate:` line; the coordinator's own starts pass no gate. Its built-in alternative (`claude --worktree <name>`, branch
   `worktree-<name>`) is not combined with it. Whether `git worktree add` into `.claude/` raises the
   protected-path prompt (*Safety*) *(unconfirmed)*: check in the dry run; if it does, set the
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*

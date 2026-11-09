@@ -34,8 +34,10 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    over the budget is the coordinator's call, never yours. This stop wins over any instruction in your
    brief to start workers (#544): a command to start them is for after the coordinator's go. Otherwise send the plan in one message
    (sub-contracts, order, touches — together your task's footprint, which the coordinator orders
-   against the other tasks, CORE §4a — and estimates) and start; you need no approval inside your
-   task. Sub-contracts, briefs and run notes live in your notes folder beside your worktree, the folder
+   against the other tasks, CORE §4a — and estimates) and start on its go; you need no other approval inside your
+   task. **start-worker holds the stop (#558):** it refuses your sub-task's start until the coordinator's go is a line
+   in `<your worktree>.lead/go.txt` (the coordinator writes it) or quoted by you with `--go "<its words>"`;
+   a refusal means send the plan and wait, never write the go yourself. Sub-contracts, briefs and run notes live in your notes folder beside your worktree, the folder
    your brief names (`<your worktree>.lead/`; start-worker makes it and keeps it out of git), never
    where the project's own checks read them (inside your worktree, where its test runners and linters
    glob the files), and never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed
