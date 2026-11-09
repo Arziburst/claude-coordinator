@@ -80,6 +80,7 @@ mkdir -p "$tmp/bin" "$tmp/other" "$tmp/work-old" "$tmp/work-wt/14-x" "$tmp/work/
 # (work/.claude/worktrees/12-fix/src stays a plain folder of work)
 git -C "$tmp/work" worktree add -q --detach "$tmp/linked" && git init -q "$tmp/work-wt/14-x" &&
   git init -q "$tmp/work/.claude/worktrees/13-clone" || { echo "FAIL (worktrees) could not make linked, work-wt/14-x or 13-clone"; fail=1; }
+git -C "$tmp/work" remote add origin https://github.com/Acme/Work.git   # #560: gh pr create -R naming its own origin
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SG_CLAUDE_LOG"
@@ -308,6 +309,10 @@ mkdir -p "$tmp/denydir/.claude/coordinator-deny.txt"
 denied "a folder in place of the deny file" "$tmp/denydir"
 denied "a deny file in UTF-16 with a BOM" "$tmp/utf16" "project rule file cannot be read: .claude/coordinator-deny.txt (not UTF-8: re-save it as UTF-8)"
 denied "a deny file in UTF-16 without a BOM" "$tmp/utf16nul" "(not UTF-8: re-save it as UTF-8)"
+# #456: git -C with a shell variable is read as the main checkout; the refusal says to write the literal path
+n=$((n + 1)); d="$(winpath m "$tmp/work")"
+err="$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C \\"$d\\" clean -ffdx"},"cwd":"%s"}' "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+case "$rc:$err" in 2:*"literal path"*) ;; *) echo "FAIL (#456) expected a block naming the literal path (exit $rc): $err"; fail=1 ;; esac
 # an empty file written by Windows PowerShell 5.1 (its BOM only, no NUL byte), and big-endian UTF-16
 mkdir -p "$tmp/utf16empty/.claude" "$tmp/utf16be/.claude"
 printf '\377\376' > "$tmp/utf16empty/.claude/coordinator-deny.txt"
