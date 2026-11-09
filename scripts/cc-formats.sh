@@ -54,10 +54,10 @@ ver="$(claude --version 2>/dev/null </dev/null | head -n 1 | sed 's/ .*//')" || 
 if [ -n "$ifc" ]; then [ -n "$ver" ] || exit 0; [ "$(cat "$sd/version" 2>/dev/null)" != "$ver" ] || exit 0; fi
 mkdir -p "$sd" || { echo "cc-formats: FAIL claude ${ver:-?}: cannot create $sd"; exit 1; }
 bad=""; n=0
-# the listing, 5 s at most (past that the process this script started is killed)
-claude agents --json --all > "$sd/agents.json" 2>/dev/null </dev/null & pid=$!
+# the listing, 5 s at most (past that its whole process group is killed: set -m gives it one of its own)
+set -m; claude agents --json --all > "$sd/agents.json" 2>/dev/null </dev/null & pid=$!; set +m
 t0=$SECONDS; while kill -0 "$pid" 2>/dev/null && [ $((SECONDS - t0)) -lt 5 ]; do sleep 0.1; done   # by the clock: a slow machine's loop is slower
-if kill -0 "$pid" 2>/dev/null; then { kill "$pid"; wait "$pid"; } 2>/dev/null; bad="$bad; agents: claude agents --json --all did not answer in 5 s"
+if kill -0 "$pid" 2>/dev/null; then { kill -- "-$pid" || kill "$pid"; wait "$pid"; } 2>/dev/null; bad="$bad; agents: claude agents --json --all did not answer in 5 s"
 elif ! wait "$pid" || ! tr -d ' \t\r\n' < "$sd/agents.json" | grep -q '^\[.*\]$'; then bad="$bad; agents: claude agents --json --all printed no JSON list"; fi
 if [ -z "$tr" ]; then
   for f in $(ls -t "$cfg"/projects/*/*.jsonl 2>/dev/null | head -n 50); do

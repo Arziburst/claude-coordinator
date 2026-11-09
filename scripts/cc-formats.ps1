@@ -23,7 +23,9 @@ try {
   elseif ($cm.Path -match '\.(cmd|bat)$') { $exe = $env:ComSpec; $a = '/d /s /c ""' + $cm.Path + '" ' + $a + '"' } else { $exe = $cm.Path }
   $p = Start-Process -FilePath $exe -ArgumentList $a -NoNewWindow -PassThru -RedirectStandardOutput $ao -RedirectStandardError $ae -ErrorAction Stop
   $null = $p.Handle   # keeps its exit code readable after it ends
-  if (-not $p.WaitForExit(5000)) { try { $p.Kill() } catch { }; $bad += 'agents: claude agents --json --all did not answer in 5 s' }
+  if (-not $p.WaitForExit(5000)) {   # the whole tree ended, not only its wrapper: .NET Core's Kill(true); 5.1: taskkill /T
+    try { if ($PSVersionTable.PSVersion.Major -ge 6) { $p.Kill($true) } else { $null = & taskkill.exe /T /F /PID $p.Id 2>&1 } } catch { }
+    $bad += 'agents: claude agents --json --all did not answer in 5 s' }
   else { $p.WaitForExit(); $j = [IO.File]::ReadAllText($ao) -replace '\s', ''
     if ($p.ExitCode -ne 0 -or $j -notmatch '^\[.*\]$') { $bad += 'agents: claude agents --json --all printed no JSON list' } }
 } catch { $bad += 'agents: claude agents --json --all printed no JSON list' }

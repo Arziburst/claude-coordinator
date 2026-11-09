@@ -16,7 +16,7 @@ w() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '
 bin="$tmp/bin"; cfg="$(w "$tmp/cfg")"; export CLAUDE_CONFIG_DIR="$cfg" STUB_DIR="$tmp/stub"; mkdir "$bin"
 cat > "$bin/claude" <<'EOF'
 #!/usr/bin/env bash
-case "$1" in --version) echo "$(cat "$STUB_DIR/version") (Claude Code)" ;; agents) [ ! -f "$STUB_DIR/hang" ] || exec sleep 8; cat "$STUB_DIR/agents.json" ;; esac
+case "$1" in --version) echo "$(cat "$STUB_DIR/version") (Claude Code)" ;; agents) [ ! -f "$STUB_DIR/hang" ] || { sleep 30 & echo $! > "$STUB_DIR/child"; wait; exit; }; cat "$STUB_DIR/agents.json" ;; esac
 EOF
 # Windows only (elsewhere PowerShell runs the bash stub itself, one PowerShell less a run): claude.ps1, which PowerShell finds first
 command -v cygpath >/dev/null 2>&1 && printf '%s\n' "& bash (Join-Path \$PSScriptRoot 'claude') @args" 'exit $LASTEXITCODE' > "$bin/claude.ps1"
@@ -77,9 +77,12 @@ named() { local body="${out#cc-formats: FAIL claude $2: }" e k=${#want[@]}; [ -z
   for e in "${want[@]}"; do case "; $body" in *"; $e"*) ;; *) bad "run $1: ${e% (read by } not named" ;; esac; done
   [ -z "${3:-}" ] || case "; $body;" in *"; $3;"*) ;; *) bad "run $1: '$3' not named" ;; esac; }
 
-# hang: a listing that never answers (first: its stub's sleep ends while the other runs go), the payload's fields removed
+# hang: a listing that never answers (its stub's child sleeps on), the payload's fields removed
 setup; : > "$STUB_DIR/hang"; remove hang; s=$SECONDS; cc; named hang 2.1.300 "agents: claude agents --json --all did not answer in 5 s"
 [ $((SECONDS - s)) -le 10 ] || bad "a listing that never answers: the line within 10 s (took $((SECONDS - s)) s)"
+# its whole tree ended (the stub's child too); the next run's listing answers in time (its FAIL names run agents' items only)
+c="$(cat "$STUB_DIR/child" 2>/dev/null)"; k=0; while [ -n "$c" ] && kill -0 "$c" 2>/dev/null && [ $k -lt 10 ]; do sleep 0.1; k=$((k + 1)); done
+[ -n "$c" ] && ! kill -0 "$c" 2>/dev/null || bad "a listing that never answers: its child ended with it"
 # no status line here: the payload part one SKIP line, the rest decides (run agents: its FAIL; all present: the PASS, recorded)
 sk="cc-formats: SKIP payload: no status line here ($cfg/coordinator/statusline.json absent)"
 setup; rm "$tmp/cfg/coordinator/statusline.json"; remove agents; cc; [ "${out%%$'\n'*}" = "$sk" ] || bad "no status line: the SKIP line"
