@@ -28,9 +28,17 @@ try {
     if ($p.ExitCode -ne 0 -or $j -notmatch '^\[.*\]$') { $bad += 'agents: claude agents --json --all printed no JSON list' } }
 } catch { $bad += 'agents: claude agents --json --all printed no JSON list' }
 Remove-Item -LiteralPath $ae -Force -ErrorAction SilentlyContinue
+# Tail2000 <file>: its last 2000 lines, the file read once whole (Get-Content -Tail took 18 s on 51 MB on Windows), shared
+# with its writer; @() when unreadable
+function Tail2000([string]$p) {
+  try { $s = [IO.FileStream]::new($p, 'Open', 'Read', 'ReadWrite'); $r = [IO.StreamReader]::new($s, [Text.Encoding]::UTF8)
+    try { $l = $r.ReadToEnd().TrimEnd([char]10).Split([char]10) } finally { $r.Dispose() }
+    if ($l.Count -gt 2000) { $l[($l.Count - 2000)..($l.Count - 1)] } else { $l } } catch { @() }
+}
+$tl = $null   # the transcript's last 2000 lines, read once: the search below and Text
 if (-not $Transcript) {
   foreach ($f in @(Get-ChildItem -Path "$cfg/projects/*/*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 50)) {
-    if (Get-Content -LiteralPath $f.FullName -Tail 2000 -Encoding UTF8 | Select-String -Quiet '"role": *"assistant"') { $Transcript = $f.FullName; break } }
+    $l = @(Tail2000 $f.FullName); if (@($l -match '"role": *"assistant"').Count) { $Transcript = $f.FullName; $tl = $l; break } }
   if (-not $Transcript) { $bad += "transcript: none under $cfg/projects holds an assistant message" }
 }
 $fms = 'agents', 'transcript', 'payload'   # no status line here (its file absent, no -Payload): the payload part one SKIP line
@@ -40,7 +48,7 @@ if ($Transcript -and -not (Test-Path -LiteralPath $Transcript -PathType Leaf)) {
 if ($fms.Count -eq 3 -and -not (Test-Path -LiteralPath $Payload -PathType Leaf)) { $bad += "payload: cannot read $Payload" }
 # the input's lines, `": ` and `, "` closed up
 function Text([string]$fm) {
-  $l = switch ($fm) { 'agents' { Get-Content -LiteralPath $ao -Encoding UTF8 } 'transcript' { if ($Transcript) { Get-Content -LiteralPath $Transcript -Tail 2000 -Encoding UTF8 } }
+  $l = switch ($fm) { 'agents' { Get-Content -LiteralPath $ao -Encoding UTF8 } 'transcript' { if ($null -ne $tl) { $tl } elseif ($Transcript) { Tail2000 $Transcript } }
     'payload' { Get-Content -LiteralPath $Payload -Encoding UTF8 } }
   @($l | ForEach-Object { $_ -replace '"\s*:\s*', '":' -replace ',\s*"', ',"' })
 }

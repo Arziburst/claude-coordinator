@@ -14,11 +14,12 @@
 # The table: `#F <format> <field> <when> <pattern> <readers>`. <when> and <pattern> are extended regular expressions on the
 # input's text after `"<key>" : ` is written `"<key>":` and `, "` as `,"` (- in <when>: always); a row is checked only when
 # its input matches <when>. agents: the listing (rows checked when it lists a session); transcript; payload.
-#F agents id [{] "id":" runs,watch-sessions,cleanup-worker,start-worker
-#F agents sessionId [{] "sessionId":" runs,watch-sessions,cleanup-worker,start-worker
-#F agents cwd [{] "cwd":" runs,watch-sessions,cleanup-worker,hooks/before-compact
-#F agents name [{] "name":" runs,watch-sessions,cleanup-worker,start-worker
-#F agents state [{] "state":" runs,watch-sessions,start-worker
+#F agents id [{] "id":" runs,watch-sessions,cleanup-worker,start-worker,hooks/safety-guard,hooks/before-compact
+#F agents sessionId [{] "sessionId":" runs,watch-sessions,cleanup-worker,start-worker,hooks/safety-guard,statusline
+#F agents cwd [{] "cwd":" runs,watch-sessions,cleanup-worker,hooks/before-compact,hooks/safety-guard,statusline
+#F agents name [{] "name":" runs,watch-sessions,cleanup-worker,start-worker,hooks/safety-guard,hooks/before-compact,statusline
+#F agents state [{] "state":" runs,watch-sessions,start-worker,hooks/before-compact,statusline
+#F agents startedAt [{] "startedAt": statusline
 #F transcript type - "type":"assistant" session-tokens,session-insights
 #F transcript timestamp - "timestamp":" session-tokens,session-insights
 #F transcript cwd - "cwd":" session-insights
@@ -36,7 +37,11 @@
 #F transcript tool_use_id "tool_result" "tool_use_id":" session-tokens,session-insights
 #F payload session_id - "session_id":" statusline,hooks/before-compact,hooks/after-compact
 #F payload cwd - "cwd":" statusline,hooks/safety-guard,hooks/before-compact,hooks/after-compact
+#F payload transcript_path - "transcript_path":" statusline
 #F payload workspace.project_dir "workspace":[{] "project_dir":" statusline
+#F payload model.display_name "workspace":[{] "display_name":" statusline
+#F payload cost.total_cost_usd "workspace":[{] "total_cost_usd":[0-9] statusline,session-tokens
+#F payload context_window.context_window_size "workspace":[{] "context_window_size":[0-9] statusline
 #F payload tool_input.command "tool_name":"Bash" "tool_input":[{][^}]*"command":" hooks/safety-guard
 set -u
 usage() { sed -n '2,13s/^# \{0,1\}//p' "$0" >&2; exit 2; }

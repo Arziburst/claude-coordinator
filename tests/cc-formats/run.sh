@@ -41,12 +41,18 @@ snap() { (cd "$tmp/cfg" && find . -type f ! -path './coordinator/cc-formats/*' |
 T='hang|statusline|"session_id":|"sessionId":|payload session_id
 hang|statusline|"cwd":|"dir":|payload cwd
 hang|statusline|"project_dir":|"projectDir":|payload workspace.project_dir
+hang|statusline|"transcript_path":|"transcriptPath":|payload transcript_path
+hang|statusline|"total_cost_usd":|"total_cost":|payload cost.total_cost_usd
+hang|statusline|"display_name":|"displayName":|payload model.display_name
+hang|statusline|"context_window_size":|"size":|payload context_window.context_window_size
+agents|agents|"startedAt":|"started":|agents startedAt
 agents|agents|"id":|"jobId":|agents id
 agents|agents|"sessionId":|"sid":|agents sessionId
 agents|agents|"cwd":|"dir":|agents cwd
 agents|agents|"name":|"title":|agents name
 agents|agents|"state":|"phase":|agents state
 hook|hook|"command":|"cmd":|payload tool_input.command
+hook|hook|"transcript_path":|"transcriptPath":|payload transcript_path
 new|transcript|"type":"assistant"|"type":"model"|transcript type
 new|transcript|"timestamp":|"time":|transcript timestamp
 new|transcript|"cwd":|"dir":|transcript cwd
@@ -79,12 +85,12 @@ sk="cc-formats: SKIP payload: no status line here ($cfg/coordinator/statusline.j
 setup; rm "$tmp/cfg/coordinator/statusline.json"; remove agents; cc; [ "${out%%$'\n'*}" = "$sk" ] || bad "no status line: the SKIP line"
 out="${out#*$'\n'}"; named agents 2.1.300
 setup; rm "$tmp/cfg/coordinator/statusline.json"; cc
-[ "$rc" = 0 ] && [ "$out" = "$sk"$'\n'"cc-formats: PASS claude 2.1.300, 20 fields" ] || bad "no status line, the rest present: SKIP, PASS"
+[ "$rc" = 0 ] && [ "$out" = "$sk"$'\n'"cc-formats: PASS claude 2.1.300, 21 fields" ] || bad "no status line, the rest present: SKIP, PASS"
 [ "$(cat "$tmp/cfg/coordinator/cc-formats/version" 2>/dev/null)" = 2.1.300 ] || bad "no status line: the version recorded at the PASS"
 setup; remove hook; cc --payload "$(w "$STUB_DIR/hook.json")"; named hook 2.1.300
 # all present: one PASS line, the version recorded, nothing else under the config changed
 setup; b="$(snap)"; cc
-[ "$rc" = 0 ] && [ "$out" = "cc-formats: PASS claude 2.1.300, 23 fields" ] || bad "all fields present: one PASS line"
+[ "$rc" = 0 ] && [ "$out" = "cc-formats: PASS claude 2.1.300, 28 fields" ] || bad "all fields present: one PASS line"
 [ "$(cat "$tmp/cfg/coordinator/cc-formats/version" 2>/dev/null)" = 2.1.300 ] || bad "the version recorded at a PASS"
 [ "$(snap)" = "$b" ] || bad "nothing written outside the scratch folder"
 # --if-changed: silent on the recorded version; a new one probed (run new: a FAIL keeps the old record), then recorded at its PASS
@@ -92,13 +98,13 @@ cc --if-changed; [ "$rc" = 0 ] && [ -z "$out" ] || bad "--if-changed on the reco
 echo 2.1.301 > "$STUB_DIR/version"; remove new; cc --if-changed; named new 2.1.301
 [ "$(cat "$tmp/cfg/coordinator/cc-formats/version")" = 2.1.300 ] || bad "a FAIL keeps the version unrecorded"
 cp "$here/transcript.jsonl" "$tmp/cfg/projects/p/s.jsonl"; cc --if-changed
-[ "$rc" = 0 ] && [ "$out" = "cc-formats: PASS claude 2.1.301, 23 fields" ] || bad "--if-changed on a new version: the PASS"
+[ "$rc" = 0 ] && [ "$out" = "cc-formats: PASS claude 2.1.301, 28 fields" ] || bad "--if-changed on a new version: the PASS"
 [ "$(cat "$tmp/cfg/coordinator/cc-formats/version")" = 2.1.301 ] || bad "the new version recorded"
 # selftest env on a new version: the probe's one line (gh may be absent here: its lines are not checked)
 echo 2.1.302 > "$STUB_DIR/version"
 if [ "$kind" = sh ]; then out="$(bash "$core/scripts/selftest.sh" env 2>&1)"
 else out="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/selftest.ps1" env 2>&1)"; fi
 out="${out//$'\r'/}"; rc=-
-[ "$(printf '%s\n' "$out" | grep -c 'cc-formats')" = 1 ] && printf '%s\n' "$out" | grep -qx 'PASS env: cc-formats claude 2.1.302, 23 fields' ||
+[ "$(printf '%s\n' "$out" | grep -c 'cc-formats')" = 1 ] && printf '%s\n' "$out" | grep -qx 'PASS env: cc-formats claude 2.1.302, 28 fields' ||
   bad "selftest env on a new version: the probe's one PASS line"
 [ "$fails" = 0 ] && echo "cc-formats: all checks passed ($kind)" || { echo "cc-formats: $fails failed"; exit 1; }
