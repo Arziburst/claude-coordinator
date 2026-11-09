@@ -9,6 +9,7 @@
 # listing, and `version` - `claude --version` at the last PASS. --if-changed: nothing at all (exit 0) when that version is
 # today's or claude answers no version; else the probe. One line: `cc-formats: PASS claude <version>, <n> fields` or
 # `cc-formats: FAIL claude <version>: <format> <field> (read by <scripts>); ...` - a field missing, or an input unread.
+# No status line here (that file absent, no --payload): first `cc-formats: SKIP payload: ...`; the rest decides.
 # Exit 0 PASS, 1 FAIL (the version stays unrecorded: the next run probes again), 2 usage.
 # The table: `#F <format> <field> <when> <pattern> <readers>`. <when> and <pattern> are extended regular expressions on the
 # input's text after `"<key>" : ` is written `"<key>":` and `, "` as `,"` (- in <when>: always); a row is checked only when
@@ -38,7 +39,7 @@
 #F payload workspace.project_dir "workspace":[{] "project_dir":" statusline
 #F payload tool_input.command "tool_name":"Bash" "tool_input":[{][^}]*"command":" hooks/safety-guard
 set -u
-usage() { sed -n '2,12s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+usage() { sed -n '2,13s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 ifc=""; tr=""; pl=""
 while [ $# -gt 0 ]; do case "$1" in
   --if-changed) ifc=1 ;; --transcript) [ $# -ge 2 ] || usage; tr="$2"; shift ;; --payload) [ $# -ge 2 ] || usage; pl="$2"; shift ;;
@@ -59,13 +60,15 @@ if [ -z "$tr" ]; then
   done
   [ -n "$tr" ] || bad="$bad; transcript: none under $cfg/projects holds an assistant message"
 fi
-[ -n "$pl" ] || pl="$cfg/coordinator/statusline.json"
+fms="agents transcript payload"   # no status line here (its file absent, no --payload): the payload part one SKIP line
+if [ -z "$pl" ] && [ ! -e "$cfg/coordinator/statusline.json" ]; then fms="agents transcript"
+  echo "cc-formats: SKIP payload: no status line here ($cfg/coordinator/statusline.json absent)"; else pl="${pl:-$cfg/coordinator/statusline.json}"; fi
 [ -z "$tr" ] || [ -r "$tr" ] || bad="$bad; transcript: cannot read $tr"
-[ -r "$pl" ] || bad="$bad; payload: cannot read $pl"
+[ "$fms" = "agents transcript" ] || [ -r "$pl" ] || bad="$bad; payload: cannot read $pl"
 # text <format>: the input, `": ` and `, "` closed up
 text() { case "$1" in agents) cat "$sd/agents.json" ;; transcript) [ -z "$tr" ] || tail -n 2000 "$tr" ;; payload) cat "$pl" ;; esac 2>/dev/null |
   sed -E 's/"[[:space:]]*:[[:space:]]*/":/g; s/,[[:space:]]*"/,"/g'; }
-for fm in agents transcript payload; do
+for fm in $fms; do
   case "$bad" in *"; $fm: "*) continue ;; esac
   t="$(text "$fm")"
   while read -r _ f fld when pat who; do

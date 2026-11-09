@@ -1,6 +1,7 @@
 # Claude Code's internal formats against the fields the core reads (#559; Windows; macOS / Linux: cc-formats.sh - the same
 # line and codes). The table of fields (`#F` lines) and what each part means: cc-formats.sh, beside this file.
 #   scripts/cc-formats.ps1 [-IfChanged] [-Transcript <file.jsonl>] [-Payload <file.json>]
+# No status line here (that file absent, no -Payload): first `cc-formats: SKIP payload: ...`; the rest decides.
 # Exit 0 PASS, 1 FAIL, 2 usage.
 param([switch]$IfChanged, [string]$Transcript = '', [string]$Payload = '')
 if ($args.Count -gt 0) { [Console]::Error.WriteLine('usage: cc-formats.ps1 [-IfChanged] [-Transcript <file.jsonl>] [-Payload <file.json>]'); exit 2 }
@@ -32,9 +33,11 @@ if (-not $Transcript) {
     if (Get-Content -LiteralPath $f.FullName -Tail 2000 -Encoding UTF8 | Select-String -Quiet '"role": *"assistant"') { $Transcript = $f.FullName; break } }
   if (-not $Transcript) { $bad += "transcript: none under $cfg/projects holds an assistant message" }
 }
-if (-not $Payload) { $Payload = "$cfg/coordinator/statusline.json" }
+$fms = 'agents', 'transcript', 'payload'   # no status line here (its file absent, no -Payload): the payload part one SKIP line
+if (-not $Payload) { $Payload = "$cfg/coordinator/statusline.json"
+  if (-not (Test-Path -LiteralPath $Payload)) { $fms = 'agents', 'transcript'; "cc-formats: SKIP payload: no status line here ($Payload absent)" } }
 if ($Transcript -and -not (Test-Path -LiteralPath $Transcript -PathType Leaf)) { $bad += "transcript: cannot read $Transcript" }
-if (-not (Test-Path -LiteralPath $Payload -PathType Leaf)) { $bad += "payload: cannot read $Payload" }
+if ($fms.Count -eq 3 -and -not (Test-Path -LiteralPath $Payload -PathType Leaf)) { $bad += "payload: cannot read $Payload" }
 # the input's lines, `": ` and `, "` closed up
 function Text([string]$fm) {
   $l = switch ($fm) { 'agents' { Get-Content -LiteralPath $ao -Encoding UTF8 } 'transcript' { if ($Transcript) { Get-Content -LiteralPath $Transcript -Tail 2000 -Encoding UTF8 } }
@@ -42,7 +45,7 @@ function Text([string]$fm) {
   @($l | ForEach-Object { $_ -replace '"\s*:\s*', '":' -replace ',\s*"', ',"' })
 }
 $rows = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'cc-formats.sh') | Where-Object { $_ -like '#F *' })
-foreach ($fm in 'agents', 'transcript', 'payload') {
+foreach ($fm in $fms) {
   if (@($bad | Where-Object { $_ -like "${fm}: *" }).Count) { continue }
   $t = @(Text $fm)   # one line stays a list: -match on a list filters it
   foreach ($r in $rows) {

@@ -357,8 +357,9 @@ switch ($Step) {
     if ($v) { Pass ("$c " + ($v -replace "^$c version ", '')) } else { Fail "$c not found" }
   }
   # #559: Claude Code's formats, probed only when claude --version differs from this machine's last PASS (cc-formats)
-  $l = "$(& (Join-Path $coreDir 'scripts/cc-formats.ps1') -IfChanged 2>$null)"
-  if ($l -like 'cc-formats: PASS *') { Pass ('cc-formats ' + $l.Substring(17)) } elseif ($l -like 'cc-formats: FAIL *') { Fail ('cc-formats ' + $l.Substring(17)) }
+  foreach ($l in @(& (Join-Path $coreDir 'scripts/cc-formats.ps1') -IfChanged 2>$null)) {   # no status line here: a SKIP line first
+    $l = "$l"; if ($l -like 'cc-formats: PASS *') { Pass ('cc-formats ' + $l.Substring(17)) } elseif ($l -like 'cc-formats: FAIL *') { Fail ('cc-formats ' + $l.Substring(17)) }
+    elseif ($l -like 'cc-formats: SKIP *') { Skip ('cc-formats ' + $l.Substring(17)) } }
   $v = $null
   if (Get-Command gh -ErrorAction SilentlyContinue) { $v = @(& gh --version 2>$null)[0] }
   if ($v) { Pass ('gh ' + ($v -replace '^gh version ', '')) } else { Skip 'gh not installed: no PR flow'; $Repo = '' }

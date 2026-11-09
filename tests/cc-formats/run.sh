@@ -3,7 +3,7 @@
 # temp CLAUDE_CONFIG_DIR, in few process starts: each field of its table removed (the table below names the run that
 # removes it; a run removes several and its one FAIL line must name each, nothing more), all present (one PASS line,
 # nothing written outside the scratch folder), --if-changed against the stub's `claude --version`, a listing that never
-# answers (5 s), and the line of selftest env.
+# answers (5 s), no status line (the payload part one SKIP line), and the line of selftest env.
 #   tests/cc-formats/run.sh sh                  # cc-formats.sh, selftest.sh
 #   tests/cc-formats/run.sh ps pwsh             # cc-formats.ps1, selftest.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
@@ -74,7 +74,13 @@ named() { local body="${out#cc-formats: FAIL claude $2: }" e k=${#want[@]}; [ -z
 # hang: a listing that never answers (first: its stub's sleep ends while the other runs go), the payload's fields removed
 setup; : > "$STUB_DIR/hang"; remove hang; s=$SECONDS; cc; named hang 2.1.300 "agents: claude agents --json --all did not answer in 5 s"
 [ $((SECONDS - s)) -le 10 ] || bad "a listing that never answers: the line within 10 s (took $((SECONDS - s)) s)"
-setup; remove agents; cc; named agents 2.1.300
+# no status line here: the payload part one SKIP line, the rest decides (run agents: its FAIL; all present: the PASS, recorded)
+sk="cc-formats: SKIP payload: no status line here ($cfg/coordinator/statusline.json absent)"
+setup; rm "$tmp/cfg/coordinator/statusline.json"; remove agents; cc; [ "${out%%$'\n'*}" = "$sk" ] || bad "no status line: the SKIP line"
+out="${out#*$'\n'}"; named agents 2.1.300
+setup; rm "$tmp/cfg/coordinator/statusline.json"; cc
+[ "$rc" = 0 ] && [ "$out" = "$sk"$'\n'"cc-formats: PASS claude 2.1.300, 20 fields" ] || bad "no status line, the rest present: SKIP, PASS"
+[ "$(cat "$tmp/cfg/coordinator/cc-formats/version" 2>/dev/null)" = 2.1.300 ] || bad "no status line: the version recorded at the PASS"
 setup; remove hook; cc --payload "$(w "$STUB_DIR/hook.json")"; named hook 2.1.300
 # all present: one PASS line, the version recorded, nothing else under the config changed
 setup; b="$(snap)"; cc

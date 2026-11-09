@@ -685,7 +685,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   line's recorded payload (`--payload`: a hook's): a missing one is `cc-formats: FAIL claude <version>: <format> <field>
   (read by <scripts>)`, all present one PASS line. `selftest env` runs it when `claude --version` differs from this
   machine's last PASS (`<config>/coordinator/cc-formats/version`): one line, the listing 5 s at most; a FAIL is for the
-  owner (the readers need a fix) and the next run probes again.
+  owner (the readers need a fix) and the next run probes again. No status line here (no `statusline.json`): one more
+  line first, `cc-formats: SKIP payload: ...`; the listing and the transcript decide, the version recorded at their PASS.
 - **Our guard's two, by design:** a worktree is removed by cleanup-worker or a plain `git worktree
   remove`, never `--force`; a scratch upstream's branch is not named `main` (the guard and the deny rules
   block a push to any `main`).
