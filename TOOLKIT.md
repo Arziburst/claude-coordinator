@@ -420,7 +420,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   command still needs every part allowed. `gh pr ready` and `gh pr merge` stay denied where the preset
   denies them (#261). The `*` would also take in `--repo <any repository>`: the guard blocks `gh pr create`
   with `--repo` / `--repo=x`, a short-flag group holding `R` (`-R x`, `-Rx`, `-dR x`), the same before `pr`
-  (`gh -R x pr create`), or `GH_REPO=` before gh in the same command. It cannot see a `GH_REPO` exported
+  (`gh -R x pr create`), or `GH_REPO=` before gh in the same command; after `create`, `-R x` / `--repo x`
+  naming the checkout's own origin (host/owner/repo, or owner/repo on github.com; letter case ignored) passes and `GH_HOST=` blocks (#560). It cannot see a `GH_REPO` exported
   earlier or inherited from the session's environment, nor which remote gh takes the base repository
   from: keep `GH_REPO` out of the worker safety file's `env`.
 - **The guard reads a command's text, not only what will run:** `git push` written inside a string or a
@@ -441,7 +442,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   that holds it, the project's folder or a folder that holds it, or a worktree by hand (also the
   worktrees' folder and `.claude`) (`rm` / `Remove-Item` / `rd /s` in their recursive forms, `find …
   -delete` — with a test such as `-name` the project's folder may be its path —, a
-  `Get-ChildItem` / `ls` piped into `Remove-Item -Recurse`, `git worktree remove --force`; a drive also
+  `Get-ChildItem` / `ls` piped into `Remove-Item -Recurse`, `git worktree remove --force` of a worktree in the project, a declared root or a variable, also by a name git matches by its end (a scratch copy elsewhere passes, #560); a drive also
   as `/c`, `/mnt/c`, `/cygdrive/c`, home also written out in its Windows or Git Bash form, `~name` as
   a user's home for the Bash tool only; `.`, `*`, `..` and other relative targets count from the folder
   a `cd` led to, and `.` and `x/..` are taken out of the path by its text). A removal's target, an edit

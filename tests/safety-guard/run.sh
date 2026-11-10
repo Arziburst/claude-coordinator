@@ -80,6 +80,10 @@ mkdir -p "$tmp/bin" "$tmp/other" "$tmp/work-old" "$tmp/work-wt/14-x" "$tmp/work/
 # (work/.claude/worktrees/12-fix/src stays a plain folder of work)
 git -C "$tmp/work" worktree add -q --detach "$tmp/linked" && git init -q "$tmp/work-wt/14-x" &&
   git init -q "$tmp/work/.claude/worktrees/13-clone" || { echo "FAIL (worktrees) could not make linked, work-wt/14-x or 13-clone"; fail=1; }
+git -C "$tmp/work" remote add origin https://github.com/Acme/Work.git   # #560: gh pr create -R naming its own origin
+git -C "$tmp/dev" remote add origin https://gitlab.com/acme/work.git   # #560: an origin not on GitHub
+# #560: 15-reg, a registered worktree in work (12-fix stays a plain folder for #263); linked holds a folder of that name
+git -C "$tmp/work" worktree add -q --detach "$tmp/work/.claude/worktrees/15-reg" && mkdir "$tmp/linked/15-reg" || { echo "FAIL (worktrees) could not make 15-reg"; fail=1; }
 cat > "$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SG_CLAUDE_LOG"
@@ -308,6 +312,14 @@ mkdir -p "$tmp/denydir/.claude/coordinator-deny.txt"
 denied "a folder in place of the deny file" "$tmp/denydir"
 denied "a deny file in UTF-16 with a BOM" "$tmp/utf16" "project rule file cannot be read: .claude/coordinator-deny.txt (not UTF-8: re-save it as UTF-8)"
 denied "a deny file in UTF-16 without a BOM" "$tmp/utf16nul" "(not UTF-8: re-save it as UTF-8)"
+# #456: a folder the guard cannot know (git -C or cd with a shell variable, --git-dir, --work-tree, GIT_DIR=) is read as
+# the main checkout; the refusal names them and says to write the literal path
+d="$(winpath m "$tmp/work")"
+for c in 'git -C \"$d\" clean -ffdx' 'cd \"$d\" && git clean -ffdx' 'git --git-dir .git clean -ffdx' 'git --work-tree . clean -ffdx' 'GIT_DIR=.git git clean -ffdx'; do
+  n=$((n + 1))
+  err="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"%s"}' "$c" "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  case "$rc:$err" in 2:*"literal path"*--git-dir*GIT_DIR*) ;; *) echo "FAIL (#456) expected a block naming the literal path (exit $rc): $c: $err"; fail=1 ;; esac
+done
 # an empty file written by Windows PowerShell 5.1 (its BOM only, no NUL byte), and big-endian UTF-16
 mkdir -p "$tmp/utf16empty/.claude" "$tmp/utf16be/.claude"
 printf '\377\376' > "$tmp/utf16empty/.claude/coordinator-deny.txt"

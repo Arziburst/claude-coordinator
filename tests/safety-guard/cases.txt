@@ -276,8 +276,33 @@ allow	work	git checkout main README.md && git push
 block	work	git checkout main && git -C . push
 # --- a worktree removed by force (the lead's plain git worktree remove of a clean copy stays: roles/lead.md) ---
 block	work	git worktree remove --force .claude/worktrees/12-fix
-block	work	git worktree remove -f ../elsewhere
+allow	work	git worktree remove -f ../elsewhere
 block	work	git -C ../main worktree remove -f -f x
+# #560: a worktree in the project (its folder, a declared root; as written and on disk) or in a variable stays blocked; ../linked passes
+block	work	git worktree remove -f .claude/worktrees/12-fix
+block	work	git worktree remove -ff .claude/worktrees/13-clone
+block	work	git worktree remove --force @PROJECT@/.claude/worktrees/12-fix
+block	work	git worktree remove --force @PROJECT@
+block	work	git worktree remove --force ../work-wt/14-x
+block	work	git worktree remove --force ../elsewhere/../work/.claude/worktrees/12-fix
+block	work	git worktree remove --force @LINK@/.claude/worktrees/12-fix
+block	work	git -C @PROJECT@ worktree remove -f .claude/worktrees/12-fix
+block	work	git -C .claude/worktrees/12-fix worktree remove --force .
+block	work	git -C ../linked worktree remove --force ../work/.claude/worktrees/12-fix
+block	work	git worktree remove --force "$WT"
+block	work/.claude/worktrees/12-fix/src	git worktree remove --force ../../13-clone
+block	ps:work	git worktree remove --force .claude\worktrees\12-fix
+block	ps:work	git worktree remove -f @LINK_W@\.claude\worktrees\12-fix
+allow	work	git worktree remove --force ../linked
+allow	work	git -C @PROJECT@ worktree remove -f ../linked
+allow	work	git -C ../linked worktree remove --force .
+allow	ps:work	git worktree remove --force ../linked
+allow	work	git worktree remove --force ../work-old/x
+# git's suffix rule: a name that a registered worktree's path ends with names that worktree, whatever the folder (15-reg: run.sh)
+block	work	git -C ../linked worktree remove --force 15-reg
+block	work	git -C ../linked worktree remove --force .claude/worktrees/15-reg
+block	work	cd ../linked && git worktree remove --force worktrees/15-reg
+block	ps:work	git -C ../linked worktree remove -f .claude\worktrees\15-reg
 allow	work	git worktree remove .claude/worktrees/12-fix
 allow	work	git worktree list
 allow	work	git worktree prune
@@ -601,6 +626,26 @@ allow	work	gh pr -R other/x list
 allow	work	gh pr create --draft -dr alice
 allow	work	gh pr create --draft --title t --body-file b.md
 allow	work	gh issue create -R other/x --title t
+# #560: -R / --repo after create passes when it names the checkout's own origin (work's: https://github.com/Acme/Work.git)
+block	work	gh pr create --draft -R acme/work-old --title t
+block	work	gh pr create --draft -R acme/wor --title t
+block	dev	gh pr create --draft -R acme/work --title t
+allow	dev	gh pr create --draft -R gitlab.com/acme/work --title t
+block	work	GH_HOST=x gh pr create --draft -R acme/work --title t
+block	work	gh pr create --draft --repo other/work --title t
+block	work	gh pr create --draft -R acme/work -R other/x --title t
+block	work	gh pr create --draft -R gitlab.com/acme/work --title t
+block	work	GH_REPO=acme/work gh pr create --draft --title t
+block	work	gh -R acme/work pr create --draft
+block	work	gh pr create --draft -dR acme/work --title t
+block	main	gh pr create --draft -R acme/work --title t
+block	ps:work	gh pr create --draft -R other/work --title t
+allow	work	gh pr create --draft -R acme/work --title t
+allow	work	gh pr create --draft --repo Acme/Work --title t
+allow	work	gh pr create --draft --repo=ACME/WORK --title t
+allow	work	gh pr create --draft -R github.com/acme/work --title t
+allow	work/.claude/worktrees/12-fix/src	gh pr create --draft -R acme/work --title t
+allow	ps:work	gh pr create --draft --repo acme/work --title t
 # --- the assistant mode (#281, 281.1): the 7th column is COORD_ASSISTANT_DIR (none or -: unset; @A@ in
 # these comments is @PROJECT@/coordinator/assistants/a1). An assistant edits only inside that folder and
 # never writes to git or GitHub. run.sh makes work/coordinator/assistants/a1 (with sub/, and out -> a folder
