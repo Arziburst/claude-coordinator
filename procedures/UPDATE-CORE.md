@@ -52,7 +52,7 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      assistant now). Named per assistant in this report and asked, never assumed: on the owner's yes each file
      is filled anew from the new `settings.example.assistant(.windows).json` (its own connector rules carried
      over), committed, and the assistant is started fresh in step 6 (start-worker starts it in dontAsk), as the
-     `coord-assistant` skill says; on a no it stays paused - it would only be refused;
+     `coord-assistant` skill says; on a no it stays paused - start-worker refuses its old file and the guard any call of it in another mode;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts

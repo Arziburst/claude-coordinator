@@ -308,7 +308,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   journal do not hold.
 - **Wake after a restart** (of the machine, after a core update or a pause): record its full `sessionId`
   at the start (the journal line). Listed and idle: a SendMessage. Listed as stopped (`done`): `claude --bg
-  --resume <full sessionId> "<re-read BRIEF.md and NOTES.md, then continue>"` from the project root
+  --resume <full sessionId> --permission-mode dontAsk --settings <its settings> "<re-read BRIEF.md and NOTES.md, then continue>"` from the project root
   (*Pause and resume*: the same name, settings and history). Not listed, or a history so long that a
   resume would pay more than a fresh start (after a pause over an hour the cache is gone): a fresh start
   with the same brief, which reads BRIEF.md and NOTES.md — a listed old session removed first, on the
@@ -571,18 +571,22 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   allow list: every call no allow rule names is refused at once, with no prompt. Allowed: Read, Grep, Glob;
   `Edit(//<its folder>/**)` (it covers Write, MultiEdit, NotebookEdit; an absolute path is written with a
   leading `//`, on Windows in Claude Code's POSIX form `//c/...` - measured on 2.1.322: `//C:/...` matches
-  nothing); `gh issue` / `pr` / `run` / `repo` reads by fixed prefixes; SendMessage, ListAgents. Claude
+  nothing); `gh issue` / `pr` / `run` / `repo` / `project` (`item-list`, `view`) / `search` reads by fixed prefixes; the bare `git branch` and `git config --get *`; SendMessage, ListAgents. Claude
   Code's own read-only check passes `ls`, `cat` and `git status` / `log` / `diff` / `show` / `rev-parse` in the
   session's folder (the project root) and refuses `git -C <dir> …`, `cd <dir> && git …`, `git --no-pager …`
   and `git log --output=…`; a redirection into the assistant's own folder runs (its Edit rule covers it). No
-  git rule is listed: a wildcard in the middle (`git -C * log`) would also match a write. Denied besides,
+  other git rule: a wildcard in the middle (`git -C * log`) would also match a write (`git branch -*` stays denied). Denied besides,
   since a dontAsk refusal invites another route and a deny always wins over an allow from another settings
   file: every deny line of the worker example, the common git and GitHub write forms, `gh api`, the whole
   PowerShell tool (it is then not offered at all) and the edit of the core copy,
   `coordinator/assistant-settings/`, the project's `.claude/` and `~/.claude/`. **The limit:** an allow
   rule in the user's own or the project's settings reaches an assistant for anything its deny list does not
-  name - keep writes out of those lists, or deny them in the assistant's file; a connector's MCP tools are
-  allowed tool by tool, reads only, from its brief. **The guard's assistant mode is retired:** with env
+  name - keep writes out of those lists, or deny them in the assistant's file; what one brief needs beyond the base
+  list - a connector's read tools, its write tools only where the brief's write rule names them, `WebSearch`,
+  `WebFetch(domain:…)` per named site, `Edit(//…/**)` for a named outside folder - goes into that assistant's
+  allow list entry by entry (the example's `_allow_per_brief` shows the forms), shown to the owner before
+  the start; with no prompt in dontAsk, the draft-first rule rests on the assistant. start-worker refuses an
+  assistant's settings without `"defaultMode": "dontAsk"`. **The guard's assistant mode is retired:** with env
   `COORD_ASSISTANT_DIR` set (the folder; it also tells the after-compact hook which files to name), the guard
   refuses an edit tool, Bash or PowerShell call whose payload's `permission_mode` is not `dontAsk` (absent
   too: measured on 2.1.322, Windows, every PreToolUse payload carries it; cc-formats checks it), naming the

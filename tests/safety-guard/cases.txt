@@ -666,6 +666,8 @@ block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@
 block	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	-
 block	multiedit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	acceptEdits
 block	notebook:work	@PROJECT@/coordinator/assistants/a1/a.ipynb	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	auto
+# SendMessage is outside the rule: an assistant reaches the coordinator in any mode
+allow	send:work	#13 worker: Own	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	default
 # a folder that is set but not absolute is still an assistant's session: the same refusal
 block	work	git log -1	-	@PROJECT@	-	coordinator/assistants/a1	default
 # in dontAsk the guard's general rules: a push to a protected branch is still blocked, the rest passes the hook

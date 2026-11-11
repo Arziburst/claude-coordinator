@@ -25,9 +25,12 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
    no assistant's folder can share its name: the core copy's absolute path for the guard, the folder's
    absolute path for `COORD_ASSISTANT_DIR` and in its `Edit(//…)` rules (Windows: `//c/…`, the drive in
    lower case), and the deny rules of the protected branches as in the worker safety file. Claude Code
-   holds the assistant (#563): `defaultMode` dontAsk and a closed allow list - add nothing that can write or
-   run code; a connector the brief names goes into allow tool by tool, its reads only, and its write tools
-   into the deny list (TOOLKIT *Safety*). Keep the example's after-compact hook (`after-compact
+   holds the assistant (#563): `defaultMode` dontAsk and a closed base allow list. What its brief needs
+   beyond it goes into this assistant's allow list entry by entry, in the forms of the example's
+   `_allow_per_brief`: a connector's read tools, its write tools only where the brief's write rule names
+   them, `WebSearch`, `WebFetch(domain:…)` per named site, `Edit(//…/**)` for an outside folder the brief
+   names - nothing else that writes or runs code. Show the owner that list before the start (TOOLKIT
+   *Safety*). Keep the example's after-compact hook (`after-compact
    assistant`): right after each compaction it tells the assistant to read BRIEF.md, NOTES.md and its role
    in full.
 4. Commit the folder and its settings in the state repository (CORE §12b). The assistant cannot commit:
@@ -37,7 +40,7 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
    `--repo <root> --name "assistant: <name>" --model <model> --brief-file <root>/coordinator/assistants/<name>/BRIEF.md
    --safety <its settings> --report-to "<the coordinator's name>"` - the model the owner named, else the
    rung the job needs (CORE §7), said in the reply; start-worker starts it in permission mode dontAsk
-   (another `--mode` is refused). A refusal (the name, the folder, `COORD_ASSISTANT_DIR`,
+   (another `--mode` is refused, and settings without `"defaultMode": "dontAsk"`). A refusal (the name, the folder, `COORD_ASSISTANT_DIR`,
    a session of that name already listed, a listing that fails, a `--safety` file inside the folder) is
    fixed, never worked around. `--assistant-dir` is the self-test's alone (`selftest assistant`): a real
    assistant keeps its folder in `coordinator/assistants/`.
@@ -48,7 +51,8 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
 tell the assistant by SendMessage: "BRIEF.md changed: re-read it in full". A change of its connectors or of
 the settings file reaches it only through a fresh start (below).
 
-**Wake** (after a restart of the machine, a core update or a pause): listed and idle - a SendMessage; listed
+**Wake** (after a restart of the machine, a core update or a pause): settings from before #563 move first
+(below), then a fresh start; otherwise listed and idle - a SendMessage; listed
 as stopped (`done`) - `claude --bg --resume <full sessionId> --permission-mode dontAsk --settings <its settings> "Re-read BRIEF.md and NOTES.md in full, then continue"`
 from the project root (TOOLKIT *Pause and resume*); not listed (a new machine, a removed session), or a
 history so long that a resume would cost more than starting over (on the owner's yes: the old session
@@ -61,7 +65,7 @@ line. The folder and its settings stay in the state repository unless the owner 
 `git -C coordinator rm -r assistants/<name> assistant-settings/<name>.json` and a commit.
 
 **Settings from before #563** (the guard's assistant mode, retired): such an assistant is refused every
-edit and shell call by the guard (`an assistant runs only in permission mode dontAsk`) until it moves. Ask
+edit and shell call by the guard (`an assistant runs only in permission mode dontAsk`), and start-worker refuses its file (no `"defaultMode": "dontAsk"`), until it moves. Ask
 the owner first, naming each assistant; on the owner's yes: fill its settings anew from the example (step 3, its
 own connector rules carried over), commit them, stop it, and start it fresh as in step 5 (its folder kept).
 Never edit the old file to pass the guard, and never start it in another mode.
