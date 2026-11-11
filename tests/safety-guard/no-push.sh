@@ -2,7 +2,7 @@
 # COORD_NO_PUSH (#367): the cases of tests/safety-guard/no-push.txt against a safety hook. run.sh runs this
 # file too; alone it takes seconds, where the whole set takes minutes.
 #   tests/safety-guard/no-push.sh bash scripts/hooks/safety-guard.sh
-#   tests/safety-guard/no-push.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
+#   tests/safety-guard/no-push.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1   (the shim, #564)
 # Exit 1 if any check fails.
 #
 # The access points the guard implements as written:

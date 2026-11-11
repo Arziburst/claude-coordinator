@@ -52,6 +52,7 @@ jobs:
 # every other step packed longest first into the shortest shard of its OS (the parts of one set on shards of their own) by the largest
 # seconds of runs 42376067684 and 42379649294 (main) and 42382598781 (#554; a Windows step varies by about a fifth from run to run):
 # every shard about 6 to 8 minutes, Windows bound by watch-sessions' one step; a longer one is rebalanced at the next CI audit. A shard past SHARD_LIMIT is a warning below.
+# #564: the PowerShell guard's ten parts gone, the Git Bash guard on five Windows shards; run-stats and check-bounds moved by run 43015604202.
   shard-ubuntu:
     strategy:
       fail-fast: false
@@ -358,10 +359,10 @@ jobs:
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh sh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-6' && steps.need.outputs.runstats == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-        if: matrix.shard == 'windows-7' && steps.need.outputs.runstats == 'true'
+        if: matrix.shard == 'windows-8' && steps.need.outputs.runstats == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/run-stats/run.sh ps powershell
@@ -389,49 +390,47 @@ jobs:
           PATH="$nojq" bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
           # selftest hooks reads the settings files with its awk JSON reader too
           PATH="$nojq" bash tests/selftest/hooks.sh sh
-      # #405: the two long guard sets in five parts each (SG_PART=<k>/5: a case's part by its index in cases.txt; the sections
-      # after the cases in part 1, about 200 s more, so its shard holds less of the rest), the same body in every part, on five
-      # shards of their OS
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 1/5
+      # #564: one guard, safety-guard.sh, on Windows too - in Git Bash, as Claude Code runs it there, and with no jq on PATH, as on
+      # the owner's machines (every folder holding jq leaves PATH). #405: the set in five parts (SG_PART=<k>/5: a case's part by its
+      # index in cases.txt; the sections after the cases in part 1), the same body in every part, on five shards
+      - name: safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 1/5
         if: matrix.shard == 'windows-8' && steps.need.outputs.guard == 'true'
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          SG_PART=1/5 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 2/5
+          while j="$(command -v jq)"; do d="${j%/*}"; p="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$d" | paste -sd: -)"
+            case "$d" in /usr/bin|/bin) echo "jq in $d"; exit 1 ;; esac; [ "$p" != "$PATH" ] || { echo "cannot drop $d"; exit 1; }; PATH="$p"; done
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          SG_PART=1/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 2/5
         if: matrix.shard == 'windows-3' && steps.need.outputs.guard == 'true'
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          SG_PART=2/5 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 3/5
+          while j="$(command -v jq)"; do d="${j%/*}"; p="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$d" | paste -sd: -)"
+            case "$d" in /usr/bin|/bin) echo "jq in $d"; exit 1 ;; esac; [ "$p" != "$PATH" ] || { echo "cannot drop $d"; exit 1; }; PATH="$p"; done
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          SG_PART=2/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 3/5
         if: matrix.shard == 'windows-10' && steps.need.outputs.guard == 'true'
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          SG_PART=3/5 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 4/5
+          while j="$(command -v jq)"; do d="${j%/*}"; p="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$d" | paste -sd: -)"
+            case "$d" in /usr/bin|/bin) echo "jq in $d"; exit 1 ;; esac; [ "$p" != "$PATH" ] || { echo "cannot drop $d"; exit 1; }; PATH="$p"; done
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          SG_PART=3/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 4/5
         if: matrix.shard == 'windows-6' && steps.need.outputs.guard == 'true'
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          SG_PART=4/5 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard blocks and allows the shared cases (Windows PowerShell 5.1) - part 5/5
+          while j="$(command -v jq)"; do d="${j%/*}"; p="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$d" | paste -sd: -)"
+            case "$d" in /usr/bin|/bin) echo "jq in $d"; exit 1 ;; esac; [ "$p" != "$PATH" ] || { echo "cannot drop $d"; exit 1; }; PATH="$p"; done
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          SG_PART=4/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 5/5
         if: matrix.shard == 'windows-5' && steps.need.outputs.guard == 'true'
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1 -SelfTest | tr -d '\r' | grep -qx 'safety-guard: OK'
-          SG_PART=5/5 bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 1/5
-        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.guard == 'true'
-        run: SG_PART=1/5 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 2/5
-        if: matrix.shard == 'ubuntu-5' && steps.need.outputs.guard == 'true'
-        run: SG_PART=2/5 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 3/5
-        if: matrix.shard == 'ubuntu-3' && steps.need.outputs.guard == 'true'
-        run: SG_PART=3/5 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 4/5
-        if: matrix.shard == 'ubuntu-1' && steps.need.outputs.guard == 'true'
-        run: SG_PART=4/5 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
-      - name: safety-guard.ps1 under PowerShell 7 too (Linux) - part 5/5
-        if: matrix.shard == 'ubuntu-7' && steps.need.outputs.guard == 'true'
-        run: SG_PART=5/5 bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+          while j="$(command -v jq)"; do d="${j%/*}"; p="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$d" | paste -sd: -)"
+            case "$d" in /usr/bin|/bin) echo "jq in $d"; exit 1 ;; esac; [ "$p" != "$PATH" ] || { echo "cannot drop $d"; exit 1; }; PATH="$p"; done
+          bash scripts/hooks/safety-guard.sh --self-test | grep -qx 'safety-guard: OK'
+          SG_PART=5/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
+      - name: safety-guard.ps1, the shim an older settings file names, hands each call to safety-guard.sh (Windows PowerShell 5.1)
+        if: matrix.shard == 'windows-10' && steps.need.outputs.guard == 'true'
+        run: bash tests/safety-guard/shim.sh powershell
       - name: start-worker and cleanup-worker against temporary repositories (bash)
         if: (matrix.shard == 'ubuntu-7' || matrix.shard == 'macos-2') && steps.need.outputs.workers == 'true'
         run: bash tests/workers/run.sh sh
@@ -479,7 +478,7 @@ jobs:
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.bounds == 'true'
         run: bash tests/check-bounds/run.sh sh
       - name: check-bounds on a throwaway repository (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.bounds == 'true'
+        if: matrix.shard == 'ubuntu-5' && steps.need.outputs.bounds == 'true'
         run: bash tests/check-bounds/run.sh ps pwsh
       - name: check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
         if: matrix.shard == 'windows-6' && steps.need.outputs.bounds == 'true'

@@ -39,7 +39,8 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     repository stays private (TOOLKIT *CI*). A change of the repository's visibility re-runs this check.
   - **Worker safety settings** (`settings.example.json`, Windows `settings.example.windows.json` → a
     file with absolute paths, written with forward slashes even on Windows — hooks run through Git Bash,
-    which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`): the deny rules for the protected branches (the
+    which drops backslashes — passed to every worker by `start-worker --safety` / `-Safety`; its guard and the
+    guard's self-test are `bash <core>/scripts/hooks/safety-guard.sh` on every OS, Windows too, #564): the deny rules for the protected branches (the
     examples' main / master rules, repeated for every other branch of *Protected branches*; plus, where
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`), that list in its `env`
     `COORD_PROTECTED_BRANCHES` (names separated by spaces; TOOLKIT *Safety*) and the safety hook,

@@ -20,7 +20,7 @@
 # A /c/... form of CLAUDE_PROJECT_DIR, COORD_ASSISTANT_DIR or CLAUDE_CONFIG_DIR reads as cygpath -m reads it (as the .sh).
 # Prints {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"..."}} (plain stdout
 # does not reach the model; at most 9600 bytes of text, then `truncated`), always exits 0. Stdin is read as
-# UTF-8 (as safety-guard.ps1 does) and stdout written as UTF-8 bytes: under any code page, with no console.
+# UTF-8 (as the guard reads its JSON) and stdout written as UTF-8 bytes: under any code page, with no console.
 param([string]$Role)
 if ($Role -notmatch '^(coordinator|worker|assistant)$') { [Console]::Error.WriteLine('usage: after-compact.ps1 coordinator|worker|assistant'); exit 0 }
 $in = ''; try { [Console]::InputEncoding = [Text.Encoding]::UTF8 } catch { }; try { $in = [Console]::In.ReadToEnd() } catch { }

@@ -428,8 +428,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   here-string of the same command (a brief written to a file) is read as a push and may be blocked.
   Write such text with the Write tool. The guard does not strip strings on purpose: that would let
   `pwsh -Command "git push origin main"` through (#264).
-- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`; Windows `safety-guard.ps1`, the same
-  rules, both checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
+- **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`, one guard on every OS: Windows runs it in Git Bash, as Claude Code runs hooks there, #564;
+  `safety-guard.ps1` is only a shim for a settings file written before, *Scripts*; checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
   pushing, force-pushing or deleting the protected branches (main / master and those of `COORD_PROTECTED_BRANCHES`,
   next bullet — in any refspec form:
   quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
@@ -492,7 +492,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   (the first line, 16+ letters, digits and `-`; read from `CLAUDE_PROJECT_DIR`), so a harmless `echo`
   shows the hook loaded, run and its exit 2 honoured, with nothing for the auto mode's classifier to
   refuse (#259). So the settings example runs the
-  hook's self-test at session start (`safety-guard.sh --self-test` / `safety-guard.ps1 -SelfTest`: a
+  hook's self-test at session start (`bash <core>/scripts/hooks/safety-guard.sh --self-test`, Windows too: a
   push to `main` must block and a work-branch push must pass, so a guard that blocks everything — a
   syntax error does — fails too); a failure there means: fix before starting workers.
   That self-test calls the guard directly, never through Claude Code, so it cannot see a shell wrapper
@@ -668,6 +668,14 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
 - **A pair with the same behaviour and output:** `<name>.sh` for macOS / Linux and `<name>.ps1` for
   Windows. Same arguments, same messages, same exit codes; a change to one is made to the other in the
   same pull request.
+- **The hooks exception (#564):** the guard is one script, `hooks/safety-guard.sh`, run by bash on every OS
+  (Windows: Git Bash, as Claude Code runs hooks there); its other half `hooks/safety-guard.ps1` is a thin shim
+  for a settings file written before, never a second guard: it hands each call to the `.sh` unchanged (stdin's
+  bytes in; stdout, stderr and the exit code back), takes Git Bash (Claude Code's `CLAUDE_CODE_GIT_BASH_PATH`,
+  else the one beside git, else bash on PATH; never WSL's `bash.exe`; start-worker.ps1 runs a `.sh` guard's
+  self-test through it, so WSL's bash ahead of Git's on PATH refuses no worker start) and blocks when it or the `.sh` cannot run
+  (`tests/safety-guard/shim.sh`). A guard rule is written once, in the `.sh`; check-core refuses a shim that does
+  not name `safety-guard.sh` or grows past 80 lines.
 - **Run a `.ps1` with its full command** on Windows: `powershell -NoProfile -ExecutionPolicy Bypass
   -File <script> …` (or `pwsh` the same way). A bare `.\script.ps1` or `-File` without `-ExecutionPolicy
   Bypass` is refused under the default execution policy — a lead's cost read failed that way. Briefs
@@ -834,7 +842,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   comment names the runs measured; Windows is bound by watch-sessions' one step); a new step goes into the shortest shard of its OS, by the measured seconds; a shard past the limit
   is rebalanced at the next CI audit. **How a case lands in a shard:** a set too long for one shard runs in parts by
   its data, the same body in every part, the step named `<its name> - part <k>/<n>`: the guard set in five parts on
-  Ubuntu (pwsh) and on Windows (PowerShell 5.1), `SG_PART=<k>/5 bash tests/safety-guard/run.sh ...` - case i of
+  Windows (Git Bash, no `jq`, #564), `SG_PART=<k>/5 bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh` - case i of
   cases.txt is in part (i - 1) mod n + 1, so a case added at the end lands in one part by itself; the sections after the
   cases (sessions, the self-test, no-push.sh) run in part 1, about 110 to 200 s more than another part, so its shard holds
   less of the rest; `SG_LIST=1` prints a part's line numbers with no hook run,
@@ -1331,8 +1339,8 @@ Run in this order; the first work is a **dry run** (CORE §12a).
    Secrets net: enable the code host's push protection / secret scanning (or a `gitleaks protect`
    pre-commit) — a leaked token on the host cannot be rolled back, only rotated.
 4. Make the scripts executable: `chmod +x scripts/*.sh scripts/hooks/*.sh` (macOS / Linux).
-5. Test the hook: `scripts/hooks/safety-guard.sh --self-test` (Windows: `powershell -NoProfile
-   -ExecutionPolicy Bypass -File scripts\hooks\safety-guard.ps1 -SelfTest`) → `safety-guard: OK`.
+5. Test the hook: `bash scripts/hooks/safety-guard.sh --self-test` (Windows too, in Git Bash; an older
+   settings file's `safety-guard.ps1 -SelfTest` runs the same through the shim) → `safety-guard: OK`.
    Windows: start-worker needs the native `claude.exe`; an npm `claude.cmd` cuts a multi-line brief.
 6. Branch protection on the code host is on (or the owner records why not).
 7. Initialize (CORE §2 — the one start sequence): context of running sessions and PRs, open questions,

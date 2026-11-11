@@ -11,7 +11,8 @@
 # blocks every call): .claude/coordinator-deny.txt
 # Self-test: scripts/hooks/safety-guard.sh --self-test   (prints to stdout so the session sees it)
 # Works on macOS (bash 3.2, BSD awk / sed), Linux and Windows (Git Bash); jq is used when present.
-# Same rules as safety-guard.ps1, both checked against tests/safety-guard/cases.txt.
+# The one guard of every OS (#564), checked against tests/safety-guard/cases.txt; safety-guard.ps1 is only
+# a shim that hands an older Windows settings file's calls to it. A rule is written here, never there.
 
 # The protected branches: main, master and the names in COORD_PROTECTED_BRANCHES (separated by spaces
 # and/or commas; TOOLKIT.md *Safety*) - a list adds to main and master, never replaces them. Each is
@@ -177,7 +178,7 @@ case_fold() {   # case_fold <keep or ""> <path>...: one per line, \ as /, lower 
   else printf '%s\n' "$@" | tr '\\A-Z' '/a-z'; fi
 }
 # lower: its input in lower case, line for line: the ASCII letters everywhere; where letter case in
-# paths is ignored (Windows, macOS) also Ü or Д, which NTFS and APFS fold too (as safety-guard.ps1's
+# paths is ignored (Windows, macOS) also Ü or Д, which NTFS and APFS fold too (as .NET's
 # ToLowerInvariant does). Git Bash's GNU tr folds ASCII only in any locale, its gawk folds them under
 # C.UTF-8 (built into Git Bash, whatever locale the hook gets); macOS tr folds them in a UTF-8 locale
 # (if it refuses the input: the ASCII letters only, as before).

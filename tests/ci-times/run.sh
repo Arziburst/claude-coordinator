@@ -31,8 +31,8 @@
 #    case prints the first 20 lines of the hook's stderr, in their order, in the normal and the timed: mode; a passing case none. Same verdicts, one call a case.
 # 4. #405, a split set: SG_PART=<k>/<n> (1 <= k <= n) on tests/safety-guard/run.sh; WK_PART on tests/workers/run.sh and RI_PART on tests/report-issue/run.sh the same, if the numbers pay.
 #    In the workflow a part is a step named `<its name in steps-main.txt> - part <k>/<n>`, in one shard, every part 1..n there, each `bash <that run.sh>` of its body written `<VAR>=<k>/<n> bash <that run.sh>`,
-#    the body otherwise the same in all parts. Split into 2 or more, always: windows' and ubuntu's guard step, with a whole line (after `run: ` or alone) `SG_PART=<k>/<n> bash tests/safety-guard/run.sh`
-#    + ` powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1` / ` pwsh -NoProfile -File scripts/hooks/safety-guard.ps1`. tests/ci-times.tsv may hold the parts' names for a split row.
+#    the body otherwise the same in all parts. Split into 2 or more, always: windows' guard step (#564: the one guard, in Git Bash), with a whole line (after `run: ` or alone) `SG_PART=<k>/<n> bash tests/safety-guard/run.sh`
+#    + ` bash scripts/hooks/safety-guard.sh`. tests/ci-times.tsv may hold the parts' names for a split row.
 #    SG_PART: only that part's cases run, the timed: ones too; a case's part follows from the file alone (not SG_JOBS, no clock); every part holds a case, none over 2 * cases / n + 1. What follows the cases
 #    (sessions, the self-test, no-push.sh) runs in exactly one part, never under SG_CASES. A part passes when its own cases pass. Its summary: `safety-guard cases: <count> (<the file's name or path> part <k>/<n>:
 #    <its cases run> of <the file's cases>, <jobs> in parallel), all pass|FAILURES`. SG_PART malformed (not <digits>/<digits>, k 0, k > n, n 0): exit 2, no hook started, no summary. Empty or unset: the whole set.
@@ -85,7 +85,7 @@ check_wf() {   # check_wf <workflow>: one line per thing wrong, none when right
       for (r in want) if (seen[r] == 0) print "in no shard: " r; for (r in seen) if (seen[r] > 1) print "in " seen[r] " shards: " r
       if (!co || !nd) print "the first two steps are not the checkout and the #need step (id: need)"; if ("check" in j) print "the job named check is still there"
       for (r in pn) for (k = 1; k <= pn[r]; k++) if (pc[r, k] != 1) print "part " k "/" pn[r] " in " pc[r, k] + 0 " shards: " r
-      g["windows bash safety-guard blocks and allows the shared cases (Windows PowerShell 5.1)"] = "bash tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1"; g["ubuntu bash safety-guard.ps1 under PowerShell 7 too (Linux)"] = "bash tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1"
+      g["windows bash safety-guard blocks and allows the shared cases (Git Bash, without jq)"] = "bash tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh"
       g["ubuntu bash start-worker and cleanup-worker against temporary repositories (PowerShell 7, Linux)"] = "bash tests/workers/run.sh ps pwsh"; g["windows bash start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1)"] = "bash tests/workers/run.sh ps powershell"
       if (pn[RW] + 0 < 2) print "a long step is not split: " RW; else { c = split("sh|ps powershell|ps pwsh", f, "|"); for (k = 1; k <= c; k++) if (count(pt[RW] "\n", "\n *(run: )?bash tests/report-issue/run\\.sh " f[k] "\n") != 1) print "report-issue on Windows: not exactly one command for: " f[k] }
       if (cnt["macos"] != 2) print "not 2 macos shards: " cnt["macos"] + 0
@@ -120,10 +120,10 @@ if [ "$kind" = sh ]; then wf="$core/.github/workflows/check-core.yml"; check_wf 
     done
     wm() { tr -d '\r' < "$wf" | awk "$2" > "$tmp/mut.yml"; check_wf "$tmp/mut.yml" | grep -qF "$1" || bad split "a workflow not refused for: $1"; }   # wm <what check_wf must print> <awk>: its own reason (#405)
     wm " in 0 shards: " '/^      - name: .* - part 2\// && !d { d = 1; s = 1; next } s && /^      - / { s = 0 } !s'
-    wm " in 2 shards: " '/^      - name: .*Windows PowerShell 5\.1\) - part 2\// { p = 1 } p && /^        if: / { sub(/matrix\.shard == \047[^\047]*\047/, "(& || matrix.shard == \047windows-1\047)"); p = 0 } 1'
-    wm "is not the same text" '/^      - name: .*Windows PowerShell 5\.1\) - part 2\// { p = 1 } p && /run\.sh powershell/ { sub(/run\.sh powershell/, "run.sh pwsh"); p = 0 } 1'
+    wm " in 2 shards: " '/^      - name: .*Git Bash, without jq\) - part 2\// { p = 1 } p && /^        if: / { sub(/matrix\.shard == \047[^\047]*\047/, "(& || matrix.shard == \047windows-1\047)"); p = 0 } 1'
+    wm "is not the same text" '/^      - name: .*Git Bash, without jq\) - part 2\// { p = 1 } p && /run\.sh bash/ { sub(/run\.sh bash/, "run.sh sh"); p = 0 } 1'
     wm "does not hold <VAR>" '!d && /^ +(run: )?SG_PART=2\// { sub(/SG_PART=2\//, "SG_PART=1/"); d = 1 } 1'
-    wm "not the command of main" '/run\.sh pwsh/ { sub(/SG_PART=/, "SG_CASES=x SG_PART=") } 1'
+    wm "not the command of main" '/safety-guard\/run\.sh bash scripts/ { sub(/SG_PART=/, "SG_CASES=x SG_PART=") } 1'
     wm "not the command of main" '/WK_PART=[0-9\/]* bash tests\/workers\/run\.sh ps pwsh/ { sub(/ps pwsh/, "ps powershell") } 1'
     wm "report-issue on Windows" '/report-issue\/run\.sh ps pwsh/ { sub(/ps pwsh/, "ps powershell") } 1'
     wm "not 2 macos" '/^        shard: \[macos-1/ { $0 = "        shard: [macos-1, macos-2, macos-3]" } 1'

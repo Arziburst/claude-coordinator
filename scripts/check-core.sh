@@ -8,7 +8,8 @@
 #   - FEATURES.md out of sync: a file a block names is missing, a script, procedure, role or one-time
 #     step is in no feature, an ID repeats, a block lacks a field, the table and the blocks disagree
 #     (a field's indented continuation lines are read as part of it);
-#   - a script under scripts/ without its other half: every script is a .sh + .ps1 pair;
+#   - a script under scripts/ without its other half: every script is a .sh + .ps1 pair; the hooks exception
+#     (#564): hooks/safety-guard.ps1 is only a shim (it names safety-guard.sh, at most 80 lines), never a second guard;
 #   - a core skill (skills/*/SKILL.md) outside `coord-`, named unlike its folder, not marked as the
 #     coordinator's, or naming a `coordinator/core/<path>` this core does not have.
 # Run in CI on every pull request and before proposing a core change (CORE §10).
@@ -155,6 +156,11 @@ while IFS= read -r f; do
   case "$f" in *.sh) o="${f%.sh}.ps1" ;; *) o="${f%.ps1}.sh" ;; esac
   [ -e "$o" ] || { echo "$f: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; errors=$((errors + 1)); }
 done < <([ -d scripts ] && find scripts -type f \( -name '*.sh' -o -name '*.ps1' \) | LC_ALL=C sort)
+# the hooks exception (TOOLKIT Scripts, #564): the guard is safety-guard.sh on every OS; its .ps1 half only hands each call to it
+g=scripts/hooks/safety-guard.ps1
+if [ -f "$g" ] && ! { grep -q 'safety-guard\.sh' "$g" && [ "$(wc -l < "$g")" -le 80 ]; }; then
+  echo "$g: not the shim that hands each call to safety-guard.sh (at most 80 lines): a guard rule goes into safety-guard.sh (TOOLKIT Scripts)"; errors=$((errors + 1))
+fi
 
 # the core's skills (CORE §12b, #243): skills/coord-*/SKILL.md, its frontmatter name its folder, its description
 # saying it is the coordinator's, every `coordinator/core/<path>` it names a file of this core
