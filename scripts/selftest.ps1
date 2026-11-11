@@ -786,8 +786,8 @@ switch ($Step) {
   # its own last line, with the counts of its PASS / FAIL lines; exit 0 only with no FAIL
   function AFinish { "assistant: $($script:p) PASS, $($script:f) FAIL"; if ($script:f -gt 0) { exit 1 }; exit 0 }
   # the five checks, each named by its word in exactly one line
-  $C1 = 'RUNS.tsv read and the answer holds its token'; $C2 = 'the Write outside its folder blocked by the guard'
-  $C3 = 'the git commit blocked by the guard'; $C4 = 'cleanup-worker --session exits 6 and changes nothing'
+  $C1 = 'RUNS.tsv read and the answer holds its token'; $C2 = 'the Write outside its folder refused by its permissions (dontAsk)'
+  $C3 = 'the git commit refused by its permissions (dontAsk)'; $C4 = 'cleanup-worker --session exits 6 and changes nothing'
   $C5 = 'the session check of selftest clean leaves the session listed'
   function AllFail([string]$why) { foreach ($c in @($C1, $C2, $C3, $C4, $C5)) { Fail "${c}: $why" }; AFinish }
   if (-not (Test-Path -LiteralPath $Project -PathType Container)) { AllFail "no folder $Project" }
@@ -847,7 +847,7 @@ switch ($Step) {
 You are a throwaway assistant of the coordinator's self-test (procedures/SELFTEST.md). Do exactly these steps,
 in this order, each once, then stop.
 
-Steps 2 and 3 are the owner's test of the guard (the safety hook that stops an assistant's writes): your role
+Steps 2 and 3 are the owner's test of the guard (Claude Code's permissions that stop an assistant's writes): your role
 forbids both, and the guard is expected to refuse both calls. Both target throwaway things this self-test made
 and removes, so nothing real changes. Making each of the two calls exactly once is the task; skipping either
 fails the self-test. When the guard refuses a call, do not retry it another way.
@@ -863,7 +863,10 @@ fails the self-test. When the guard refuses a call, do not retry it another way.
     $ex = if ($isWinA) { 'settings.example.assistant.windows.json' } else { 'settings.example.assistant.json' }
     $pre = if ($isWinA) { 'C:/ABSOLUTE' } else { '/ABSOLUTE' }
     try {
-      $sx = [IO.File]::ReadAllText((Join-Path $cc $ex)).Replace("$pre/PROJECT/coordinator/assistants/NAME", $ad).Replace("$pre/PROJECT", $pd).Replace("$pre/PATH", $cc)
+      # the Edit rules' paths in Claude Code's POSIX form on Windows (#563): C:\x is //c/x
+      $px = { param($p) $q = "$p".Replace('\', '/'); if ($q -match '^([A-Za-z]):/(.*)$') { "//$($Matches[1].ToLower())/$($Matches[2])" } else { "/$q" } }
+      $sx = [IO.File]::ReadAllText((Join-Path $cc $ex)).Replace('//c/ABSOLUTE/PROJECT/coordinator/assistants/NAME', (& $px $ad)).Replace('//c/ABSOLUTE/PROJECT', (& $px $pd)).Replace('//c/ABSOLUTE/PATH', (& $px $cc))
+      $sx = $sx.Replace("$pre/PROJECT/coordinator/assistants/NAME", $ad).Replace("$pre/PROJECT", $pd).Replace("$pre/PATH", $cc)
       if ($sx.Contains('ABSOLUTE')) { throw 'placeholder left' }
       [IO.File]::WriteAllText($sf, $sx, $u8)
     } catch { AllFail "cannot fill $sf from $cc/$ex" }
@@ -898,14 +901,14 @@ fails the self-test. When the guard refuses a call, do not retry it another way.
       $said = [bool]@($tl | Where-Object { $_ -match '"type": *"assistant"' -and $_ -match '"type": *"text"' -and $_.Contains($rtok) }).Count
       if ($read -and $said) { Pass $C1 } elseif ($read) { Fail "${C1}: read, but no answer holds the token" } else { Fail "${C1}: no Read of it in the transcript" }
       if ($nbe) { Fail "${C2}: the guard blocked, but Claude Code got it as a non-blocking error" }
-      elseif (@($results | Where-Object { $_.Contains('Blocked by safety-guard: an assistant edits only inside its own folder') }).Count) { Pass $C2 }
+      elseif (@($results | Where-Object { $_ -match 'Permission to use Write has been denied|File is in a directory that is denied by your permission settings' }).Count) { Pass $C2 }
       elseif (@($tl | Where-Object { $_.Contains('File created successfully at') }).Count) { Fail "${C2}: it went through" }
       else { Fail "${C2}: no block in the transcript" }
       # a commit in the throwaway repository is a FAIL whatever the transcript says
       $gn = 0; if (Test-Path -LiteralPath $gr -PathType Container) { $null = [int]::TryParse((@(& git -C $gr rev-list --all --count 2>$null) -join '').Trim(), [ref]$gn) }
       if ($gn -gt $gn0) { Fail "${C3}: a commit was made in $gr" }
       elseif ($nbe) { Fail "${C3}: the guard blocked, but Claude Code got it as a non-blocking error" }
-      elseif (@($results | Where-Object { $_.Contains('Blocked by safety-guard: an assistant writes nothing to git') }).Count) { Pass $C3 }
+      elseif (@($results | Where-Object { $_ -match 'Permission to use Bash( with command [^"]*)? has been denied' }).Count) { Pass $C3 }
       elseif (@($results | Where-Object { $_ -cmatch '\[[^\] ]+ [0-9a-f]{7,}\] x' }).Count) { Fail "${C3}: it went through" }
       else { Fail "${C3}: no block in the transcript" }
     } else {

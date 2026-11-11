@@ -98,9 +98,14 @@ if ($asst) {
   if ($given.Count) { Fail "refused: -$($given[0]) with an assistant ($Name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" }
 }
 if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - it is for an assistant (-Name `"assistant: <name>`") only" }
+# an assistant runs in permission mode dontAsk (#563): its settings' closed allow list holds it, the guard refuses it in any other
+if ($asst) {
+  if ($PSBoundParameters.ContainsKey('Mode') -and $Mode -cne 'dontAsk') { Fail "refused: -Mode $Mode with an assistant ($Name) - an assistant runs only in permission mode dontAsk (#563)" }
+  $Mode = 'dontAsk'
+}
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
+  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode dontAsk] [-DryRun]') }
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-Go <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
@@ -179,6 +184,10 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:uppe
   # the settings outside the folder: the guard lets the assistant write inside it, so it could edit them there
   if ("$(FCanon (Split-Path -Parent $Safety))/".StartsWith("$(FCanon $adir)/", [StringComparison]::Ordinal)) {
     Fail "refused: the -Safety file $Safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it outside the folder (coordinator/assistant-settings/$aname.json)"
+  }
+  # settings from before #563 (the guard's retired assistant mode) are moved first: their allow list is not closed
+  if ([IO.File]::ReadAllText($Safety) -cnotmatch '"defaultMode"\s*:\s*"dontAsk"') {
+    Fail "refused: $Safety has no `"defaultMode`": `"dontAsk`" - an assistant's settings are filled from settings.example.assistant(.windows).json since #563 (the coord-assistant skill moves older ones, on the owner's yes)"
   }
 }
 $wt = if ($asst) { '' } else { Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch }

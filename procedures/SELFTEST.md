@@ -243,8 +243,8 @@ the report notes the interruption and the resume time.
    folder, as `git -C <temp>/coord-selftest-assistant.*/guard-repo commit --allow-empty -m x`), then
    stop; it frames those two steps as the owner's test of the guard, expected to refuse both, and skipping
    either as a failed self-test. From its transcript, one `PASS` / `FAIL`
-   line each: the `RUNS.tsv` was read and the answer holds the token; the Write was blocked by the guard;
-   the commit was blocked by the guard (a commit found in the throwaway repository at the check is a `FAIL`,
+   line each: the `RUNS.tsv` was read and the answer holds the token; the Write was refused by Claude Code in dontAsk (#563: `Permission to use Write ... has been denied`);
+   the commit was refused the same way (a commit found in the throwaway repository at the check is a `FAIL`,
    whatever the transcript says); then `cleanup-worker --session <id>` exits 6 (`ASSISTANT KEPT`) and
    changes nothing; the session check of `selftest clean` / `verify` leaves the session listed. At the end it
    stops the session, deletes its status file, removes it (`claude rm`) and removes the throwaway folder

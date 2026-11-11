@@ -9,7 +9,7 @@
 set -u
 [ $# -gt 0 ] || { sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
-unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
+unset COORD_ASSISTANT_DIR   # an assistant's session (#281, #563): set per case by the 7th column, or left unset
 unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
 here="$(cd "$(dirname "$0")" && pwd)"
 cases="${SG_CASES:-$here/cases.txt}"; pk=1; pn=1   # the part (#405): k/n of the cases, by their index in the file alone
@@ -158,7 +158,7 @@ bounded() {
 shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
   local ln=0 i=0 hung="" e="$tmp/err.$1"   # e: the hook's stderr of the case at hand (printed when it fails)
   n=0 fail=0
-while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
+while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir pm; do
   ln=$((ln + 1))
   case "$expect" in ''|'#'*) continue ;; esac
   i=$((i + 1))
@@ -169,9 +169,10 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   esac
   [ "$expect" = fold ] && expect=$fold
   [ "$expect" = fold8 ] && expect=$fold8; [ "$expect" = own8 ] && expect=$own8; [ "$expect" = own ] && expect=$own
-  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"; adir="${adir%"$cr"}"   # a checkout with CRLF line ends
+  cmd="${cmd%"$cr"}"; root="${root%"$cr"}"; pdir="${pdir%"$cr"}"; pbr="${pbr%"$cr"}"; adir="${adir%"$cr"}"; pm="${pm%"$cr"}"   # a checkout with CRLF line ends
   [ "$pbr" = - ] && pbr=""   # the 6th column: COORD_PROTECTED_BRANCHES; none or -: unset (main master)
   [ "$adir" = - ] && adir=""   # the 7th column: COORD_ASSISTANT_DIR; none or -: unset
+  [ "$pm" = - ] && pm=""   # the 8th column: the payload's permission_mode (#563); none or -: absent
   n=$((n + 1))
   # the branch column: [ps:|edit:|write:|multiedit:|notebook:|send:]<cwd under the temporary folder>; ps: is a
   # PowerShell tool call, send: a SendMessage call to the command column, the others an edit tool's call with
@@ -197,7 +198,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   # the 5th column: CLAUDE_PROJECT_DIR; the project's folder when there is none, - for unset
   case "$pdir" in '') pdir="$SG_PROJECT" ;; -) pdir="" ;; *) pdir="$(printf '%s' "$pdir" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')" ;; esac
-  json="$(printf '%s' "$cmd" | awk -v cwd="$dir" -v tool="$tool" "$SUBST_AWK"'
+  json="$(printf '%s' "$cmd" | awk -v cwd="$dir" -v tool="$tool" -v pm="$pm" "$SUBST_AWK"'
     { gsub(/\\n/, "\001"); gsub(/\\t/, "\002"); $0 = subst($0)
       gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n"); gsub(/\002/, "\\t")
       if (tool == "Edit") ti = "{\"file_path\":\"" $0 "\",\"old_string\":\"a\",\"new_string\":\"b\"}"
@@ -206,7 +207,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
       else if (tool == "NotebookEdit") ti = "{\"notebook_path\":\"" $0 "\",\"new_source\":\"x\",\"cell_id\":\"c1\"}"
       else if (tool == "SendMessage") ti = "{\"to\":\"" $0 "\",\"message\":\"x\"}"
       else ti = "{\"command\":\"" $0 "\"}"
-      printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"}", tool, ti, cwd }')"
+      printf "{\"tool_name\":\"%s\",\"tool_input\":%s,\"cwd\":\"%s\"%s}", tool, ti, cwd, (pm == "") ? "" : ",\"permission_mode\":\"" pm "\"" }')"
   adir="$(printf '%s' "$adir" | awk "$SUBST_AWK"'
     { printf "%s", subst($0) }')"
   if [ -n "$hung" ]; then
@@ -224,7 +225,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir; do
   [ "$rc" = 124 ] && { got="no answer within ${SG_CASE_LIMIT:-10}s"; hung=1; }
   [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || head -n 20 "$e" | sed "s/^/$ln     /"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}${pm:+, mode $pm}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || head -n 20 "$e" | sed "s/^/$ln     /"; fail=1; }
 done < "$cases"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
 }
@@ -392,21 +393,18 @@ ptok allow "an edit tool's call holding the token" "$tk\n" Write "$tk"
 ptok allow "no CLAUDE_PROJECT_DIR, run from another folder" "$tk\n" Bash "echo $tk" nopd
 rm -f "$tmp/probe/.claude/coordinator-probe.txt"
 
-# The assistant mode (#281): an edit refused outside COORD_ASSISTANT_DIR gives a reason that names the
-# assistant's folder - the value of COORD_ASSISTANT_DIR as set (here C:/... in Git Bash), letter case ignored.
+# An assistant's session not in dontAsk (#563): the refusal names the mode it needs and the settings to move to.
 adm="$(winpath m "$tmp/work/coordinator/assistants/a1")"; wkm="$(winpath m "$tmp/work")"
-amsg() {   # amsg <what> <tool> <file path> [COORD_PROTECTED_ROOT]
+amsg() {   # amsg <what> <tool> <tool_input> [, "permission_mode": ...]
   local rc err js; n=$((n + 1))
-  js="{\"tool_name\":\"$2\",\"tool_input\":{\"file_path\":\"$3\",\"content\":\"x\"},\"cwd\":\"$wkm\"}"
-  err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$wkm" COORD_PROTECTED_ROOT="${4:-}" COORD_ASSISTANT_DIR="$adm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  js="{\"tool_name\":\"$2\",\"tool_input\":$3,\"cwd\":\"$wkm\"${4:-}}"
+  err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$wkm" COORD_ASSISTANT_DIR="$adm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   [ "$rc" = 2 ] || { echo "FAIL (assistant) expected block, got exit $rc: $1"; fail=1; return; }
-  printf '%s' "$err" | grep -qiF -- "$adm" || { echo "FAIL (assistant) the reason does not name the assistant's folder $adm: $1: $err"; fail=1; }
+  case "$err" in *dontAsk*settings.example.assistant*) ;; *) echo "FAIL (assistant) the reason does not name dontAsk and settings.example.assistant: $1: $err"; fail=1 ;; esac
 }
-amsg "a write in the project root" Write "$wkm/src/a.txt" "$wkm"
-amsg "a write in the project root, COORD_PROTECTED_ROOT unset" Write "$wkm/src/a.txt"
-amsg "a write in a worktree of the project" Write "$wkm/.claude/worktrees/12-fix/a.txt" "$wkm"
-amsg "a write outside the project" Write "$(winpath m "$tmp/elsewhere")/a.txt" "$wkm"
-amsg "an edit in another assistant's folder" Edit "$wkm/coordinator/assistants/a2/notes.md" "$wkm"
+amsg "a shell call, no permission_mode" Bash '{"command":"git log -1"}'
+amsg "a shell call in default mode" PowerShell '{"command":"Get-ChildItem"}' ',"permission_mode":"default"'
+amsg "a write in its own folder in auto mode" Write "{\"file_path\":\"$adm/notes.md\",\"content\":\"x\"}" ',"permission_mode":"auto"'
 
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
 for a in "$@"; do guard="$a"; done

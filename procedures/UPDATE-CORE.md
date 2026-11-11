@@ -46,6 +46,13 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      same verdicts, and blocks when it cannot; the update never rewrites it on its own. Moving its two guard
      commands to `bash <core>/scripts/hooks/safety-guard.sh` (`--self-test` on the SessionStart one), as in the
      current settings example, saves a PowerShell start a call: offered once, in the same way, never required;
+   - **Assistants' settings from before #563** (`coordinator/assistant-settings/*.json` without
+     `"defaultMode": "dontAsk"`): the new guard refuses such an assistant every edit and shell call (the
+     guard's assistant mode is retired; Claude Code's permission mode dontAsk with a closed allow list holds an
+     assistant now). Named per assistant in this report and asked, never assumed: on the owner's yes each file
+     is filled anew from the new `settings.example.assistant(.windows).json` (its own connector rules carried
+     over), committed, and the assistant is started fresh in step 6 (start-worker starts it in dontAsk), as the
+     `coord-assistant` skill says; on a no it stays paused - start-worker refuses its old file and the guard any call of it in another mode;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
@@ -106,7 +113,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
    project's change path and stay on disk).
 6. **Resume** every session paused in step 4, after the self-test: an idle one with a one-line
    "continue", a stopped one with `claude --bg --resume <full session id> "continue"` (TOOLKIT *Pause and
-   resume*); each is told to re-read its brief's rules only where the update changes them.
+   resume*); each is told to re-read its brief's rules only where the update changes them. An assistant
+   whose settings moved (step 3) starts fresh instead, by the `coord-assistant` skill.
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
 

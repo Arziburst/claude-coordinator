@@ -57,6 +57,7 @@ agents|agents|"name":|"title":|agents name
 agents|agents|"state":|"phase":|agents state
 agents|agents|"status":|"Status":|agents status
 hook|hook|"command":|"cmd":|payload tool_input.command
+pm|hook|"permission_mode":|"mode":|payload permission_mode
 hook|hook|"transcript_path":|"transcriptPath":|payload transcript_path
 hook|hook|"source":|"src":|payload source
 new|statusline|"used_percentage":17,|"used_pct":17,|payload context_window.used_percentage
@@ -101,6 +102,8 @@ setup; rm "$tmp/cfg/coordinator/statusline.json"; cc
 [ "$rc" = 0 ] && [ "$out" = "$sk"$'\n'"cc-formats: PASS claude 2.1.300, 22 fields" ] || bad "no status line, the rest present: SKIP, PASS"
 [ "$(cat "$tmp/cfg/coordinator/cc-formats/version" 2>/dev/null)" = 2.1.300 ] || bad "no status line: the version recorded at the PASS"
 setup; edit hook '"PreToolUse"' '"SessionStart","source":"startup"'; remove hook; cc --payload "$(w "$STUB_DIR/hook.json")"; named hook 2.1.300
+# a PreToolUse payload without permission_mode (#563: the guard holds an assistant by it)
+setup; remove pm; cc --payload "$(w "$STUB_DIR/hook.json")"; named pm 2.1.300
 # all present: one PASS line, the version recorded, nothing else under the config changed
 setup; b="$(snap)"; cc
 [ "$rc" = 0 ] && [ "$out" = "cc-formats: PASS claude 2.1.300, 37 fields" ] || bad "all fields present: one PASS line"

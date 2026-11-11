@@ -27,6 +27,10 @@ Created: <date> on the owner's word. Changed: <date - what changed, on the owner
 <A connector that is not yet proven: the first run proves read and write on a scratch copy before
 touching the real one.>
 
+<Each row - and web search, each site to fetch, each outside folder to write - becomes its own entry in the
+assistant's allow list (#563, settings `_allow_per_brief`): its read tools, and its write tools only where the
+write rule below names them. What this brief does not name is refused.>
+
 ## Write rule and confirmation
 <Default: a draft first - the exact rows, cells or text and where they go are shown to the owner, and
 written only after the owner's explicit yes typed to the assistant. Write on its own only where the owner

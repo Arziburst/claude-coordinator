@@ -14,9 +14,9 @@
 # An optional 4th column is COORD_PROTECTED_ROOT (an edit tool's case without one: @PROJECT@; -: unset),
 # an optional 5th CLAUDE_PROJECT_DIR (without one: the cwd's first folder; -: unset), an optional 6th
 # COORD_PROTECTED_BRANCHES (without one or -: unset; main and master are protected either way). A cwd of dev is a repo on branch dev.
-# An optional 7th column is COORD_ASSISTANT_DIR (without one or -: unset; the assistant mode, #281). A row
-# with a 7th column writes the 4th to 6th out (- where unset). expect own: allow where letter case in paths
-# is ignored (Windows, macOS), block elsewhere (Linux).
+# An optional 7th column is COORD_ASSISTANT_DIR (without one or -: unset), an optional 8th the payload's permission_mode
+# (without one or -: absent; #563, the assistant's transition rule). A row with a 7th column writes the 4th to 6th
+# out (- where unset). expect own: allow where letter case in paths is ignored (Windows, macOS), block elsewhere (Linux).
 # Separated by single tabs. \n in the command is a newline, \t a tab (so \\n is a backslash and a newline).
 # @HOME@ is the runner's home as the shell has it, @HOME_M@ the same as C:/Users/x, @HOME_W@ as C:\Users\x
 # (all three the plain home where there is no Git Bash), @PROJECT@ the project's folder (C:/... in Git
@@ -646,184 +646,55 @@ allow	work	gh pr create --draft --repo=ACME/WORK --title t
 allow	work	gh pr create --draft -R github.com/acme/work --title t
 allow	work/.claude/worktrees/12-fix/src	gh pr create --draft -R acme/work --title t
 allow	ps:work	gh pr create --draft --repo acme/work --title t
-# --- the assistant mode (#281, 281.1): the 7th column is COORD_ASSISTANT_DIR (none or -: unset; @A@ in
-# these comments is @PROJECT@/coordinator/assistants/a1). An assistant edits only inside that folder and
-# never writes to git or GitHub. run.sh makes work/coordinator/assistants/a1 (with sub/, and out -> a folder
-# outside the project), a2 and a1-old.
-# The edit tools: inside the folder (and the folder itself) they pass, though it lies under COORD_PROTECTED_ROOT
-allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	notebook:work	@PROJECT@/coordinator/assistants/a1/a.ipynb	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# the folder and the path written with backslashes, a trailing separator, the Git Bash form, . and ..
-allow	edit:work	@PROJECT_W@\coordinator\assistants\a1\x.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	edit:work	@PROJECT_U@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# a relative path counts from the call's cwd
-allow	edit:work/coordinator/assistants/a1	notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	edit:work/coordinator/assistants/a1	../a2/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# letter case as the guard compares it (own: allow where case is ignored - Windows, macOS - block on Linux)
-own	edit:work	@PROJECT_UP@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# links as the guard resolves them: through @LINK@ into the folder passes; out of it through a link does not
-allow	write:work	@LINK@/coordinator/assistants/a1/a.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	write:work	@PROJECT@/coordinator/assistants/a1/out/a.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# every other path is refused: in the project root, its worktrees, a sibling, a folder sharing the prefix, outside
-block	edit:work	@PROJECT@/src/app.js	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	edit:work	@PROJECT@/coordinator/assistants/a2/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	edit:work	@PROJECT@/coordinator/assistants/a1-old/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	write:work	@PROJECT_W@\coordinator\assistants\a1\..\..\..\src\x.txt	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	write:work	@HOME@/assistant-test.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# a folder that is set but not absolute refuses every edit (a broken mode never fails open)
-block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	coordinator/assistants/a1
-# without the folder the edit verdicts are the ones above (no change)
+# --- #563: the assistant is held by Claude Code's own permissions (permission mode dontAsk, a closed allow list:
+# settings.example.assistant.json); the guard's assistant mode (#281) is retired. What stays of it is one rule, so
+# no assistant runs unprotected across the update: with COORD_ASSISTANT_DIR set (the 7th column, @A@ below:
+# @PROJECT@/coordinator/assistants/a1), a call whose permission_mode (the 8th column; none or -: absent from the
+# payload) is not dontAsk is refused - every edit tool and every Bash or PowerShell call. In dontAsk the guard
+# judges an assistant's call as any other session's: its general rules still apply.
+block	work	git log -1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	default
+block	work	git log -1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	-
+block	work	ls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	acceptEdits
+block	work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	auto
+block	work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	bypassPermissions
+block	work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	plan
+block	work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	DontAsk
+block	work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontask
+block	ps:work	Get-ChildItem	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	default
+block	ps:work	git log -1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	-
+block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	default
+block	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	-
+block	multiedit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	acceptEdits
+block	notebook:work	@PROJECT@/coordinator/assistants/a1/a.ipynb	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	auto
+# SendMessage is outside the rule: an assistant reaches the coordinator in any mode
+allow	send:work	#13 worker: Own	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	default
+# a folder that is set but not absolute is still an assistant's session: the same refusal
+block	work	git log -1	-	@PROJECT@	-	coordinator/assistants/a1	default
+# in dontAsk the guard's general rules: a push to a protected branch is still blocked, the rest passes the hook
+# (Claude Code's permissions decide it); the owner's working copy gives way to the assistant's folder, as before
+allow	work	git log -1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+allow	ps:work	git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+allow	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+allow	write:work	@PROJECT@/coordinator/assistants/a1/new.md	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+block	work	git push origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+block	work	git push --force origin master	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+block	ps:work	git push origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+block	work	git branch -D main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1	dontAsk
+# without COORD_ASSISTANT_DIR the permission mode changes nothing (a worker, a lead, the coordinator)
+allow	work	git log -1	-	@PROJECT@	-	-	default
+allow	work	git commit -m x	-	@PROJECT@	-	-	acceptEdits
+allow	ps:work	git status	-	@PROJECT@	-	-	auto
+allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@	@PROJECT@	-	-	default
+block	work	git push origin main	-	@PROJECT@	-	-	dontAsk
+# without the assistant's folder (the controls of the retired mode, kept): the base verdicts
 allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@	@PROJECT@	-	-
 block	edit:work	@PROJECT@/coordinator/assistants/a1/notes.md	@PROJECT@	@PROJECT@	-	-
-# The shell: a command that writes to git, in any repository, is refused
-block	work	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git push origin 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git merge 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git pull	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git rebase main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git reset --soft HEAD^	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git checkout 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git tag v1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git branch -d 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git branch new-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git stash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git stash list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git clean -f build	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git worktree add ../x 12-fix	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git cherry-pick abc123	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git add .	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git update-ref refs/heads/x HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# through git -C and other global options, another way to name git, and in a compound command
-block	work	git -C ../other commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git -c user.name=x commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git.exe commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git status && git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	bash -c "git commit -m x"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	other	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	git commit -m x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	& git add .	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# a folder set but not absolute: the shell's git writes are refused too
-block	work	git commit -m x	-	@PROJECT@	-	coordinator/assistants/a1
-# git reads pass
-allow	work	git log --oneline -5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git branch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git fetch	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git remote -v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git config --get user.name	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git -C ../other log -3	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git status && git log -1 && git diff	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	echo "git push origin 12-fix"	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	git log --oneline -5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# GitHub: a write is refused (these groups with any subcommand but list / view / status / diff / checks)
-block	work	gh pr create --draft --title t --body b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr merge 12 --squash	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh issue create --title t --body b	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh workflow run ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh -R o/x pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list && gh pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr merge 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# gh api: a method other than GET, or fields / --input without an explicit GET (gh's implicit POST);
-# graphql with a mutation (letter case ignored)
-block	work	gh api -X POST repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api --method=DELETE repos/o/x/git/refs/heads/x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api repos/o/x/issues --input body.json	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api graphql -f query='mutation { addComment(input: {}) { clientMutationId } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh api -X POST repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# GitHub reads pass
-allow	work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh pr checks 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh issue list --state open	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api repos/o/x/pulls	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api -X GET repos/o/x/issues	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh api -X GET search/issues -f q=x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
-block	work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api graphql -f query='{ repository(owner: "o", name: "x") { id } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
-block	ps:work	gh api graphql -f query='query { viewer { login } }'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# without the folder the shell verdicts are unchanged
 allow	work	git commit -m x	-	@PROJECT@	-	-
 allow	work	gh issue comment 281 --body x	-	@PROJECT@	-	-
 allow	work	gh api repos/o/x/issues -f title=t	-	@PROJECT@	-	-
-# --- round 2 of 281.1 (the review of dc2cb0b): F1 an argument holding :- is not a flag; F2 fetch --refmap
-# with a :<dst> updates local branches; F3 an edit path holding a line break; F4 the gh api endpoint
-# folded (a leading /, the host) before the graphql rule; git reflog reads pass, its writes are refused
-block	work	git config 'a.b:-c.d' v	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git fetch --refmap=refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git fetch --refmap refs/heads/*:refs/heads/* origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git fetch origin main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	edit:work	@PROJECT@/coordinator/assistants/a1/notes\n.md	@PROJECT@	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api /graphql -X GET -f query='mutation{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
-block	work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh api /graphql -f query='query{viewer{login}}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git reflog HEAD	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git reflog expire --all	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# an edit path holding a line break without the assistant mode: the base verdicts (both shells at 3e15b27)
 block	edit:work	@PROJECT@/src/a\nb.js	@PROJECT@	@PROJECT@	-	-
-# --- 281.5: gh is an allowlist in the assistant mode - only reads pass: a group's list / view / status /
-# diff / checks / watch, gh api by its read rules, gh auth status, gh --version, gh help; every other gh
-# command is refused (an alias and its call, an extension, auth, config, an unknown group ...)
-block	work	gh alias set co 'pr checkout'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh co 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh extension install o/gh-x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh auth login --with-token	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh config set git_protocol ssh	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh foo bar	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list && gh alias set x y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh alias set co 'pr checkout'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh auth status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh --version	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh help	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh run list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh auth status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# without the folder the gh verdicts are unchanged
 allow	work	gh alias set co 'pr checkout'	-	@PROJECT@	-	-
-# 281.5, the lead's decisions (the worker's cases): search, status, org list, alias list, config get / list,
-# version and browse (it opens a URL) are reads and pass in the assistant mode; --hostname takes a value;
-# config clear-cache stays refused (alias set / delete / import and config set: the cases above)
-allow	work	gh search issues bug	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh alias list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh config get git_protocol	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
-block	work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh browse 12 --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# #345 (the owner, 2026-11-02): the assistant's gh opens no browser and reaches no graphql - flipped to block
-block	ps:work	gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh config clear-cache	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# --- 281.6: gh's own command line read exactly in the assistant mode - before the group and before the
-# subcommand only -R / --repo / --hostname with their value (also --repo= / --hostname=) may stand, any other
-# flag there refuses (gh lets it take the next word); group and subcommand names match case-sensitively and whole
-block	work	gh pr -b list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh --body search pr merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr -b list merge 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh pr list --limit 5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh -R o/r pr view 1	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh --repo=o/r issue list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh --hostname h pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh PR list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh help:x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh PR list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# without the folder these gh verdicts are unchanged
 allow	work	gh PR list	-	@PROJECT@	-	-
-# --- the fix round on 2e97b63 (#281): a git read that runs a command (--upload-pack, a pager, an ssh command,
-# grep's -O / --open-files-in-pager) or writes a file (--output) is refused in the assistant mode; the plain
-# reads pass; without the folder the verdicts are today's
-block	work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git -c core.pager='x' log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	GIT_PAGER='x' git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git grep -O'x' y	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	git log --output=../outside.txt	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git log	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	git fetch origin	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-# without the folder these git verdicts are unchanged
 allow	work	git fetch --upload-pack='x' origin	-	@PROJECT@	-	-
 # brace expansion and find -exec (#345): a Bash command is judged as the words bash expands it to, and the
 # command find runs; quoted braces, {x}, {}, ${var}, @{u} and braces in a safe command keep their verdicts
@@ -940,63 +811,9 @@ allow	timed:work	echo {1..9007199254740993}
 # git is case-sensitive: git subtree PUSH and git send-pack --STDIN are refused by git, so nothing is pushed; the same verdict in both scripts
 allow	work	git subtree --prefix=a PUSH origin main
 allow	work	git send-pack --STDIN origin 12-fix
-# --- #345: the assistant's gh - no browser routes (GH_BROWSER / BROWSER, gh browse, --web / -w), no graphql; boards through gh project
-block	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	GH_BROWSER=echo git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr view 12 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh issue view 281 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh repo view o/x -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api /graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api https://api.github.com/graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api GraphQL -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh api graphql --paginate -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list && gh browse	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	BROWSER=echo git status	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh browse 12	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr view 12 --web	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh issue view 281 -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh api /graphql -f query='query{x}'	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	$env:GH_BROWSER='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh browse --no-browser	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh run list --workflow ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh pr list --search graphql	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh run list -w ci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh project item-list 1 --owner o	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
+# without the assistant's folder (the controls of #345 and #385, kept): gh's browser and graphql forms keep their base verdicts
 allow	work	gh browse	-	@PROJECT@	-	-
 allow	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	-
 allow	work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	-
-# --- #385: gh -w in a cluster or with = is web too (run list's -w is a workflow, a flag's value is no flag); both guards on env:/, ${env:} and +=
-block	work	gh pr view 12 -cw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr view 12 -w=true	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh repo view o/x -wb main	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh issue list -wa me	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list -wL5	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr view 12 -cw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr view 12 -w=true	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh run list -wci.yml	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	work	gh pr list --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-allow	ps:work	gh pr list --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	${env:GH_BROWSER}='x'; gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	BROWSER+=x gh pr list	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
 allow	work	gh pr view 12 -cw	-	@PROJECT@	-	-
 allow	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	-
-# --- #385: any short cluster holding w is web, repeated letters too; env:/ and env:\ for both names; --search takes a value only after a word, not after a flag
-block	work	gh pr list -dw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr view 12 -ccw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh gist view x -rw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh ruleset list -pw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	gh pr list -dw	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	Set-Item env:/BROWSER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	ps:work	Set-Item env:\GH_BROWSER x	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list --author --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1
-block	work	gh pr list --search --search -w	-	@PROJECT@	-	@PROJECT@/coordinator/assistants/a1

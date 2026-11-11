@@ -111,20 +111,25 @@ nopoff true '"env": { "COORD_NO_PUSH": "true" }'
 nopoff none '"env": { "SOME_OTHER": "1" }'
 nopoff nested '"x": { "env": { "COORD_NO_PUSH": "1" } }'
 
-# the assistant's settings examples (#281, 281.1): each the matching worker example with the assistant's
-# changes - env COORD_ASSISTANT_DIR (/ABSOLUTE/PROJECT/coordinator/assistants/NAME, or C:/...) beside
-# COORD_PROTECTED_ROOT, the worker example's PreToolUse matcher and deny list, the guard's timeout 30 and
-# onFailure block, a _comment; filled (the folder here: this core's tests/), each passes selftest hooks
+# the assistant's settings examples (#281, 281.1, #563): each the matching worker example with the assistant's
+# changes - env COORD_ASSISTANT_DIR (/ABSOLUTE/PROJECT/coordinator/assistants/NAME, or C:/...), defaultMode
+# dontAsk, every deny line of the worker example and more, an allow list with no gh api, git, PowerShell or
+# interpreter rule, the worker example's PreToolUse matcher, the guard's timeout 30 and onFailure block, a
+# _comment; filled (the folder here: this core's tests/), each passes selftest hooks
 ast() {   # ast <assistant example> <worker example> <placeholder of the project>
   n=$((n + 1))
-  local a="$1" w="$2" p="$3" bad="" s
+  local a="$1" w="$2" p="$3" bad="" s l
   if [ ! -f "$a" ]; then echo "FAIL ($a): the assistant's settings example is missing"; fail=1; return; fi
   tr -d '\r' < "$a" > "$tmp/a.json"; tr -d '\r' < "$w" > "$tmp/w.json"
   grep -qF "\"COORD_ASSISTANT_DIR\": \"$p/coordinator/assistants/NAME\"" "$tmp/a.json" || bad="$bad; no env COORD_ASSISTANT_DIR $p/coordinator/assistants/NAME"
-  grep -qF "\"COORD_PROTECTED_ROOT\": \"$p\"" "$tmp/a.json" || bad="$bad; no env COORD_PROTECTED_ROOT $p"
+  grep -q '"defaultMode": "dontAsk"' "$tmp/a.json" || bad="$bad; no defaultMode dontAsk"
   grep -q '^  "_comment": "..*assistant' "$tmp/a.json" || bad="$bad; no _comment about the assistant"
-  for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" > "$tmp/$s.deny"; done
-  cmp -s "$tmp/a.deny" "$tmp/w.deny" || bad="$bad; the deny list differs from $w's"
+  for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" | sed 's/,$//' > "$tmp/$s.deny"; done
+  while IFS= read -r l; do grep -qxF -- "$l" "$tmp/a.deny" || bad="$bad; the deny list lacks $l"; done < "$tmp/w.deny"
+  awk '/"allow": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/a.json" > "$tmp/a.allow"
+  grep -Eq '"(Bash\((gh api|bash|sh|node|python|npx)|PowerShell)' "$tmp/a.allow" && bad="$bad; the allow list holds a gh api, PowerShell or interpreter rule"
+  grep '"Bash(git' "$tmp/a.allow" | grep -vxE ' *"Bash\(git branch\)",?| *"Bash\(git config --get \*\)",?' | grep -q . && bad="$bad; the allow list holds a git rule other than git branch / git config --get"
+  grep -q '^  "_allow_per_brief": \[' "$tmp/a.json" || bad="$bad; no _allow_per_brief block of the per-brief forms"
   for s in a w; do awk '/"PreToolUse"/ { f = 1 } f' "$tmp/$s.json" > "$tmp/$s.pre"; done
   grep '"matcher"' "$tmp/w.pre" > "$tmp/w.m"; grep '"matcher"' "$tmp/a.pre" > "$tmp/a.m"
   cmp -s "$tmp/a.m" "$tmp/w.m" || bad="$bad; the PreToolUse matcher differs from $w's"
