@@ -178,6 +178,24 @@ while IFS= read -r f; do
       sub(/[.\/]+$/, "", p); print NR, p } }')
 done < <([ -d skills ] && find skills -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
 
+# the start-read texts' sizes (#600): the words of CORE.md, its section 1 (from `## 1. ` to the next `## `), its event
+# table (from `| Event |` to `**Where the topics live`) and each roles/*.md - a word is a run of characters between
+# spaces, tabs and line ends (a CR is a line end), the same in check-core.ps1 - against tests/check-core-sizes.txt.
+# Over its record by more than the margin, or no record: a WARN, never an error (TOOLKIT check-core)
+sz=tests/check-core-sizes.txt
+words() { LC_ALL=C awk -v m="${2:-}" '{ gsub(/\r/, " ") }
+  m == "s1" { if (/^## 1\. /) on = 1; else if (/^## /) on = 0 }
+  m == "ev" { if (/^\| Event \|/) on = 1; else if (/^\*\*Where the topics live/) on = 0 }
+  m == "" || on { n += NF } END { print n + 0 }' "$1"; }
+mg="$(tr -d '\r' 2>/dev/null < "$sz" | sed -n 's/^margin \([0-9][0-9]*%\{0,1\}\)$/\1/p' | head -n 1)"; mg="${mg:-0}"
+for t in CORE.md CORE.md#section-1 CORE.md#event-table $([ -d roles ] && find roles -maxdepth 1 -name '*.md' | LC_ALL=C sort); do
+  case "$t" in *#section-1) w=$(words CORE.md s1) ;; *#event-table) w=$(words CORE.md ev) ;; *) w=$(words "$t") ;; esac
+  r="$(tr -d '\r' 2>/dev/null < "$sz" | awk -v t="$t" '$1 == t && NF == 2 && $2 ~ /^[0-9]+$/ { print $2; exit }')"
+  if [ -z "$r" ]; then echo "WARN: $t has $w words and no record in $sz"; continue; fi
+  case "$mg" in *%) x=$((r * ${mg%\%} / 100)) ;; *) x=$mg ;; esac
+  [ "$w" -le $((r + x)) ] || echo "WARN: $t has $w words, over its record $r by more than the margin $mg ($sz)"
+done
+
 nsec=$(echo $sections | wc -w | tr -d ' ')
 echo "check-core: $files files, $nsec sections, $rules hard rules, $nfeat features, $errors errors"
 [ "$errors" -eq 0 ]

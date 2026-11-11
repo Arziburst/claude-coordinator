@@ -878,10 +878,10 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - not covered: that Claude Code really keeps the trust of the kept repo (no prompt on the second run) is seen by the owner on that run, not tested
 
 ### F-SELFTEST-04 check-core
-- defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
+- defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10, tests/check-core-sizes.txt, TOOLKIT.md
 - entry: before every core pull request; CI
-- promises: a broken relative link, a missing section, a §1.N past the last hard rule, a feature map out of sync, or a stale "tested by" token fails; the `.sh` and `.ps1` print the same
-- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half; a stale flag and case form reported, also one only in a sibling of the named file, one below a named folder found, a plain word, a spaced token and a field without a test file not; a quoted case argument with a slash read as no path, a missing unquoted tests/ file reported; a path named twice listed once)
+- promises: a broken relative link, a missing section, a §1.N past the last hard rule, a feature map out of sync, or a stale "tested by" token fails; a start-read text (CORE.md, its §1, its event table, a role) over its recorded words plus the margin, or with no record, is a WARN that never blocks - a PR raises the record with a line in its body naming the owner's word; the `.sh` and `.ps1` print the same
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half; a stale flag and case form reported, also one only in a sibling of the named file, one below a named folder found, a plain word, a spaced token and a field without a test file not; a quoted case argument with a slash read as no path, a missing unquoted tests/ file reported; a path named twice listed once; a text over its record plus a margin in words or percent warned, one at it not, one with no record warned, the exit code unchanged, the same counts in both halves)
 - not covered: "tested by" prose tokens (a plain word, a token with a space, a placeholder or pattern) and fields that name no tests/ path are not checked
 
 ### F-SELFTEST-05 check-scripts

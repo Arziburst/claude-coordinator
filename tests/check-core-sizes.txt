@@ -1,0 +1,16 @@
+# The start-read texts' recorded sizes in words, as check-core counts them (#600; TOOLKIT check-core).
+# check-core prints a WARN for a text over its record by more than the margin, never an error.
+# A PR that grows a text past it raises the record here, with a line in its body naming the owner's word.
+# The margin: a number of words, or a percent of each record with %.
+# Recorded at 25455ca (main, 2026-11-11).
+margin 2%
+CORE.md 13842
+CORE.md#section-1 1404
+CORE.md#event-table 996
+roles/assistant.md 907
+roles/lead.md 2581
+roles/researcher.md 330
+roles/scout.md 199
+roles/tester.md 1020
+roles/verifier.md 1796
+roles/worker.md 1447

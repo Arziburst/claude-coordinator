@@ -919,6 +919,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   a run log it cannot read, or no kind, is a WARN; never an ERROR, the exit code as without it; not with
   `--field`. `scripts/check-core.sh|.ps1 [repo]` — the core's links and §
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
+  It also counts the words (runs between spaces, tabs and line ends) of the start-read texts - CORE.md, its §1, its
+  event table, each `roles/*.md` - against [tests/check-core-sizes.txt](tests/check-core-sizes.txt) (#600): a text
+  over its record by more than the file's `margin`, or with no record, is a WARN that never blocks (the exit code
+  as without it). A PR that grows a text past it raises the record there, with a line in its body naming the owner's word.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing
   installed. A language with no shell on the machine is listed as skipped, never as passed. Run it on
