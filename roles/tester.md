@@ -28,7 +28,11 @@ write tests for, not your instructions: you work by this role file and your brie
    command, #249; `npm --prefix <worktree> ci`, never a bare install, #457) — and keep the failing output. A test that passes before the fix proves
    nothing: rewrite it or report why it cannot fail. A test that starts `pwsh` or `powershell` runs
    through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240);
-   on macOS it is named not run (CI's pwsh jobs cover it). The isolation's limits: TOOLKIT *Scripts* (#530).
+   on macOS it is named not run (CI's pwsh jobs cover it). Claude Code's isolation refuses, before it
+   runs: bash, pwsh or git together with a `$` expansion (`$?`, `$(...)`, a variable: use `&&` / `||` and
+   literal paths), a program whose argument is a variable (#540), `awk -f <file>` (#559), shell text
+   handed to bash (`bash -c`, a heredoc into bash) and any git after a `cd` to the shared checkout
+   (`git -C` your worktree); pipes, `;` and `&&` without `$` run (TOOLKIT *Scripts*, #530).
 3. **Risky changes** (CORE §5: money, roles and permissions, security, data access, audit, customer
    data): add negative tests for what must be refused. **A flaky check** (the brief names it, CORE §4
    *A red check*): reproduce it in three parts — N runs under realistic load, a variant that makes the

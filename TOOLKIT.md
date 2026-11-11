@@ -1,6 +1,8 @@
 # Toolkit — Claude Code mechanics for a coordinator
 
-How a coordinator does its job with Claude Code on **any machine** (Windows, macOS, Linux). This file
+How a coordinator does its job with Claude Code on **any machine** (Windows, macOS, Linux). It is a
+reference: read the section a step names (CORE and the role files name them as TOOLKIT *Section*), never
+the whole file at start or after a compaction. This file
 tracks Claude Code features and changes with them — re-check the linked docs when something behaves
 differently. Items marked *(unconfirmed)* were not stated in the docs; verify them in the dry run (CORE §12a).
 
@@ -689,7 +691,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   bash, pwsh or git together with a `$` expansion (`git status; echo rc=$?`: use `&&` / `||` instead of
   `$?`), shell text handed to bash (`bash -c`, a heredoc into bash: run the command plainly), pwsh from
   the Bash tool (the PowerShell tool on Windows), any git after a `cd` to the shared checkout (`git -C`
-  your worktree). It runs pipes, `;` and `&&` without `$` (`bash scripts/check-core.sh && echo done`,
+  your worktree), a program whose argument is a variable (`python x.py $CLAUDE_JOB_DIR/...`: write the
+  literal path, #540), `awk -f <file>` and any `$(...)` in a command that names bash or git (#559). It
+  runs pipes, `;` and `&&` without `$` (`bash scripts/check-core.sh && echo done`,
   `| tail -1`), a heredoc into cat, `x=1; echo $x` with no bash or git: no "one plain command per call" rule.
 - **Claude Code's formats (#559):** scripts read its internal formats as text (the transcript, `claude agents --json`,
   the hook and status line payloads), which move without notice. `cc-formats.sh` / `.ps1` checks the fields the core
@@ -867,6 +871,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   request's own diff: ci-times on three main runs, the new medians in the file. A worker's `ci_seconds` is the number
   ci-times measures on its PR's run (roles/worker.md).
   After a merge a coordinator on GitHub Actions reads the main run's times the same way (CORE §4, #390).
+  Growth past `CI time budget` (`PROJECT.md`) goes to the owner only by the median of the last three runs of the
+  main line against the baseline, where a project keeps one; with no baseline, the same median of the wall clock
+  against the median three runs earlier; a run that prints only `wall` is read so.
 - **A self-hosted runner and a public repository.** On a public repository a fork's pull request runs
   its code on the runner once a person approves the contributor's first run (GitHub's default
   `first_time_contributors`). Either the repository stays private, or both hold: fork PRs never reach

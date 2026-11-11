@@ -47,7 +47,8 @@ the owner's word it also files the project's anonymous report for the core's own
    - *predictability*: per measure (cost, work, time to ready) how many tasks had a forecast, the share
      inside its range and the median of actual over forecast. The forecast is the estimate the run log
      logged at the start (`estimate` for cost, `estimate_time` for work, CORE §7: a range `lo-hi`, its
-     midpoint for the ratio; one number `n`, in range from `2n/3` to `3n/2` — symmetric on a log scale and close to a range's 25th–75th band), counted as `_logged`; else it
+     midpoint for the ratio; one number `n`, in range from `2n/3` to `3n/2` — symmetric on a log scale and close to a range's 25th–75th band, so a single number never looks more predictable than
+     a range), counted as `_logged`; else it
      is rebuilt as `run-stats` gave it before the task (the 25th–75th percentile, CORE §7a), counted as
      `_rebuilt`; time to ready is always rebuilt. `scripts/run-stats <RUNS.tsv> --ratio --model <m>` is the
      same median of actual over the logged estimate, per model over all its tasks — the factor a thin

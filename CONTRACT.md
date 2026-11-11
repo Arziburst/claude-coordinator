@@ -119,6 +119,10 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   to the owner, not to another restart. A stuck worker (a `blocked` report) is helped or split
   (CORE §4), which spends no escalation. A model that is not stronger than `model` gives no second
   chance: check-contract warns.
+- A contract changed mid-task is written again whole (the earlier text stays in the state repository's
+  history), never extended by notes under it; it passes check-contract again, the session gets the new text
+  with one line naming what changed, and a copy the merge queue reads (`coordinator/briefs/<branch>-contract.md`)
+  is replaced with it.
 
 ## The report
 
