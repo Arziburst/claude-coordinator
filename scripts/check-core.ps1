@@ -89,8 +89,10 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
     if ($script:cur) { for ($k = 0; $k -lt 5; $k++) { if (-not $script:have[$k]) { [void]$script:out.Add("E $($script:curn) $($script:cur) lacks `"- $($fnames[$k]):`"") } } }
     $script:cur = ''; $script:have = @($false, $false, $false, $false, $false)
   }
-  # the file paths a field names: words with a slash, or a file name with a known extension
-  function Paths([string]$s, [int]$ln) {
+  # the file paths a field names: words with a slash, or a file name with a known extension; in a
+  # "tested by" field ($q) a backtick-quoted token is a case argument, no path (#578)
+  function Paths([string]$s, [int]$ln, [bool]$q) {
+    if ($q) { $s = $s -replace '`[^`]*`', ' ' }
     foreach ($p in (($s -replace '[`,;()]', ' ') -split ' ' | Where-Object { $_ })) {
       $p = $p -replace '#.*$', '' -replace '[.:]+$', '' -replace '/$', ''
       if ($p -cnotmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') { continue }
@@ -120,12 +122,12 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
       $kk = -1
       for ($k = 0; $k -lt 5; $k++) { if ($line.StartsWith("- $($fnames[$k]):")) { $have[$k] = $true; $kk = $k } }
       $cont = $kk
-      if ($kk -eq 0 -or $kk -eq 1 -or $kk -eq 3) { Paths ($line -creplace '^- [a-z ]+:', '') $n }
+      if ($kk -eq 0 -or $kk -eq 1 -or $kk -eq 3) { Paths ($line -creplace '^- [a-z ]+:', '') $n ($kk -eq 3) }
       continue
     }
     # an indented line right after a field (or after another such line) continues it
     if ($cur -and $cont -ge 0 -and $line -cmatch '^[ \t]+[^ \t]') {
-      if ($cont -eq 0 -or $cont -eq 1 -or $cont -eq 3) { Paths $line $n }
+      if ($cont -eq 0 -or $cont -eq 1 -or $cont -eq 3) { Paths $line $n ($cont -eq 3) }
       continue
     }
     $cont = -1
