@@ -15,7 +15,7 @@ if ($IfChanged) { if (-not $ver) { exit 0 }; if ("$(Get-Content -LiteralPath "$s
 try { $null = New-Item -ItemType Directory -Force -Path $sd -ErrorAction Stop } catch { "cc-formats: FAIL claude ${v}: cannot create $sd"; exit 1 }
 $bad = @(); $n = 0
 # the listing, 5 s at most, into the scratch folder (claude as PATH gives it: a .ps1 through this PowerShell, a .cmd / .bat through cmd)
-$ao = "$sd/agents.json"; $ae = "$sd/agents.err"
+$ao = "$sd/agents.json"; $ae = "$sd/agents.err"; $p = $null; $job = [IntPtr]::Zero
 try {
   if (-not $cm) { throw 'no claude' }
   $a = 'agents --json --all'
@@ -23,10 +23,11 @@ try {
   elseif ($cm.Path -match '\.(cmd|bat)$') { $exe = $env:ComSpec; $a = '/d /s /c ""' + $cm.Path + '" ' + $a + '"' } else { $exe = $cm.Path }
   # its whole tree in a job object: a child whose Windows parent is gone (an msys exec leaves one) is out of reach of
   # taskkill /T and Kill($true), which follow parent ids, and holds the caller's inherited pipe open until it ends (#559)
-  $win = $env:OS -eq 'Windows_NT'; $job = [IntPtr]::Zero; if ($win) { try { Add-Type -Namespace CcFormats -Name Job -ErrorAction Stop -MemberDefinition @'
+  $win = $env:OS -eq 'Windows_NT'; if ($win) { try { Add-Type -Namespace CcFormats -Name Job -ErrorAction Stop -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern IntPtr CreateJobObject(IntPtr a, IntPtr n);
 [DllImport("kernel32.dll")] public static extern bool AssignProcessToJobObject(IntPtr j, IntPtr p);
 [DllImport("kernel32.dll")] public static extern bool TerminateJobObject(IntPtr j, uint c);
+[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
 '@; $job = [CcFormats.Job]::CreateJobObject([IntPtr]::Zero, [IntPtr]::Zero) } catch { } }
   $p = Start-Process -FilePath $exe -ArgumentList $a -NoNewWindow -PassThru -RedirectStandardOutput $ao -RedirectStandardError $ae -ErrorAction Stop
   $null = $p.Handle   # keeps its exit code readable after it ends
@@ -39,7 +40,11 @@ try {
   else { $p.WaitForExit(); $j = [IO.File]::ReadAllText($ao) -replace '\s', ''
     if ($p.ExitCode -ne 0 -or $j -notmatch '^\[.*\]$') { $bad += 'agents: claude agents --json --all printed no JSON list' } }
 } catch { $bad += 'agents: claude agents --json --all printed no JSON list' }
-Remove-Item -LiteralPath $ae -Force -ErrorAction SilentlyContinue
+finally {   # the handles closed; agents.err removed once the process ended (a killed one: 2 s at most for it)
+  if ($p) { try { $null = $p.WaitForExit(2000) } catch { }; $p.Dispose() }
+  if ($job -ne [IntPtr]::Zero) { $null = [CcFormats.Job]::CloseHandle($job) }
+  Remove-Item -LiteralPath $ae -Force -ErrorAction SilentlyContinue
+}
 # Tail2000 <file>: its last 2000 lines, the file read once whole (Get-Content -Tail took 18 s on 51 MB on Windows), shared
 # with its writer; @() when unreadable
 function Tail2000([string]$p) {
@@ -50,7 +55,7 @@ function Tail2000([string]$p) {
 $tl = $null   # the transcript's last 2000 lines, read once: the search below and Text
 if (-not $Transcript) {
   foreach ($f in @(Get-ChildItem -Path "$cfg/projects/*/*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 50)) {
-    $l = @(Tail2000 $f.FullName); if (@($l -match '"role": *"assistant"').Count) { $Transcript = $f.FullName; $tl = $l; break } }
+    $l = @(Tail2000 $f.FullName); if (@($l -cmatch '"role": *"assistant"').Count) { $Transcript = $f.FullName; $tl = $l; break } }
   if (-not $Transcript) { $bad += "transcript: none under $cfg/projects holds an assistant message" }
 }
 $fms = 'agents', 'transcript', 'payload'   # no status line here (its file absent, no -Payload): the payload part one SKIP line
@@ -67,11 +72,11 @@ function Text([string]$fm) {
 $rows = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'cc-formats.sh') | Where-Object { $_ -like '#F *' })
 foreach ($fm in $fms) {
   if (@($bad | Where-Object { $_ -like "${fm}: *" }).Count) { continue }
-  $t = @(Text $fm)   # one line stays a list: -match on a list filters it
+  $t = @(Text $fm)   # one line stays a list: -cmatch on a list filters it; case-exact as grep
   foreach ($r in $rows) {
     $x = $r -split ' +'; if ($x[1] -ne $fm) { continue }
-    if ($x[3] -ne '-' -and -not @($t -match $x[3]).Count) { continue }
-    $n++; if (-not @($t -match $x[4]).Count) { $bad += "$fm $($x[2]) (read by $($x[5].Replace(',', ', ')))" }
+    if ($x[3] -ne '-' -and -not @($t -cmatch $x[3]).Count) { continue }
+    $n++; if (-not @($t -cmatch $x[4]).Count) { $bad += "$fm $($x[2]) (read by $($x[5].Replace(',', ', ')))" }
   }
 }
 if ($bad.Count) { "cc-formats: FAIL claude ${v}: $($bad -join '; ')"; exit 1 }

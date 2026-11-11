@@ -5,6 +5,8 @@
     "cwd": "/work/project",
     "name": "fixture",
     "state": "working",
+    "pid": 4242,
+    "status": "busy",
     "startedAt": 1767225600000
   }
 ]
