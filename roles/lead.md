@@ -70,7 +70,11 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    alive: one `watch-sessions` on your list as a `run_in_background` command (`bash
    <core>/scripts/watch-sessions.sh --list <your worktree>.lead/watch.txt`; Windows: `powershell
    -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file>`), started again after it ends (a
-   finding handled, or an `ERROR` once), never a second one beside it. You yourself are on the
+   finding handled, or an `ERROR` once), never a second one beside it. **Ending it:** once your last
+   worker is handled, its line removed leaves the list empty and the watcher ends by itself (`EMPTY`
+   after its `--empty-minutes`, #471; not started again), or you stop your own background task (by the
+   task id its start gave you). Never `pkill`, `killall`, `taskkill /IM` or any stop by a process name
+   or pattern: it reaches other sessions' watchers, the coordinator's included (#591). You yourself are on the
    coordinator's list with a long limit of your own (`<id> @120`): your quiet wait for your workers is
    no finding before it. Its findings, as the coordinator's (CORE §4
    *Control*): `STOPPED` → the worker's branch and log, resumed or restarted as the work needs;

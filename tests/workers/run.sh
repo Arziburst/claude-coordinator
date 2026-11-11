@@ -1792,6 +1792,12 @@ check 0 "#504: a brief that holds the contract is not doubled" -- start "${F[@]}
 once504 "$STUB_LOG.arg" "holds it, the launch text"; once504 "$(kept504 "#504 worker: C")" "holds it, the kept brief"
 rm -f "$STUB_LOG.arg"; check 0 "#504: a tester's --contract is only checked" -- start "${F[@]}" --name "#504 tester: D" --branch 504-d --brief-file "$tmp/brief.md" --contract "$c504"
 grep -q '^acceptance:' "$STUB_LOG.arg" && { echo "FAIL (tester): the contract in its launch text"; fail=1; }
+# #594: a tester's, a verifier's or a researcher's --contract its brief does not hold ends the kept brief, whole; its launch text is unchanged
+printf 'Verify task 594: the contract is at %s.\n' "$c504" > "$tmp/brief-c594.md"
+for r in tester verifier researcher; do rm -f "$STUB_LOG.arg"; check 0 "#594: a $r's --contract, a brief naming only its path" -- start "${F[@]}" --name "#594 $r: V" --branch "594-$r" --brief-file "$tmp/brief-c594.md" --contract "$c504"
+  grep -q '^acceptance:' "$STUB_LOG.arg" && { echo "FAIL (#594 $r): the contract in its launch text"; fail=1; }
+  tr -d '\r' < "$STUB_LOG.arg" | grep -qF 'Verify task 594: the contract is at' || { echo "FAIL (#594 $r): the brief is gone from the launch text"; fail=1; }
+  ends504 "$c504" "$(kept504 "#594 $r: V")" "#594 $r, the kept brief"; once504 "$(kept504 "#594 $r: V")" "#594 $r, the kept brief"; done
 for r in worker; do check 0 "#504: a $r with neither a contract in the brief nor --contract" -- start "${F[@]}" --name "#504 $r: E" --branch 504-e --brief-file "$tmp/brief.md" --dry-run
   [ "$(printf '%s\n' "$LAST" | grep -c 'starts without a contract')" = 1 ] || { echo "FAIL ($r, no contract): not one line naming it"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }; done
 # --- a task's earlier finished sessions (#521): found by the worktree their kept brief names (else by `#<id> `), removed with a run row ---

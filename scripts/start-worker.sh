@@ -42,7 +42,8 @@
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # A worker's or a lead's --contract reaches the session (#504): a brief with no `acceptance:` line gets the contract, whole, at the end of
-# the launch text and of the kept brief, one WARN line saying so (--dry-run too). Any other --contract is only checked (#331): one whose text is
+# the launch text and of the kept brief, one WARN line saying so (--dry-run too). Any other role's --contract is only checked (#331), and with no
+# `acceptance:` line in the brief it ends the kept brief alone, whole, its launch text unchanged (#594); one whose text is
 # not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
 # WARN line, and the start goes on (--dry-run too); the brief file is never changed.
 # The tests_first gate (CORE §4 step 3, #276): a worker whose contract says `tests_first: yes` starts only
@@ -291,7 +292,8 @@ if [ -n "$cfile" ]; then
   [ "$crc" = 0 ] || { echo "refused: the contract fails check-contract - fix the ERROR lines above before it goes out (CORE §4)" >&2; exit 1; }
 fi
 # a worker's or a lead's --contract its brief does not hold goes into the launch text, whole (#504)
-cadd=""; if [ -n "$contract" ]; then case "$crole" in worker|lead|"") grep -Eq '^[[:space:]]*acceptance:' "$brief" || cadd=1 ;; esac; fi
+# any other role's goes into the kept brief only, whole: its launch text is unchanged (#594)
+cadd="" kadd=""; if [ -n "$contract" ] && ! grep -Eq '^[[:space:]]*acceptance:' "$brief"; then case "$crole" in worker|lead|"") cadd=1 ;; *) kadd=1 ;; esac; fi
 if [ -n "$cadd" ]; then
   echo "WARN: --contract: the brief holds no acceptance: block - the contract goes into the launch text, whole (#504)"
 elif [ -n "$contract" ]; then
@@ -465,11 +467,12 @@ full="$first
 ${roletext:+$roletext
 
 }$(cat "$brief")"
-if [ -n "$cadd" ]; then full="$full
+ctext=""; [ -z "$cadd$kadd" ] || ctext="
 
 The contract of this task, whole (start-worker added it: your brief does not hold it):
 
-$(LC_ALL=C sed "1s/^$(printf '\357\273\277')//" "$contract" | tr -d '\r')"; fi
+$(LC_ALL=C sed "1s/^$(printf '\357\273\277')//" "$contract" | tr -d '\r')"
+[ -z "$cadd" ] || full="$full$ctext"
 # characters, not bytes, in any locale: UTF-8 continuation bytes are not counted
 nchars="$(printf '%s' "$full" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')"
 bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
@@ -651,7 +654,7 @@ else
   sid="$(claude agents --json 2>/dev/null | tr -d '\r\n' | tr '}' '\n' | grep -F "\"$jname\"" |
     sed -n 's/.*"sessionId": *"\([0-9a-fA-F-]*\)".*/\1/p' | tail -n 1)" || sid=""   # a session never listed: grep finds nothing, the start goes on (#370)
   if [ -n "$sid" ]; then
-    mkdir -p "$bd" && printf '%s\n' "$full" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
+    mkdir -p "$bd" && printf '%s\n' "$full${kadd:+$ctext}" > "$bd/$sid.md" && echo "brief kept for after a compaction: $bd/$sid.md"
     find "$bd" -name '*.md' -type f -mtime +14 -exec rm -f {} + 2>/dev/null || true
   else echo "no sessionId in the listing: the brief is not kept for after a compaction" >&2; fi
   if [ -n "$asst" ]; then
