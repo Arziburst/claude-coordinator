@@ -52,6 +52,7 @@ jobs:
 # every other step packed longest first into the shortest shard of its OS (the parts of one set on shards of their own) by the largest
 # seconds of runs 42376067684 and 42379649294 (main) and 42382598781 (#554; a Windows step varies by about a fifth from run to run):
 # every shard about 6 to 8 minutes, Windows bound by watch-sessions' one step; a longer one is rebalanced at the next CI audit. A shard past SHARD_LIMIT is a warning below.
+# #564: the PowerShell guard's ten parts gone, the Git Bash guard on five Windows shards; run-stats and check-bounds moved by run 43015604202.
   shard-ubuntu:
     strategy:
       fail-fast: false
@@ -358,10 +359,10 @@ jobs:
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh sh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-6' && steps.need.outputs.runstats == 'true'
+        if: matrix.shard == 'ubuntu-4' && steps.need.outputs.runstats == 'true'
         run: bash tests/run-stats/run.sh ps pwsh
       - name: run-stats computes the forecast numbers of the fixture run logs (PowerShell)
-        if: matrix.shard == 'windows-7' && steps.need.outputs.runstats == 'true'
+        if: matrix.shard == 'windows-8' && steps.need.outputs.runstats == 'true'
         run: |
           # through -File, as the docs give it, in both PowerShells
           bash tests/run-stats/run.sh ps powershell
@@ -477,7 +478,7 @@ jobs:
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.bounds == 'true'
         run: bash tests/check-bounds/run.sh sh
       - name: check-bounds on a throwaway repository (PowerShell 7, Linux)
-        if: matrix.shard == 'ubuntu-2' && steps.need.outputs.bounds == 'true'
+        if: matrix.shard == 'ubuntu-5' && steps.need.outputs.bounds == 'true'
         run: bash tests/check-bounds/run.sh ps pwsh
       - name: check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
         if: matrix.shard == 'windows-6' && steps.need.outputs.bounds == 'true'

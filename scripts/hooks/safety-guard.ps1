@@ -15,14 +15,14 @@ function Stop-Guard([string]$why) {
   exit 2
 }
 
-# Git Bash: Claude Code's own setting, else bash on PATH, else the one beside git - never WSL's launcher
-# (System32\bash.exe) or its store alias, which cannot read a Windows path
+# Git Bash: Claude Code's own setting, else the one beside git, else bash on PATH (as start-worker finds it, #465) -
+# never WSL's launcher (System32\bash.exe) or its store alias, which cannot read a Windows path
 $cand = @()
 if ($env:CLAUDE_CODE_GIT_BASH_PATH) { $cand += $env:CLAUDE_CODE_GIT_BASH_PATH }
-$cand += @(Get-Command bash -CommandType Application -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
 foreach ($g in @(Get-Command git -CommandType Application -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })) {
   $cand += (Join-Path (Split-Path $g) '..\bin\bash.exe'), (Join-Path (Split-Path $g) '..\..\bin\bash.exe')
 }
+$cand += @(Get-Command bash -CommandType Application -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
 $bash = $null
 foreach ($b in $cand) {
   if (-not $b -or -not (Test-Path -LiteralPath $b -PathType Leaf)) { continue }

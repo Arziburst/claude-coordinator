@@ -2,6 +2,7 @@
 # reads with --baseline (a step over max(floor(b * 1.3), b + 60) is a warning in the check-<os> jobs). Raised only by a
 # pull request's own diff: scripts/ci-times on three main runs, then the new medians here. Runs: 42597596546, 42466515969,
 # 42449662277, all on 13b7f4e, after the tests audit (#426: the trimmed sets and the rebalanced shards, PRs 545-554).
+# #564: the Windows Git Bash guard parts and the shim's step from the PR's one run 43015604202 (bfab37d), not yet a median of three.
 ubuntu	6	Set up job
 ubuntu	9	Run actions/checkout@v4
 ubuntu	1	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -121,12 +122,12 @@ windows	23	The checks on a project's cloned core copy (Windows PowerShell 5.1)
 windows	20	Post Run actions/checkout@v4
 windows	0	Complete job
 windows	21	check-scripts.sh and .ps1 print the same on Windows (Git Bash, Windows PowerShell 5.1)
-windows	81	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 5/5
+windows	72	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 5/5
 windows	68	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
 windows	277	merge-queue against a stub gh (Git Bash, Windows PowerShell 5.1)
 windows	12	selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
 windows	59	session-insights reads the fixture transcripts (PowerShell)
-windows	163	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 1/5
+windows	110	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 1/5
 windows	126	reset-coordinator on scratch projects (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
 windows	13	check-scripts on temporary folders (Git Bash, Windows PowerShell 5.1 and pwsh)
 windows	145	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 1/3
@@ -136,7 +137,7 @@ windows	413	watch-sessions against a stub claude (Git Bash, Windows PowerShell 5
 windows	60	cc-formats against a stub claude (bash, PowerShell 7; Windows also 5.1)
 windows	34	selftest - the scripted steps (Windows PowerShell 5.1, and pwsh)
 windows	73	session-tokens counts the fixture exactly (PowerShell)
-windows	79	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 4/5
+windows	63	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 4/5
 windows	27	check-bounds on a throwaway repository (Git Bash, Windows PowerShell 5.1)
 windows	252	runs against fixture transcripts and a stub claude (Git Bash, Windows PowerShell 5.1 and PowerShell 7)
 windows	54	selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
@@ -145,10 +146,10 @@ windows	238	start-worker and cleanup-worker against temporary repositories (Wind
 windows	14	ci-times on its fixtures (Windows PowerShell 5.1 and pwsh)
 windows	120	check-contract on the fixture contracts (Windows PowerShell 5.1 and pwsh, console code page 866)
 windows	206	retro measures the fixture weeks (PowerShell)
-windows	67	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 3/5
-windows	25	safety-guard.ps1, the shim an older settings file names, hands each call to safety-guard.sh (Windows PowerShell 5.1)
+windows	90	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 3/5
+windows	16	safety-guard.ps1, the shim an older settings file names, hands each call to safety-guard.sh (Windows PowerShell 5.1)
 windows	49	check-core on a core copy with a wrapped feature field and a script without its pair (Windows)
-windows	79	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 2/5
+windows	56	safety-guard blocks and allows the shared cases (Git Bash, without jq) - part 2/5
 windows	292	report-issue against a stub gh (Git Bash, Windows PowerShell 5.1 and PowerShell 7) - part 1/2
 windows	96	selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
 windows	114	run-stats computes the forecast numbers of the fixture run logs (PowerShell)

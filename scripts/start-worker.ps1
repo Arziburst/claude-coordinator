@@ -226,6 +226,9 @@ if (-not $hook -or -not (Test-Path -LiteralPath $hook -PathType Leaf)) { Fail "s
 if (-not $cfg.worktree.bgIsolation) { Fail 'safety settings: add "worktree": {"bgIsolation": "none"}' }
 if ($hook.EndsWith('.ps1')) {
   $selftest = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest
+} elseif ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath ($hook -replace '\.sh$', '.ps1') -PathType Leaf)) {
+  # #564: the .sh guard through the shim beside it, which takes Git Bash: a plain `bash` may be WSL's launcher (#465)
+  $selftest = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File ($hook -replace '\.sh$', '.ps1') -SelfTest
 } else { $selftest = bash $hook --self-test }
 if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test printed nothing ($hook)" }
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }

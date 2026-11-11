@@ -672,7 +672,8 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   (Windows: Git Bash, as Claude Code runs hooks there); its other half `hooks/safety-guard.ps1` is a thin shim
   for a settings file written before, never a second guard: it hands each call to the `.sh` unchanged (stdin's
   bytes in; stdout, stderr and the exit code back), takes Git Bash (Claude Code's `CLAUDE_CODE_GIT_BASH_PATH`,
-  else bash on PATH, else the one beside git; never WSL's `bash.exe`) and blocks when it or the `.sh` cannot run
+  else the one beside git, else bash on PATH; never WSL's `bash.exe`; start-worker.ps1 runs a `.sh` guard's
+  self-test through it, so WSL's bash ahead of Git's on PATH refuses no worker start) and blocks when it or the `.sh` cannot run
   (`tests/safety-guard/shim.sh`). A guard rule is written once, in the `.sh`; check-core refuses a shim that does
   not name `safety-guard.sh` or grows past 80 lines.
 - **Run a `.ps1` with its full command** on Windows: `powershell -NoProfile -ExecutionPolicy Bypass
