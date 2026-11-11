@@ -1051,7 +1051,7 @@ asnothing "an assistant, dry run"
 [ "$(ls "$tmp/cfg/coordinator/briefs" 2>/dev/null)" = "$bdb" ] || { echo "FAIL (an assistant, dry run): a brief file was written"; fail=1; }
 : > "$STUB_LOG"; rm -f "$STUB_LOG.arg"
 check 0 "start: an assistant" -- start "${A[@]}" --name "assistant: timesheet" --brief-file "$tsd/BRIEF.md" --safety "$tsf"
-grep -qF -- "--bg --name assistant: timesheet --model sonnet --permission-mode auto --settings " "$STUB_LOG" &&
+grep -qF -- "--bg --name assistant: timesheet --model sonnet --permission-mode dontAsk --settings " "$STUB_LOG" &&
   grep -F -- "--bg --name assistant: timesheet" "$STUB_LOG" | grep -qF "as-timesheet.json" ||
   { echo "FAIL (an assistant): claude got unexpected arguments:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 grep -qx "cwd $(cd "$ar" && pwd -P)" "$STUB_LOG" || { echo "FAIL (an assistant): not launched from the repository root:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
