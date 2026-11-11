@@ -53,6 +53,7 @@
 #F payload rate_limits.seven_day.resets_at "rate_limits":[{] "seven_day":[{][^}]*"resets_at":[0-9] statusline
 #F payload source "hook_event_name":"SessionStart" "source":" statusline
 #F payload tool_input.command "tool_name":"Bash" "tool_input":[{][^}]*"command":" hooks/safety-guard
+#F payload permission_mode "hook_event_name":"PreToolUse" "permission_mode":" hooks/safety-guard
 set -u
 usage() { sed -n '2,13s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 ifc=""; tr=""; pl=""
