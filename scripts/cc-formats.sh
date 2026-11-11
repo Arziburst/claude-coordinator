@@ -20,6 +20,7 @@
 #F agents name [{] "name":" runs,watch-sessions,cleanup-worker,start-worker,hooks/safety-guard,hooks/before-compact,statusline
 #F agents state [{] "state":" runs,watch-sessions,start-worker,hooks/before-compact,statusline
 #F agents startedAt [{] "startedAt": statusline
+#F agents status "pid":[0-9] "status":" statusline
 #F transcript type - "type":"assistant" session-tokens,session-insights
 #F transcript timestamp - "timestamp":" session-tokens,session-insights
 #F transcript cwd - "cwd":" session-insights
@@ -42,6 +43,15 @@
 #F payload model.display_name "workspace":[{] "display_name":" statusline
 #F payload cost.total_cost_usd "workspace":[{] "total_cost_usd":[0-9] statusline,session-tokens
 #F payload context_window.context_window_size "workspace":[{] "context_window_size":[0-9] statusline
+#F payload effort.level "effort":[{] "effort":[{][^}]*"level":" statusline
+#F payload context_window.used_percentage "current_usage":[{] "context_window":[{]([^{}]|[{][^{}]*[}])*"used_percentage":[0-9] statusline
+#F payload context_window.current_usage.input_tokens "context_window":[{]([^{}]|[{][^{}]*[}])*"used_percentage":[0-9] "current_usage":[{][^}]*"input_tokens":[0-9] statusline
+#F payload context_window.current_usage.cache_read_input_tokens "context_window":[{]([^{}]|[{][^{}]*[}])*"used_percentage":[0-9] "current_usage":[{][^}]*"cache_read_input_tokens":[0-9] statusline
+#F payload context_window.current_usage.cache_creation_input_tokens "context_window":[{]([^{}]|[{][^{}]*[}])*"used_percentage":[0-9] "current_usage":[{][^}]*"cache_creation_input_tokens":[0-9] statusline
+#F payload rate_limits.five_hour.used_percentage "five_hour":[{] "five_hour":[{][^}]*"used_percentage":[0-9] statusline
+#F payload rate_limits.seven_day.used_percentage "rate_limits":[{] "seven_day":[{][^}]*"used_percentage":[0-9] statusline
+#F payload rate_limits.seven_day.resets_at "rate_limits":[{] "seven_day":[{][^}]*"resets_at":[0-9] statusline
+#F payload source "hook_event_name":"SessionStart" "source":" statusline
 #F payload tool_input.command "tool_name":"Bash" "tool_input":[{][^}]*"command":" hooks/safety-guard
 set -u
 usage() { sed -n '2,13s/^# \{0,1\}//p' "$0" >&2; exit 2; }
