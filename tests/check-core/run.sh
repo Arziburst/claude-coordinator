@@ -45,33 +45,37 @@ run; summary "the copy as it is" 0 0
 nowarn() { n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q "^WARN: $2" || { echo "FAIL ($1): a WARN:"; printf '%s\n' "$LAST" | grep '^WARN' | sed 's/^/    /'; fail=1; }; }
 nowarn "the records at their texts' sizes" ""
 
-# the start-read texts' sizes (#600): a margin of 10 words; over it a WARN naming the text, the record and the count,
-# at it nothing; a text with no record a WARN; spaces, tabs and CRs separate words; the exit code unchanged
+# the start-read texts' sizes (#600), in one run: a margin of 10 % of each record; over it a WARN naming the text,
+# the record and the count, at it nothing; a text with no record a WARN; spaces, tabs and CRs separate words; the exit
+# code unchanged; the unchanged roles and a role with record 1 print their real counts, the same in both halves
 sz="$d/tests/check-core-sizes.txt"; rec() { awk -v t="$1" '$1 == t { print $2 }' "$sz"; }
+ws() { awk -v n="$1" 'BEGIN { for (i = 0; i < n; i++) printf "w "; print "" }'; }
 c0="$(rec CORE.md)" s0="$(rec CORE.md#section-1)" e0="$(rec CORE.md#event-table)" k0="$(rec roles/scout.md)" w0="$(rec roles/worker.md)"
-awk '/^margin / { print "margin 10"; next } $1 != "roles/tester.md" { print }' "$sz" > "$tmp/f" && cat "$tmp/f" > "$sz"
-printf 'one two three four five six seven\teight\tnine  ten\r\neleven\r\n' >> "$d/roles/scout.md"
-printf 'one two three four five six seven eight nine ten\n' >> "$d/roles/worker.md"
-awk '{ print } /^## 1\. / { print "a b c d e f g h i j k" } /^\| Event \|/ { print "| x | y |" }' "$d/CORE.md" > "$tmp/f" && cat "$tmp/f" > "$d/CORE.md"
+S=$((s0 / 10 + 1)) X=$((c0 / 10 + 1))
+awk '/^margin / { print "margin 10%"; next } $1 == "roles/tester.md" { print $1, 1; next }
+  $1 !~ /^roles\/(assistant|lead|researcher|verifier)\.md$/ { print }' "$sz" > "$tmp/f" && cat "$tmp/f" > "$sz"
+{ printf 'one two three four five six seven\teight\tnine  ten\r\neleven\r\n'; ws $((k0 / 10 + 1 - 11)); } >> "$d/roles/scout.md"
+ws $((w0 / 10)) >> "$d/roles/worker.md"
+awk -v s="$(ws $S)" '{ print } /^## 1\. / { print s } /^\| Event \|/ { print "| x | y |" }' "$d/CORE.md" > "$tmp/f" && cat "$tmp/f" > "$d/CORE.md"
+ws $X >> "$d/CORE.md"
 run
-o="by more than the margin 10 (tests/check-core-sizes.txt)"
-expect "a role over its record by more than the margin" 0 "WARN: roles/scout.md has $((k0 + 11)) words, over its record $k0 $o"
+o="by more than the margin 10% (tests/check-core-sizes.txt)"
+expect "a role over its record by more than the margin" 0 "WARN: roles/scout.md has $((k0 + k0 / 10 + 1)) words, over its record $k0 $o"
 nowarn "a role at its record plus the margin" "roles/worker.md"
-expect "CORE section 1 over its record" 0 "WARN: CORE.md#section-1 has $((s0 + 11)) words, over its record $s0 $o"
+expect "CORE section 1 over its record" 0 "WARN: CORE.md#section-1 has $((s0 + S)) words, over its record $s0 $o"
 nowarn "the event table within the margin" "CORE.md#event-table"
-expect "CORE.md over its record" 0 "WARN: CORE.md has $((c0 + 11 + 5)) words, over its record $c0 $o"
-tc="$(sed -n 's/^WARN: roles\/tester.md has \([0-9][0-9]*\) words and no record in tests\/check-core-sizes.txt$/\1/p' "$tmp/out")"
-expect "a role with no record" 0 "WARN: roles/tester.md has ${tc:-?} words and no record in tests/check-core-sizes.txt"
+expect "CORE.md over its record" 0 "WARN: CORE.md has $((c0 + S + 5 + X)) words, over its record $c0 $o"
+rc="$(sed -n 's/^WARN: roles\/researcher.md has \([0-9][0-9]*\) words and no record in tests\/check-core-sizes.txt$/\1/p' "$tmp/out")"
+expect "a role with no record" 0 "WARN: roles/researcher.md has ${rc:-?} words and no record in tests/check-core-sizes.txt"
+tc="$(sed -n 's/^WARN: roles\/tester.md has \([0-9][0-9]*\) words, over.*/\1/p' "$tmp/out")"
+expect "a role over a percent margin" 0 "WARN: roles/tester.md has ${tc:-?} words, over its record 1 $o"
 summary "WARNs leave the exit code and the errors alone" 0 0
-# a percent margin: 10 % of each record lets all of these through; the same counts in both halves on the real texts
-sed 's/^margin 10$/margin 10%/' "$sz" > "$tmp/f" && cat "$tmp/f" > "$sz"; printf 'roles/tester.md 1\n' >> "$sz"
-run; nowarn "a percent margin" "[^r]"; nowarn "a percent margin, roles" "roles/[^t]"
-expect "a role over a percent margin" 0 "WARN: roles/tester.md has ${tc:-?} words, over its record 1 by more than the margin 10% (tests/check-core-sizes.txt)"
-(cd "$core" && git ls-files CORE.md roles | while IFS= read -r f; do cp "$f" "$d/$f"; done); printf 'margin 0\n' > "$sz"; run; mine="$(grep '^WARN' "$tmp/out")"
-n=$((n + 1)); [ "$(printf '%s\n' "$mine" | grep -c 'no record')" = $((3 + $(ls "$d"/roles/*.md | wc -l))) ] || { echo "FAIL (a WARN per watched text):"; echo "$mine"; fail=1; }
+mine="$(grep '^WARN' "$tmp/out" | tr -d '\r')"
+n=$((n + 1)); [ "$(printf '%s\n' "$mine" | grep -c .)" = $((3 + $(ls "$d"/roles/*.md | wc -l) - 2)) ] ||
+  { echo "FAIL (a WARN per watched text over its record or with no record):"; echo "$mine"; fail=1; }
 if [ "$kind" = ps ]; then n=$((n + 1)); bash "$d/scripts/check-core.sh" "$d" 2>&1 | tr -d '\r' | grep '^WARN' > "$tmp/sh"
   printf '%s\n' "$mine" | diff "$tmp/sh" - > /dev/null || { echo "FAIL (the same counts in both halves):"; printf '%s\n' "$mine" | diff "$tmp/sh" -; fail=1; }; fi
-cp "$core/tests/check-core-sizes.txt" "$sz"
+(cd "$core" && git ls-files CORE.md roles | while IFS= read -r f; do cp "$f" "$d/$f"; done); cp "$core/tests/check-core-sizes.txt" "$sz"
 
 # a continuation line under the first "- defined:" field
 awk '{ print } !done && /^- defined: / { print "  scripts/nowhere.sh, procedures/NOWHERE.md"; done = 1 }' "$d/FEATURES.md" > "$tmp/f" &&
