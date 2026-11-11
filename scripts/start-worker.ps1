@@ -39,7 +39,8 @@
 # the start (exit 1) with check-contract's lines; WARNs are printed and the start goes on; a worker or a
 # lead with no contract found: one notice line, the start goes on. Other roles' briefs are not searched.
 # A worker's or a lead's -Contract reaches the session (#504): a brief with no `acceptance:` line gets the contract, whole, at the end of
-# the launch text and of the kept brief, one WARN line saying so (-DryRun too). Any other -Contract is only checked (#331): one whose text is
+# the launch text and of the kept brief, one WARN line saying so (-DryRun too). Any other role's -Contract is only checked (#331), and with no
+# `acceptance:` line in the brief it ends the kept brief alone, whole, its launch text unchanged (#594); one whose text is
 # not in the brief (its first `id:` line and its first `title:` line both absent from the brief) prints one
 # WARN line, and the start goes on (-DryRun too); the brief file is never changed.
 # The tests_first gate (CORE section 4 step 3, #276): a worker whose contract says `tests_first: yes` starts
@@ -301,6 +302,7 @@ if ($cFile) {
   if ($tfRc -ne 0) { $tfOut | ForEach-Object { [Console]::Error.WriteLine($_) }; Fail "refused: check-contract could not read tests_first (CORE ${sect}4 step 3)" }
   $tfYes = ((@($tfOut) -join "`n").Trim().ToLower()) -cmatch '^yes([ \t,:;(]|$)'
 }
+$kAdd = $false
 if ($Contract) {
   # the contract's first `id:` and `title:` lines against the brief's lines, all trimmed
   $trimmed = { param($f) [IO.File]::ReadAllText($f).TrimStart([char]0xFEFF).Replace("`r", '') -split "`n" | ForEach-Object { $_.Trim(" `t") } }
@@ -308,6 +310,8 @@ if ($Contract) {
   $have = @(& $trimmed $BriefFile)
   # a worker's or a lead's -Contract its brief does not hold goes into the launch text, whole (#504)
   $cAdd = $crole -in @('worker', 'lead', '') -and -not @($have -cmatch '^acceptance:').Count
+  # any other role's goes into the kept brief only, whole: its launch text is unchanged (#594)
+  $kAdd = -not $cAdd -and -not @($have -cmatch '^acceptance:').Count
   if ($cAdd) { 'WARN: -Contract: the brief holds no acceptance: block - the contract goes into the launch text, whole (#504)' }
   elseif ($want.Count -and -not @($want.Values | Where-Object { $have -ccontains $_ }).Count) {
     'WARN: -Contract only checks the contract - the session will not see it: its text (its id: and title: lines) is not in the brief; put the contract into the brief file (#331)'
@@ -476,7 +480,8 @@ if ($Name -cmatch '^(#\S* )?([a-z]+):' -and $Matches[2] -ceq 'lead') {
   $first = $first.Substring(0, $i) + "`nYour notes folder: $notes - the one exception to `"never change files outside it`": beside your worktree, never inside it; your sub-contracts, briefs, run notes, the tester's test copies and evidence go there (roles/lead.md)." + $first.Substring($i)
 }
 $full = $first + "`n`n" + $(if ($roleText) { $roleText + "`n`n" } else { '' }) + $briefText
-if ($cAdd) { $full = $full.TrimEnd("`n") + "`n`nThe contract of this task, whole (start-worker added it: your brief does not hold it):`n`n" + [IO.File]::ReadAllText($Contract).Replace("`r", '').TrimEnd("`n") }
+$cText = if ($cAdd -or $kAdd) { "`n`nThe contract of this task, whole (start-worker added it: your brief does not hold it):`n`n" + [IO.File]::ReadAllText($Contract).Replace("`r", '').TrimEnd("`n") } else { '' }
+if ($cAdd) { $full = $full.TrimEnd("`n") + $cText }
 # characters as the .sh counts them: a surrogate pair is one
 $nChars = $full.Length - [regex]::Matches($full, '[\uDC00-\uDFFF]').Count
 $cfgDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
@@ -701,7 +706,7 @@ foreach ($o in ("$(& $claude.Source agents --json 2>$null)" -replace "[`r`n]", '
 }
 if ($sid) {
   $null = New-Item -ItemType Directory -Force -Path $bd
-  [IO.File]::WriteAllText((Join-Path $bd "$sid.md"), $full + "`n", (New-Object System.Text.UTF8Encoding $false))
+  [IO.File]::WriteAllText((Join-Path $bd "$sid.md"), $(if ($kAdd) { $full.TrimEnd("`n") + $cText } else { $full }) + "`n", (New-Object System.Text.UTF8Encoding $false))
   "brief kept for after a compaction: $((Join-Path $bd "$sid.md").Replace('\', '/'))"
   Get-ChildItem -LiteralPath $bd -Filter '*.md' -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-14) } | Remove-Item -Force -ErrorAction SilentlyContinue
 } else { [Console]::Error.WriteLine('no sessionId in the listing: the brief is not kept for after a compaction') }

@@ -221,6 +221,15 @@ bar_cases() {
   is "$L400 $dot #9 T 1\$ $dot #426 V 4/10\$ $dot #558 W 1\$ $dot #426-1 W 5\$ $dot #BIN-161 T 2\$ $dot #NBP-658 W 3/10\$ $dot #RECEPTION-FLOW L 3/10\$ $dot #ab_c R 1\$"
   bar "#NBP-658 W 3/10\$" 17 "green:5 grey:12"; bar "#426 V 4/10\$" 17 "green:7 grey:10"; bar "#426-1 W 5\$" 17 "blue:17"; bar "#RECEPTION-FLOW L 3/10\$" 23 "green:7 grey:16"
   tasks_reset; rm -f "$root/coordinator/briefs/426-contract.md"
+  # #594: only the verifier lives; its kept brief as start-worker writes it: the brief, then the contract, whole
+  begin "a task whose only live session is its verifier (#594): the budget from its kept brief, every row of its contract's id plus the live session, never another contract's"
+  s=2026-11-04T14:00; agent v1 "#NBP-658 verifier: x" working busy "$wt" 1 "$s:03Z"
+  row NBP-658-glass-tab-bar tester 2.0000 "$s:00Z"; row NBP-658-favs-data tester 1.0000 "$s:01Z"; row NBP-658-favs-data worker 2.0000 "$s:02Z"
+  printf 'Verify task NBP-658: the contract is at coordinator/briefs/NBP-658-favs-data-contract.md.\n' > "$cfg/coordinator/briefs/v1.md"
+  fx "$C" "$M" high $W400; draw; bar "#NBP-658 V 1\$" 17 "blue:17"   # the kept brief before #594: no budget, no rows
+  printf '\nThe contract of this task, whole (start-worker added it: your brief does not hold it):\n\n---\nid: NBP-658-favs-data\ntitle: "favs"\nbudget:\n  model: opus\n  cost: 10\n---\n' >> "$cfg/coordinator/briefs/v1.md"
+  draw; is "$L400 $dot #NBP-658 V 4/10\$"; bar "#NBP-658 V 4/10\$" 17 "green:7 grey:10"
+  tasks_reset; rm -f "$cfg/coordinator/briefs/v1.md"
   begin "not a coordinator: no task bars and no core mark"; upstream "$A"; fx "#11 worker: x" "$M" high $W400; draw; is "$L400"; [ ! -s "$tmp/stub/git.log" ] || no "wants no git call in a session that is not a coordinator"
 
   tasks_reset; printf 6 > "$tmp/stub/git.sleep"; printf '%s' "$A" > "$tmp/stub/git.head"; rm -f "$up" "$tmp/stub/git.log"; fx "$C" "$M" high $W400
@@ -294,7 +303,7 @@ bar_cases() {
     lines "${t#*|}"; bar "$M high . 400k/1M 40%" 34 "green:14 grey:20"; bar "5h limit 14%" 14 "green:2 grey:12"; bar "week 30% . reset 50%" 26 "green:8 blue:5 grey:13"
   done
 }
-bars=41; skipped=""   # #553: the cases bar_cases begins - checked when they run, named in the summary when they do not
+bars=42; skipped=""   # #553: the cases bar_cases begins - checked when they run, named in the summary when they do not
 if [ "$line" = yes ]; then n0=$n; bar_cases; [ $((n - n0)) = "$bars" ] || bad "bar_cases began $((n - n0)) cases, bars=$bars says otherwise: set bars"
 else echo "skip the bars: no jq here (the .sh needs it for its line)"; skipped=", $bars bar cases skipped (no jq)"; fi
 
