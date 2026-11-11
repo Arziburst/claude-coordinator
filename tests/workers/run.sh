@@ -405,6 +405,7 @@ sed "${gl}s#safety-guard\.#other-tool.#" "$tmp/safety.json" > "$tmp/safety-none.
 check 1 "start: no PreToolUse guard" -- start --repo "$tmp/repo" --name "#32 worker: a" --branch 32-a "${W[@]}" --safety "$tmp/safety-none.json"
 expect_in "no PreToolUse safety-guard hook"
 mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/safety-guard.sh"   # every settings example names the .sh (#564)
+cp "$core/scripts/hooks/safety-guard.ps1" "$tmp/silent/"   # the real shim beside it: on Windows start-worker.ps1 runs the self-test through it
 sed "s#$core/scripts/hooks/#$mtmp/silent/#g" "$tmp/safety.json" > "$tmp/safety-silent.json"
 check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/repo" --name "#33 worker: a" --branch 33-a "${W[@]}" --safety "$tmp/safety-silent.json"
 expect_in "printed nothing"
