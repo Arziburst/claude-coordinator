@@ -669,7 +669,7 @@ if ($PSVersionTable.PSVersion -lt [version]'7.3') {
 }
 Push-Location -LiteralPath $from
 $eff = @(if ($Effort) { '--effort', $Effort })
-# the launch output is read for its id (`backgrounded · <id> · <name>`), then printed as it came
+# the launch output is read for its id (`backgrounded <dot> <id> <dot> <name>`, <dot> a middle dot), then printed as it came
 $bgOut = @()
 try { $bgOut = @(& $claude.Source --bg --name $argName --model $Model @eff --permission-mode $Mode --settings $Safety $brief | ForEach-Object { "$_" }) }
 finally { Pop-Location }

@@ -116,6 +116,36 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
   for id in $(sed -n 's/^| `\([a-z0-9-]*\)` |.*/\1/p' ONE-TIME.md); do
     grep -qF "\`$id\`" FEATURES.md || { echo "FEATURES.md: one-time step $id is in no feature"; errors=$((errors + 1)); }
   done
+  # a "tested by" field's backtick token that looks like a flag, a path or a case form (not a plain word,
+  # no space, no <placeholder>, * or …) occurs in a tests/ file the field names or in a file below a tests/
+  # folder it names, or a tests trim left it stale (#562, #548). A field naming no tests/ path is not
+  # checked. Records: "<line> TAB <token> TAB <path> ...", each path once.
+  tb="$(awk '
+    function flush(   i) { if (nd) for (i = 1; i <= nt; i++) print tl[i] "\t" tt[i] "\t" dirs; nt = 0; nd = 0; dirs = ""; on = 0; split("", seen) }
+    function scan(s,   t, n, i, p, w) {
+      while (match(s, /`[^`]*`/)) { t = substr(s, RSTART + 1, RLENGTH - 2); s = substr(s, 1, RSTART - 1) " " substr(s, RSTART + RLENGTH)
+        if (t !~ /^[A-Za-z0-9_]+$/ && t !~ /[ \t<>*]|…/) { nt++; tl[nt] = NR; tt[nt] = t } }
+      gsub(/[,;()]/, " ", s); n = split(s, w, " ")
+      for (i = 1; i <= n; i++) { p = w[i]; sub(/[.:]+$/, "", p)
+        if (p !~ /^tests\/[A-Za-z0-9_.\/-]+$/) continue
+        sub(/\/$/, "", p); if (!(p in seen)) { seen[p] = 1; nd++; dirs = dirs (nd > 1 ? "\t" : "") p } }
+    }
+    { sub(/\r$/, "") }
+    /^[ \t]*```/ { code = !code; flush(); next }
+    code { next }
+    /^- tested by:/ { flush(); on = 1; scan($0); next }
+    on && /^[ \t]+[^ \t]/ { scan($0); next }
+    { flush() }
+    END { flush() }' FEATURES.md)"
+  while IFS= read -r m; do [ -n "$m" ] && { echo "$m"; errors=$((errors + 1)); }; done < <([ -n "$tb" ] &&
+    printf '%s\n' "$tb" | cut -f3- | tr '\t' '\n' | LC_ALL=C sort -u | while IFS= read -r d; do if [ -d "$d" ]; then find "$d" -type f; elif [ -f "$d" ]; then echo "$d"; fi; done |
+    LC_ALL=C sort -u | TB="$tb" awk 'BEGIN { n = split(ENVIRON["TB"], r, "\n")
+        for (i = 1; i <= n; i++) { nd[i] = split(r[i], x, "\t") - 2; ln[i] = x[1]; tk[i] = x[2]; for (j = 1; j <= nd[i]; j++) d[i, j] = x[j + 2] } }
+      { m = 0; for (i = 1; i <= n; i++) if (!ok[i]) for (j = 1; j <= nd[i]; j++) if ($0 == d[i, j] || index($0, d[i, j] "/") == 1) { s[++m] = i; break }
+        while (m && (getline l < $0) > 0) for (k = 1; k <= m; k++) if (!ok[s[k]] && index(l, tk[s[k]])) ok[s[k]] = 1
+        close($0) }
+      END { for (i = 1; i <= n; i++) if (!ok[i]) { w = d[i, 1]; for (j = 2; j <= nd[i]; j++) w = w ", " d[i, j]
+        print "FEATURES.md:" ln[i] ": tested by `" tk[i] "` occurs in none of " w } }')
 fi
 
 # every script under scripts/ is a .sh + .ps1 pair (TOOLKIT Scripts): a half without the other is an error

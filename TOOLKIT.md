@@ -704,7 +704,9 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   a variable followed by `:` is read as a drive-qualified name and the file stops parsing:
   write `"${Issue}: $title"`, not `"$Issue: $title"` (it broke a project's start-worker wrapper).
   No Python, Node, jq or other runtimes; only `git`, `gh` and `claude`, which the coordinator needs anyway.
-  In a `.sh`, a `case` inside `$( )` writes `(` before its patterns (`(sh) ... ;;`): on bash 3.2 the first `)` of a pattern closes the substitution (#489).
+  In a `.sh`, no `case` and no here-document inside `$( )`: bash 3.2 can close the substitution at a pattern's `)`
+  (#489) or misread a here-document's lone quote (CF-6); use a function, `if`, or `read` from a file. check-scripts
+  refuses both, and a `.ps1` holding a non-ASCII byte without a UTF-8 BOM (CF-7, CF-8; #562).
 - **Top comment** = usage, what it checks or changes, and its exit codes; a usage error prints it.
 - **CI runs both** (`.sh` with bash, `.ps1` with `pwsh`) where the script can run in CI.
 - **Arguments:** the same names, in each shell's own form: `--brief-file` in `.sh`, `-BriefFile` in `.ps1`.

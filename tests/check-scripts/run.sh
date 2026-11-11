@@ -4,6 +4,8 @@
 #     every file counted, the error under the folder's own name;
 #   - a .ps1 using `??` without `#Requires -Version 7`: an error wherever Windows PowerShell 5.1 exists
 #     (its rules, also when check-scripts.ps1 runs under pwsh), a pass where only pwsh does;
+#   - bash 3.2's misreads: a here-document or a case inside $(...) fails, outside passes; a .ps1 with a
+#     non-ASCII byte fails without a UTF-8 BOM, passes with one (#562);
 #   - (the .ps1 only) a `bash` first on PATH that checks nothing, as the WSL launcher: on Windows the bash
 #     next to git is used instead; where none is found, the .sh files are listed as skipped and counted
 #     as an error, never dropped from the count.
@@ -11,7 +13,7 @@
 #   tests/check-scripts/run.sh ps pwsh             # check-scripts.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'rm -r "$tmp"' EXIT
@@ -56,6 +58,29 @@ case "$ps1by" in
   ps) expect "?? where only pwsh exists" 0 "check-scripts: 1 files, 0 errors" ;;
   *) expect "?? with no PowerShell" 0 "check-scripts: 0 files, 0 errors" ;;
 esac
+
+# bash 3.2's misreads (#562): a here-document or a case inside $(...), on its line or under a $( left open;
+# outside $(...), in $((...)), a here-string and a comment pass
+mkdir -p "$tmp/forms"
+printf 'x="$(cat <<\047EOF\047\nhi\nEOF\n)"\n' > "$tmp/forms/hd.sh"
+# (the case written `(a)`, which bash 3.2 parses: the rule alone refuses it, on every bash)
+printf 'y=$(case a in (a) echo 1 ;; esac)\n' > "$tmp/forms/case.sh"
+printf 'z="$(\n  case a in (a) echo 1 ;; esac\n)"\n' > "$tmp/forms/open.sh"
+printf 'cat <<EOF\n$(echo hi)\nEOF\ncase a in a) echo "$((1 << 2))" ;; esac\nw="$(cat <<<"x")"\n# $(cat <<EOF)\n' > "$tmp/forms/ok.sh"
+run forms
+expect "a here-document inside \$(...)" 1 "forms/hd.sh:1: a here-document inside \$(...) - bash 3.2 misreads it (TOOLKIT Scripts)"
+expect "a case inside \$(...)" 1 "forms/case.sh:1: a case inside \$(...) - bash 3.2 misreads it (TOOLKIT Scripts)"
+expect "a case under a \$( left open" 1 "forms/open.sh:2: a case inside \$(...) - bash 3.2 misreads it (TOOLKIT Scripts)"
+expect "the same forms outside \$(...)" 1 "check-scripts: 4 files, 3 errors"
+# Windows PowerShell 5.1 reads a .ps1 without a BOM in the ANSI code page: a non-ASCII byte needs the BOM
+mkdir -p "$tmp/bom"
+printf '$x = 1\n# caf\303\251\n' > "$tmp/bom/nobom.ps1"; printf '\357\273\277$x = 1\n# caf\303\251\n' > "$tmp/bom/bom.ps1"
+printf '$x = 1\n# cafe\n' > "$tmp/bom/ascii.ps1"
+run bom
+if [ -n "$ps1by" ]; then
+  expect "a non-ASCII .ps1 without a BOM" 1 "bom/nobom.ps1:2: a non-ASCII byte without a UTF-8 BOM - Windows PowerShell 5.1 misreads it (TOOLKIT Scripts)"
+  expect "with a BOM, or ASCII" 1 "check-scripts: 3 files, 1 errors"
+fi
 
 if [ "$kind" = ps ]; then
   mkdir -p "$tmp/two" "$tmp/fake"

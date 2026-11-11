@@ -3,13 +3,15 @@
 #   - a FEATURES.md field wrapped onto an indented continuation line that names missing files: each one
 #     reported with the continuation line's number;
 #   - a script under scripts/ without its .ps1 and one under scripts/hooks/ without its .sh: each reported;
-#   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's.
+#   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's;
+#   - a stale flag or case form in a "tested by" field, also one only in a sibling of the named file (#562);
+#     one below a named folder found; prose and a field naming no tests/ path unchecked.
 # The same lines from both versions.
 #   tests/check-core/run.sh sh                  # check-core.sh, with the bash running this file
 #   tests/check-core/run.sh ps pwsh             # check-core.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -63,6 +65,21 @@ expect "a core skill's folder without coord-" 1 "skills/mine/SKILL.md: a core sk
 expect "a skill whose name is not its folder" 1 "skills/mine/SKILL.md: name 'other' is not its folder 'mine'"
 expect "a skill not marked as the coordinator's" 1 "skills/mine/SKILL.md: the description does not start with 'Coordinator only'"
 summary "nine errors in all" 1 9
+# "tested by" tokens (#562): a flag and a case form in none of the named files are stale (built here, so this
+# file does not hold them), also one only in a sibling of the named file; one below a named folder is found;
+# a plain word, a token with a space, a field naming no tests/ path unchecked
+g="stale$((50 + 12))"
+mkdir -p "$d/tests/check-core/sub"; printf 'v8+%s\n' "$g" > "$d/tests/check-core/sibling.txt"; printf 'v7+%s\n' "$g" > "$d/tests/check-core/sub/x.txt"
+G="$g" awk '{ print } !done && /^- tested by: / { g = ENVIRON["G"]
+    print "  tests/check-core/run.sh, tests/check-core/sub/ (`--" g "`, `v9+" g "`, `v8+" g "`, `v7+" g "`, `" g "`, `" g " away`)"; done = 1 }
+  END { print "- tested by: a CI step (`--" ENVIRON["G"] "-ci`)" }' "$d/FEATURES.md" > "$tmp/f" && cat "$tmp/f" > "$d/FEATURES.md"
+t="$(grep -n "v9+$g" "$d/FEATURES.md" | cut -d: -f1)"
+run
+w="occurs in none of tests/check-core/run.sh, tests/check-core/sub"
+expect "a stale flag in a tested-by field" 1 "FEATURES.md:$t: tested by \`--$g\` $w"
+expect "a stale case form in a tested-by field" 1 "FEATURES.md:$t: tested by \`v9+$g\` $w"
+expect "a token only in a sibling of the named file" 1 "FEATURES.md:$t: tested by \`v8+$g\` $w"
+summary "twelve errors in all: below a named folder found; prose and a field without a test file unchecked" 1 12
 
 echo "check-core ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

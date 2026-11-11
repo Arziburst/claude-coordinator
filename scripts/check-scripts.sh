@@ -4,14 +4,16 @@
 #   scripts/check-scripts.sh [folder ...]      default: this core's own scripts/
 # .sh files: `bash -n`. .ps1 files: PowerShell's own parser, through check-scripts.ps1 - under
 # `powershell` (Windows PowerShell 5.1's rules) where it exists, else `pwsh`; without either they are
-# listed as skipped, not passed. A file marked `#Requires -Version 7` is parsed by `pwsh`.
+# listed as skipped, not passed. A file marked `#Requires -Version 7` is parsed by `pwsh`. Also errors:
+# a here-document or a `case` inside `$(...)` in a .sh (bash 3.2 misreads them), a non-ASCII byte in a
+# .ps1 without a UTF-8 BOM (Windows PowerShell 5.1 misreads it).
 # Prints `<file>:<line>: <message>` per error, then `check-scripts: <n> files, <e> errors`.
 # Exit 1 on any error, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 only=""
 if [ "${1:-}" = "--only-sh" ]; then only=sh; shift; fi   # used by check-scripts.ps1
-case "${1:-}" in -h|--help) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 2 ;; esac
+case "${1:-}" in -h|--help) sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2 ;; esac
 [ $# -gt 0 ] || set -- "$here"
 for d in "$@"; do [ -d "$d" ] || { echo "not a folder: $d" >&2; exit 2; }; done
 
@@ -26,11 +28,21 @@ list() { for d in "$@"; do d="${d%/}"; find "$d" -type f -iname "*.$ext" |
     { r = substr($0, length(d) + 2); if (index(a, p) || !index(a r, p)) print r }' | LC_ALL=C sort |
   D="$d" awk '{ print ENVIRON["D"] "/" $0 }'; done; }
 
+# two forms bash 5 parses and bash 3.2 (macOS) misreads (#562): a here-document or a `case` inside
+# `$(...)`, on the line of its `$(` or on the lines of a `$(` left open at a line's end; comments and
+# single-quoted strings skipped (the quotes of a here-document's word kept apart), and an escaped \$
+forms='{ sub(/\r$/, ""); s = $0; sub(/^#.*$/, "", s); sub(/[ \t]#.*$/, "", s); m = ""
+  gsub(/<<-?[ \t]*\047/, "<<", s); gsub(/\047[^\047]*\047/, "", s); gsub(/\\\$/, "", s)
+  if (open && s ~ /^[ \t]*\)/) open = 0
+  if (s ~ /\$\([^()]*[^<]<<-?[ \t]*["\047]?[A-Za-z_]/ || (open && s ~ /[^<]<<-?[ \t]*["\047]?[A-Za-z_]/)) m = "a here-document"
+  else if (s ~ /\$\([ \t]*case[ \t]/ || s ~ /\$\([^()]*[^A-Za-z0-9_()]case[ \t]/ || (open && (s ~ /^[ \t]*case[ \t]/ || s ~ /[;&|][ \t]*case[ \t]/))) m = "a case"
+  if (m != "") print ENVIRON["F"] ":" NR ": " m " inside $(...) - bash 3.2 misreads it (TOOLKIT Scripts)"
+  if (s ~ /\$\([ \t]*$/) open = 1 }'
 ext=sh
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   n=$((n + 1))
-  out="$(bash -n "$f" 2>&1)" && continue
+  out="$(bash -n "$f" 2>&1)" && out="$(F="$f" awk "$forms" "$f")" && [ -z "$out" ] && continue
   e=$((e + 1))
   # "file: line 3: message" -> "file:3: message"
   printf '%s\n' "$out" | F="$f" awk '!match($0, /^.*: line [0-9]+: /) { print; next }

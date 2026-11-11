@@ -158,6 +158,44 @@ if (-not (Test-Path -LiteralPath $fm -PathType Leaf)) { 'FEATURES.md: missing'; 
       if (-not $text.Contains('`' + $id + '`')) { "FEATURES.md: one-time step $id is in no feature"; $errors++ }
     }
   }
+  # a "tested by" field's backtick token that looks like a flag, a path or a case form (not a plain word,
+  # no space, no <placeholder>, * or an ellipsis) occurs in a tests/ file the field names or in a file below
+  # a tests/ folder it names, or a tests trim left it stale (#562, #548). A field naming no tests/ path is
+  # not checked; each path listed once.
+  $tb = New-Object System.Collections.ArrayList; $toks = @(); $dirs = @(); $on = $false; $code = $false; $n = 0
+  $flush = { if ($script:dirs.Count) { foreach ($t in $script:toks) { [void]$script:tb.Add(@($t[0], $t[1], $script:dirs)) } }
+    $script:toks = @(); $script:dirs = @(); $script:on = $false }
+  foreach ($line in [IO.File]::ReadAllLines($fm)) {
+    $n++; $line = $line.TrimEnd("`r")
+    if ($line -match '^[ \t]*```') { $code = -not $code; & $flush; continue }
+    if ($code) { continue }
+    if ($line.StartsWith('- tested by:')) { & $flush; $on = $true }
+    elseif (-not ($on -and $line -cmatch '^[ \t]+[^ \t]')) { & $flush; continue }
+    foreach ($m in [regex]::Matches($line, '`([^`]*)`')) {
+      $t = $m.Groups[1].Value
+      if ($t -cnotmatch '^[A-Za-z0-9_]+$' -and $t -notmatch ('[ \t<>*]|' + [char]0x2026)) { $toks += , @($n, $t) }
+    }
+    foreach ($p in ((($line -replace '`[^`]*`', ' ') -replace '[,;()]', ' ') -split '[ \t]+' | Where-Object { $_ })) {
+      $p = $p -replace '[.:]+$', ''
+      if ($p -cnotmatch '^tests/[A-Za-z0-9_./-]+$') { continue }
+      $p = $p.TrimEnd('/'); if ($dirs -cnotcontains $p) { $dirs += $p }
+    }
+  }
+  & $flush
+  $content = @{}
+  foreach ($r in $tb) {
+    $hit = $false
+    foreach ($d in $r[2]) {
+      if (-not $content.ContainsKey($d)) {
+        $full = Join-Path $Root $d
+        $content[$d] = if (Test-Path -LiteralPath $full -PathType Container) { @(Get-ChildItem -LiteralPath $full -Recurse -File -Force | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) }
+          elseif (Test-Path -LiteralPath $full -PathType Leaf) { @([IO.File]::ReadAllText($full)) } else { @() }
+      }
+      foreach ($c in $content[$d]) { if ($c.Contains($r[1])) { $hit = $true; break } }
+      if ($hit) { break }
+    }
+    if (-not $hit) { "FEATURES.md:$($r[0]): tested by ``$($r[1])`` occurs in none of $($r[2] -join ', ')"; $errors++ }
+  }
 }
 # every script under scripts/ is a .sh + .ps1 pair (TOOLKIT Scripts): a half without the other is an error.
 # Names are built while walking (hidden ones too, as find lists them), in ordinal order as LC_ALL=C sort.
