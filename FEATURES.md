@@ -17,6 +17,7 @@ feature per session, a fixed report.
 procedure, role or one-time step is in no feature, when an ID repeats, when a block lacks one of its
 five fields, when the table and the blocks disagree, or when a `tested by` token that looks like a flag, a path
 or a case form (not a plain word, no space) occurs in none of the tests/ files its field names (a named folder: any file below) (#562).
+In a `tested by` field a backtick-quoted token is a case argument, never checked as a file path (#578).
 
 Block shape: `defined` (where the rule lives) · `entry` (what triggers it) · `promises` (checkable
 statements) · `tested by` (tests, CI steps, self-test steps) · `not covered` (known gaps). A rule with
@@ -880,7 +881,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
 - entry: before every core pull request; CI
 - promises: a broken relative link, a missing section, a §1.N past the last hard rule, a feature map out of sync, or a stale "tested by" token fails; the `.sh` and `.ps1` print the same
-- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half; a stale flag and case form reported, also one only in a sibling of the named file, one below a named folder found, a plain word, a spaced token and a field without a test file not)
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half; a stale flag and case form reported, also one only in a sibling of the named file, one below a named folder found, a plain word, a spaced token and a field without a test file not; a quoted case argument with a slash read as no path, a missing unquoted tests/ file reported; a path named twice listed once)
 - not covered: "tested by" prose tokens (a plain word, a token with a space, a placeholder or pattern) and fields that name no tests/ path are not checked
 
 ### F-SELFTEST-05 check-scripts

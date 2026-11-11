@@ -75,8 +75,10 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
       if (cur != "") for (k = 1; k <= 5; k++) if (!f[k]) print "E", curn, cur " lacks \"- " fname[k] ":\""
       cur = ""; cont = 0; for (k = 1; k <= 5; k++) f[k] = 0
     }
-    # the file paths a field names: words with a slash, or a file name with a known extension
-    function paths(s,   n, t, i, p) {
+    # the file paths a field names: words with a slash, or a file name with a known extension; in a
+    # "tested by" field (q) a backtick-quoted token is a case argument, no path (#578)
+    function paths(s, q,   n, t, i, p) {
+      if (q) gsub(/`[^`]*`/, " ", s)
       gsub(/[`,;()]/, " ", s); n = split(s, t, " ")
       for (i = 1; i <= n; i++) {
         p = t[i]; sub(/#.*$/, "", p); sub(/[.:]+$/, "", p); sub(/\/$/, "", p)
@@ -100,11 +102,11 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
       kk = 0
       for (k = 1; k <= 5; k++) if (index($0, "- " fname[k] ":") == 1) { f[k] = 1; kk = k }
       cont = kk
-      if (kk == 1 || kk == 2 || kk == 4) { s = $0; sub(/^- [a-z ]+:/, "", s); paths(s) }
+      if (kk == 1 || kk == 2 || kk == 4) { s = $0; sub(/^- [a-z ]+:/, "", s); paths(s, kk == 4) }
       next
     }
     # an indented line right after a field (or after another such line) continues it
-    cur != "" && cont && /^[ \t]+[^ \t]/ { if (cont == 1 || cont == 2 || cont == 4) paths($0); next }
+    cur != "" && cont && /^[ \t]+[^ \t]/ { if (cont == 1 || cont == 2 || cont == 4) paths($0, cont == 4); next }
     { cont = 0 }
     END { endblk()
       for (i = 1; i <= nb; i++) if (!(bord[i] in row)) print "E", blk[bord[i]], bord[i] " is not in the summary table"

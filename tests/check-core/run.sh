@@ -5,13 +5,15 @@
 #   - a script under scripts/ without its .ps1 and one under scripts/hooks/ without its .sh: each reported;
 #   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's;
 #   - a stale flag or case form in a "tested by" field, also one only in a sibling of the named file (#562);
-#     one below a named folder found; prose and a field naming no tests/ path unchecked.
+#     one below a named folder found; prose and a field naming no tests/ path unchecked;
+#   - a quoted case argument with a slash in a "tested by" field not read as a path, a missing unquoted
+#     tests/ file still reported (#578); a path named twice in a field listed once (#584).
 # The same lines from both versions.
 #   tests/check-core/run.sh sh                  # check-core.sh, with the bash running this file
 #   tests/check-core/run.sh ps pwsh             # check-core.ps1 (or: ps powershell)
 # Exit 1 if any check fails.
 set -u
-[ $# -gt 0 ] || { sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -gt 0 ] || { sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift; PS=("$@")
 here="$(cd "$(dirname "$0")" && pwd)"; core="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"; trap 'chmod -R u+w "$tmp"; rm -r "$tmp"' EXIT
@@ -80,6 +82,17 @@ expect "a stale flag in a tested-by field" 1 "FEATURES.md:$t: tested by \`--$g\`
 expect "a stale case form in a tested-by field" 1 "FEATURES.md:$t: tested by \`v9+$g\` $w"
 expect "a token only in a sibling of the named file" 1 "FEATURES.md:$t: tested by \`v8+$g\` $w"
 summary "twelve errors in all: below a named folder found; prose and a field without a test file unchecked" 1 12
+# a quoted case argument with a slash is no path, an unquoted missing tests/ file is (#578); a field naming
+# one path twice lists it once (#584)
+printf 'host/owner/repo ../work-old/x\n' > "$d/tests/check-core/args.txt"
+G="$g" awk '{ print } END { print "- tested by: tests/check-core/args.txt (`host/owner/repo`, `../work-old/x`), tests/check-core/gone.sh"
+  print "- tested by: tests/check-core/run.sh, tests/check-core/run.sh (`--" ENVIRON["G"] "-twice`)" }' "$d/FEATURES.md" > "$tmp/f" &&
+  cat "$tmp/f" > "$d/FEATURES.md"
+a="$(grep -n 'tests/check-core/gone.sh$' "$d/FEATURES.md" | cut -d: -f1)"; u=$((a + 1))
+run
+expect "a missing unquoted tests/ file" 1 "FEATURES.md:$a: no such file tests/check-core/gone.sh"
+expect "a path named twice listed once" 1 "FEATURES.md:$u: tested by \`--$g-twice\` occurs in none of tests/check-core/run.sh"
+summary "fourteen errors in all: quoted case arguments are no paths" 1 14
 
 echo "check-core ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
