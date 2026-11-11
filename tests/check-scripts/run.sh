@@ -63,8 +63,9 @@ esac
 # outside $(...), in $((...)), a here-string and a comment pass
 mkdir -p "$tmp/forms"
 printf 'x="$(cat <<\047EOF\047\nhi\nEOF\n)"\n' > "$tmp/forms/hd.sh"
-printf 'y=$(case a in a) echo 1 ;; esac)\n' > "$tmp/forms/case.sh"
-printf 'z="$(\n  case a in a) echo 1 ;; esac\n)"\n' > "$tmp/forms/open.sh"
+# (the case written `(a)`, which bash 3.2 parses: the rule alone refuses it, on every bash)
+printf 'y=$(case a in (a) echo 1 ;; esac)\n' > "$tmp/forms/case.sh"
+printf 'z="$(\n  case a in (a) echo 1 ;; esac\n)"\n' > "$tmp/forms/open.sh"
 printf 'cat <<EOF\n$(echo hi)\nEOF\ncase a in a) echo "$((1 << 2))" ;; esac\nw="$(cat <<<"x")"\n# $(cat <<EOF)\n' > "$tmp/forms/ok.sh"
 run forms
 expect "a here-document inside \$(...)" 1 "forms/hd.sh:1: a here-document inside \$(...) - bash 3.2 misreads it (TOOLKIT Scripts)"
