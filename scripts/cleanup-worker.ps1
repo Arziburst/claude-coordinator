@@ -50,7 +50,7 @@ function Canon([string]$x) {
   if ($isWin -and $x -cmatch '^/[a-z](/|$)') { $x = $x.Substring(1, 1) + ':' + $x.Substring(2) }
   $x
 }
-# A path as it lies on disk, as safety-guard.ps1 walks it (#121): links (symlinks, junctions) resolved a
+# A path as it lies on disk, as the guard (safety-guard.sh) walks it (#121): links (symlinks, junctions) resolved a
 # folder at a time, then the rest as written; PhysDir gives @(<the existing folder>, <the rest>) or $null.
 function LinkTarget([string]$p) {
   try { $it = Get-Item -LiteralPath $p -Force -ErrorAction Stop } catch { return '' }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Run tests/safety-guard/cases.txt against a safety hook (macOS / Linux; Windows: run.ps1).
+# Run tests/safety-guard/cases.txt against a safety hook (every OS; Windows: in Git Bash, #564).
 #   tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
-#   tests/safety-guard/run.sh pwsh -NoProfile -File scripts/hooks/safety-guard.ps1
+#   tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1   (the shim)
 # Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores). SG_CASES=<file>: that file
 # for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384).
 # SG_PART=<k>/<n> (#405): the k-th of n parts of the cases (case i in part (i - 1) mod n + 1, so a case added at the end lands in one
@@ -413,7 +413,7 @@ if [ -n "$flag" ]; then
   [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) expected OK, got: $out"; fail=1; }
   n=$((n + 1))
   broken="$tmp/broken-guard.${guard##*.}"
-  awk -v brk="$brk" '{ print } /^input="\$\(cat\)"/ || /^\$raw = \[Console\]::In\.ReadToEnd\(\)/ { print brk }' "$guard" > "$broken"
+  awk -v brk="$brk" '{ print } /^input="\$\(cat\)"/ || /^\$in = \[Console\]::OpenStandardInput\(\)/ { print brk }' "$guard" > "$broken"
   B=(); k=0
   for a in "$@"; do k=$((k + 1)); [ $k -lt $# ] && B+=("$a"); done
   B+=("$(winpath m "$broken")")

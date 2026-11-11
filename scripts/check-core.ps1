@@ -213,6 +213,11 @@ foreach ($f in $halves) {
   $o = if ($f.EndsWith('.sh')) { $f -creplace '\.sh$', '.ps1' } else { $f -creplace '\.ps1$', '.sh' }
   if (-not (Test-Path -LiteralPath (Join-Path $Root $o))) { "${f}: no $o - every script is a .sh + .ps1 pair (TOOLKIT Scripts)"; $errors++ }
 }
+# the hooks exception (TOOLKIT Scripts, #564): the guard is safety-guard.sh on every OS; its .ps1 half only hands each call to it
+$g = Join-Path $Root 'scripts/hooks/safety-guard.ps1'
+if ((Test-Path -LiteralPath $g -PathType Leaf) -and -not ([IO.File]::ReadAllText($g).Contains('safety-guard.sh') -and @([IO.File]::ReadAllLines($g)).Count -le 80)) {
+  'scripts/hooks/safety-guard.ps1: not the shim that hands each call to safety-guard.sh (at most 80 lines): a guard rule goes into safety-guard.sh (TOOLKIT Scripts)'; $errors++
+}
 # the core's skills (CORE section 12b, #243): skills/coord-*/SKILL.md, its frontmatter name its folder, its
 # description saying it is the coordinator's, every `coordinator/core/<path>` it names a file of this core
 $sk = Join-Path $Root 'skills'

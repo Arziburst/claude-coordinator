@@ -404,7 +404,7 @@ expect_in "PowerShell shell"
 sed "${gl}s#safety-guard\.#other-tool.#" "$tmp/safety.json" > "$tmp/safety-none.json"
 check 1 "start: no PreToolUse guard" -- start --repo "$tmp/repo" --name "#32 worker: a" --branch 32-a "${W[@]}" --safety "$tmp/safety-none.json"
 expect_in "no PreToolUse safety-guard hook"
-mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/safety-guard.sh"; printf 'exit 0\n' > "$tmp/silent/safety-guard.ps1"
+mkdir -p "$tmp/silent"; printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/silent/safety-guard.sh"   # every settings example names the .sh (#564)
 sed "s#$core/scripts/hooks/#$mtmp/silent/#g" "$tmp/safety.json" > "$tmp/safety-silent.json"
 check 1 "start: a guard whose self-test prints nothing" -- start --repo "$tmp/repo" --name "#33 worker: a" --branch 33-a "${W[@]}" --safety "$tmp/safety-silent.json"
 expect_in "printed nothing"

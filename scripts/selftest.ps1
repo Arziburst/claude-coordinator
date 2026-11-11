@@ -112,7 +112,7 @@ function KeptWhy([string]$d) {
 }
 # AbsPath <dir>: the folder as an absolute path; as given when it cannot be resolved
 function AbsPath([string]$d) { try { (Resolve-Path -LiteralPath $d -ErrorAction Stop).ProviderPath } catch { $d } }
-# PhysPath <dir>: the same folder as it lies on disk (links and junctions resolved, as safety-guard.ps1
+# PhysPath <dir>: the same folder as it lies on disk (links and junctions resolved, as the guard (safety-guard.sh)
 # walks them, #121; an 8.3 name in its long form), nothing when it does not exist: a run's session lists
 # its cwd in that form (/private/tmp, not /tmp, on macOS), which Resolve-Path does not give
 $isWinP = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
@@ -335,6 +335,7 @@ switch ($Step) {
     $got = (@(Run 'scripts/session-tokens.ps1' 's1') -join "`n")
     if ($got -eq $want) { Pass "session-tokens$tag" } else { Fail "session-tokens$tag`: differs from tests/session-tokens/expected.txt" }
     $env:CLAUDE_CONFIG_DIR = $old
+    # the guard is safety-guard.sh (#564); its shim finds Git Bash (never WSL's bash) and proves both
     $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     function Hook([string]$cmd) { [IO.File]::WriteAllText($jf, '{"tool_input":{"command":"' + $cmd + '"}}'); $null = Feed $jf $hook; $LASTEXITCODE }
@@ -603,6 +604,7 @@ switch ($Step) {
   if ($listed.Count -eq 0) { 'protected branches: main master (default)' }
   else {
     "protected branches: $($names -join ' ')"
+    # safety-guard.sh through its shim (#564), whichever of the two the file names: the shim finds Git Bash
     $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'
     $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
     $oldPb = $env:COORD_PROTECTED_BRANCHES; $env:COORD_PROTECTED_BRANCHES = $pbs

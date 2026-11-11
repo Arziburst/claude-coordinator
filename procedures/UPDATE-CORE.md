@@ -41,7 +41,11 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      command to apply it — `! cp <prepared file> <target>` in the
      coordinator's prompt, or the same in their own terminal (PowerShell: `Copy-Item <prepared file>
      <target>`) — then re-runs `selftest hooks --settings <target>` in a **new** session (hooks load at
-     start: the running session keeps the old guard);
+     start: the running session keeps the old guard). **A Windows file whose guard names `safety-guard.ps1`**
+     (written before #564) needs no change: that file is now a shim that runs `safety-guard.sh` in Git Bash, the
+     same verdicts, and blocks when it cannot; the update never rewrites it on its own. Moving its two guard
+     commands to `bash <core>/scripts/hooks/safety-guard.sh` (`--self-test` on the SessionStart one), as in the
+     current settings example, saves a PowerShell start a call: offered once, in the same way, never required;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking
      for project wrappers:'` — anchored, so a commit that only mentions the rule does not match), and for each script it names, every call to it in the project's coordination scripts
