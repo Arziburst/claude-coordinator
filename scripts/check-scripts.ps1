@@ -5,6 +5,8 @@
 # file marked `#Requires -Version 7` (or 6, or `-PSEdition Core`) is parsed by `pwsh`, and is listed as
 # skipped, not passed, where there is none. .sh files: `bash -n`, through check-scripts.sh with Git Bash
 # (the bash next to git); no bash: listed as skipped, not passed; a bash that does not run: an error.
+# Also errors (as check-scripts.sh): a here-document or a `case` inside `$(...)` in a .sh, a non-ASCII byte
+# in a .ps1 without a UTF-8 BOM (bash 3.2 and Windows PowerShell 5.1 misread them).
 # Prints `<file>:<line>: <message>` per error, then `check-scripts: <n> files, <e> errors`.
 # Exit 1 on any error, 2 on a usage error.
 param([switch]$OnlyPs1, [Parameter(DontShow)][string]$ParseFile, [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$Folders)   # -OnlyPs1, -ParseFile: internal
@@ -15,7 +17,7 @@ param([switch]$OnlyPs1, [Parameter(DontShow)][string]$ParseFile, [Parameter(Posi
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 if ($Folders -and ($Folders[0] -eq '-h' -or $Folders[0] -eq '--help')) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 9 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 11 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 $ErrorActionPreference = 'Stop'
 
@@ -123,6 +125,15 @@ if ($ps51 -and $ps1.Count -gt 0) {
       $errs = @(& $pwsh -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -ParseFile $f.Path)
     } else {
       $errs = @(Parse $f.Path)
+    }
+    # a non-ASCII byte in a file without a UTF-8 BOM: Windows PowerShell 5.1 reads it in the ANSI code page (#562)
+    $b = [IO.File]::ReadAllBytes($f.Path)
+    if (-not ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)) {
+      $i = [Array]::FindIndex($b, [Predicate[byte]] { param($x) $x -gt 127 })
+      if ($i -ge 0) {
+        $ln = 1; for ($k = 0; $k -lt $i; $k++) { if ($b[$k] -eq 10) { $ln++ } }
+        $errs += "${ln}: a non-ASCII byte without a UTF-8 BOM - Windows PowerShell 5.1 misreads it (TOOLKIT Scripts)"
+      }
     }
     $n++
     if ($errs.Count -gt 0) {

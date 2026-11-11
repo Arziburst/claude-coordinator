@@ -15,7 +15,8 @@ feature per session, a fixed report.
 
 **Kept in sync:** `scripts/check-core` fails when a file a block names does not exist, when a script,
 procedure, role or one-time step is in no feature, when an ID repeats, when a block lacks one of its
-five fields, or when the table and the blocks disagree.
+five fields, when the table and the blocks disagree, or when a `tested by` token that looks like a flag, a path
+or a case form (not a plain word, no space) occurs in no file under the tests/ folders its field names (#562).
 
 Block shape: `defined` (where the rule lives) · `entry` (what triggers it) · `promises` (checkable
 statements) · `tested by` (tests, CI steps, self-test steps) · `not covered` (known gaps). A rule with
@@ -878,15 +879,15 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SELFTEST-04 check-core
 - defined: scripts/check-core.sh, scripts/check-core.ps1, CORE.md §10
 - entry: before every core pull request; CI
-- promises: a broken relative link, a missing section, a §1.N past the last hard rule, or a feature map out of sync fails; the `.sh` and `.ps1` print the same
-- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half)
+- promises: a broken relative link, a missing section, a §1.N past the last hard rule, a feature map out of sync, or a stale "tested by" token fails; the `.sh` and `.ps1` print the same
+- tested by: CI steps "links and section references" (bash, PowerShell, parity on Linux), tests/selftest/core-copy.sh (agent worktrees under .claude/ and a nested worktree are not counted), tests/check-core/run.sh (a feature field wrapped onto an indented line, a script without its other half; a stale flag and case form reported, a plain word, a spaced token and a field without a test file not)
 - not covered: none known
 
 ### F-SELFTEST-05 check-scripts
 - defined: scripts/check-scripts.sh, scripts/check-scripts.ps1, TOOLKIT.md
 - entry: before every pull request; the dry run; "update the core"
-- promises: every `.sh` and `.ps1` parses; a language with no shell on the machine is listed as skipped, never passed; a `#Requires -Version 7` file is parsed with pwsh
-- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, tests/selftest/core-copy.sh (a whole core copy passes), tests/check-scripts/run.sh (a folder named with `&` and `[x]`, extensions in capitals, `??` under the rules of Windows PowerShell 5.1 also from pwsh, a bash on PATH that checks nothing), CI steps "every script parses, and a broken one is reported"
+- promises: every `.sh` and `.ps1` parses; a language with no shell on the machine is listed as skipped, never passed; a `#Requires -Version 7` file is parsed with pwsh; a here-document or a `case` inside `$(...)` in a `.sh` and a non-ASCII byte in a `.ps1` without a UTF-8 BOM fail (#562)
+- tested by: tests/check-scripts/broken, tests/check-scripts/pwsh7, tests/selftest/core-copy.sh (a whole core copy passes), tests/check-scripts/run.sh (a folder named with `&` and `[x]`, extensions in capitals, `??` under the rules of Windows PowerShell 5.1 also from pwsh, a bash on PATH that checks nothing, a here-document and a case inside and outside `$(...)`, a non-ASCII `.ps1` with and without a BOM), CI steps "every script parses, and a broken one is reported"
 - not covered: none known
 
 ### F-SELFTEST-06 check-contract
