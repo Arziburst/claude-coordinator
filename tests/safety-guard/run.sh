@@ -330,9 +330,13 @@ mkdir -p "$tmp/denyperm/.claude" && printf 'terraform\n' > "$tmp/denyperm/.claud
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     acl="$(winpath w "$tmp/denyperm/.claude/coordinator-deny.txt")"
-    if MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' icacls "$acl" /deny "${USERNAME:-}:(R)" >/dev/null 2>&1; then
-      denied "a deny file whose read an NTFS permission denies" "$tmp/denyperm" "project rule file cannot be read"
-    else echo "FAIL (deny file) icacls could not deny the read"; fail=1; fi
+    if ! MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' icacls "$acl" /deny "${USERNAME:-}:(R)" >/dev/null 2>&1; then
+      echo "FAIL (deny file) icacls could not deny the read"; fail=1
+    # #564: an elevated process (a CI runner) reads past the deny in Git Bash, so the rules can be read and are applied:
+    # the case runs only where the deny stops this process's read, as the chmod case below only when not root
+    elif cat "$tmp/denyperm/.claude/coordinator-deny.txt" >/dev/null 2>&1; then
+      echo "NOTE (deny file) not run: a deny file whose read an NTFS permission denies - this process reads past the deny (elevated)"
+    else denied "a deny file whose read an NTFS permission denies" "$tmp/denyperm" "project rule file cannot be read"; fi
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' icacls "$acl" /remove:d "${USERNAME:-}" >/dev/null 2>&1 && acl="" ;;
   *)
     if [ "$(id -u)" != 0 ]; then
