@@ -278,7 +278,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   what it did, the owner's corrections and standing rules). What it knows lives in these two files, so a
   long context can be compacted, or the session restarted or replaced, without loss, and its cost need not
   grow with its history. Its settings file lies outside the folder, never inside it (start-worker refuses
-  a `--safety` file inside it: the guard lets the assistant write there), and outside
+  a `--safety` file inside it: its settings let the assistant edit there), and outside
   `coordinator/assistants/`, so no assistant's folder can share its name:
   `coordinator/assistant-settings/<name>.json`. The assistant cannot commit: the coordinator commits its
   folder, `NOTES.md` included, together with every commit it makes in `coordinator/`, and at each sync and
@@ -287,7 +287,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   <root>/coordinator/assistants/<name>/BRIEF.md --safety <its settings> --report-to "<the coordinator>"`
   (Windows: `start-worker.ps1` with `-Repo`, `-Name`, `-Model`, `-BriefFile`, `-Safety`, `-ReportTo`).
   `<name>`: letters, digits, `.`, `_`, `-`, not dots only. No worktree and no branch: the session starts
-  from the repository root, and its launch text's first line names its folder (BRIEF.md read in full,
+  from the repository root in permission mode dontAsk (#563; another `--mode` is refused), and its launch text's first line names its folder (BRIEF.md read in full,
   NOTES.md kept as its memory, both re-read after a compaction or a restart, writes only inside the folder,
   questions to `--report-to`), then the role, then the brief. Refused before anything is created (exit 1):
   a brief that is not `BRIEF.md` in that folder, a safety file whose env `COORD_ASSISTANT_DIR` does not
@@ -564,40 +564,34 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   has no `COORD_PROTECTED_ROOT`. **The limit:** it guards the edit tools only — a shell command such as
   `echo x > <root>/file` or `cp` still writes there, and a symlink is not followed; it protects against
   a mistake, not intent (the worker's brief and branch protection remain the rules).
-- **The assistant mode** (#281, *Assistants*): an assistant's settings come from
+- **An assistant's protection** (#281, #563, *Assistants*) is Claude Code's own: its settings come from
   [settings.example.assistant.json](settings.example.assistant.json) (Windows:
-  [settings.example.assistant.windows.json](settings.example.assistant.windows.json)) — the worker
-  safety file with env `COORD_ASSISTANT_DIR`, the absolute path of the assistant's folder. With it set, the
-  guard holds the session to an assistant: `Edit` / `Write` / `MultiEdit` / `NotebookEdit` only inside that
-  folder (as written or as on disk; also inside `COORD_PROTECTED_ROOT`, whose worker rule then gives way),
-  any other path, no path, or a path holding a line break refused; a value that is not absolute, or is `/`
-  or a drive, refuses every edit (a broken mode never fails open). git only to read (log, show, diff,
-  status, a branch or tag listing, a config read, fetch with no local destination …: commit, push, merge,
-  checkout, stash, add and every other write refused, in any repository), and never a read that can run a
-  command or write a file: git's own `-c`, `--config-env`, `--exec-path=`, `--git-dir`, `--work-tree`, any
-  variable set before git (`GIT_PAGER=`, `PAGER=`, `HOME=` …), a `GIT_` variable set anywhere in the command
-  (`export`, `$env:`, `Set-Item env:`), a read's `--output`, `--ext-diff`, `--upload-pack`, `--receive-pack`,
-  `--exec`, `--open-files-in-pager` (also abbreviated), grep's `-O`, ls-remote's `-u` are refused, while
-  `git log`, `git fetch origin`, `git grep x`, `git diff` pass; gh only to read (`pr` / `issue` /
-  `repo` … `list`, `view`, `status`, `diff`, `checks`; `gh api` with no method and no fields, or `-X GET`;
-  no graphql since #345, boards through `gh project item-list` / `gh project view`). Nothing opens a browser there
-  (#345): no `--web`, no short option cluster holding `w` (`-w`, `-cw`, `-w=true`, `-Rowner/repo`; except under `gh run list`, where `-w` is a workflow, and as the value of `gh pr list --search`), `gh browse` only with `--no-browser`, no `GH_BROWSER` /
-  `BROWSER`; a git command's help: `git <command> -h` in the terminal, `--help` opens a browser on Windows. gh is an allowlist there: only these reads pass — a group's `list`, `view`,
-  `status`, `diff`, `checks`, `watch` (`pr`, `issue`, `release`, `repo`, `run`, `workflow`, `label`, `gist`,
-  `cache`, `ruleset`, `project`, `secret`, `variable`, `search` …), `gh api` by the read rules above (GET or
-  HEAD, never graphql), `gh auth status`, `gh --version`, `gh help`; every other gh command is
-  refused (`gh alias set` and a call of an alias, `gh extension install`, `gh auth login` / `logout` /
-  `refresh` / `setup-git`, `gh config set`, `gh codespace create`, `gh ssh-key add`, an unknown group …).
-  The examples also run the after-compact hook's `assistant` variant (*Assistants*); the guard's
-  self-test there probes the pushes with the mode off and the mode's own verdicts with it on, so it says
-  `safety-guard: OK` in an assistant's session. Unset or empty,
-  nothing changes. **The limit:** shell writes (a
-  redirection, `sed -i`, `cp`) are not guarded, and MCP tools pass the hook — the assistant's role and
-  brief hold it to its folder there, and the write tools of a connector its brief does not name go into
-  its settings' deny list. Nor does the guard's reading of git and gh see `gh --help <extension>`, abbreviated options of
-  `git branch` / `tag` / `config`, a variable other than `GIT_…` exported earlier (`export PAGER=…`), or
-  git run inside a repository made in the assistant's own folder. This file only, never the coordinator's own settings: the coordinator edits its state repository and
-  more.
+  [settings.example.assistant.windows.json](settings.example.assistant.windows.json)) - permission mode
+  dontAsk (`defaultMode`; start-worker starts an assistant with `--permission-mode dontAsk`) and a closed
+  allow list: every call no allow rule names is refused at once, with no prompt. Allowed: Read, Grep, Glob;
+  `Edit(//<its folder>/**)` (it covers Write, MultiEdit, NotebookEdit; an absolute path is written with a
+  leading `//`, on Windows in Claude Code's POSIX form `//c/...` - measured on 2.1.322: `//C:/...` matches
+  nothing); `gh issue` / `pr` / `run` / `repo` reads by fixed prefixes; SendMessage, ListAgents. Claude
+  Code's own read-only check passes `ls`, `cat` and `git status` / `log` / `diff` / `show` / `rev-parse` in the
+  session's folder (the project root) and refuses `git -C <dir> …`, `cd <dir> && git …`, `git --no-pager …`
+  and `git log --output=…`; a redirection into the assistant's own folder runs (its Edit rule covers it). No
+  git rule is listed: a wildcard in the middle (`git -C * log`) would also match a write. Denied besides,
+  since a dontAsk refusal invites another route and a deny always wins over an allow from another settings
+  file: every deny line of the worker example, the common git and GitHub write forms, `gh api`, the whole
+  PowerShell tool (it is then not offered at all) and the edit of the core copy,
+  `coordinator/assistant-settings/`, the project's `.claude/` and `~/.claude/`. **The limit:** an allow
+  rule in the user's own or the project's settings reaches an assistant for anything its deny list does not
+  name - keep writes out of those lists, or deny them in the assistant's file; a connector's MCP tools are
+  allowed tool by tool, reads only, from its brief. **The guard's assistant mode is retired:** with env
+  `COORD_ASSISTANT_DIR` set (the folder; it also tells the after-compact hook which files to name), the guard
+  refuses an edit tool, Bash or PowerShell call whose payload's `permission_mode` is not `dontAsk` (absent
+  too: measured on 2.1.322, Windows, every PreToolUse payload carries it; cc-formats checks it), naming the
+  example to move to - so an assistant started with older settings or in another mode is held, never
+  unprotected (UPDATE-CORE step 3 and the `coord-assistant` skill move it, on the owner's yes); in dontAsk
+  it gives an assistant's call the verdicts it gives any session (a push to a protected branch is still
+  blocked), and its `COORD_PROTECTED_ROOT` rule gives way to the assistant. The guard's self-test in an
+  assistant's session checks that rule (default blocked, dontAsk passing). This file only, never the
+  coordinator's own settings: the coordinator edits its state repository and more.
 - **Own sessions only (CORE §1.17):** `claude stop / rm / respawn / attach <id>`, `claude --resume <id>`
   and SendMessage reach every session on the machine; the coordinator and every role act only on those
   whose `cwd` (`claude agents --json --all`) is inside the project root, its state repository or its

@@ -9,7 +9,7 @@
 set -u
 [ $# -gt 0 ] || { sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 2; }
 unset COORD_PROTECTED_ROOT COORD_PROTECTED_BRANCHES   # set per case (the 4th and 6th columns of cases.txt); empty is the same as unset
-unset COORD_ASSISTANT_DIR   # the assistant mode (#281): set per case by the 7th column, or left unset
+unset COORD_ASSISTANT_DIR   # an assistant's session (#281, #563): set per case by the 7th column, or left unset
 unset COORD_NO_PUSH   # #367: its own cases, tests/safety-guard/no-push.sh (run last); off for all the others
 here="$(cd "$(dirname "$0")" && pwd)"
 cases="${SG_CASES:-$here/cases.txt}"; pk=1; pn=1   # the part (#405): k/n of the cases, by their index in the file alone
