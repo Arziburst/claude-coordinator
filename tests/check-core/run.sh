@@ -3,7 +3,8 @@
 #   - a FEATURES.md field wrapped onto an indented continuation line that names missing files: each one
 #     reported with the continuation line's number;
 #   - a script under scripts/ without its .ps1 and one under scripts/hooks/ without its .sh: each reported;
-#   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's.
+#   - a core skill naming a missing core file, outside coord-, named unlike its folder or not the coordinator's;
+#   - a stale flag or case form in a "tested by" field (#562); prose and a field naming no tests/ path unchecked.
 # The same lines from both versions.
 #   tests/check-core/run.sh sh                  # check-core.sh, with the bash running this file
 #   tests/check-core/run.sh ps pwsh             # check-core.ps1 (or: ps powershell)
@@ -63,6 +64,17 @@ expect "a core skill's folder without coord-" 1 "skills/mine/SKILL.md: a core sk
 expect "a skill whose name is not its folder" 1 "skills/mine/SKILL.md: name 'other' is not its folder 'mine'"
 expect "a skill not marked as the coordinator's" 1 "skills/mine/SKILL.md: the description does not start with 'Coordinator only'"
 summary "nine errors in all" 1 9
+# "tested by" tokens (#562): a flag and a case form in no file under tests/check-core/ are stale (built here,
+# so this file does not hold them); a plain word, a token with a space, a field naming no tests/ path unchecked
+g="stale$((50 + 12))"
+G="$g" awk '{ print } !done && /^- tested by: / { g = ENVIRON["G"]
+    print "  tests/check-core/run.sh (`--" g "`, `v9+" g "`, `" g "`, `" g " away`)"; done = 1 }
+  END { print "- tested by: a CI step (`--" ENVIRON["G"] "-ci`)" }' "$d/FEATURES.md" > "$tmp/f" && cat "$tmp/f" > "$d/FEATURES.md"
+t="$(grep -n "v9+$g" "$d/FEATURES.md" | cut -d: -f1)"
+run
+expect "a stale flag in a tested-by field" 1 "FEATURES.md:$t: tested by \`--$g\` occurs in no file under tests/check-core"
+expect "a stale case form in a tested-by field" 1 "FEATURES.md:$t: tested by \`v9+$g\` occurs in no file under tests/check-core"
+summary "eleven errors in all: prose and a field without a test file unchecked" 1 11
 
 echo "check-core ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
