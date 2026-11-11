@@ -98,7 +98,7 @@ runs() {
         --repo) a+=(-Repo "$2"); shift 2 ;; --name) a+=(-Name "$2"); shift 2 ;; --branch) a+=(-Branch "$2"); shift 2 ;;
         --model) a+=(-Model "$2"); shift 2 ;; --brief-file) a+=(-BriefFile "$2"); shift 2 ;; --safety) a+=(-Safety "$2"); shift 2 ;;
         --report-to) a+=(-ReportTo "$2"); shift 2 ;; --dry-run) a+=(-DryRun); shift ;;
-        --assistant-dir) a+=(-AssistantDir "$2"); shift 2 ;;
+        --assistant-dir) a+=(-AssistantDir "$2"); shift 2 ;; --mode) a+=(-Mode "$2"); shift 2 ;;
         --worktree) a+=(-Worktree "$2"); shift 2 ;; --session) a+=(-Session "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
@@ -150,9 +150,13 @@ mkx() {   # mkx <folder> <name>: a folder with BRIEF.md and NOTES.md outside the
   asf="$tmp/ax-$2-$kind.json"
   sw "$kind" | awk -v d="$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' > "$asf"
 }
-xd() { start --repo "$ar" --name "assistant: $1" --model sonnet --brief-file "$2/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$2" --dry-run; }
+xd() { local x="$1" y="$2"; shift 2; start --repo "$ar" --name "assistant: $x" --model sonnet --brief-file "$y/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$y" "$@" --dry-run; }
 mkx "$tmp/ext/assistants/xa" xa
 check 0 "--assistant-dir: a folder outside every git working tree" -- xd xa "$tmp/ext/assistants/xa"
+# #563: an assistant starts in permission mode dontAsk; another --mode is refused
+n=$((n + 1)); printf '%s\n' "$LAST" | grep -q -- '--permission-mode dontAsk' || { echo "FAIL (an assistant's mode): the dry run does not start it in dontAsk"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+check 1 "--mode auto with an assistant" -- xd xa "$tmp/ext/assistants/xa" --mode auto
+check 0 "--mode dontAsk with an assistant" -- xd xa "$tmp/ext/assistants/xa" --mode dontAsk
 mkx "$tmp/ext/assistants/other" xb
 check 1 "--assistant-dir: a folder not named as the assistant" -- xd xb "$tmp/ext/assistants/other"
 mkx "$tmp/ext/notas/xc" xc

@@ -2,7 +2,9 @@
 # `selftest assistant` (#281, sub-contract 281.3) against a stub `claude` first on PATH (the real claude is
 # never called): the throwaway assistant is started with the core's start-worker, its transcript is written by
 # the stub - the Write outside its folder and the `git commit` fed to the guard named in the --settings file it
-# got, with that file's env, so the blocks come from this core's guard - and judged; cleanup-worker and the
+# got, with that file's env and the launch's permission_mode, then refused as Claude Code refuses them in the
+# launch's mode dontAsk (#563: `Permission to use <tool> has been denied because ... don't ask mode`; the
+# guard's own block stays `PreToolUse:<tool> hook error: ...`, which the self-test fails) - and judged; cleanup-worker and the
 # session check of `selftest clean` run against the stub's listing; at the end the session, its status file and
 # the throwaway folder are gone. Each run's scenario is set by STUB_ASST.
 #   tests/selftest/assistant.sh sh                  # selftest.sh, with the bash running this file
@@ -16,8 +18,8 @@
 #     PASS / FAIL line, nothing launched. COORD_PROBE_POLL (seconds) sets the transcript poll, as for probes.
 #   - its check lines start `PASS assistant: ` or `FAIL assistant: `, one per check, each naming its check by:
 #       `RUNS.tsv`          the run log was read and the answer holds the token
-#       `Write`             the Write outside the folder was blocked by the guard
-#       `git commit`        the git commit was blocked by the guard
+#       `Write`             the Write outside the folder was refused (dontAsk)
+#       `git commit`        the git commit was refused (dontAsk)
 #       `cleanup-worker`    cleanup-worker --session <id> exited 6 and changed nothing
 #       `selftest clean`    the self-test session check leaves the session listed
 #     (each word in exactly one line); the LAST line is `assistant: <n> PASS, <m> FAIL`, n and m the counts of
@@ -44,10 +46,10 @@
 #     sessionId's first 8 characters; launch output `backgrounded · <id> · <name>` and `claude stop <id>`), in
 #     JSON lines as Claude Code writes them: the prompt; a Read tool_use of the RUNS.tsv and its tool_result (the
 #     file's text); an assistant text answer quoting that text; a Write tool_use (file_path outside the folder)
-#     and its tool_result - the guard's block as `PreToolUse:Write hook error: [<cmd>]: Blocked by
-#     safety-guard: ...` with is_error, or `File created successfully at: <path>` (the file really written);
+#     and its tool_result - the refusal (see above; the guard's block as `PreToolUse:Write hook error: [<cmd>]: Blocked by
+#     safety-guard: ...`) with is_error, or `File created successfully at: <path>` (the file really written);
 #     a Bash tool_use with the `3. ` line's `git -C <repo> commit --allow-empty -m x` and its tool_result - the
-#     block as `PreToolUse:Bash hook error: ...` with is_error, or git's own output (the commit really made in
+#     refusal (or the guard's `PreToolUse:Bash hook error: ...`) with is_error, or git's own output (the commit really made in
 #     <repo>); then a text `Done.` and {"type":"system","subtype":"turn_duration"}.
 #     STUB_ASST: pass (default), noread (no Read, an answer without the token), notoken (the Read, an answer
 #     without the token), writeok (the Write went through), commitok (the commit went through), commitlied (the
@@ -100,11 +102,11 @@ case "${1:-}" in
   --bg) ;;
   *) exit 0 ;;
 esac
-shift; name="" model="" settings="" prompt=""
+shift; name="" model="" settings="" prompt="" pmode=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) name="$2"; shift 2 ;; --model) model="$2"; shift 2 ;; --settings) settings="$2"; shift 2 ;;
-    --permission-mode|--effort) shift 2 ;; --*) shift ;;
+    --permission-mode) pmode="$2"; shift 2 ;; --effort) shift 2 ;; --*) shift ;;
     *) prompt="$1"; shift ;;
   esac
 done
@@ -154,14 +156,17 @@ nc="$cwd"; command -v cygpath >/dev/null 2>&1 && nc="$(cygpath -w "$cwd")"
 printf '%s|%s|running|%s|%s\n' "$id" "$sid" "$nc" "$name" >> "$S"
 printf '%s\n' "$id" >> "$D/ids"
 mkdir -p "$CLAUDE_CONFIG_DIR/coordinator/sessions" && printf '{"session_id":"%s"}\n' "$sid" > "$CLAUDE_CONFIG_DIR/coordinator/sessions/$sid.json"
-# the guard's verdict on a tool call, run as Claude Code runs the PreToolUse hook of these settings
+# a tool call's verdict as Claude Code gives it (#563): the PreToolUse hook of these settings (its payload with the
+# launch's permission_mode), then the launch's mode - in dontAsk no allow rule of the examples names these two calls
 gcmd="$(grep 'safety-guard\.' "$D/settings.json" | grep -v -e '--self-test' -e '-SelfTest' | head -n 1 |
   sed 's/.*"command"[[:space:]]*:[[:space:]]*"//; s/"[[:space:]]*,\{0,1\}[[:space:]]*$//; s/\\"/"/g')"
 printf '%s' "$gcmd" > "$D/guardcmd"
-guard() {   # guard <tool> <tool_input JSON>: the guard's stderr in $gerr, its exit in $grc
+guard() {   # guard <tool> <tool_input JSON>: the refusal in $gerr, 2 in $grc (0: the call runs)
   [ -n "$gcmd" ] || { gerr="no guard command in the settings"; grc=0; return; }
-  gerr="$(printf '{"tool_name":"%s","tool_input":%s,"cwd":"%s"}' "$1" "$2" "$(jesc "$cwd")" |
+  gerr="$(printf '{"tool_name":"%s","tool_input":%s,"cwd":"%s","permission_mode":"%s"}' "$1" "$2" "$(jesc "$cwd")" "$pmode" |
     env COORD_ASSISTANT_DIR="$adir" COORD_PROTECTED_ROOT="$proot" COORD_PROTECTED_BRANCHES="$pbr" CLAUDE_PROJECT_DIR="$cwd" bash -c "$gcmd" 2>&1 >/dev/null)"; grc=$?
+  if [ "$grc" = 2 ]; then gerr="PreToolUse:$1 hook error: [$gcmd]: $gerr"
+  elif [ "$pmode" = dontAsk ]; then grc=2; gerr="Permission to use $1 has been denied because Claude Code is running in don't ask mode."; fi
 }
 use() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t%s","name":"%s","input":%s}]}}\n' "$3" "$1" "$2"; }
 result() {   # result <id> <content> [error]
@@ -191,14 +196,14 @@ write() {
   use Write "$wi" 2
   if [ "$scn" = writeok ]; then printf 'x' > "$out"; echo 1 > "$D/wrote"; result 2 "File created successfully at: $out"
   else guard Write "$wi"
-    if [ "$grc" = 2 ]; then result 2 "PreToolUse:Write hook error: [$gcmd]: $gerr" error
+    if [ "$grc" = 2 ]; then result 2 "$gerr" error
     else printf 'x' > "$out"; echo 1 > "$D/wrote"; result 2 "File created successfully at: $out"; fi
   fi
   ci="{\"command\":\"$(jesc "$ccmd")\"}"
   use Bash "$ci" 3
   if [ "$scn" = commitok ]; then commit; result 3 "$cres"
   else guard Bash "$ci"
-    if [ "$grc" = 2 ]; then [ "$scn" != commitlied ] || commit; result 3 "PreToolUse:Bash hook error: [$gcmd]: $gerr" error
+    if [ "$grc" = 2 ]; then [ "$scn" != commitlied ] || commit; result 3 "$gerr" error
     else commit; result 3 "$cres"; fi
   fi
   say "Done."

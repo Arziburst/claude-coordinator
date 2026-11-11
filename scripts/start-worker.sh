@@ -63,7 +63,8 @@
 # A launch that fails names what it created and cleanup-worker, and exits 1.
 # An assistant (#281): --name "assistant: <name>" (<name> letters, digits, . _ -, not dots only) and
 # --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md start a persistent session with NO worktree and NO
-# branch, launched from the repository root, --settings the --safety file, whose env COORD_ASSISTANT_DIR must
+# branch, in permission mode dontAsk (#563; another --mode refused),
+# launched from the repository root, --settings the --safety file, whose env COORD_ASSISTANT_DIR must
 # name that same folder. Folders are compared in one way in both start-worker scripts (the .ps1 runs this same
 # bash code): as on disk (links and junctions resolved, `..` taken), C:/... on Windows (a Git Bash /c/ form
 # too), no trailing /, in one letter case where paths ignore it; a folder that does not exist is compared as
@@ -95,7 +96,7 @@
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs="" go=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs="" go="" mgiven=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -106,7 +107,7 @@ while [ $# -gt 0 ]; do
     --branch) need "$@"; branch="$2"; shift 2 ;;
     --model) need "$@"; model="$2"; shift 2 ;;
     --effort) need "$@"; effort="$2"; shift 2 ;;
-    --mode) need "$@"; mode="$2"; shift 2 ;;
+    --mode) need "$@"; mode="$2"; mgiven=1; shift 2 ;;
     --brief-file) need "$@"; brief="$2"; shift 2 ;;
     --safety) need "$@"; safety="$2"; shift 2 ;;
     --base) need "$@"; base="$2"; shift 2 ;;
@@ -131,6 +132,11 @@ if [ -n "$asst" ] && [ -n "$given" ]; then
   echo "refused: $given with an assistant ($name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" >&2; exit 1
 fi
 [ -n "$asst" ] || [ -z "$adirx" ] || { echo "refused: --assistant-dir with $name - it is for an assistant (--name \"assistant: <name>\") only" >&2; exit 1; }
+# an assistant runs in permission mode dontAsk (#563): its settings' closed allow list holds it, the guard refuses it in any other
+if [ -n "$asst" ]; then
+  [ -z "$mgiven" ] || [ "$mode" = dontAsk ] || { echo "refused: --mode $mode with an assistant ($name) - an assistant runs only in permission mode dontAsk (#563)" >&2; exit 1; }
+  mode=dontAsk
+fi
 # a brief that is missing, or empty / blanks only, would start a worker with no task (#226)
 if [ -n "$brief" ]; then
   [ -f "$brief" ] || { echo "--brief-file: $brief does not exist" >&2; exit 1; }
@@ -138,7 +144,7 @@ if [ -n "$brief" ]; then
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--go <the coordinator's words>] [--dry-run]" >&2
-  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode auto] [--dry-run]" >&2
+  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode dontAsk] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }

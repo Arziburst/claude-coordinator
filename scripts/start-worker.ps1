@@ -97,9 +97,14 @@ if ($asst) {
   if ($given.Count) { Fail "refused: -$($given[0]) with an assistant ($Name) - an assistant has no worktree, branch, base or contract; it starts from the repository root" }
 }
 if (-not $asst -and $AssistantDir) { Fail "refused: -AssistantDir with $Name - it is for an assistant (-Name `"assistant: <name>`") only" }
+# an assistant runs in permission mode dontAsk (#563): its settings' closed allow list holds it, the guard refuses it in any other
+if ($asst) {
+  if ($PSBoundParameters.ContainsKey('Mode') -and $Mode -cne 'dontAsk') { Fail "refused: -Mode $Mode with an assistant ($Name) - an assistant runs only in permission mode dontAsk (#563)" }
+  $Mode = 'dontAsk'
+}
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode auto] [-DryRun]') }
+  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode dontAsk] [-DryRun]') }
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-Go <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
