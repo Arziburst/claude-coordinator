@@ -239,7 +239,7 @@ mkas() {   # mkas <name> [<env folder>]: <repo>/coordinator/assistants/<name> wi
   ad="$ar/coordinator/assistants/$1"; mkdir -p "$ad"
   printf 'Log the hours (the fixture brief of %s).\n' "$1" > "$ad/BRIEF.md"; printf '# Notes\n' > "$ad/NOTES.md"
   asf="$tmp/as-$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_').json"
-  awk -v d="${2-$mar/coordinator/assistants/$1}" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' "$tmp/safety.json" > "$asf"
+  awk -v d="${2-$mar/coordinator/assistants/$1}" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } /"permissions": [{]/ { print; print "    \"defaultMode\": \"dontAsk\","; next } { print }' "$tmp/safety.json" > "$asf"
   grep -q '"COORD_ASSISTANT_DIR"' "$asf" || { echo "FAIL: could not write the assistant settings $asf"; fail=1; }
 }
 A=(--repo "$ar" --model sonnet --report-to "Core lead")
@@ -1027,7 +1027,7 @@ for b in 315-lead 316-lead 317-w 317-t; do git -C "$tmp/repo" worktree remove --
 # --- an assistant (#281): --name "assistant: <name>" (letters, digits, . _ -) and --brief-file
 # <repo>/coordinator/assistants/<name>/BRIEF.md start a background session with no worktree and no branch, from the
 # --repo root, --settings the --safety file, whose env COORD_ASSISTANT_DIR names that folder. Access points: the
-# settings fixture is $tmp/safety.json with the line `"COORD_ASSISTANT_DIR": "<folder>"` added to its env (the
+# settings fixture is $tmp/safety.json with the line `"COORD_ASSISTANT_DIR": "<folder>"` added to its env and `"defaultMode": "dontAsk"` to its permissions (#563; the
 # folder in the C:/... form on Windows, as a settings file holds it); the stub claude lists every name it started
 # (`claude agents --json`, with --all too) and a session of $STUB_LOG.sessions (`<id> <sessionId> <state> <name>`).
 # A refusal is exit 1 before anything is created, and its line names what it refuses: the name, BRIEF.md or the

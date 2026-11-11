@@ -128,7 +128,7 @@ mkas() {   # mkas <name> <env folder> [<settings variant>]: the folder with BRIE
   ad="$ar/coordinator/assistants/$1"; mkdir -p "$ad"
   printf 'Log the hours (%s).\n' "$1" > "$ad/BRIEF.md"; printf '# Notes\n' > "$ad/NOTES.md"
   asf="$tmp/as-$1-${3:-$kind}.json"
-  sw "${3:-$kind}" | awk -v d="$2" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' > "$asf"
+  sw "${3:-$kind}" | awk -v d="$2" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } /"permissions": [{]/ { print; print "    \"defaultMode\": \"dontAsk\","; next } { print }' > "$asf"
   grep -q '"COORD_ASSISTANT_DIR"' "$asf" || { echo "FAIL: could not write the assistant settings $asf"; fail=1; }
 }
 mkas fc "$mar/coordinator/assistants/fc"
@@ -144,11 +144,17 @@ done
 check 0 "start: an assistant, the listing works" -- start "${A[@]}"
 n=$((n + 1)); grep -q -- '--bg --name assistant: fc' "$STUB_LOG" || { echo "FAIL (start: an assistant, the listing works): not launched"; fail=1; }
 : > "$STUB_LOG.names"
+# #563: settings without "defaultMode": "dontAsk" (a file from before #563) are refused, naming it; nothing launched
+grep -v '"defaultMode"' "$asf" > "$tmp/as-old-$kind.json"; : > "$STUB_LOG"
+check 1 "start: an assistant whose settings lack defaultMode dontAsk" -- start "${A[@]/$asf/$tmp/as-old-$kind.json}"
+n=$((n + 1)); printf '%s\n' "$LAST" | grep -q '"defaultMode": "dontAsk"' || { echo "FAIL (an assistant's old settings): the refusal does not name defaultMode dontAsk: $LAST"; fail=1; }
+n=$((n + 1)); grep -q -- '--bg' "$STUB_LOG" && { echo "FAIL (an assistant's old settings): claude --bg was started"; fail=1; }
+: > "$STUB_LOG.names"
 # --- the worker's own cases (281.3): --assistant-dir, and the settings never inside the assistant's folder ---
 mkx() {   # mkx <folder> <name>: a folder with BRIEF.md and NOTES.md outside the repository; settings in $asf
   mkdir -p "$1"; printf 'Log the hours.\n' > "$1/BRIEF.md"; printf '# Notes\n' > "$1/NOTES.md"
   asf="$tmp/ax-$2-$kind.json"
-  sw "$kind" | awk -v d="$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } { print }' > "$asf"
+  sw "$kind" | awk -v d="$(cygpath -m "$1" 2>/dev/null || printf '%s' "$1")" '/"COORD_PROTECTED_ROOT"/ { print "    \"COORD_ASSISTANT_DIR\": \"" d "\"," } /"permissions": [{]/ { print; print "    \"defaultMode\": \"dontAsk\","; next } { print }' > "$asf"
 }
 xd() { local x="$1" y="$2"; shift 2; start --repo "$ar" --name "assistant: $x" --model sonnet --brief-file "$y/BRIEF.md" --safety "$asf" --report-to x --assistant-dir "$y" "$@" --dry-run; }
 mkx "$tmp/ext/assistants/xa" xa

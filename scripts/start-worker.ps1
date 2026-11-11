@@ -184,6 +184,10 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:uppe
   if ("$(FCanon (Split-Path -Parent $Safety))/".StartsWith("$(FCanon $adir)/", [StringComparison]::Ordinal)) {
     Fail "refused: the -Safety file $Safety lies in the assistant's folder $adir - the assistant could edit its own settings; keep it outside the folder (coordinator/assistant-settings/$aname.json)"
   }
+  # settings from before #563 (the guard's retired assistant mode) are moved first: their allow list is not closed
+  if ([IO.File]::ReadAllText($Safety) -cnotmatch '"defaultMode"\s*:\s*"dontAsk"') {
+    Fail "refused: $Safety has no `"defaultMode`": `"dontAsk`" - an assistant's settings are filled from settings.example.assistant(.windows).json since #563 (the coord-assistant skill moves older ones, on the owner's yes)"
+  }
 }
 $wt = if ($asst) { '' } else { Join-Path $(if ($WorktreeRoot) { $WorktreeRoot } else { Join-Path $root '.claude/worktrees' }) $Branch }
 $from = if ($LaunchFrom) { $LaunchFrom } else { $root }
