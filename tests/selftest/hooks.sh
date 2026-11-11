@@ -127,7 +127,9 @@ ast() {   # ast <assistant example> <worker example> <placeholder of the project
   for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" | sed 's/,$//' > "$tmp/$s.deny"; done
   while IFS= read -r l; do grep -qxF -- "$l" "$tmp/a.deny" || bad="$bad; the deny list lacks $l"; done < "$tmp/w.deny"
   awk '/"allow": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/a.json" > "$tmp/a.allow"
-  grep -Eq '"(Bash\((gh api|git|bash|sh|node|python|npx)|PowerShell)' "$tmp/a.allow" && bad="$bad; the allow list holds a gh api, git, PowerShell or interpreter rule"
+  grep -Eq '"(Bash\((gh api|bash|sh|node|python|npx)|PowerShell)' "$tmp/a.allow" && bad="$bad; the allow list holds a gh api, PowerShell or interpreter rule"
+  grep '"Bash(git' "$tmp/a.allow" | grep -vxE ' *"Bash\(git branch\)",?| *"Bash\(git config --get \*\)",?' | grep -q . && bad="$bad; the allow list holds a git rule other than git branch / git config --get"
+  grep -q '^  "_allow_per_brief": \[' "$tmp/a.json" || bad="$bad; no _allow_per_brief block of the per-brief forms"
   for s in a w; do awk '/"PreToolUse"/ { f = 1 } f' "$tmp/$s.json" > "$tmp/$s.pre"; done
   grep '"matcher"' "$tmp/w.pre" > "$tmp/w.m"; grep '"matcher"' "$tmp/a.pre" > "$tmp/a.m"
   cmp -s "$tmp/a.m" "$tmp/w.m" || bad="$bad; the PreToolUse matcher differs from $w's"
