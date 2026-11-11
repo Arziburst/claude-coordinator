@@ -243,6 +243,35 @@ if (Test-Path -LiteralPath $sk -PathType Container) {
     }
   }
 }
+# the start-read texts' sizes (#600): words of CORE.md, its section 1, its event table and each roles/*.md against
+# tests/check-core-sizes.txt; over its record by more than the margin, or no record: a WARN, never an error.
+# A word is a run of characters between spaces, tabs and line ends, as check-core.sh counts it.
+function Words([string[]]$L, [string]$m) {
+  $w = 0; $on = $false
+  foreach ($l in $L) {
+    if ($m -eq 's1') { if ($l -cmatch '^## 1\. ') { $on = $true } elseif ($l.StartsWith('## ')) { $on = $false } }
+    if ($m -eq 'ev') { if ($l.StartsWith('| Event |')) { $on = $true } elseif ($l.StartsWith('**Where the topics live')) { $on = $false } }
+    if (-not $m -or $on) { $w += @($l -split '[ \t]+' | Where-Object { $_ }).Count }
+  }
+  $w
+}
+$sz = 'tests/check-core-sizes.txt'; $rec = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal); $mg = $null
+if (Test-Path -LiteralPath (Join-Path $Root $sz) -PathType Leaf) {
+  foreach ($l in [IO.File]::ReadAllLines((Join-Path $Root $sz))) {
+    if ($null -eq $mg -and $l -cmatch '^margin ([0-9]+%?)$') { $mg = $Matches[1] }
+    if ($l -cmatch '^[ \t]*([^ \t]+)[ \t]+([0-9]+)[ \t]*$' -and -not $rec.ContainsKey($Matches[1])) { $rec[$Matches[1]] = [long]$Matches[2] }
+  }
+}
+if ($null -eq $mg) { $mg = '0' }
+$cl = [IO.File]::ReadAllLines((Join-Path $Root 'CORE.md'))
+$roles = [string[]]@(if (Test-Path -LiteralPath (Join-Path $Root 'roles') -PathType Container) { Get-ChildItem -LiteralPath (Join-Path $Root 'roles') -Filter '*.md' -File | ForEach-Object { "roles/$($_.Name)" } })
+[Array]::Sort($roles, [StringComparer]::Ordinal)
+foreach ($t in @('CORE.md', 'CORE.md#section-1', 'CORE.md#event-table') + @($roles)) {
+  $w = if ($t -ceq 'CORE.md#section-1') { Words $cl 's1' } elseif ($t -ceq 'CORE.md#event-table') { Words $cl 'ev' } else { Words ([IO.File]::ReadAllLines((Join-Path $Root $t))) '' }
+  if (-not $rec.ContainsKey($t)) { "WARN: $t has $w words and no record in $sz"; continue }
+  $r = $rec[$t]; $x = if ($mg.EndsWith('%')) { [long][Math]::Floor($r * [long]$mg.TrimEnd('%') / 100) } else { [long]$mg }
+  if ($w -gt $r + $x) { "WARN: $t has $w words, over its record $r by more than the margin $mg ($sz)" }
+}
 "check-core: $files files, $($sections.Count) sections, $rules hard rules, $nfeat features, $errors errors"
 if ($errors) { exit 1 }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
