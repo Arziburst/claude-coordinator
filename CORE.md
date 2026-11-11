@@ -225,7 +225,7 @@ is lost (#242).
 | A task starts | its contract passes check-contract, run with `--runs <RUNS.tsv>`, and the plan line it prints (`run-stats <kind>/<model>: …`) is copied into the plan next to the budget (§7a, #333); conflict foresight (§4a); the tester first when `tests_first` is `yes`; a task given to a lead gets no task-level tester — its contract says `tests_first: no - the lead runs the tester per sub-contract`, `yes` belongs only in sub-contracts (#289); the session named and on the watch list, the watcher running (steps 3–4 below); its issue moved to In Progress on the board, by the project's words (`PROJECT.md`) where it has none; its journal line, and its entry in the open questions removed (§12). start-worker prints what is due then: its `foresight:` lines, and its `board:` line for a tester, a worker or a lead, and its `watch:` line (an assistant: `subscribe:`) (#466) |
 | A task goes back for another round | on a §5 task or a `tests_first: yes` task, a round that changes behaviour (a review finding, a changed rule) starts with the tester; the message to the worker names the tester's new commit (step 5 below) |
 | A check goes red | classified before anyone acts on it — cancelled, code, infrastructure or flake (a flake re-run once) (step 4 below) |
-| A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a), the issue closed and moved on the board, by the project's words (`PROJECT.md`) where it has none, the task row written (§7), and a rule or number in the project's own files that moved brought up; a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12); a project on GitHub Actions, once the main run has ended, reads its times by `scripts/ci-times` (with `--baseline` where it keeps one); one journal line: the run's wall clock and any step over its baseline. Growth past `CI time budget` (`PROJECT.md`) goes to the owner only by the median of the last three runs of the main line against the baseline, where a project keeps one; with no baseline, the same median of the wall clock against the median three runs earlier; a run that prints only `wall` is read so. Never a stop; no such CI, nothing (#390). After a merge the queue prints this row as `AFTER MERGE #<pr>:` lines, one thing each, the PR's number, branch and issue filled in; this row stays the source (#466); the queue itself removes the task's finished sessions whose run rows are written and names the rest (§8, #521) |
+| A task is accepted, merged or dropped | its cleanup (§8), its run-log and journal lines, its report (§12) with one question: did a core rule, script or check fail us in this task? (§10) — the verifier's `core_findings` included; after a merge, every `AFFECTED` session told to merge main (§4a), the issue closed and moved on the board, by the project's words (`PROJECT.md`) where it has none, the task row written (§7), and a rule or number in the project's own files that moved brought up; a bug found in earlier merged work (§12: the owner's test, CI on the main line, another task, a user) one line in ESCAPES — any time it is found, not only at a merge; the project's own after-merge duties (`PROJECT.md`, step 7 below; the progress line, §12); a project on GitHub Actions, once the main run has ended, reads its times by `scripts/ci-times` (with `--baseline` where it keeps one); one journal line: the run's wall clock and any step over its baseline; when growth goes to the owner: TOOLKIT *CI*, *Step times*. Never a stop; no such CI, nothing (#390). After a merge the queue prints this row as `AFTER MERGE #<pr>:` lines, one thing each, the PR's number, branch and issue filled in; this row stays the source (#466); the queue itself removes the task's finished sessions whose run rows are written and names the rest (§8, #521) |
 | A core finding | its row and, as the owner chose, its issue — at once, it may never happen again (§10) |
 | A mistake is corrected or found | the lesson written as a rule (§10) |
 | The conversation is compacted | CORE's §1 and this table, found by their marker lines, never by line numbers (the hook's message names them), `PROJECT.md`, `BINDINGS.md` and the journal's open questions re-read from disk first, the rest of CORE when a topic needs it; then the checkpoint the PreCompact hook wrote before it (`coordinator/CHECKPOINT.md`: the moment, the open questions, the watch list, the sessions, the files to re-read), printed by the after-compact hook as data copied from the files, read and acted on under §1 — stale or missing is a note, never a loss (TOOLKIT *After a compaction*); any duty of this table not done since the last journal line, done now |
@@ -369,10 +369,7 @@ The continuous work:
    goes to a fresh worker (step 2). A fix round may also go to a fresh worker on the pushed branch
    with a short note instead of the same session when that session's context has grown long — each
    turn re-reads it (a lead's small rounds cost $10–24 each against a $4–6 worker change, #292;
-   TOOLKIT *Pause and resume*). Each round's start removes the task's earlier finished sessions whose run rows are written (§8, #521). **The finding split (#381):** a finding is `fix now` only if the PR
-   introduced it, or the PR fails its intent or a named criterion without it; anything else is an issue and a
-   FEATURES `not covered` line, and the PR merges. The guard being only strengthened, a partial strengthening
-   is never below main. **Round 3 is a fresh worker and the owner's word:** start-worker refuses a third
+   TOOLKIT *Pause and resume*). Each round's start removes the task's earlier finished sessions whose run rows are written (§8, #521). **The finding split (#381):** §6, *Fix now or a new issue*. **Round 3 is a fresh worker and the owner's word:** start-worker refuses a third
    round, or a task whose rows sum to at least twice `budget.cost`, with the numbers, unless `--owner-ok <the
    owner's words>`; the coordinator journals the words. A round given by a message to a live session passes no
    gate, so a third round is always a fresh worker on the pushed branch. A session still running has no row
@@ -616,8 +613,7 @@ never assumed (below).
   coordinator's own model and effort get a line per day.
   **A run's row is written by `scripts/runs add`** (TOOLKIT *Usage*), never by hand (#332): it takes the
   tokens, cost, start, wall and active from `scripts/session-tokens <id>` (a subagent's row: `--in
-  <parent> --tokens <n>`), and refuses a result outside the words above (`approved` `done` `pass` `rework
-  <n>` `escalated` `failed` `dropped` `ready`), a missing transcript and a second row of the same start
+  <parent> --tokens <n>`), and refuses a result outside the words above, a missing transcript and a second row of the same start
   and role. New last columns `own_cost machine fix_now` (#490): a subagent's own reading by `--agent`, never summed; the verifier's
   line by `--findings`, as it wrote it, nobody re-counts it. **`scripts/runs check`** lists the project's finished sessions — the process ended: state
   done, stopped or failed and no status; a session waiting between rounds (status idle) is not listed, its
@@ -754,13 +750,9 @@ The coordinator's job, not a lead's or a worker's: only it sees every task, the 
 - The run log keeps leads and direct work apart (`role`, `37.2` tasks), so how much a lead saves or costs
   can be measured later from the same data.
 - **The retro**, when the owner asks ([procedures/RETRO.md](procedures/RETRO.md)), measures the
-  coordinator on cost, speed, quality, predictability and stability, week against week, from the run log
-  and the project's transcripts (`scripts/retro`, its input `scripts/session-insights`, TOOLKIT *Usage*),
-  writes at most three proposals for the owner's yes, and sends an anonymous summary of numbers only as the owner chose at init. Its
-  predictability judges a task by the estimate logged at the start where there is one (§7: `estimate`,
-  `estimate_time`) — a range met inside it, one number `n` met from `2n/3` to `3n/2` (symmetric on a log
-  scale, about as wide as a range's 25th–75th band, so a single number never looks more predictable than
-  a range) — else by the forecast rebuilt from the run log as above.
+  coordinator on cost, speed, quality, predictability and stability, week against week, writes at most
+  three proposals for the owner's yes, and sends an anonymous summary of numbers only as the owner chose
+  at init.
 
 ## 8. Resources, parallel work and cleanup
 
@@ -850,9 +842,7 @@ change that affects them.
   and the UTC time it was asked and answered — the `--waits` input of `run-stats --task`, §7a).
   It survives compaction, restarts and moves. No customer data or secrets
   (§1.13); in a client's repository, written for the client.
-- **Run log rows** (§7): each finished run's row is written by `scripts/runs add` with a result from the
-  fixed words, never by hand; `scripts/runs check` at each sync (§4) and before the retro lists the
-  finished runs still without a row, and each gets its row then (#332).
+- **Run log rows:** §7, *A run's row is written by `scripts/runs add`*.
 - **Escaped bugs** — the measure of "no bugs": a bug found **after** its change was merged (by the
   owner's test, CI on the main line, another task, a user) gets one line in `coordinator/ESCAPES.tsv`
   (private, never in the client's tracker): date · the bug (issue or link) · the task that introduced

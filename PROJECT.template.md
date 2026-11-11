@@ -199,5 +199,5 @@ history (the files most of the last weeks' PRs changed) at init or by the one-ti
 |---|---|---|---|---|
 | `<fill>` | `<fill>` | `<read / write>` | `<yes/no>` | `<fill>` |
 
-## Lessons (CORE §10) — one line each, newest last
+## Lessons (CORE §10) — one line each, newest last; a lesson replaced by a later one or taken into the core is deleted on the owner's yes
 - `<date>`: `<lesson>`

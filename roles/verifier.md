@@ -77,7 +77,11 @@ it) would make that work look deleted.
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
      (#240); on macOS (no PowerShell tool) it is named not run, covered by CI's pwsh jobs and the
-     coordinator. Which compound commands the isolation refuses and runs: TOOLKIT *Scripts* (#530).
+     coordinator. Claude Code's isolation refuses, before it runs: bash, pwsh or git together with a `$`
+     expansion (`$?`, `$(...)`, a variable: use `&&` / `||` and literal paths), a program whose argument
+     is a variable (#540), `awk -f <file>` (#559), shell text handed to bash (`bash -c`, a heredoc into
+     bash) and any git after a `cd` to the shared checkout (`git -C` your worktree); pipes, `;` and `&&`
+     without `$` run (TOOLKIT *Scripts*, #530).
 3. **Then read the change** for `check: review` criteria and for anything that breaks the intent, a
    non_goal or a do_not_decide item. A test case that repeats another, or that costs much more than what
    it proves needs, is a finding of the PR that added it. A case closing a real route of a safety or money
