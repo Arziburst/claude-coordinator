@@ -40,13 +40,14 @@ $top = "$(GitOut rev-parse --show-toplevel | Select-Object -First 1)"
 if ($repo) { $o = "$(GitOut remote get-url origin | Select-Object -First 1)"; $u = $o.TrimEnd('/') -replace '\.git$', ''
   if (-not ("/$u").EndsWith('/' + ($repo -replace '\.git$', ''), [StringComparison]::OrdinalIgnoreCase) -and -not $u.EndsWith(':' + ($repo -replace '\.git$', ''), [StringComparison]::OrdinalIgnoreCase)) {
     Stop2 "check-bounds: the origin of the repository $top ($(if ($o) { $o } else { 'none' })) is not the contract's repository ${repo}: run it inside that repository" } }
-if ($tch.Count -and -not (@(GitOut -C $top ls-files '--' @tch).Count + @(GitOut -C $top diff --name-only --no-renames $range '--' @tch).Count)) {
-  Stop2 "check-bounds: none of the contract's touches ($($tch -join ' ')) is in the repository $top or in ${range}: run it inside the contract's repository" }
+$wrong = ''; if ($tch.Count -and -not (@(GitOut -C $top ls-files '--' @tch).Count + @(GitOut -C $top diff --name-only --no-renames $range '--' @tch).Count)) {
+  $wrong = "check-bounds: none of the contract's touches ($($tch -join ' ')) is in the repository $top or in ${range}: run it inside the contract's repository" }
 $over = @()
-foreach ($x in $b) { $g = $x[0]; $a = [long]0
+$outl = @(foreach ($x in $b) { $g = $x[0]; $a = [long]0
   foreach ($n in $nums) { $f = $n -split "`t", 3; if ($f.Count -lt 3 -or -not (GlobMatch ($f[2]) $g)) { continue }
     if ($f[0] -ceq '-') { "binary: $($f[2]) counts as 0" } else { $a += [long]$f[0] } }
-  "$g $a/$($x[1])"; if ($a -gt [long]$x[1]) { $over += "check-bounds: OVER $g $a/$($x[1])" } }
+  "$g $a/$($x[1])"; if ($a -gt [long]$x[1]) { $over += "check-bounds: OVER $g $a/$($x[1])" } })
+if ($wrong -and -not $over.Count) { Stop2 $wrong }; $outl   # the OK of a wrong folder is refused; an OVER is still said
 if ($over.Count) { $over; exit 1 }
 'check-bounds: OK'
 } catch { "check-bounds: $_"; exit 2 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

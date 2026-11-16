@@ -42,28 +42,28 @@ bad="$(printf '%s\n' "$b" | sed -n 's/^ //p' | head -n 1)"
 [ -z "$bad" ] || { echo "check-bounds: a malformed bound (- <glob> <max added lines>): $bad"; exit 2; }
 [ -n "$b" ] || { echo "check-bounds: no bounds"; exit 0; }
 nums="$(git -c core.quotePath=false diff --numstat --no-renames "$range" 2>&1)" || { echo "check-bounds: cannot read $range in the repository $(git rev-parse --show-toplevel 2>/dev/null || echo '(none)'): $(printf '%s' "$nums" | head -n 1); run it from the project's root"; exit 2; }
-# #615: a folder that is not the contract's repository counts 0 for every bound, so it is refused, never OK
-top="$(git rev-parse --show-toplevel 2>/dev/null)"; lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+# #615: a folder that is not the contract's repository counts 0 for every bound: its OK is refused (an OVER is still said)
+top="$(git rev-parse --show-toplevel 2>/dev/null)"; lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }; wrong=""
 if [ -n "$repo" ]; then o="$(git remote get-url origin 2>/dev/null)"; u="${o%/}"
   case "$(lc "/${u%.git}")" in *[/:]"$(lc "${repo%.git}")") ;; *) echo "check-bounds: the origin of the repository $top (${o:-none}) is not the contract's repository $repo: run it inside that repository"; exit 2 ;; esac; fi
 if [ -n "$tch" ]; then P=(); while IFS= read -r x; do P+=("$x"); done <<IN
 $tch
 IN
-  [ -n "$(git -C "$top" ls-files -- "${P[@]}" 2>/dev/null | head -n 1)$(git -C "$top" diff --name-only --no-renames "$range" -- "${P[@]}" 2>/dev/null | head -n 1)" ] ||
-    { echo "check-bounds: none of the contract's touches ($(printf '%s' "$tch" | tr '\n' ' ' | sed 's/ $//')) is in the repository $top or in $range: run it inside the contract's repository"; exit 2; }
+  [ -n "$(git -C "$top" ls-files -- "${P[@]}" 2>/dev/null | head -n 1)$(git -C "$top" diff --name-only --no-renames "$range" -- "${P[@]}" 2>/dev/null | head -n 1)" ] || wrong="check-bounds: none of the contract's touches ($(printf '%s' "$tch" | tr '\n' ' ' | sed 's/ $//')) is in the repository $top or in $range: run it inside the contract's repository"
 fi
-over=""
+over="" outl="" nl=$'\n'
 while read -r g m; do
   a=0
   while IFS="$(printf '\t')" read -r x _ p; do
-    [ -n "$p" ] && globmatch "$p" "$g" || continue; if [ "$x" = - ]; then echo "binary: $p counts as 0"; else a=$((a + x)); fi
+    [ -n "$p" ] && globmatch "$p" "$g" || continue; if [ "$x" = - ]; then outl="${outl}binary: $p counts as 0$nl"; else a=$((a + x)); fi
   done <<IN
 $nums
 IN
-  echo "$g $a/$m"; [ "$a" -le "$m" ] || over="$over
+  outl="$outl$g $a/$m$nl"; [ "$a" -le "$m" ] || over="$over
 check-bounds: OVER $g $a/$m"
 done <<IN
 $b
 IN
+[ -n "$over" ] || [ -z "$wrong" ] || { echo "$wrong"; exit 2; }; printf '%s' "$outl"
 if [ -n "$over" ]; then printf '%s\n' "${over#?}"; exit 1; fi
 echo "check-bounds: OK"

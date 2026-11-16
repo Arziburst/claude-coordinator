@@ -109,6 +109,7 @@ mkh tglob 'touches: [src/**/thr*.txt]'; t "a glob among the touches" tglob 0 'sr
 mkh tempty 'touches: []'; t "empty touches: as without them" tempty 0 'src/* 5/6' 'check-bounds: OK'
 mkh tnone 'touches: [app/main.c, web/, lib/*.go]'
 rf "none of the touches is in the folder" tnone "check-bounds: none of the contract's touches" 'app/main.c web/ lib/*.go' '/repo' "$R"
+sed 's#src/\* 6#src/* 4#' "$tmp/c/tnone.md" > "$tmp/c/tover.md"; t "the refusal stands in for an OK only: an OVER there is still said" tover 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
 g checkout -q main   # the checkout on the base: a file only the range's head has is still the contract's
 t "a touched file only in the range" tin 0 'src/* 5/6' 'check-bounds: OK'; rf "none of the touches, on the base" tnone "none of the contract's touches"
 g checkout -q work
