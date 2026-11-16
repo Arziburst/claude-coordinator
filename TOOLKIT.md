@@ -21,6 +21,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree it entered, and no branch; `claude rm` drops the listing only: its transcript, its kept brief and its worktree stay.
   So start-worker (before a tester's, worker's or lead's launch) and merge-queue (after a merge) find a task's finished sessions by
   the worktree the brief kept by their `sessionId` names, else by the name `#<id> `, and `claude rm` those `runs check` finds a row for.
+  After a merge by a human neither runs: `scripts/cleanup-worker.sh --task <id> [--runs <log>] [--dry-run]` (`.ps1`: `-Task`), from the project's
+  root or with `--worktree`, does the same for task `<id>`: `removed <id> (<name>)`, or `MISSING <id> <name>` for one with no run row (write
+  it, run it again); exit 3 a failed listing or `runs check`, 4 a failed `claude rm` (#621).
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
 - **Name every session** (CORE §4): `--name` / `-n`; without it the name is auto-generated and the owner
   cannot tell sessions apart. The name carries the role, not the project: `#37 worker: <title>`.
