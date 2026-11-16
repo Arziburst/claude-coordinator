@@ -44,9 +44,9 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      start: the running session keeps the old guard). **A Windows file whose guard names `safety-guard.ps1`**
      (written before #564) keeps working: that file is now a shim that runs `safety-guard.sh` in Git Bash, the
      same verdicts, and blocks when it cannot — at the price of a PowerShell start on every guarded call (about 830 ms against 390, more on a loaded machine, #620). So the update moves it,
-     as a step of its own, covered by the owner's yes to the update, never offered separately: every safety file the update checks — the worker safety file and the project's other role files (a reviewer's, a lead's), the assistants' `coordinator/assistant-settings/*.json`, and the user-level and the project's `.claude/settings.json` where they name the guard —
+     as a step of its own, covered by the owner's yes to the update, never offered separately: every safety file the update checks — the worker safety file and the project's other role files (a reviewer's, a lead's), the assistants' `coordinator/assistant-settings/*.json`, and the user-level `~/.claude/settings.json` and the project's `.claude/settings.json` and `.claude/settings.local.json` where they name the guard —
      whose two guard commands name `safety-guard.ps1` is named in this report, and step 4 moves both
-     commands to `bash <core>/scripts/hooks/safety-guard.sh` (`--self-test` on the SessionStart one), as in the
+     commands to `bash <core>/scripts/hooks/safety-guard.sh` (`<core>`: this project's core path, in a shared user-level file too; `--self-test` on the SessionStart one), as in the
      current settings example, nothing else in the file changed; the coordinator's own files by the prepared file and the owner's one command, as above.
      A file the update could not move keeps working through the shim and is named in the report as not moved;
    - **Assistants' settings from before #563** (`coordinator/assistant-settings/*.json` without
@@ -122,5 +122,5 @@ Run only on the owner's command ("update the core", "обнови ядро", any
 7. **Journal** the update: the old and new commits, what the owner decided per item, the sessions paused
    and resumed.
 
-**The update's very end** (only when it set or removed the window, the PreCompact hook or the window mark's hook): the coordinator prints the owner
+**The update's very end** (only when it set or removed the window, the PreCompact hook or the window mark's hook, or moved one of the coordinator's own settings files to the bash guard — hooks load at start, so the running session stays on the shim until then, #620): the coordinator prints the owner
 the commands of TOOLKIT *Pause and resume*, as RESET.md step 6 does; a session cannot restart itself. For a foreground coordinator that is `/exit`, then `claude --resume <its session id>` from the project's root; RESET.md's "NEW session, never --resume" is for a reset only.
