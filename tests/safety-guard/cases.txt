@@ -817,3 +817,53 @@ allow	work	GH_BROWSER=echo gh pr list	-	@PROJECT@	-	-
 allow	work	gh api graphql -f query='query{x}'	-	@PROJECT@	-	-
 allow	work	gh pr view 12 -cw	-	@PROJECT@	-	-
 allow	ps:work	Set-Item env:/GH_BROWSER x; gh pr list	-	@PROJECT@	-	-
+# --- several protected roots (#613): COORD_PROTECTED_ROOT lists them separated by | (a project of several
+# repositories: work and other here; @TMP@ is the folder that holds them all, so @TMP@/work is @PROJECT@ in work).
+# Every rule of the one root holds for each: an edit under either outside its own .claude/worktrees/ is blocked,
+# whichever root the session's cwd is in; inside either root's worktrees and in neither root: allowed ---
+block	edit:work	@PROJECT@/src/app.js	@PROJECT@|@TMP@/other
+block	write:work	@TMP@/other/src/app.js	@PROJECT@|@TMP@/other
+block	multiedit:work	@TMP@/other/src/app.js	@PROJECT@|@TMP@/other
+block	notebook:work	@TMP@/other/notebooks/a.ipynb	@PROJECT@|@TMP@/other
+block	edit:work	@TMP@/other/.claude/settings.json	@PROJECT@|@TMP@/other
+block	edit:other	@TMP@/work/src/app.js	@TMP@/work|@TMP@/other
+block	edit:other	src/app.js	@TMP@/work|@TMP@/other
+block	edit:work/.claude/worktrees/12-fix/src	../../../../../other/src/app.js	@PROJECT@|@TMP@/other
+allow	edit:work	@PROJECT@/.claude/worktrees/12-fix/src/app.js	@PROJECT@|@TMP@/other
+allow	write:work	@TMP@/other/.claude/worktrees/7-api/new.txt	@PROJECT@|@TMP@/other
+allow	edit:other	@TMP@/work/.claude/worktrees/12-fix/src/app.js	@TMP@/work|@TMP@/other
+allow	edit:work/.claude/worktrees/12-fix/src	app.js	@PROJECT@|@TMP@/other
+allow	edit:work	@TMP@/elsewhere/a.txt	@PROJECT@|@TMP@/other
+allow	edit:work	@TMP@/other-old/src/app.js	@PROJECT@|@TMP@/other
+allow	write:work	@TMP@/other	@PROJECT@|@TMP@/other
+# one root's worktrees are not the other's: .. from a worktree of work into other
+block	edit:work	@PROJECT@/.claude/worktrees/12-fix/../../../../other/src/app.js	@PROJECT@|@TMP@/other
+# the order of the list, three roots, and each root canonicalised as the one root is: a trailing separator,
+# backslashes, .. in it, a link to it (@LINK@ is work from another folder), letter case (fold)
+block	edit:work	@PROJECT@/src/app.js	@TMP@/other|@PROJECT@
+block	edit:work	@TMP@/other/src/app.js	@TMP@/main|@PROJECT@|@TMP@/other
+block	edit:work	@TMP@/main/src/app.js	@TMP@/main|@PROJECT@|@TMP@/other
+block	edit:work	@TMP@/other/src/app.js	@PROJECT@|@TMP@/other/
+block	edit:work	@PROJECT@/src/app.js	@TMP@/other|@PROJECT_W@\
+block	edit:work	@TMP@/other/src/app.js	@PROJECT@|@PROJECT@/../other
+block	edit:other	@TMP@/work/src/app.js	@TMP@/other|@LINK@
+block	edit:work	@LINK@/src/app.js	@TMP@/other|@PROJECT@
+allow	edit:other	@LINK@/.claude/worktrees/12-fix/app.js	@TMP@/other|@LINK@
+fold	edit:work	@PROJECT_UP@/../OTHER/src/app.js	@PROJECT@|@TMP@/other
+# the command checks are unchanged with a list
+allow	work	echo x > @TMP@/other/a.txt	@PROJECT@|@TMP@/other
+block	work	git push origin main	@PROJECT@|@TMP@/other
+# an entry that protects nothing fails closed: empty, not absolute, or not a folder on this machine (gone is not
+# there) - every edit tool's call is refused, also one in neither root or in a worktree (run.sh checks that the
+# refusal names the entry); the shell's checks go on as they are
+block	edit:work	@TMP@/elsewhere/a.txt	@PROJECT@|
+block	edit:work	@TMP@/elsewhere/a.txt	|@PROJECT@
+block	write:work	@TMP@/elsewhere/a.txt	@PROJECT@||@TMP@/other
+block	edit:work	@PROJECT@/.claude/worktrees/12-fix/app.js	@PROJECT@|other
+block	edit:work	@TMP@/elsewhere/a.txt	@PROJECT@|../other
+block	multiedit:work	@TMP@/elsewhere/a.txt	@PROJECT@|@TMP@/gone
+block	notebook:work	@PROJECT@/.claude/worktrees/12-fix/a.ipynb	@TMP@/gone|@PROJECT@
+block	edit:work	@TMP@/elsewhere/a.txt	@TMP@/gone
+block	edit:work	@TMP@/elsewhere/a.txt	src
+allow	work	git status	@PROJECT@|@TMP@/gone
+block	work	git push origin main	@PROJECT@|@TMP@/gone

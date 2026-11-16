@@ -26,6 +26,26 @@ for b in ${pbs//,/ }; do
 done
 set +f; shopt -u nocasematch
 
+# The protected roots (#613): COORD_PROTECTED_ROOT is one absolute folder, or several separated by | (a project of
+# several repositories; | cannot be in a Windows file name, and a drive's colon does not split). read_roots fills
+# roots with the entries and root_bad with the first that protects nothing - empty, not absolute, or not a folder on
+# this machine - as the refusal and the self-test name it. Unset or empty: no roots. The rule itself is further down.
+roots=(); root_bad=""
+read_roots() {
+  local rest="${COORD_PROTECTED_ROOT:-}|" r d k=0 why
+  [ "$rest" != "|" ] || return 0
+  while [ -n "$rest" ]; do roots+=("${rest%%|*}"); rest="${rest#*|}"; done
+  for r in "${roots[@]}"; do
+    k=$((k + 1)); why=""; d=${r//\\//}
+    case "$r" in
+      '') why="is empty" ;;
+      /*|\\*|[A-Za-z]:*) [ -d "$d" ] || why="is not a folder on this machine" ;;
+      *) why="is not an absolute path" ;;
+    esac
+    [ -z "$why" ] || { root_bad="COORD_PROTECTED_ROOT entry $k of ${#roots[@]} ($r) $why"; return 0; }
+  done
+}
+
 if [ "${1:-}" = "--self-test" ]; then
   # a push to main must block (exit 2) and a work-branch push must pass (exit 0): a guard that blocks
   # everything (a syntax error also exits 2) is not working either. Both with COORD_ASSISTANT_DIR cleared
@@ -37,8 +57,11 @@ if [ "${1:-}" = "--self-test" ]; then
     [ "$(printf '%s' '{"permission_mode":"default","tool_name":"Bash","tool_input":{"command":"git log -1"}}' | COORD_NO_PUSH= bash "$0" 2>/dev/null; echo $?)" = 2 ] || ok=x
     [ "$(printf '%s' '{"permission_mode":"dontAsk","tool_name":"Bash","tool_input":{"command":"git log -1"}}' | COORD_NO_PUSH= bash "$0" 2>/dev/null; echo $?)" = 0 ] || ok=x
   fi
-  if [ "$out" = "2" ] && [ "$ok" = "0" ]; then echo "safety-guard: OK"; exit 0; fi
-  echo "safety-guard: NOT WORKING — STOP: do not start workers until it is fixed (TOOLKIT.md)."
+  # a root that protects nothing (#613) refuses every edit tool's call: not working either, and named (one sound root
+  # or a list of them: the one line OK); in an assistant's session the roots' rule gives way, so it is not looked at
+  [ -n "${COORD_ASSISTANT_DIR:-}" ] || read_roots
+  if [ "$out" = "2" ] && [ "$ok" = "0" ] && [ -z "$root_bad" ]; then echo "safety-guard: OK"; exit 0; fi
+  echo "safety-guard: NOT WORKING — STOP: do not start workers until it is fixed (TOOLKIT.md).${root_bad:+ $root_bad: no edit tool is let through until the env of the worker safety file is fixed.}"
   exit 0   # stdout reaches the session's context; a non-zero exit would only show it to the user
 fi
 
@@ -467,9 +490,16 @@ claude_seg() {
 # Opt-in: unset or empty changes nothing. A relative path counts from the call's cwd; whole path segments
 # are compared (<root>-old is another folder), letter case ignored on Windows and macOS only. In an assistant's
 # session (COORD_ASSISTANT_DIR set) it gives way: its folder lies in the root, and Claude Code's permissions hold its edits (#563).
+# Several roots (#613, read_roots above): each is protected alike, whichever root the call's cwd is in, and each
+# root's own .claude/worktrees/ stays free. An entry that protects nothing fails closed: no edit tool's call passes.
 if [ -n "${COORD_PROTECTED_ROOT:-}" ] && [ -z "${COORD_ASSISTANT_DIR:-}" ]; then
   case "$tool" in
     Edit|Write|MultiEdit|NotebookEdit)
+      read_roots
+      if [ -n "$root_bad" ]; then
+        echo "Blocked by safety-guard: $root_bad, so no edit tool is let through (the owner's working copies cannot be told). Fix COORD_PROTECTED_ROOT in the worker safety file's env: absolute folders, several separated by | (TOOLKIT.md Safety). Ask the owner." >&2
+        exit 2
+      fi
       if command -v jq >/dev/null 2>&1; then
         fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty | strings' 2>/dev/null)
         np=$(printf '%s' "$input" | jq -r '.tool_input.notebook_path // empty | strings' 2>/dev/null)
@@ -482,15 +512,18 @@ if [ -n "${COORD_PROTECTED_ROOT:-}" ] && [ -z "${COORD_ASSISTANT_DIR:-}" ]; then
         eps+=("$p"); efull+=("$full")
       done
       if [ ${#eps[@]} -gt 0 ]; then
-        # the root and each path as written and as they lie on disk (links resolved, #121): either form
-        # of the path under either form of the root blocks
-        # lines: the root and each path as written, then the same as on disk ("." and the form, or empty)
+        # each root and each path as written and as they lie on disk (links resolved, #121): either form
+        # of the path under either form of a root blocks
+        # lines: the roots and each path as written, then the same as on disk ("." and the form, or empty)
         ef=(); while IFS= read -r l; do ef+=("$l"); done <<EDIT_FORMS_END
-$(canon_all "$cm" "$COORD_PROTECTED_ROOT" "${efull[@]}"; physical "$cm" "$COORD_PROTECTED_ROOT" "${efull[@]}")
+$(canon_all "$cm" "${roots[@]}" "${efull[@]}"; physical "$cm" "${roots[@]}" "${efull[@]}")
 EDIT_FORMS_END
-        ne=$(( ${#efull[@]} + 1 ))
-        proots=("${ef[0]}"); [ -n "${ef[$ne]:-}" ] && proots+=("${ef[$ne]#.}")
-        k=0
+        nr=${#roots[@]}; ne=$(( ${#efull[@]} + nr ))
+        proots=(); k=0
+        while [ $k -lt $nr ]; do
+          proots+=("${ef[$k]}"); [ -n "${ef[$((ne + k))]:-}" ] && proots+=("${ef[$((ne + k))]#.}"); k=$((k + 1))
+        done
+        k=$((nr - 1))
         for p in "${eps[@]}"; do
           k=$((k + 1)); forms=("${ef[$k]}"); [ -n "${ef[$((ne + k))]:-}" ] && forms+=("${ef[$((ne + k))]#.}")
           for full in "${forms[@]}"; do
