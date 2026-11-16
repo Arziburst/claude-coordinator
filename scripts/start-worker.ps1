@@ -234,12 +234,19 @@ if ($hookObj -and $hookObj.shell -eq 'powershell' -and -not ([string]$hookObj.co
 }
 if (-not $hook -or -not (Test-Path -LiteralPath $hook -PathType Leaf)) { Fail "safety settings: hook not found at '$hook' (use an absolute path)" }
 if (-not $cfg.worktree.bgIsolation) { Fail 'safety settings: add "worktree": {"bgIsolation": "none"}' }
+# the self-test runs with the safety file's env block (#613), as the session's guard will: a root list with an entry
+# that protects nothing is refused here, before any worktree; the caller's own values are put back after it
+$envOld = @{}
+if ($cfg.env -is [Management.Automation.PSCustomObject]) { foreach ($e in @($cfg.env.PSObject.Properties | Where-Object { $_.Value -is [string] })) {
+  $envOld[$e.Name] = [Environment]::GetEnvironmentVariable($e.Name); [Environment]::SetEnvironmentVariable($e.Name, $e.Value) } }
+try {
 if ($hook.EndsWith('.ps1')) {
   $selftest = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $hook -SelfTest
 } elseif ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath ($hook -replace '\.sh$', '.ps1') -PathType Leaf)) {
   # #564: the .sh guard through the shim beside it, which takes Git Bash: a plain `bash` may be WSL's launcher (#465)
   $selftest = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File ($hook -replace '\.sh$', '.ps1') -SelfTest
 } else { $selftest = bash $hook --self-test }
+} finally { foreach ($k in @($envOld.Keys)) { [Environment]::SetEnvironmentVariable($k, $envOld[$k]) } }
 if (-not "$selftest".Trim()) { Fail "safety settings: the hook's self-test printed nothing ($hook)" }
 if ("$selftest".Trim() -ne 'safety-guard: OK') { Fail "$selftest" }
 # an assistant is one session per name: one already listed (running or stopped) is refused, never a second

@@ -568,8 +568,11 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   root the session's cwd is in, and each root's own `.claude/worktrees/` stays free — one safety file serves
   them all. An entry that is empty, not absolute or not a folder on this machine protects nothing, so the
   guard fails closed, for a single root too: every edit tool's call is refused with the entry named, and the
-  self-test prints `NOT WORKING` with it, until the safety file is fixed. (`selftest hooks --settings` and
-  the edit probe still read the value as one folder: on a list they fail until #613-B.)
+  self-test prints `NOT WORKING` with it, until the safety file is fixed; `start-worker` runs that self-test with
+  the safety file's `env` block, so such a file starts no worker and makes no worktree. **The limit, nested roots:**
+  a root inside another (`A|A/front`) still lies under the outer one, so the inner root's worktrees are refused:
+  list sibling roots. `selftest hooks --settings` reads the list: each entry is checked as the one root is and
+  named (`entry <k> of <n>`), and with every entry sound an Edit under each root must be blocked by this core's guard; the edit probe's `--edit-root` stays one root.
   `selftest hooks --settings` checks it: set, the root must
   be an absolute path to a folder on the machine — on Windows a drive path (`C:/…`, `C:\…`, or Git
   Bash's `/c/…`, which the guard reads as `C:/…`), since Claude Code passes `C:\…` file paths there —
@@ -903,7 +906,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
 - `scripts/check-bounds.sh|.ps1 <contract> <base>...<head>` (#381) — a contract's `bounds:` against `git diff
   --numstat`: one line per bound, `<glob> <added>/<max>`, then `check-bounds: OK` or `check-bounds: OVER <glob>
   <added>/<max>`; exit 0 / 1, usage 2; a binary file counts as 0 and is named; no `bounds:` is `check-bounds: no
-  bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md).
+  bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md). A folder that is
+  not the contract's repository is refused, exit 2 and why, never OK (#615): none of its `touches` among the folder's
+  tracked files or the range's, or an origin that is not its `repository: <owner>/<name>`.
 - `scripts/ci-times.sh|.ps1 [--baseline <file>] <run id | file>` (#373) — the seconds of a check-core run from
   `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`

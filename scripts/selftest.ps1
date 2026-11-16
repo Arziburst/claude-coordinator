@@ -574,16 +574,36 @@ switch ($Step) {
   if ($cfg.env -is [Management.Automation.PSCustomObject] -and $cfg.env.COORD_PROTECTED_ROOT -is [string]) { $root = $cfg.env.COORD_PROTECTED_ROOT -replace '[\r\n\t]', ' ' }
   if (-not $root) { Skip 'COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools' }
   else {
-    if ($root -match '^(/|\\|[A-Za-z]:[/\\])') {
+    # a list (#613): several roots separated by |, split as the guard splits them; each entry is checked as the
+    # one root is and named `entry <k> of <n>` (one root: the lines as before)
+    $rs = @($root.Split('|')); $k = 0; $f0 = $script:f
+    foreach ($r in $rs) { $k++; $w = 'COORD_PROTECTED_ROOT'; if ($rs.Count -gt 1) { $w = "$w entry $k of $($rs.Count)" }
+    if ($r -match '^(/|\\|[A-Za-z]:[/\\])') {
       # on Windows Claude Code passes C:\... file paths, so the root is a drive path: C:/... or C:\..., or
       # Git Bash's /c/... (/mnt/c/..., /cygdrive/c/...), which the guard reads as C:/...
       $win = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
-      $dir = $root
+      $dir = $r
       if ($win) { $dir = $dir -replace '^/(mnt/|cygdrive/)?([A-Za-z])(/|$)', '$2:/' }
-      if ($win -and $dir -notmatch '^[A-Za-z]:[/\\]') { Fail "COORD_PROTECTED_ROOT is not a drive path (C:/... or C:\...): $root - Claude Code passes C:\... file paths on Windows" }
-      elseif (Test-Path -LiteralPath $dir -PathType Container) { Pass 'COORD_PROTECTED_ROOT is an absolute path to a folder' }
-      else { Fail "COORD_PROTECTED_ROOT is not a folder on this machine: $root" }
-    } else { Fail "COORD_PROTECTED_ROOT is not an absolute path: $root" }
+      if ($win -and $dir -notmatch '^[A-Za-z]:[/\\]') { Fail "$w is not a drive path (C:/... or C:\...): $r - Claude Code passes C:\... file paths on Windows" }
+      elseif (Test-Path -LiteralPath $dir -PathType Container) { Pass "$w is an absolute path to a folder" }
+      else { Fail "$w is not a folder on this machine: $r" }
+    } else { Fail "$w is not an absolute path: $r" } }
+    # the list's edit probe, with every entry sound: an Edit under each root, fed to this core's guard (through its
+    # shim, #564) with the file's value, must be blocked as the owner's working copy
+    if ($rs.Count -gt 1 -and $script:f -eq $f0) {
+      $exe = (Get-Process -Id $PID).Path; $hook = Join-Path $coreDir 'scripts/hooks/safety-guard.ps1'; $k = 0
+      $jf = Join-Path ([IO.Path]::GetTempPath()) ('selftest-hook.' + [IO.Path]::GetRandomFileName() + '.json')
+      $oldPr = $env:COORD_PROTECTED_ROOT; $env:COORD_PROTECTED_ROOT = $root; $oldAd = $env:COORD_ASSISTANT_DIR; $env:COORD_ASSISTANT_DIR = $null
+      foreach ($r in $rs) { $k++; $rj = $r.Replace('\', '/')
+        [IO.File]::WriteAllText($jf, '{"tool_name":"Edit","tool_input":{"file_path":"' + $rj + '/probe-root.txt"},"cwd":"' + $rj + '"}')
+        if ($env:OS -eq 'Windows_NT') { $err = @(& cmd /d /s /c "`"$exe`" -NoProfile -ExecutionPolicy Bypass -File `"$hook`" < `"$jf`" 2>&1 >nul") }
+        else { $err = @(Get-Content -Raw -LiteralPath $jf | & $exe -NoProfile -File $hook 2>&1 | ForEach-Object { "$_" }) }
+        $rc = $LASTEXITCODE
+        if ($rc -eq 2 -and ($err -join "`n").StartsWith("Blocked by safety-guard: the owner's working copy is never edited by a worker", [StringComparison]::Ordinal)) { Pass "the guard blocks an edit tool under entry $k of $($rs.Count)" }
+        else { Fail "the guard does not block an edit tool under entry $k of $($rs.Count) as the owner's working copy (exit $rc)" }
+      }
+      $env:COORD_PROTECTED_ROOT = $oldPr; $env:COORD_ASSISTANT_DIR = $oldAd; Remove-Item -LiteralPath $jf -ErrorAction SilentlyContinue
+    }
     $miss = @()
     foreach ($t in @('Edit', 'Write', 'MultiEdit', 'NotebookEdit')) {
       if ($matcher -ceq '' -or $matcher -ceq '*' -or $matcher -ceq '.*') { continue }
