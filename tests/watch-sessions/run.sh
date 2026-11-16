@@ -408,5 +408,13 @@ fresh "the list emptied and left empty: EMPTY once --empty-seconds passed, not b
 echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; printf ': > "%s"\n' "$L" > "$STUB_D/after-1"; s0=$SECONDS
 run --list "$L" --interval 1 --empty-seconds 5; code 0; has "^EMPTY\$"; calls -eq 1
 [ $((SECONDS - s0)) -ge 5 ] && ok || bad "EMPTY after $((SECONDS - s0)) s, before the bound"
+# --- the lead's start line (roles/lead.md, #610): the wait given in minutes is read as minutes, and it is what ends the wait
+fresh "--empty-minutes 2, the list emptied and filled again 6 s later: no EMPTY (minutes, not seconds)"
+echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; echo "$A done w-a" > "$STUB_D/list-2"
+printf ': > "%s"; ( sleep 6; echo %s > "%s" ) > /dev/null 2>&1 &\n' "$L" $A "$L" > "$STUB_D/after-1"
+run --list "$L" --interval 1 --empty-minutes 2; code 0; hasnt "^EMPTY"; has "^STOPPED $A w-a\$"; calls -eq 2
+fresh "--empty-minutes 0, the list emptied: EMPTY at the next poll (the flag sets the wait, not the 30 minutes)"
+echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; printf ': > "%s"\n' "$L" > "$STUB_D/after-1"
+run --list "$L" --interval 1 --empty-minutes 0; code 0; has "^EMPTY\$"; calls -eq 1
 echo "watch-sessions ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

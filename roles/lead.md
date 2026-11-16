@@ -68,12 +68,14 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    **Stay reachable:** a background session idle with nothing running may exit (`done`) and is then
    unreachable by SendMessage (2.1.296). While any of your workers runs, keep one background wait
    alive: one `watch-sessions` on your list as a `run_in_background` command (`bash
-   <core>/scripts/watch-sessions.sh --list <your worktree>.lead/watch.txt`; Windows: `powershell
-   -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file>`), started again after it ends (a
-   finding handled, or an `ERROR` once), never a second one beside it. **Ending it:** once your last
-   worker is handled, its line removed leaves the list empty and the watcher ends by itself (`EMPTY`
-   after its `--empty-minutes`, #471; not started again), or you stop your own background task (by the
-   task id its start gave you). Never `pkill`, `killall`, `taskkill /IM` or any stop by a process name
+   <core>/scripts/watch-sessions.sh --list <your worktree>.lead/watch.txt --empty-minutes 2`; Windows: `powershell
+   -NoProfile -ExecutionPolicy Bypass -File <core>/scripts/watch-sessions.ps1 -List <the same file> -EmptyMinutes 2`), started again after it ends (a
+   finding handled, or an `ERROR` once), never a second one beside it. **Ending it:** between rounds, once
+   your last worker is handled, its line removed leaves the list empty and that is enough: the watcher
+   ends by itself (`EMPTY` after its `--empty-minutes`, #471; not started again until a worker runs).
+   At your end (the final report sent) you stop your own background task by the task id its start gave
+   you: a watcher left waiting keeps your session `busy` after your last word (#610). Never `pkill`,
+   `killall`, `taskkill /IM` or any stop by a process name
    or pattern: it reaches other sessions' watchers, the coordinator's included (#591). You yourself are on the
    coordinator's list with a long limit of your own (`<id> @120`): your quiet wait for your workers is
    no finding before it. Its findings, as the coordinator's (CORE §4
