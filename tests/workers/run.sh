@@ -1192,6 +1192,24 @@ mkas rg; cp "$rg/coordinator/RUNS.tsv" "$ar/coordinator/RUNS.tsv"
 check 0 "gate: an assistant has no gate" -- start "${A[@]}" --name "assistant: rg" --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run
 expect_in "[dry-run]"; rgone "gate: an assistant"
 rm -f "$ar/coordinator/RUNS.tsv"
+# no contract (#616): the id from the name `#<id> <role>:`; earlier worker rows gate it by the round count, the cost rule said not to apply
+NC=("${RG[@]}" --brief-file "$tmp/brief.md" --dry-run)
+check 0 "gate, no contract: a second round starts" -- start --name "#501 worker: G" "${NC[@]}" --branch 501-g
+says "gate, no contract: a second round" "round gate: " "round 2" "task 501" "no contract" "the cost rule could not apply"; expect_in "[dry-run]"; rgone "gate, no contract: a second round"
+check 1 "gate, no contract: a third round is refused" -- start --name "#502 worker: G" "${NC[@]}" --branch 502-g
+says "gate, no contract: a third round is refused" "refused: " "round 3" "task 502" "no contract" "the cost rule could not apply"; rgrefused "gate, no contract: a third round"
+check 1 "gate, no contract: a lead's third round is refused" -- start --name "#502 lead: G" "${NC[@]}" --branch 502-g
+says "gate, no contract: a lead's third round is refused" "refused: " "round 3" "task 502" "no contract"; rgrefused "gate, no contract: a lead's third round"
+check 0 "gate, no contract: --owner-ok passes and prints the words" -- start --name "#502 worker: G" "${NC[@]}" --branch 502-g --owner-ok "the owner said go on"
+says "gate, no contract: --owner-ok" "round gate: " "round 3" "task 502" "the cost rule could not apply" "the owner said go on"; expect_in "[dry-run]"; rgone "gate, no contract: --owner-ok"
+check 0 "gate, no contract: twice the spend alone is no refusal" -- start --name "#503 worker: G" "${NC[@]}" --branch 503-g
+says "gate, no contract: twice the spend alone" "round gate: " "round 2" "task 503"; expect_in "[dry-run]"
+check 0 "gate, no contract: an id with no rows, as before" -- start --name "#777 worker: G" "${NC[@]}" --branch 777-g
+expect_in "round gate: no contract, no gate"; expect_in "[dry-run]"; rgone "gate, no contract: an id with no rows"
+check 0 "gate, no contract: a lead's sub-task, as before" -- start --name "#504.1 worker: G" "${NC[@]}" --go "go" --branch 504-1-g
+expect_in "round gate: no contract, no gate"; rgone "gate, no contract: a lead's sub-task"
+check 0 "gate, no contract: another role, as before" -- start --name "#502 verifier: G" "${NC[@]}" --branch 502-g
+expect_in "round gate: a verifier, no gate"; rgone "gate, no contract: another role"
 
 # --- the lead's go gate (#558): a lead's sub-task (named `#<n>.<m>`, or reporting to a `#<n> lead:`) starts only on the coordinator's go ---
 gl="$tmp/repo/.claude/worktrees/558-lead"; git -C "$tmp/repo" worktree add -q --no-track -b 558-lead "$gl" main

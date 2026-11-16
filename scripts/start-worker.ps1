@@ -68,7 +68,7 @@
 # compared by start-worker.sh's own bash code, run here through bash, so both scripts decide alike; after the
 # launch the attach command (the rules: start-worker.sh's top comment).
 # The round and money gate (#381; the rules: start-worker.sh's top comment): round 3 or later, or the task's rows summing
-# to at least twice budget.cost, is refused unless -OwnerOk <the owner's words>, printed. A mistyped -OwnerOk is swallowed by
+# to at least twice budget.cost, is refused unless -OwnerOk <the owner's words>, printed; no contract (#616): the name's id, the round count alone. A mistyped -OwnerOk is swallowed by
 # param() and the gate still refuses. Limits: a round given by a message passes no gate; a running session has no row yet.
 # The lead's go gate (#558; the rules: start-worker.sh's top comment): a lead's sub-task (named `#<n>.<m> ...`, or -ReportTo
 # a `#<n> lead: ...`) is refused unless -Go <the coordinator's words> or a line in <the lead's worktree>.lead/go.txt.
@@ -329,6 +329,8 @@ if ($Contract) {
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
 if (-not "$OwnerOk".Trim()) { $OwnerOk = '' }   # words of blanks only are no words
 $rl = if ($Runs) { [IO.Path]::Combine((Get-Location).Path, $Runs) } else { Join-Path $root 'coordinator/RUNS.tsv' }; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
+# no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
+$rnc = -not $gId -and -not $asst -and $crole -in @('worker', 'lead') -and $Name -cmatch '^#([0-9]+) '; if ($rnc) { $gId = $Matches[1] }
 $rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
        elseif (-not (Test-Path -LiteralPath $rl -PathType Leaf)) { 'no run log' } elseif ($gId.Contains('.')) { 'a sub-contract' } else { '' }
 if ($rno) { "round gate: $rno, no gate$okTail" }
@@ -340,7 +342,9 @@ else {
   $rw, $rsp = "$($rs[0])" -split ' ', 2; $rn = [int]$rw + 1; $inv = [Globalization.CultureInfo]::InvariantCulture
   $rline = "round $rn, task $gId, spent $rsp against estimate $(if ($gCost) { $gCost } else { 'none' }), API list price"
   $est = if ($gCost -cmatch '^\$?([0-9]+(\.[0-9]+)?)') { [decimal]::Parse($Matches[1], $inv) } else { [decimal]0 }
-  if ($rn -ge 3 -or ($est -gt 0 -and [decimal]::Parse($rsp, $inv) -ge 2 * $est)) {
+  if ($rnc) { $rline = "round $rn, task $gId, spent $rsp, no contract so no estimate: the cost rule could not apply, the round count only, API list price" }
+  if ($rnc -and $rn -eq 1) { "round gate: no contract, no gate$okTail" }
+  elseif ($rn -ge 3 -or ($est -gt 0 -and [decimal]::Parse($rsp, $inv) -ge 2 * $est)) {
     if (-not $OwnerOk) { Fail "refused: $rline - a third round or twice the estimate needs the owner's word: -OwnerOk <the owner's words> (CORE ${sect}6)" }
     "round gate: $rline - passed on the owner's words: $OwnerOk"
   } else { "round gate: $rline$okTail" }
