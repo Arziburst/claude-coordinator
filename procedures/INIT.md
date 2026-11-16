@@ -50,6 +50,8 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     in the hook's matcher, the guard then refuses a worker's `Edit` / `Write` / `MultiEdit` /
     `NotebookEdit` there outside `.claude/worktrees/` (TOOLKIT *Safety*) — in this file only, never in
     the coordinator's own settings. `selftest hooks --settings <file>` passes on it
+    (`selftest hooks --settings` and the edit probe still read the value as one folder: on a list they
+    fail until #613-B)
     and on every settings file of the coordinator's own session that holds the guard (no `"shell":
     "powershell"` without `; exit $LASTEXITCODE`, forward slashes, no `$env:`; TOOLKIT *Safety*); the
     self-test proves both through Claude Code (SELFTEST step 2a). **Stack-specific denies are candidates, not impositions**: offer
