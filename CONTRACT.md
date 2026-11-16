@@ -46,7 +46,7 @@ budget:
   time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
-repository: acme/shop              # optional, a project of several repositories only (else leave it out): the one this task changes, <owner>/<name>
+repository: owner/shop             # optional, a project of several repositories only (else leave it out): the one this task changes, <owner>/<name>
 bounds:                            # with tests_first: yes, or when touches holds an important component: the most lines a glob may add
   - src/cart/* 120
   - tests/cart/* 80
