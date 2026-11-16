@@ -45,7 +45,8 @@ Same authority as `CORE.md`; the hard rules of CORE §1 apply.
     `PROJECT.md` says humans merge or mark ready, `gh pr merge` / `gh pr ready`), that list in its `env`
     `COORD_PROTECTED_BRANCHES` (names separated by spaces; TOOLKIT *Safety*) and the safety hook,
     whose self-test must pass before any worker starts. Its `env` `COORD_PROTECTED_ROOT` is filled
-    with the project root (the owner's working copy, absolute, forward slashes): with the edit tools
+    with the project root (the owner's working copy, absolute, forward slashes; a project of several
+    repositories: every repository's root, separated by `|`, #613): with the edit tools
     in the hook's matcher, the guard then refuses a worker's `Edit` / `Write` / `MultiEdit` /
     `NotebookEdit` there outside `.claude/worktrees/` (TOOLKIT *Safety*) — in this file only, never in
     the coordinator's own settings. `selftest hooks --settings <file>` passes on it

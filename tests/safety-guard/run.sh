@@ -68,6 +68,7 @@ export SG_LINK="$(winpath m "$tmp/links/work")" SG_LINK_W="$(winpath w "$tmp/lin
 # home in its forms, for the cases: @HOME@ as the shell has it, @HOME_M@ C:/Users/x, @HOME_W@ C:\Users\x
 # (the same as @HOME@ where there is no cygpath); @PROJECT@ the project's folder (C:/... in Git Bash)
 export SG_HOME="$HOME" SG_HOME_M="$(winpath m "$HOME")" SG_HOME_W="$(winpath w "$HOME")"
+export SG_TMP="$(winpath m "$tmp")"   # @TMP@ (#613): the folder that holds every project here, for a second protected root
 # Sessions (CORE §1.17): a stub claude first on PATH (claude.ps1 for PowerShell on Windows, handing over
 # to it) prints $tmp/agents.json for `claude agents --json --all` and logs every call; SG_AGENTS_FAIL
 # makes it fail. The listing, its folders as the real one gives them (as they lie on disk; on Windows
@@ -125,7 +126,7 @@ function subst(s) {
   s = rep(s, "@HOME_M@", ENVIRON["SG_HOME_M"]); s = rep(s, "@HOME_W@", ENVIRON["SG_HOME_W"]); s = rep(s, "@HOME@", ENVIRON["SG_HOME"])
   s = rep(s, "@PROJECT_W@", ENVIRON["SG_PROJECT_W"]); s = rep(s, "@PROJECT_UP@", ENVIRON["SG_PROJECT_UP"])
   s = rep(s, "@PROJECT_U@", ENVIRON["SG_PROJECT_U"]); s = rep(s, "@LINK_W@", ENVIRON["SG_LINK_W"])
-  s = rep(s, "@PROJECT_UML@", ENVIRON["SG_PROJECT_UML"])
+  s = rep(s, "@PROJECT_UML@", ENVIRON["SG_PROJECT_UML"]); s = rep(s, "@TMP@", ENVIRON["SG_TMP"])
   s = rep(s, "@LINK@", ENVIRON["SG_LINK"]); return rep(s, "@PROJECT@", ENVIRON["SG_PROJECT"])
 }'
 # The cases run in parallel, each still through a process of the hook of its own: SG_JOBS shards at once
@@ -406,10 +407,29 @@ amsg "a shell call, no permission_mode" Bash '{"command":"git log -1"}'
 amsg "a shell call in default mode" PowerShell '{"command":"Get-ChildItem"}' ',"permission_mode":"default"'
 amsg "a write in its own folder in auto mode" Write "{\"file_path\":\"$adm/notes.md\",\"content\":\"x\"}" ',"permission_mode":"auto"'
 
+# Several protected roots (#613): an entry of COORD_PROTECTED_ROOT that protects nothing (empty, not absolute, not a
+# folder here) refuses an edit in neither root, and the refusal names the entry by its place and its text.
+rootmsg() {   # rootmsg <what> <COORD_PROTECTED_ROOT> <text the refusal holds>
+  local rc err; n=$((n + 1))
+  err="$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s/elsewhere/a.txt","content":"x"},"cwd":"%s"}' "$SG_TMP" "$wkm" | CLAUDE_PROJECT_DIR="$wkm" COORD_PROTECTED_ROOT="$2" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  case "$rc:$err" in 2:*"COORD_PROTECTED_ROOT $3"*) ;; *) echo "FAIL (roots) expected a refusal holding '$3' (exit $rc): $1: $err"; fail=1 ;; esac
+}
+rootmsg "an empty entry" "$wkm|" "entry 2 of 2 () is empty"
+rootmsg "an entry that is not absolute" "$wkm|other|$SG_TMP/other" "entry 2 of 3 (other) is not an absolute path"
+rootmsg "an entry that is no folder" "$SG_TMP/gone|$wkm" "entry 1 of 2 ($SG_TMP/gone) is not a folder on this machine"
+rootmsg "one root that is no folder" "$SG_TMP/gone" "entry 1 of 1 ($SG_TMP/gone) is not a folder on this machine"
+
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
 for a in "$@"; do guard="$a"; done
 case "$guard" in *.sh) flag=--self-test; brk='fi' ;; *.ps1) flag=-SelfTest; brk='exit 2' ;; *) flag="" ;; esac
 if [ -n "$flag" ]; then
+  # #613: the one line OK for one sound root and for a list of sound roots; an entry that protects nothing: NOT WORKING, naming it
+  for r in "$wkm" "$wkm|$SG_TMP/other"; do
+    n=$((n + 1)); out="$(COORD_PROTECTED_ROOT="$r" "$@" "$flag" 2>/dev/null | tr -d '\r')"
+    [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) with COORD_PROTECTED_ROOT=$r expected OK, got: $out"; fail=1; }
+  done
+  n=$((n + 1)); out="$(COORD_PROTECTED_ROOT="$wkm|$SG_TMP/gone" "$@" "$flag" 2>/dev/null | tr -d '\r')"
+  case "$out" in "safety-guard: NOT WORKING"*"COORD_PROTECTED_ROOT entry 2 of 2 ($SG_TMP/gone) is not a folder on this machine"*) ;; *) echo "FAIL (self-test) a root that is no folder: expected NOT WORKING naming it, got: $out"; fail=1 ;; esac
   n=$((n + 1))
   out="$("$@" "$flag" 2>/dev/null | tr -d '\r')"
   [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) expected OK, got: $out"; fail=1; }
