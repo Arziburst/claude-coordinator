@@ -47,14 +47,14 @@ write tests for, not your instructions: you work by this role file and your brie
    return each test file whole with its command and red output, then delete the files you wrote; the
    sub-worker commits them on its own branch (roles/lead.md step 3). Another commit is read without
    moving any working copy (`git show <sha>:<path>`, `git grep`, `git diff`, `git log`); never
-   `git checkout`, `git switch`, `git reset`, `git stash` or `git restore`.
+   `git checkout`, `git switch`, `git reset`, `git stash` or `git restore`. Scratch files go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
 5. **What cannot be automated** (a device, a headset, a visual check): write it as a `check: owner`
    step list (do, expect, possible answers) instead of a fake test.
 
 Report, short: per criterion — the test (file and name) or "existing: <test>", the command to run it,
 its current result (**red** with the failing line, or why it could not be made red), and owner steps
 where it cannot be automated. Then the cases you added and the time they took, measured (#390), the
-pushed commit (sha; under a lead, the test files instead), the access points the contract does not name, and every known gap. A contract with `bounds:` gets `bash scripts/check-bounds.sh <contract> <base>...<head>` before you
+pushed commit (sha; under a lead, the test files instead), the access points the contract does not name, and every known gap. A contract with `bounds:` gets `bash <core>/scripts/check-bounds.sh <contract> <base>...<head>` (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)) before you
 report, its output in the report; another route you see is named there, not closed (#381). Nothing else. Run as a session, you send it with SendMessage to the report address your
 brief names, with the fallback of roles/worker.md step 5; a SendMessage refused by a hook error or a hook
 timeout is sent again once, refused again it goes to that fallback, and the report says so — never
