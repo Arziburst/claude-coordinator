@@ -4,10 +4,12 @@
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
 #       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--state <folder>] [--go <words>] [--dry-run]
-# --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <state>/RUNS.tsv.
+# --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <state>/RUNS.tsv. A file that does
+#           not exist: refused (#633) - a mistyped path would switch the gate off in silence.
 # --state:  the coordinator's state folder (#613), default <repo>/coordinator: the run log's default, the contract's copy (<state>/briefs/) and an assistant's
 #           folder (<state>/assistants/<name>) come from it, so a second repository of one coordinator needs no coordinator/ of its own (merge-queue takes the
-#           same --state); not a folder: refused. What is kept out of the repository's git is still its own coordinator/.
+#           same --state); not a folder, or one holding neither RUNS.tsv nor briefs/ (the project's root in place of its coordinator/, #635): refused; a
+#           relative one is taken from the current folder and named by its absolute path. What is kept out of the repository's git is still its own coordinator/.
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -66,7 +68,7 @@
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
 # An assistant (#281): --name "assistant: <name>" (<name> letters, digits, . _ -, not dots only) and
-# --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md start a persistent session with NO worktree and NO
+# --brief-file <state>/assistants/<name>/BRIEF.md (<state>: --state, default <repo>/coordinator) start a persistent session with NO worktree and NO
 # branch, in permission mode dontAsk (#563; another --mode refused),
 # launched from the repository root, --settings the --safety file, whose env COORD_ASSISTANT_DIR must
 # name that same folder. Folders are compared in one way in both start-worker scripts (the .ps1 runs this same
@@ -151,10 +153,14 @@ if [ -n "$brief" ]; then
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
   echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--state <folder>] [--go <the coordinator's words>] [--dry-run]" >&2
-  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode dontAsk] [--dry-run]" >&2
+  [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <state>/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--state <folder>, default <repo>/coordinator] [--assistant-dir <folder>] [--mode dontAsk] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ -z "$state" ] || [ -d "$state" ] || { echo "--state: $state is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" >&2; exit 1; }
+[ -z "$state" ] || [ -e "$state/RUNS.tsv" ] || [ -d "$state/briefs" ] || { echo "--state: $state holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635)" >&2; exit 1; }
+[ -z "$runs" ] || [ -f "$runs" ] || { echo "--runs: $runs does not exist - the round gate reads it, a mistyped path would switch the gate off: give the run log (<state>/RUNS.tsv, #633)" >&2; exit 1; }
+# a --state is named by its absolute path (#635), C:/... on Windows, as start-worker.ps1 names it
+[ -z "$state" ] || { state="$(cd "$state" && pwd)"; ! command -v cygpath >/dev/null 2>&1 || state="$(cygpath -m "$state")"; }
 [ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
@@ -196,7 +202,7 @@ if [ -n "$asst" ]; then
     adir="$adirx"
   fi
   [ "$(basename "$brief")" = BRIEF.md ] && [ "$(fcanon "$(dirname "$brief")")" = "$(fcanon "$adir")" ] ||
-    { echo "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $brief" >&2; exit 1; }
+    { echo "refused: an assistant's brief is $adir/BRIEF.md (its folder in <state>/assistants/: --state, default <repo>/coordinator), got $brief" >&2; exit 1; }
   # COORD_ASSISTANT_DIR in the safety file's env: the guard keeps the assistant's writes inside that folder
   aenv="$(sed -n 's/.*"COORD_ASSISTANT_DIR"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$safety" | head -n 1 | sed 's#\\\\#/#g' | tr '\\' '/')"
   [ -n "$aenv" ] || { echo "refused: no COORD_ASSISTANT_DIR in the env of $safety - it must name the assistant's folder $adir" >&2; exit 1; }
