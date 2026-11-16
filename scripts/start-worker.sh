@@ -157,7 +157,7 @@ fi
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
 [ -z "$state" ] || [ -d "$state" ] || { echo "--state: $state is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" >&2; exit 1; }
-[ -z "$state" ] || [ -e "$state/RUNS.tsv" ] || [ -d "$state/briefs" ] || { echo "--state: $state holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635)" >&2; exit 1; }
+[ -z "$state" ] || [ -e "$state/RUNS.tsv" ] || [ -d "$state/briefs" ] || { echo "--state: $state holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635)" >&2; exit 1; }
 [ -z "$runs" ] || [ -f "$runs" ] || { echo "--runs: $runs does not exist - the round gate reads it, a mistyped path would switch the gate off: give the run log (<state>/RUNS.tsv, #633)" >&2; exit 1; }
 # a --state is named by its absolute path (#635), C:/... on Windows, as start-worker.ps1 names it
 [ -z "$state" ] || { state="$(cd "$state" && pwd)"; ! command -v cygpath >/dev/null 2>&1 || state="$(cygpath -m "$state")"; }

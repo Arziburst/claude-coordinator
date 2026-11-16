@@ -45,7 +45,7 @@ if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, mer
 if ($Poll -notmatch '^[0-9]+$' -or $Timeout -notmatch '^[0-9]+$') { Usage '-Poll and -Timeout take whole numbers' }
 # the coordinator's state folder (#613, the header), kept apart from the loop's own $state (a PR's): variable names ignore letter case
 if ($State -and -not (Test-Path -LiteralPath $State -PathType Container)) { Usage "-State: $State is not a folder - give the coordinator's state folder (#613)" }
-if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Usage "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635)" }
+if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Usage "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635)" }
 $sdir = if ($State) { $State.Replace('\', '/').TrimEnd('/') } else { 'coordinator' }; if (-not $Runs) { $Runs = "$sdir/RUNS.tsv" }
 $okPr = ''; $okW = ''
 if ($PSBoundParameters.ContainsKey('OverBoundsOk')) { if ($OverBoundsOk -cnotmatch '^([0-9]+):(.*\S.*)$') { Usage "-OverBoundsOk takes <pr>:<the owner's words>" }; $okPr = $Matches[1]; $okW = $Matches[2] }

@@ -137,7 +137,7 @@ if ($Task -cnotmatch '^[A-Za-z0-9._-]*$') { [Console]::Error.WriteLine("-Task: n
 # -State (#635): the coordinator's state folder, its RUNS.tsv the run log unless -Runs names one
 if ($State) {
   if (-not (Test-Path -LiteralPath $State -PathType Container)) { [Console]::Error.WriteLine("-State: $State is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613); $usage"); exit 1 }
-  if (-not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { [Console]::Error.WriteLine("-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635); $usage"); exit 1 }
+  if (-not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { [Console]::Error.WriteLine("-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635); $usage"); exit 1 }
   if (-not $Runs) { $Runs = Join-Path (Resolve-Path -LiteralPath $State).ProviderPath 'RUNS.tsv' }
 }
 if (-not $Runs) { $Runs = 'coordinator/RUNS.tsv' }

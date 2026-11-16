@@ -247,7 +247,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   <pr>@<sha> --state <the same folder>`, run from that repository's root: the queue reads the copy there and
   checks the bounds. One safety file serves them all: its `COORD_PROTECTED_ROOT` lists every root, `|` between
   them (*Safety*). Without `--state` both scripts read `<repo>/coordinator` as before; one that is not a folder, or holds neither `RUNS.tsv` nor `briefs/` (the project's root in place of its `coordinator/`, #635),
-  is refused (`cleanup-worker --task --state` alike), and so is start-worker's `--runs` naming a file that does not exist (#633): a mistyped path never switches the gate or the bounds off in silence.
+  is refused (`cleanup-worker --task --state` alike; a new state folder needs `briefs/` made in it first), and so is start-worker's `--runs` naming a file that does not exist (#633): a mistyped path never switches the gate or the bounds off in silence.
 - **A big brief through a file** (#291): Windows cuts a command line at 32 767 characters, and a brief
   that long once failed a start after the worktree and branch existed. start-worker decides by the size
   of the full launch text (the first line, the report line, the role, the brief) before anything is

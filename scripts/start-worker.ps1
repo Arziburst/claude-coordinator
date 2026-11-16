@@ -123,7 +123,7 @@ if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a work
 if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
 if ($Contract -and -not (Test-Path -LiteralPath $Contract -PathType Leaf)) { Fail "-Contract: $Contract does not exist" }
 if ($State -and -not (Test-Path -LiteralPath $State -PathType Container)) { Fail "-State: $State is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" }
-if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Fail "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635)" }
+if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Fail "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635)" }
 if ($Runs -and -not (Test-Path -LiteralPath $Runs -PathType Leaf)) { Fail "-Runs: $Runs does not exist - the round gate reads it, a mistyped path would switch the gate off: give the run log (<state>/RUNS.tsv, #633)" }
 if ($TesterCommit -and $TesterTests) { Fail "-TesterCommit and -TesterTests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE $([char]0x00A7)4 step 3)" }
 # Absolute paths: both files are used from inside the worktree; the contract is read by .NET, whose

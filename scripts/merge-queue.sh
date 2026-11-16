@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
     --over-bounds-ok) need "$@"; [ -z "$ook" ] || { echo "--over-bounds-ok: one per run, two PRs go in two runs; $usage" >&2; exit 1; }; ook="$2"; shift 2 ;;
     --runs) need "$@"; rlog="$2"; shift 2 ;;
     --state) need "$@"; sdir="$2"; [ -d "$sdir" ] || { echo "--state: $sdir is not a folder - give the coordinator's state folder (#613); $usage" >&2; exit 1; }
-      [ -e "$sdir/RUNS.tsv" ] || [ -d "$sdir/briefs" ] || { echo "--state: $sdir holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635); $usage" >&2; exit 1; }; shift 2 ;;
+      [ -e "$sdir/RUNS.tsv" ] || [ -d "$sdir/briefs" ] || { echo "--state: $sdir holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635); $usage" >&2; exit 1; }; shift 2 ;;
     --dry-run) dry=1; shift ;;
     [0-9]*) [ "$mode" = land ] || { echo "status takes no PR; $usage" >&2; exit 1; }; prs+=("$1"); shift ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 1 ;;

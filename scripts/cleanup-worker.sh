@@ -50,7 +50,7 @@ case "$task" in *[!A-Za-z0-9._-]*) echo "--task: not a task id: $task; $usage" >
 # --state (#635): the coordinator's state folder, its RUNS.tsv the run log unless --runs names one
 if [ -n "$state" ]; then
   [ -d "$state" ] || { echo "--state: $state is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613); $usage" >&2; exit 1; }
-  [ -e "$state/RUNS.tsv" ] || [ -d "$state/briefs" ] || { echo "--state: $state holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635); $usage" >&2; exit 1; }
+  [ -e "$state/RUNS.tsv" ] || [ -d "$state/briefs" ] || { echo "--state: $state holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635); $usage" >&2; exit 1; }
   [ -n "$rlog" ] || rlog="$(cd "$state" && pwd)/RUNS.tsv"
 fi
 rlog="${rlog:-coordinator/RUNS.tsv}"
