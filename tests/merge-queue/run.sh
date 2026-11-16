@@ -438,18 +438,6 @@ qc 30a-part 3; qc 31-slash-name 3; qc 32-both 3; qc 32 100; qpr 30 "$H30" 30a-pa
 run land 30 31 32 --poll 0
 code 3; hasline "OVER BOUNDS 30 src/* 5/3"; hasline "OVER BOUNDS 31 src/* 5/3"; hasline "OVER BOUNDS 32 src/* 5/3"; notcalled "pr merge"; hasnt "no contract"
 
-# which OVER stops (#419, the header), the row gone: the core's default list alone. qo <id> <file> [<bound>...]: a pushed branch adding 5 lines to <file>, its contract, its PR landed
-rm -f "$tmp/p/PROJECT.md"; qo() { local n="$1" f="$2"; shift 2; qg checkout -q -b "$n-o" main; mkdir -p "$(dirname "$f")"; printf '%s\n' 1 2 3 4 5 > "$f"; qg add "$f"; qg commit -q -m "$n"; QH="$(qg rev-parse HEAD)"; qg push -q origin "$n-o" 2>/dev/null; qg checkout -q main
-  { printf -- '---\nid: %s\ntitle: t\n' "$n"; [ $# = 0 ] || { echo 'bounds:'; printf '  - %s\n' "$@"; }; printf 'wall: w\n---\n'; } > "coordinator/briefs/$n-contract.md"; qpr "$n" "$QH" "$n-o"; run land "$n" --poll 0; }
-fresh "an OVER on an ordinary glob: the one line, the PR lands"; qo 40 src/40.txt 'src/* 3'; code 0; hasline "bounds over, not important: 40 src/* 5/3"; oneline "not important"; hasnt "OVER BOUNDS"; has "MERGED #40"; called "pr merge 40 --squash --match-head-commit $QH"; has "merge-queue: 1 merged"
-fresh "a glob beside an important one, holding none: ordinary"; qo 41 scripts/merge-queue.sh 'scripts/merge-queue.* 3'; code 0; hasline "bounds over, not important: 41 scripts/merge-queue.* 5/3"; hasnt "OVER BOUNDS"; has "MERGED #41"
-fresh "a glob matching an important one on the default list: stops, --over-bounds-ok passes it"; qo 42 tests/q/run.sh 'tests/q/run.sh 3'; code 3; hasline "OVER BOUNDS 42 tests/q/run.sh 5/3"; notcalled "pr merge 42"; has "left: #42 (OVER BOUNDS)"; hasnt "not important"
-run land 42 --poll 0 --over-bounds-ok "42:the owner said yes"; code 0; has "the owner said yes"; has "MERGED #42"
-fresh "a glob holding an important one, on a file that is not: stops"; qo 43 scripts/tool.sh 'scripts/* 3'; code 3; hasline "OVER BOUNDS 43 scripts/* 5/3"; notcalled "pr merge 43"; hasnt "not important"
-fresh "ordinary bounds around an important one, all OVER: stops, each its own line"; qo 44 scripts/mix.sh 'scripts/mix.* 3' 'scripts/* 3' 'scripts/mix.sh 3'; code 3; notcalled "pr merge 44"; has "left: #44 (OVER BOUNDS)"; hasline "OVER BOUNDS 44 scripts/* 5/3"; hasline "bounds over, not important: 44 scripts/mix.* 5/3"; hasline "bounds over, not important: 44 scripts/mix.sh 5/3"
-fresh "check-bounds exit 2 on an ordinary glob still stops"; qpr 19 "$H19" 19-gone; qpr 20 "$H20" 20-dir; qpr 21 "$H21" 21-bad; run land 19 20 21 --poll 0; code 3; notcalled "pr merge"; has "left: #19 (BOUNDS), #20 (BOUNDS), #21 (BOUNDS)"; hasnt "not important"
-fresh "a contract with no bounds: as today"; qo 45 src/45.txt; code 0; has "MERGED #45"; hasnt "OVER BOUNDS"; hasnt "not important"
-
 # one coordinator, a second repository (#613): a working copy with no coordinator/ lands with --state <the coordinator's state folder> (.ps1: -State) -
 # the contract is read from <state>/briefs/, the run log's default is <state>/RUNS.tsv; a --state that is not a folder: exit 1; without it: as before
 git clone -q "$tmp/q.git" "$tmp/q2" 2>/dev/null; cd "$tmp/q2" || exit 1; [ ! -e coordinator ] || { echo "FAIL: the second working copy has a coordinator/"; exit 1; }
@@ -462,6 +450,18 @@ fresh "no --state there: as before - no contract at coordinator/briefs, not chec
 run land 15 --poll 0; code 0; hasline "BOUNDS #15: no contract at coordinator/briefs/15-contract.md - not checked"; has "MERGED #15"; has "run-stats coordinator/RUNS.tsv "
 fresh "--state that is not a folder: exit 1, named, nothing merged"; qpr 16 "$H16" 16-fine; run land 16 --poll 0 --state "$tmp/q/no-such"; code 1; has "q/no-such"; notcalled "pr merge"
 cd "$tmp/q" || exit 1
+
+# which OVER stops (#419, the header), the row gone: the core's default list alone. qo <id> <file> [<bound>...]: a pushed branch adding 5 lines to <file>, its contract, its PR landed
+rm -f "$tmp/p/PROJECT.md"; qo() { local n="$1" f="$2"; shift 2; qg checkout -q -b "$n-o" main; mkdir -p "$(dirname "$f")"; printf '%s\n' 1 2 3 4 5 > "$f"; qg add "$f"; qg commit -q -m "$n"; QH="$(qg rev-parse HEAD)"; qg push -q origin "$n-o" 2>/dev/null; qg checkout -q main
+  { printf -- '---\nid: %s\ntitle: t\n' "$n"; [ $# = 0 ] || { echo 'bounds:'; printf '  - %s\n' "$@"; }; printf 'wall: w\n---\n'; } > "coordinator/briefs/$n-contract.md"; qpr "$n" "$QH" "$n-o"; run land "$n" --poll 0; }
+fresh "an OVER on an ordinary glob: the one line, the PR lands"; qo 40 src/40.txt 'src/* 3'; code 0; hasline "bounds over, not important: 40 src/* 5/3"; oneline "not important"; hasnt "OVER BOUNDS"; has "MERGED #40"; called "pr merge 40 --squash --match-head-commit $QH"; has "merge-queue: 1 merged"
+fresh "a glob beside an important one, holding none: ordinary"; qo 41 scripts/merge-queue.sh 'scripts/merge-queue.* 3'; code 0; hasline "bounds over, not important: 41 scripts/merge-queue.* 5/3"; hasnt "OVER BOUNDS"; has "MERGED #41"
+fresh "a glob matching an important one on the default list: stops, --over-bounds-ok passes it"; qo 42 tests/q/run.sh 'tests/q/run.sh 3'; code 3; hasline "OVER BOUNDS 42 tests/q/run.sh 5/3"; notcalled "pr merge 42"; has "left: #42 (OVER BOUNDS)"; hasnt "not important"
+run land 42 --poll 0 --over-bounds-ok "42:the owner said yes"; code 0; has "the owner said yes"; has "MERGED #42"
+fresh "a glob holding an important one, on a file that is not: stops"; qo 43 scripts/tool.sh 'scripts/* 3'; code 3; hasline "OVER BOUNDS 43 scripts/* 5/3"; notcalled "pr merge 43"; hasnt "not important"
+fresh "ordinary bounds around an important one, all OVER: stops, each its own line"; qo 44 scripts/mix.sh 'scripts/mix.* 3' 'scripts/* 3' 'scripts/mix.sh 3'; code 3; notcalled "pr merge 44"; has "left: #44 (OVER BOUNDS)"; hasline "OVER BOUNDS 44 scripts/* 5/3"; hasline "bounds over, not important: 44 scripts/mix.* 5/3"; hasline "bounds over, not important: 44 scripts/mix.sh 5/3"
+fresh "check-bounds exit 2 on an ordinary glob still stops"; qpr 19 "$H19" 19-gone; qpr 20 "$H20" 20-dir; qpr 21 "$H21" 21-bad; run land 19 20 21 --poll 0; code 3; notcalled "pr merge"; has "left: #19 (BOUNDS), #20 (BOUNDS), #21 (BOUNDS)"; hasnt "not important"
+fresh "a contract with no bounds: as today"; qo 45 src/45.txt; code 0; has "MERGED #45"; hasnt "OVER BOUNDS"; hasnt "not important"
 
 # the wrong folder: a subfolder, another repository (its origin lacks the branch), no repository at all
 mkdir -p "$tmp/q/wrong-sub" "$tmp/wrong-none"; git init -q --bare "$tmp/w.git"; git init -q -b main "$tmp/wrong-repo"; git -C "$tmp/wrong-repo" remote add origin "$tmp/w.git"
