@@ -56,6 +56,16 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Current milestone / sprint and what "done" means | `<fill>` | a demo scenario / the sprint's issues |
 | Who owns the scope | `<fill>` | solo: the owner · a team or a client: the business analyst / product owner (INIT 3.1, question 3) |
 
+## Repositories (#613)
+One row per repository the coordinator works in, the project's own first; a project of one repository keeps
+that one row. A further repository needs no `coordinator/` of its own: its sessions start with `start-worker
+--repo <its root> --state <this project's coordinator folder>`, its PRs land with `merge-queue land … --state
+<the same folder>` run from its root (TOOLKIT *Working copies*).
+
+| Name | Local root | Default branch | Safety file |
+|---|---|---|---|
+| `<fill>` (this project) | `<fill>` | `main` | `<fill>` — one file for every row, each root in its `COORD_PROTECTED_ROOT` (TOOLKIT *Safety*) |
+
 ## Sources of truth (procedures/SOURCES.md)
 | Kind | Main system | The coordinator may |
 |---|---|---|

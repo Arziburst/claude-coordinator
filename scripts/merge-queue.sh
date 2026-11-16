@@ -2,8 +2,10 @@
 # Land approved PRs one at a time, in the order given (CORE §4a): parallel work, serial merging - each PR
 # merges main once, when its turn comes, never after every other merge.
 #   scripts/merge-queue.sh land <pr>[@<approved sha>]... [--method squash|merge|rebase] [--shared <glob>]...
-#                               [--poll <seconds>] [--timeout <minutes>] [--over-bounds-ok <pr>:<the owner's words>] [--runs <log>] [--dry-run]
-# --runs: the run log (as check-contract takes it, #525) the finished sessions are judged by and the AFTER MERGE run-stats line names; default coordinator/RUNS.tsv.
+#                               [--poll <seconds>] [--timeout <minutes>] [--over-bounds-ok <pr>:<the owner's words>] [--runs <log>] [--state <folder>] [--dry-run]
+# --runs: the run log (as check-contract takes it, #525) the finished sessions are judged by and the AFTER MERGE run-stats line names; default <state>/RUNS.tsv.
+# --state: the coordinator's state folder (#613), default coordinator (the cwd's own): the PR's contract is read from <state>/briefs/ and the run log's default is there,
+#   so a second repository of one coordinator lands with no coordinator/ of its own (start-worker takes the same --state); not a folder: a usage error.
 #   scripts/merge-queue.sh status [--shared <glob>]... [--touches <path or glob>]...
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
@@ -23,7 +25,7 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381, #387), land: the contract at coordinator/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (coordinator/briefs/<id>-contract.md),
+# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md),
 # scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its --important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's stopping OVER, its words printed; one per run, two PRs go in two runs.
 # The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
@@ -32,10 +34,10 @@
 # says why; the queue goes on with the next). gh is called, and git only to read the folder and origin and to fetch the head check-bounds reads, and `claude agents` once after a merge for the sessions line (Windows: merge-queue.ps1).
 set -uo pipefail
 
-usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--runs <log>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
+usage="usage: land <pr>[@<sha>]... [--method squash|merge|rebase] [--shared <glob>]... [--poll <s>] [--timeout <min>] [--over-bounds-ok <pr>:<words>] [--runs <log>] [--state <folder>] [--dry-run] | status [--shared <glob>]... [--touches <path>]..."
 mode="${1:-}"; [ $# -gt 0 ] && shift
 case "$mode" in land|status) ;; *) echo "$usage" >&2; exit 1 ;; esac
-method=squash poll=60 timeout=120 dry=0 prs=() shared=() touches=() ook="" rlog=coordinator/RUNS.tsv
+method=squash poll=60 timeout=120 dry=0 prs=() shared=() touches=() ook="" rlog="" sdir=coordinator
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,11 +48,13 @@ while [ $# -gt 0 ]; do
     --timeout) need "$@"; timeout="$2"; shift 2 ;;
     --over-bounds-ok) need "$@"; [ -z "$ook" ] || { echo "--over-bounds-ok: one per run, two PRs go in two runs; $usage" >&2; exit 1; }; ook="$2"; shift 2 ;;
     --runs) need "$@"; rlog="$2"; shift 2 ;;
+    --state) need "$@"; sdir="$2"; [ -d "$sdir" ] || { echo "--state: $sdir is not a folder - give the coordinator's state folder (#613); $usage" >&2; exit 1; }; shift 2 ;;
     --dry-run) dry=1; shift ;;
     [0-9]*) [ "$mode" = land ] || { echo "status takes no PR; $usage" >&2; exit 1; }; prs+=("$1"); shift ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 1 ;;
   esac
 done
+rlog="${rlog:-$sdir/RUNS.tsv}"
 case "$method" in squash|merge|rebase) ;; *) echo "--method: squash, merge or rebase; $usage" >&2; exit 1 ;; esac
 case "$poll$timeout" in *[!0-9]*) echo "--poll and --timeout take whole numbers; $usage" >&2; exit 1 ;; esac
 [ "$mode" = status ] || [ ${#prs[@]} -gt 0 ] || { echo "$usage" >&2; exit 1; }
@@ -131,7 +135,7 @@ for item in "${prs[@]}"; do
   if [ -n "$want" ]; then case "$head" in "$want"*) ;; *)
     leave "$pr" "NOT APPROVED" "its head ${head:0:7} is not the approved ${want:0:7} - verify the new commit, then queue $pr@${head:0:7}"; continue ;; esac; fi
   # the contract's bounds (#381, the header)
-  bc="coordinator/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || bc="coordinator/briefs/${branch%%-*}-contract.md"
+  bc="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || bc="$sdir/briefs/${branch%%-*}-contract.md"
   if [ ! -e "$bc" ]; then echo "BOUNDS #$pr: no contract at $bc - not checked"
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?

@@ -3,8 +3,11 @@
 #   scripts/start-worker.sh --repo <project repo path> --name "#12 worker: Fix login" --branch 12-fix-login \
 #       --model opus [--effort high] --brief-file brief.md --safety <worker settings .json> [--mode auto] [--base main]
 #       --report-to <coordinator session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>]
-#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--go <words>] [--dry-run]
-# --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <repo>/coordinator/RUNS.tsv.
+#       [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--state <folder>] [--go <words>] [--dry-run]
+# --runs:   the run log (as check-contract takes it, #525) for the round gate and the earlier sessions below; default <state>/RUNS.tsv.
+# --state:  the coordinator's state folder (#613), default <repo>/coordinator: the run log's default, the contract's copy (<state>/briefs/) and an assistant's
+#           folder (<state>/assistants/<name>) come from it, so a second repository of one coordinator needs no coordinator/ of its own (merge-queue takes the
+#           same --state); not a folder: refused. What is kept out of the repository's git is still its own coordinator/.
 # --repo:   the project repository (the worktree is created there, not where the script runs).
 # --safety: a settings file for the worker (from settings.example.json) with the deny rules, the
 #           PreToolUse hook at an ABSOLUTE path and "worktree": {"bgIsolation": "none"}. It is passed
@@ -81,7 +84,7 @@
 # --tester-commit and --tester-tests are refused; each refusal exits 1 before anything is created. Nothing is
 # written into the folder (the coordinator's skill writes BRIEF.md and NOTES.md). After the launch: the attach
 # command (`claude attach "assistant: <name>"`, and `claude attach <id>` when the launch printed the id).
-# The round and money gate (#381): for a worker or a lead, from <repo>/coordinator/RUNS.tsv through `scripts/runs task`:
+# The round and money gate (#381): for a worker or a lead, from the run log (--runs, else <state>/RUNS.tsv) through `scripts/runs task`:
 # rounds = the id's worker rows + this start; round 3 or later, or the task's rows summing to at least twice budget.cost,
 # is refused (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API list price`, exit 1, before
 # anything is created) unless --owner-ok <the owner's words>, printed. No contract (#616): the id is the name's
@@ -94,12 +97,12 @@
 # words (the lead's worktree: the one --base is checked out in, else the folder start-worker runs in); else refused
 # (exit 1, before anything is created, --dry-run too) naming roles/lead.md step 2. Passed: one `go gate:` line with
 # the words. The coordinator's own starts and an assistant: no gate, no line. Limit: the lead could write either itself.
-# The contract's copy (#387): a worker or a lead whose contract (--contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
-# coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
+# The contract's copy (#387): a worker or a lead whose contract (--contract or in the brief) has `bounds:`, where <state>/briefs/ exists (--state, default <repo>/coordinator): just before the launch it is copied to
+# <state>/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 # Reference script — run it with --dry-run first on a new machine (TOOLKIT.md).
 set -euo pipefail
 
-repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs="" go="" mgiven=""
+repo="" name="" branch="" model="" effort="" mode="auto" brief="" safety="" base="main" from="" report="" wtroot="" contract="" tcommit="" ttests="" dry=0 given="" adirx="" owok="" runs="" go="" mgiven="" state=""
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2)" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
@@ -123,6 +126,7 @@ while [ $# -gt 0 ]; do
     --assistant-dir) need "$@"; adirx="$2"; shift 2 ;;
     --owner-ok) need "$@"; owok="$2"; shift 2 ;;
     --runs) need "$@"; runs="$2"; shift 2 ;;
+    --state) need "$@"; state="$2"; shift 2 ;;
     --go) need "$@"; go="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
@@ -146,10 +150,11 @@ if [ -n "$brief" ]; then
   grep -q '[^[:space:]]' "$brief" || { echo "--brief-file: $brief is empty - a worker with no task would start" >&2; exit 1; }
 fi
 [ -n "$repo" ] && [ -n "$name" ] && { [ -n "$branch" ] || [ -n "$asst" ]; } && [ -n "$model" ] && [ -n "$report" ] && [ -f "$brief" ] && [ -f "$safety" ] || {
-  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--go <the coordinator's words>] [--dry-run]" >&2
+  echo "usage: --repo <path> --name <session name> --branch <branch> --model <model> [--effort <level>] --brief-file <file> --safety <settings.json> --report-to <session> [--contract <file>] [--tester-commit <sha> | --tester-tests <path>] [--mode auto] [--base main] [--launch-from <folder>] [--worktree-root <folder>] [--owner-ok <the owner's words>] [--runs <log>] [--state <folder>] [--go <the coordinator's words>] [--dry-run]" >&2
   [ -z "$asst" ] || echo "an assistant: --repo <path> --name \"assistant: <name>\" --model <model> [--effort <level>] --brief-file <repo>/coordinator/assistants/<name>/BRIEF.md --safety <settings.json> --report-to <session> [--assistant-dir <folder>] [--mode dontAsk] [--dry-run]" >&2
   exit 1; }
 [ -z "$contract" ] || [ -f "$contract" ] || { echo "--contract: $contract does not exist" >&2; exit 1; }
+[ -z "$state" ] || [ -d "$state" ] || { echo "--state: $state is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" >&2; exit 1; }
 [ -z "$tcommit" ] || [ -z "$ttests" ] || { echo "--tester-commit and --tester-tests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE §4 step 3)" >&2; exit 1; }
 [ "$(printf '%s' "$mode" | tr '[:upper:]' '[:lower:]')" = "bypasspermissions" ] && { echo "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" >&2; exit 1; }
 case "$effort" in ""|low|medium|high|xhigh|max) ;; *) echo "--effort: low, medium, high, xhigh or max (got $effort)" >&2; exit 1 ;; esac
@@ -163,13 +168,14 @@ case "$wtroot" in ""|/*|[A-Za-z]:[/\\]*) ;; *) wtroot="$(pwd)/$wtroot" ;; esac
 fold() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$1" | tr '[:upper:]' '[:lower:]' ;; *) printf '%s' "$1" ;; esac; }
 
 root="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git repository: $repo" >&2; exit 1; }
-# an assistant's name and folder: <root>/coordinator/assistants/<name>/, its brief BRIEF.md there
+sdir="${state:-$root/coordinator}"   # the coordinator's state folder (#613, the header)
+# an assistant's name and folder: <state>/assistants/<name>/, its brief BRIEF.md there
 aname="" adir=""
 if [ -n "$asst" ]; then
   aname="${name#assistant: }"
   { [ "assistant: $aname" = "$name" ] && [[ "$aname" =~ ^[A-Za-z0-9._-]+$ ]] && case "$aname" in *[!.]*) true ;; *) false ;; esac; } ||
     { echo "refused: the assistant name \"${name#assistant:}\" in --name \"$name\" - write \"assistant: <name>\", <name> letters, digits, . _ - (not dots only)" >&2; exit 1; }
-  adir="$root/coordinator/assistants/$aname"
+  adir="$sdir/assistants/$aname"
   # the one comparison of folders (M1): start-worker.ps1 runs this same code through bash - a folder as it lies
   # on disk (links resolved), C:/... on Windows, no trailing /, in one letter case where paths ignore it; one
   # that does not exist as written
@@ -319,7 +325,7 @@ if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
     { printf '%s\n' "$tfv" >&2; echo "refused: check-contract could not read tests_first (CORE §4 step 3)" >&2; exit 1; }
   printf '%s\n' "$tfv" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | grep -Eq '^yes([[:space:],:;(]|$)' && tfyes=1 ;; esac; fi
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
-rl="${runs:-$root/coordinator/RUNS.tsv}" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
+rl="${runs:-$sdir/RUNS.tsv}" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
 [ -z "$cfile" ] || rid="$(bash "$sd/check-contract.sh" --field id "$cfile" 2>/dev/null | tr -d '\r' || true)"
 rnc=""   # no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
 [ -n "$rid" ] || [ -n "$asst" ] || case "$crole" in worker|lead) rid="$(printf '%s' "$name" | sed -n 's/^#\([A-Za-z0-9_-]\{1,\}\) .*/\1/p')"; rnc="${rid:+1}" ;; esac
@@ -562,8 +568,8 @@ if [ -n "$notes" ]; then
   fi
 fi
 # the contract's copy for the merge queue (#387, the header)
-cto="$root/coordinator/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"
-if [ -n "$cfile" ] && [ -d "$root/coordinator/briefs" ] && case "$crole" in worker|lead|"") [ -n "$(bash "$sd/check-contract.sh" --field bounds "$cfile" 2>/dev/null | tr -d '\r')" ] ;; *) false ;; esac; then
+cto="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"
+if [ -n "$cfile" ] && [ -d "$sdir/briefs" ] && case "$crole" in worker|lead|"") [ -n "$(bash "$sd/check-contract.sh" --field bounds "$cfile" 2>/dev/null | tr -d '\r')" ] ;; *) false ;; esac; then
   if [ "$dry" = 1 ]; then echo "[dry-run] copy the contract to $cto"
   else
     # read first: --contract may be the copy itself, in any spelling (the x keeps the last line breaks through $(...))

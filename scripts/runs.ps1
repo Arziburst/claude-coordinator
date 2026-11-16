@@ -13,7 +13,7 @@
 # add appends exactly one row (CORE 7) and prints it: its cells by the file's header, else CORE 7's order; tokens, cost,
 # start, wall and active from scripts/session-tokens <id>, never typed by hand; result one of approved done pass
 # `rework <n>` escalated failed dropped ready (exit 2 otherwise); no transcript: exit 1; a second row of the same start
-# and role: exit 1, except roles assistant and coordinator (#389: a row per day, each the cost since the previous); the file keeps its BOM and line ends; a log that is no file or cannot be
+# and role: exit 1, except roles assistant and coordinator (#389: a row per day, each the cost since the previous; #624: of the priced total, runs.sh's header); the file keeps its BOM and line ends; a log that is no file or cannot be
 # read or written: exit 1, a line `runs:`, no row printed. check lists the project's finished sessions (the process
 # ended: state done, stopped or failed and no status field) with no row - `MISSING <short id> <name> <start>` each,
 # else `ALL LOGGED` - and only reads (a log it cannot read: exit 1, never read as empty).
@@ -60,9 +60,9 @@ function RowsOf($l) {
 function ColNo($c, [string]$n) { for ($i = 0; $i -lt $c.Count; $i++) { if ($c[$i] -ceq $n) { return $i } }; -1 }
 function Cell($row, [int]$i) { if ($i -ge 0 -and $i -lt $row.Count) { $row[$i] } else { '' } }
 # Tokens <id>: what session-tokens.ps1 prints for the session, as lines; $null when it fails
-function SessionTokens([string]$id) {
+function SessionTokens([string]$id, [string]$pf) {
   $global:LASTEXITCODE = 0
-  $o = @(& (Join-Path $PSScriptRoot 'session-tokens.ps1') $id 2>$null)
+  $o = if ($pf) { @(& (Join-Path $PSScriptRoot 'session-tokens.ps1') $id -Prices $pf 2>$null) } else { @(& (Join-Path $PSScriptRoot 'session-tokens.ps1') $id 2>$null) }
   if ($LASTEXITCODE -ne 0) { return $null }
   , @($o | ForEach-Object { [string]$_ })
 }
@@ -107,7 +107,14 @@ if ($Command -ceq 'add') {
   $Row = @{ date = $Date; task = $Task; role = $Role; kind = $Kind; model = $Model; effort = $Effort; estimate = $Estimate
     tokens = $Tokens; cost = ''; result = $Result; start = ''; wall = ''; active = ''; wait = ''; estimate_time = $EstimateTime; own_cost = ''; machine = ''; fix_now = $Findings }
   if ($Session) {
-    $st = SessionTokens $Session
+    # #624: a coordinator's and an assistant's row rest on the priced total, at prices.txt next to the log (runs.sh's header)
+    $pf = ''; $why = ''; $st = $null; $pr = ''; $un = '0'
+    if ($Role -ceq 'assistant' -or $Role -ceq 'coordinator') {
+      $pf = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $Log).Path) 'prices.txt'
+      if (-not (Test-Path -LiteralPath $pf -PathType Leaf)) { $pf = ''; $why = 'no prices.txt next to the run log' }
+    }
+    if ($pf) { $st = SessionTokens $Session $pf }
+    if ($null -eq $st) { $st = SessionTokens $Session '' }
     if ($null -eq $st) { Die 1 "no transcript for session $Session (session-tokens failed)" }
     $tot = ''; $tl = ''; $cost = ''
     foreach ($x in $st) {
@@ -115,7 +122,14 @@ if ($Command -ceq 'add') {
       if ($f[0] -ceq 'total' -and -not $tot) { $tot = $f[1] }
       elseif ($f[0] -ceq 'time' -and -not $tl) { $tl = $x }
       elseif ($f[0] -ceq 'cost' -and -not $cost) { $cost = $f[1] -replace '^\$', '' }
+      elseif ($f[0] -ceq 'priced' -and -not $pr) { $pr = $f[1] -replace '^\$', '' }
+      elseif ($f[0] -ceq 'context' -and $x -cmatch ' unpriced=([0-9]+)') { $un = $Matches[1] }
     }
+    if ($pf) {
+      if (-not $pr) { $why = 'session-tokens printed no priced line with prices.txt' }
+      elseif ([int]$un -ne 0) { $why = "$([int]$un) requests of a model not in prices.txt" } else { $cost = $pr }
+    }
+    if ($why) { [Console]::Error.WriteLine("runs: $why; the cost cell rests on the cost line, not the priced total") }
     if (-not $tot -or -not $tl) { Die 1 "no transcript for session $Session (no total or time line)" }
     $Row.tokens = $tot; $Row.start = TimeKv $tl 'start'; $Row.wall = TimeKv $tl 'wall'; $Row.active = TimeKv $tl 'active'
     $ns = ColNo $c 'start'; $nr = ColNo $c 'role'; $nc = ColNo $c 'cost'; $nt = ColNo $c 'task'

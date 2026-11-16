@@ -37,7 +37,7 @@ if ($PSBoundParameters.ContainsKey('Session') -and -not $Session.Trim()) {
   [Console]::Error.WriteLine('empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)'); exit 2
 }
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 28 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 27 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 if ($Prices -and -not (Test-Path -LiteralPath $Prices -PathType Leaf)) { [Console]::Error.WriteLine("cannot read the prices file $Prices"); exit 2 }
 $ErrorActionPreference = 'Stop'
