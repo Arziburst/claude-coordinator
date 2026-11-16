@@ -689,6 +689,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
 ## Scripts
+In a command, here and in the procedures, `<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when a worktree has none), the repository's root in the core's own repository (#618).
 One style for every script in `scripts/`, so each runs on a bare Mac and a bare Windows machine:
 - **A pair with the same behaviour and output:** `<name>.sh` for macOS / Linux and `<name>.ps1` for
   Windows. Same arguments, same messages, same exit codes; a change to one is made to the other in the
