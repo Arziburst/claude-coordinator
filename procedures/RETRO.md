@@ -132,7 +132,7 @@ A proposal, not a bug report: the maintainer acts on it only after the owner's d
 ```
 
 - **Title:** `[self-improvement] proposal: <axis> <measure> (<core file name>)`.
-- **Already proposed?** The same path as a core finding (CORE-FINDINGS.md §2, #338): `<core>/scripts/report-issue.sh
+- **Already proposed?** The same path as a core finding (CORE-FINDINGS.md §2, #338; `<core>`: the core's folder, TOOLKIT *Scripts*): `<core>/scripts/report-issue.sh
   file --repo Arziburst/claude-coordinator --title "<the title>" --body-file <file> --signature
   "<signature>" --keywords "<axis> <measure> <core file name>"` (Windows: `report-issue.ps1 file`), the
   signature the table's `<axis>:<measure>:<core file name>`; it searches open and closed issues for it

@@ -23,7 +23,7 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    cover every parent criterion; their `touches` do not overlap, or they run one after another. Each
    keeps CONTRACT.md's two default `non_goals` lines (check-contract fails without them), passes
    `<core>/scripts/check-contract` (Windows: the full `powershell -NoProfile -ExecutionPolicy Bypass
-   -File <core>/scripts/check-contract.ps1` command) and gets a model and effort from the routing (a
+   -File <core>/scripts/check-contract.ps1` command; `<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository, #618) and gets a model and effort from the routing (a
    research sub-run, the researcher role, is routed as research: the top rung from the balanced spend
    level up, within its guard rails, CORE §7) and a cost estimate (`budget.cost`, CORE §7a). The
    estimates plus your own share must fit the parent's `budget.cost`; your own session is no small
