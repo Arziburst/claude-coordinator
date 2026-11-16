@@ -445,7 +445,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   Write such text with the Write tool. The guard does not strip strings on purpose: that would let
   `pwsh -Command "git push origin main"` through (#264).
 - **Hook:** a `PreToolUse` hook (`scripts/hooks/safety-guard.sh`, one guard on every OS: Windows runs it in Git Bash, as Claude Code runs hooks there, #564;
-  `safety-guard.ps1` is only a shim for a settings file written before, *Scripts*; checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
+  `safety-guard.ps1` is only a shim for a settings file written before, *Scripts* — slower by a PowerShell start a call, so the update of the core moves such a file to the bash command, UPDATE-CORE step 3, #620; checked against `tests/safety-guard/cases.txt`) guards only the irreversible:
   pushing, force-pushing or deleting the protected branches (main / master and those of `COORD_PROTECTED_BRANCHES`,
   next bullet — in any refspec form:
   quoted, `+`, `src:dst`, `:main`, `refs/heads/` or `heads/`, `~N` / `^{}` suffixes; `--all`,
@@ -692,7 +692,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   same pull request.
 - **The hooks exception (#564):** the guard is one script, `hooks/safety-guard.sh`, run by bash on every OS
   (Windows: Git Bash, as Claude Code runs hooks there); its other half `hooks/safety-guard.ps1` is a thin shim
-  for a settings file written before, never a second guard: it hands each call to the `.sh` unchanged (stdin's
+  for a settings file written before and not yet moved (the update of the core moves it to `bash …/safety-guard.sh`, UPDATE-CORE step 3, #620), never a second guard: it hands each call to the `.sh` unchanged (stdin's
   bytes in; stdout, stderr and the exit code back), takes Git Bash (Claude Code's `CLAUDE_CODE_GIT_BASH_PATH`,
   else the one beside git, else bash on PATH; never WSL's `bash.exe`; start-worker.ps1 runs a `.sh` guard's
   self-test through it, so WSL's bash ahead of Git's on PATH refuses no worker start) and blocks when it or the `.sh` cannot run
