@@ -19,21 +19,32 @@
 # any other check: an assistant is removed only on the owner's word; with --session, a listing that fails or
 # prints no JSON list is exit 3 (LISTING FAILED, nothing stopped, removed or changed) - it cannot tell an
 # assistant (Windows: cleanup-worker.ps1, the same checks and codes).
+#   scripts/cleanup-worker.sh --task <id> [--runs <log>] [--dry-run]     alone, from the project's root; or with --worktree: after its cleanup
+# --task (#621; after a merge by a human, which merge-queue's removal of them never follows): the finished sessions of task <id> in this
+# project (the folder it runs in; with --worktree that repository's main checkout), found by merge-queue's rule (#493, #521; kept equal to it by
+# hand): the brief kept by the sessionId names a worktree `<id>-...`, else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
+# (--runs <log>, default coordinator/RUNS.tsv under the project) finds a row for is removed (`claude rm`: the listing only), `removed <id> (<name>)`,
+# --dry-run: `[dry-run] claude rm <id> (<name>)`; the others are `MISSING <id> <name>`; then `task <id>: <n> removed, <m> without a run row`. A live
+# session (a status field, or a state other than done, stopped, failed) and another project's are never touched. Its exit codes: 0, MISSING
+# lines or none; 1 usage; 3 LISTING FAILED or RUNS CHECK FAILED, nothing removed; 4 SESSION KEPT: a claude rm failed, the others still handled.
 set -euo pipefail
 
-session="" wt="" dry=0
-usage="usage: --worktree <path> [--session <id>] [--dry-run]"
+session="" wt="" dry=0 task="" rlog=coordinator/RUNS.tsv
+usage="usage: --worktree <path> [--session <id>] [--task <id> [--runs <log>]] [--dry-run], or --task <id> [--runs <log>] [--dry-run]"
 need() { [ $# -ge 2 ] && [ -n "$2" ] || { echo "missing value for $1; $usage" >&2; exit 1; }
          case "$2" in -*) echo "missing value for $1 (got the flag $2); $usage" >&2; exit 1 ;; esac; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --session) need "$@"; session="$2"; shift 2 ;;
     --worktree) need "$@"; wt="$2"; shift 2 ;;
+    --task) need "$@"; task="$2"; shift 2 ;;
+    --runs) need "$@"; rlog="$2"; shift 2 ;;
     --dry-run) dry=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-[ -n "$wt" ] || { echo "$usage" >&2; exit 1; }
+{ [ -n "$wt" ] || { [ -n "$task" ] && [ -z "$session" ]; }; } || { echo "$usage" >&2; exit 1; }
+case "$task" in *[!A-Za-z0-9._-]*) echo "--task: not a task id: $task; $usage" >&2; exit 1 ;; esac
 
 run() { if [ "$dry" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 stop_here() { echo "$1 - left as is" >&2; exit 3; }
@@ -55,6 +66,32 @@ canon() {
   if [ "$os" = win ]; then case "$x" in /[a-z]|/[a-z]/*) x="${x:1:1}:${x:2}" ;; esac; fi
   printf '%s' "$x"
 }
+
+# task_sessions <project root> (--task, #621): the listing, the finished sessions of this project and the two ways to find the task's are
+# merge-queue's after a merge (#493, #521), its awk program as it stands there; only the task's worktree is named by the id, not by a branch
+task_sessions() {
+  local root="$1" log="$rlog" TAB bd ls tre ms="" got="" rc=0 nr=0 nm=0 xid xsid xnm; TAB="$(printf '\t')"; bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs"
+  tre="$(printf '%s' "$task" | sed 's/\./\\./g')"; case "$log" in /*|[A-Za-z]:*) ;; *) log="$root/$log" ;; esac
+  ls="$(claude agents --json --all 2>/dev/null </dev/null)" || { echo "LISTING FAILED: claude agents --json --all failed - no session of task $task removed" >&2; return 3; }
+  while IFS="$TAB" read -r xid xsid xnm; do [ -n "$xid" ] || continue
+    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -E "/$tre-[^/ ]*[.,] " >/dev/null || continue
+    else case "$xnm" in "#$task "*|"#$task."*) ;; *) continue ;; esac; fi
+    [ -n "$got" ] || { got=1; ms="$(bash "$(dirname "$0")/runs.sh" check --log "$log" --root "$root" 2>/dev/null </dev/null)" ||
+      { echo "RUNS CHECK FAILED: runs check --log $log --root $root failed - no session of task $task removed" >&2; return 3; }; }
+    if printf '%s\n' "$ms" | grep -F "MISSING $xid " >/dev/null; then nm=$((nm + 1)); echo "MISSING $xid $xnm"
+    elif [ "$dry" = 1 ]; then nr=$((nr + 1)); echo "[dry-run] claude rm $xid ($xnm)"
+    elif claude rm "$xid" >/dev/null 2>&1 </dev/null; then nr=$((nr + 1)); echo "removed $xid ($xnm)"
+    else rc=4; echo "SESSION KEPT: $xid ($xnm): claude rm failed - remove it by hand (claude rm $xid)" >&2; fi
+  done <<< "$(printf '%s' "$ls" | tr -d '\r\n' | tr '}' '\n' | awk -v R="$root|$(cd "$root" 2>/dev/null && pwd -P)|$(cd "$root" 2>/dev/null && pwd -W 2>/dev/null)" '
+    function f(k,  m) { if (!match($0, "\"" k "\": *\"[^\"]*\"")) return ""; m = substr($0, RSTART, RLENGTH); sub(/^[^:]*: *"/, "", m); sub(/"$/, "", m); return m }
+    function c(s) { gsub(/\\+/, "/", s); return tolower(s) }
+    BEGIN { split(R, rt, "|") }
+    { st = f("state"); nm = f("name"); cw = c(f("cwd")); ok = 0
+      for (i in rt) if (rt[i] != "" && (cw == c(rt[i]) || index(cw, c(rt[i]) "/") == 1)) ok = 1
+      if (ok && f("id") != "" && (st == "done" || st == "stopped" || st == "failed") && $0 !~ /"status":/) print f("id") "\t" f("sessionId") "\t" nm }')"
+  echo "task $task: $nr $([ "$dry" = 1 ] && echo "would be removed" || echo removed), $nm without a run row"; return $rc
+}
+[ -n "$wt" ] || { task_sessions "$(pwd)" || exit $?; exit 0; }
 
 # an assistant (#281: the listing names the session `assistant: <name>`) is never stopped or removed here,
 # whatever the worktree: decided before any other check
@@ -272,3 +309,4 @@ EOF
   fi
 fi
 echo "cleaned: ${id:-no session} ${wt}"
+[ -z "$task" ] || task_sessions "$root" || exit $?
