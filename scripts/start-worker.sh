@@ -85,7 +85,7 @@
 # rounds = the id's worker rows + this start; round 3 or later, or the task's rows summing to at least twice budget.cost,
 # is refused (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API list price`, exit 1, before
 # anything is created) unless --owner-ok <the owner's words>, printed. No contract (#616): the id is the name's
-# (`#<id> <role>:`, a worker or a lead); with worker rows it is gated by the round count alone, the line saying the cost rule
+# (`#<id> <role>:`, a worker or a lead; letters, digits, _ and -, matched whole: 426 is not 426-2); with worker rows it is gated by the round count alone, the line saying the cost rule
 # could not apply (no estimate). No log, no contract and no rows for the name's id, a lead's sub-contract, another
 # role or an assistant: one `round gate:` line, no gate. Limits: a round given by a message to a live session passes no
 # gate (CORE §6: a third round is always a fresh worker); a running session has no row yet, its spend is not in the sum.
@@ -322,7 +322,7 @@ if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
 rl="${runs:-$root/coordinator/RUNS.tsv}" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
 [ -z "$cfile" ] || rid="$(bash "$sd/check-contract.sh" --field id "$cfile" 2>/dev/null | tr -d '\r' || true)"
 rnc=""   # no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
-[ -n "$rid" ] || [ -n "$asst" ] || case "$crole" in worker|lead) rid="$(printf '%s' "$name" | sed -n 's/^#\([0-9][0-9]*\) .*/\1/p')"; rnc="${rid:+1}" ;; esac
+[ -n "$rid" ] || [ -n "$asst" ] || case "$crole" in worker|lead) rid="$(printf '%s' "$name" | sed -n 's/^#\([A-Za-z0-9_-]\{1,\}\) .*/\1/p')"; rnc="${rid:+1}" ;; esac
 if [ -n "$asst" ]; then rno="an assistant"
 elif ! case "$crole" in worker|lead|"") true ;; *) false ;; esac; then rno="a $crole"
 elif [ -z "$rid" ]; then rno="no contract"

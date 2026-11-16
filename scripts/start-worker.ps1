@@ -330,7 +330,7 @@ if ($Contract) {
 if (-not "$OwnerOk".Trim()) { $OwnerOk = '' }   # words of blanks only are no words
 $rl = if ($Runs) { [IO.Path]::Combine((Get-Location).Path, $Runs) } else { Join-Path $root 'coordinator/RUNS.tsv' }; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
 # no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
-$rnc = -not $gId -and -not $asst -and $crole -in @('worker', 'lead') -and $Name -cmatch '^#([0-9]+) '; if ($rnc) { $gId = $Matches[1] }
+$rnc = -not $gId -and -not $asst -and $crole -in @('worker', 'lead') -and $Name -cmatch '^#([A-Za-z0-9_-]+) '; if ($rnc) { $gId = $Matches[1] }
 $rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
        elseif (-not (Test-Path -LiteralPath $rl -PathType Leaf)) { 'no run log' } elseif ($gId.Contains('.')) { 'a sub-contract' } else { '' }
 if ($rno) { "round gate: $rno, no gate$okTail" }

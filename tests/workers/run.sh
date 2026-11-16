@@ -1161,6 +1161,7 @@ rg="$tmp/rgrepo"; git init -q -b main "$rg"; git -C "$rg" config core.autocrlf f
   rgl tester 502 'in a1b2c3d4'; rgl worker 502 2.00; rgl verifier 502 0.50; rgl worker 502 2.50
   rgl tester 503 2.00; rgl worker 503 7.00; rgl verifier 503 3.00           # one worker row, exactly twice 6
   rgl worker 504.1 1.00; rgl worker 504.1 1.00                              # a sub-contract's own two rounds
+  rgl worker gps-1 1.00; rgl worker gps-1 1.00; rgl worker gps-10 1.00; rgl worker 426-2 1.00; rgl worker 426-2 1.00   # ids with letters and a dash (#616)
 } > "$rg/coordinator/RUNS.tsv"
 g -C "$rg" add -A; g -C "$rg" commit -q -m init
 rgr="$tmp/rgnolog"; git init -q -b main "$rgr"; g -C "$rgr" commit -q --allow-empty -m init
@@ -1204,6 +1205,10 @@ check 0 "gate, no contract: --owner-ok passes and prints the words" -- start --n
 says "gate, no contract: --owner-ok" "round gate: " "round 3" "task 502" "the cost rule could not apply" "the owner said go on"; expect_in "[dry-run]"; rgone "gate, no contract: --owner-ok"
 check 0 "gate, no contract: twice the spend alone is no refusal" -- start --name "#503 worker: G" "${NC[@]}" --branch 503-g
 says "gate, no contract: twice the spend alone" "round gate: " "round 2" "task 503"; expect_in "[dry-run]"
+check 1 "gate, no contract: an id of letters and a dash, a third round is refused" -- start --name "#gps-1 worker: G" "${NC[@]}" --branch gps-1-g
+says "gate, no contract: an id of letters and a dash" "refused: " "round 3" "task gps-1," "no contract"; rgrefused "gate, no contract: an id of letters and a dash"
+check 0 "gate, no contract: rows of 426-2 are not task 426" -- start --name "#426 worker: G" "${NC[@]}" --branch 426-g
+expect_in "round gate: no contract, no gate"; expect_in "[dry-run]"; rgone "gate, no contract: rows of 426-2"
 check 0 "gate, no contract: an id with no rows, as before" -- start --name "#777 worker: G" "${NC[@]}" --branch 777-g
 expect_in "round gate: no contract, no gate"; expect_in "[dry-run]"; rgone "gate, no contract: an id with no rows"
 check 0 "gate, no contract: a lead's sub-task, as before" -- start --name "#504.1 worker: G" "${NC[@]}" --go "go" --branch 504-1-g
