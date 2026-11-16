@@ -20,7 +20,9 @@
 # (its total line, its cost line's number, its time line's start= wall= active=), never typed by hand; no
 # cost line leaves the cell empty (a note on stderr). An assistant's row (role assistant) and a coordinator's
 # (role coordinator, #389: a row per day, --task -) get the cost the session spent since its previous row: the
-# session's cost less the earlier rows' of the same task column, role and start (CORE 7). With --in: tokens = --tokens, cost `in <parent>`,
+# session's priced total (#624: session-tokens' `priced` line at prices.txt next to the log - the cost line reads low when
+# a process ended without a stop; no prices.txt, or a model not in it: the cost line, and a line `runs:` says why) less
+# the earlier rows' of the same task column, role and start (CORE 7). With --in: tokens = --tokens, cost `in <parent>`,
 # start, wall and active empty. wait stays empty (task rows: run-stats --task ... --append); date: --date,
 # else today (UTC). Result words: approved done pass `rework <n>` escalated failed dropped (stopped without a
 # result) ready. The file keeps its BOM and its line ends (a CRLF file gets a CRLF row); a last line
@@ -43,7 +45,7 @@
 # Exit 0 (check: also when it lists some), 1 as above or when claude agents fails, 2 on a usage error.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
-usage() { sed -n '2,43s/^# \{0,1\}//p' "$0" >&2; exit 2; }
+usage() { sed -n '2,45s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 die() { echo "runs: $2" >&2; exit "$1"; }
 [ $# -ge 1 ] || usage
 cmd="$1"; shift
@@ -109,11 +111,21 @@ if [ "$cmd" = add ]; then
   { : >> "$log"; } 2>/dev/null && [ -w "$log" ] || die 1 "cannot write the run log $log"
   cost="" start="" wall="" active="" own="" machine=""
   if [ -n "$session" ]; then
-    st="$(bash "$here/session-tokens.sh" "$session" | tr -d '\r')" || die 1 "no transcript for session $session (session-tokens failed)"
+    pf="" why="" st=""   # #624: a coordinator's and an assistant's row rest on the priced total, at prices.txt next to the log
+    case "$role" in assistant|coordinator) pf="$(dirname "$log")/prices.txt"; [ -f "$pf" ] || { pf=""; why="no prices.txt next to the run log"; } ;; esac
+    [ -z "$pf" ] || st="$(bash "$here/session-tokens.sh" "$session" --prices "$pf" 2>/dev/null | tr -d '\r')"
+    [ -n "$st" ] || st="$(bash "$here/session-tokens.sh" "$session" | tr -d '\r')" || die 1 "no transcript for session $session (session-tokens failed)"
     tokens="$(printf '%s\n' "$st" | awk '$1 == "total" { print $2; exit }')"
     tl="$(printf '%s\n' "$st" | awk '$1 == "time" { print; exit }')"
     [ -n "$tokens" ] && [ -n "$tl" ] || die 1 "no transcript for session $session (no total or time line)"
     cost="$(printf '%s\n' "$st" | awk '$1 == "cost" { v = $2; sub(/^\$/, "", v); print v; exit }')"
+    if [ -n "$pf" ]; then
+      pr="$(printf '%s\n' "$st" | awk '$1 == "priced" { print substr($2, 2); exit }')"
+      un="$(printf '%s\n' "$st" | awk '$1 == "context" { u = $0; if (sub(/^.* unpriced=/, "", u)) print u + 0; exit }')"
+      if [ -z "$pr" ]; then why="session-tokens printed no priced line with prices.txt"
+      elif [ "${un:-0}" != 0 ]; then why="$un requests of a model not in prices.txt"; else cost="$pr"; fi
+    fi
+    [ -z "$why" ] || echo "runs: $why; the cost cell rests on the cost line, not the priced total" >&2
     kv() { printf '%s\n' "$tl" | awk -v w="$1" '{ for (i = 2; i <= NF; i++) { n = index($i, "="); if (substr($i, 1, n - 1) == w) { v = substr($i, n + 1); sub(/m$/, "", v); print v } } }'; }
     start="$(kv start)"; wall="$(kv wall)"; active="$(kv active)"
     c="$(cols "$log")"; ns="$(colno "$c" start)"; nr="$(colno "$c" role)"; nc="$(colno "$c" cost)"; nt="$(colno "$c" task)"
