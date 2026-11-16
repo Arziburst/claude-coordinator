@@ -983,8 +983,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   subscription for comparing runs; needs the status line installed). **After a normal stop** (`claude
   stop <id>`, idle or mid-tool-call, or the process exiting) Claude Code appends to the session's own
   transcript a `cost-state` record with its totals — `totalCostUSD` (equal to the status file's cost to
-  the last digit) and `modelUsage` per model, subagents' requests included; a resumed session restores
-  and accumulates them, so a later record holds the whole total (measured on 2.1.296; the docs describe
+  the last digit) and `modelUsage` per model, subagents' requests included; a resumed session goes on from
+  the last saved totals, so a later record holds the whole total only when every process of the session ended
+  with a stop: what one spent before a kill, a crash or a restart is in no record, and the `cost` line of a long
+  session then reads low, its request-priced total being the `priced` line (#597, measured on 2.1.310-2.1.325; the record itself: measured on 2.1.296, and the docs describe
   it — [cost-tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking): "saves the session's
   totals to its transcript when the process exits normally" — the record's name is internal). When the
   transcript's **last** such record has no assistant message after it, session-tokens takes the model
@@ -1001,6 +1003,14 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   format run-stats reads; unreadable: exit 2) each bucket adds `/$<cost at list price, 4 places>` and
   the line ends `unpriced=<requests of a model not in the file: counted, no cost>`. A dearer rate above
   a context size (Haiku over 100k) cannot be expressed in the prices file, so those requests read low.
+  **What each dollar line counts (#597):** `cost` is the CLI's own counter, not a sum of the transcript: it goes
+  on from its last saved state, so what a process of the session spent before it ended without a stop (a kill, a
+  crash, a restart) is missing (measured: a three-week coordinator's counter held 70 % of its requests' price), and
+  it holds requests the CLI does not write to the transcript (workers: 0-7 % more). With `--prices`, a `priced`
+  line before the `time` line: the `context` buckets added, the same requests at the same prices (each message id
+  once, subagents', before and after a compaction or a resume), then for one session `the cost line is $<n> less`
+  / `more` / `agrees`; with `unpriced` above 0 it names those requests (`unpriced=<n>`) and gives no cause. A long session's spend is the `priced` line. The `time` line's `start=` and `wall` are unchanged: the transcript's first timestamp, a `file-history-snapshot` record's inner one too -
+  runs and the status line know a session by it; `first=<UTC>` after `end=`, only when the first record with a time of its own is later.
   A reader that picks the lines by their first word (run-stats, runs) is not affected. The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
   session's (measured on a real project), so tokens always come from the transcript. No `cost` line → the tokens

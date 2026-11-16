@@ -1,0 +1,3 @@
+{"type":"user","message":{"role":"user","content":"go"},"uuid":"u1","sessionId":"r2","timestamp":"2026-10-24T11:00:00.000Z"}
+{"type":"assistant","message":{"id":"msg_Q1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"a"}],"usage":{"input_tokens":10,"cache_creation_input_tokens":10000,"cache_read_input_tokens":0,"output_tokens":100}},"uuid":"a1","sessionId":"r2","timestamp":"2026-10-24T11:00:30.000Z"}
+{"type":"cost-state","sessionId":"r2","totalCostUSD":0.09,"modelUsage":{"claude-opus-5-5":{"inputTokens":510,"outputTokens":150,"cacheReadInputTokens":0,"cacheCreationInputTokens":10000,"thinkingTokens":0}}}

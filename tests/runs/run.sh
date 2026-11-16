@@ -443,5 +443,21 @@ fresh "run-stats: old rows with the new last columns read as without them"; prin
 stats() { if [ "$kind" = sh ]; then bash "$core/scripts/run-stats.sh" "$1"; else "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/run-stats.ps1" "$1"; fi; }
 [ "$(stats "$L" 2>&1)" = "$(stats "$L.new" 2>&1)" ] && ok || bad "run-stats differs with new columns"
 
+# #597: a transcript that begins with a file-history-snapshot record. A session's start stays the file's first timestamp,
+# the snapshot's (as before #597, and as the status line reads it), so a row logged before still names its session: a
+# coordinator's next row holds only the spend since that row, and check does not list a logged session again.
+SN=e1f2a3b4 SNS=e1f2a3b4-0000-4000-8000-00000000000b; S0=2026-10-09T09:59:57Z
+printf '{"type":"file-history-snapshot","messageId":"m0","snapshot":{"messageId":"m0","trackedFileBackups":{},"timestamp":"2026-10-09T09:59:57.000Z"},"isSnapshotUpdate":false}\n' > "$CLAUDE_CONFIG_DIR/projects/-proj/$SNS.jsonl"
+tx -proj "$SNS" "$ROOT" 2026-10-09T10:00:00.000Z 2026-10-09T10:03:00.000Z 2026-10-09T10:20:00.000Z 4
+fresh "add: a transcript that begins with a snapshot - the start as before #597; a coordinator row after an earlier one holds the spend since it"
+printf '%s\n2026-10-28\tcore\tcoordinator\tcoordinator\topus\thigh\t-\t100\t1.5\tdone\t%s\t20\t3\t\t-\n' "$H" "$S0" > "$L"
+run add --log "$L" --session $SNS --task core --role coordinator --kind coordinator --model opus --effort high --estimate - --estimate-time - --result done --date 2026-10-29; code 0
+[ "$(cell "$L" start)" = "$S0" ] && ok || bad "start '$(cell "$L" start)', want the snapshot's $S0"
+awk -v a="$(cell "$L" cost)" 'BEGIN { exit !(a != "" && a + 0 == 2.5) }' && ok || bad "cost '$(cell "$L" cost)', want 2.5: the session's 4 less the earlier row's 1.5"
+fresh "check: a session that begins with a snapshot, logged by that start before #597, is not MISSING"
+{ echo "["; agent $SN $SNS "#15 worker" "$ROOT" done; echo; echo "]"; } > "$STUB_D/agents.json"
+printf '%s\n2026-10-09\t15\tworker\tordinary\topus\tmedium\t3\t1\t0.1\tapproved\t%s\t20\t3\t\t-\n' "$H" "$S0" > "$L"
+run check --log "$L" --root "$ROOT"; code 0; has "^ALL LOGGED\$"; hasnt "^MISSING"
+
 echo "runs ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" = 0 ]
