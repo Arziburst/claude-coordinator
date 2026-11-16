@@ -3,8 +3,11 @@
 #   powershell -File scripts\start-worker.ps1 -Repo <project repo path> -Name "#12 worker: Fix login" `
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
 #       -ReportTo <coordinator session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>]
-#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-Runs <log>] [-DryRun]
-# -Runs: the run log (as check-contract takes it, #525) for the round gate and the earlier sessions; default <repo>/coordinator/RUNS.tsv.
+#       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-Runs <log>] [-State <folder>] [-DryRun]
+# -Runs: the run log (as check-contract takes it, #525) for the round gate and the earlier sessions; default <state>/RUNS.tsv.
+# -State: the coordinator's state folder (#613), default <repo>/coordinator: the run log's default, the contract's copy (<state>/briefs/) and an assistant's
+#       folder (<state>/assistants/<name>) come from it, so a second repository of one coordinator needs no coordinator/ of its own (merge-queue takes the
+#       same -State); not a folder: refused. What is kept out of the repository's git is still its own coordinator/.
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -72,11 +75,11 @@
 # param() and the gate still refuses. Limits: a round given by a message passes no gate; a running session has no row yet.
 # The lead's go gate (#558; the rules: start-worker.sh's top comment): a lead's sub-task (named `#<n>.<m> ...`, or -ReportTo
 # a `#<n> lead: ...`) is refused unless -Go <the coordinator's words> or a line in <the lead's worktree>.lead/go.txt.
-# The contract's copy (#387): a worker or a lead whose contract (-Contract or in the brief) has `bounds:`, in a repository with coordinator/briefs/: just before the launch it is copied to
-# coordinator/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
+# The contract's copy (#387): a worker or a lead whose contract (-Contract or in the brief) has `bounds:`, where <state>/briefs/ exists (-State, default <repo>/coordinator): just before the launch it is copied to
+# <state>/briefs/<branch, / as ->-contract.md for the merge queue, over an older copy, one line naming it (a dry run says so and writes nothing). Never committed; a copy that fails stops the start.
 param([string]$Repo, [string]$Name, [string]$Branch, [string]$Model, [string]$BriefFile, [string]$Safety,
       [string]$Mode = 'auto', [string]$Base = 'main', [string]$LaunchFrom = '', [string]$ReportTo = '', [string]$WorktreeRoot = '', [switch]$DryRun, [string]$Effort = '', [string]$Contract = '',
-      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '', [string]$Runs = '', [string]$Go = '')
+      [string]$TesterCommit = '', [string]$TesterTests = '', [string]$AssistantDir = '', [string]$OwnerOk = '', [string]$Runs = '', [string]$Go = '', [string]$State = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -106,17 +109,18 @@ if ($asst) {
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
   if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode dontAsk] [-DryRun]') }
-  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-Go <words>] [-DryRun]'
+  Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-State <folder>] [-Go <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
                   @('Safety', $Safety), @('Mode', $Mode), @('Base', $Base), @('LaunchFrom', $LaunchFrom),
                   @('ReportTo', $ReportTo), @('WorktreeRoot', $WorktreeRoot), @('Contract', $Contract),
-                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk), @('Runs', $Runs), @('Go', $Go))) {
+                  @('TesterCommit', $TesterCommit), @('TesterTests', $TesterTests), @('AssistantDir', $AssistantDir), @('OwnerOk', $OwnerOk), @('Runs', $Runs), @('Go', $Go), @('State', $State))) {
   if ("$($v[1])".StartsWith('-')) { Fail "missing value for -$($v[0]) (got the flag $($v[1]))" }
 }
 if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a worker (TOOLKIT.md Safety: only the owner's own explicit setup)" }
 if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
 if ($Contract -and -not (Test-Path -LiteralPath $Contract -PathType Leaf)) { Fail "-Contract: $Contract does not exist" }
+if ($State -and -not (Test-Path -LiteralPath $State -PathType Container)) { Fail "-State: $State is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" }
 if ($TesterCommit -and $TesterTests) { Fail "-TesterCommit and -TesterTests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE $([char]0x00A7)4 step 3)" }
 # Absolute paths: both files are used from inside the worktree; the contract is read by .NET, whose
 # current folder is not PowerShell's.
@@ -127,14 +131,16 @@ if ($WorktreeRoot -and -not [IO.Path]::IsPathRooted($WorktreeRoot)) { $WorktreeR
 
 $root = (git -C $Repo rev-parse --show-toplevel)
 if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Repo" }
-# an assistant's name and folder: <root>/coordinator/assistants/<name>/, its brief BRIEF.md there
+# the coordinator's state folder (#613, the header): absolute, .NET's current folder is not PowerShell's
+$sdir = if ($State) { [IO.Path]::Combine((Get-Location).Path, $State).Replace('\', '/').TrimEnd('/') } else { "$($root.Replace('\', '/'))/coordinator" }
+# an assistant's name and folder: <state>/assistants/<name>/, its brief BRIEF.md there
 $aname = ''; $adir = ''
 if ($asst) {
   $aname = if ($Name.StartsWith('assistant: ', [StringComparison]::Ordinal)) { $Name.Substring(11) } else { '' }
   if ($aname -cnotmatch '^[A-Za-z0-9._-]+\z' -or $aname -cmatch '^\.+\z') {
     Fail "refused: the assistant name `"$($Name.Substring(10))`" in -Name `"$Name`" - write `"assistant: <name>`", <name> letters, digits, . _ - (not dots only)"
   }
-  $adir = "$($root.Replace('\', '/'))/coordinator/assistants/$aname"
+  $adir = "$sdir/assistants/$aname"
   # the one comparison of folders (M1): start-worker.sh's fcanon, the same bash code (given on stdin, so no
   # quote reaches a native argument): as on disk, C:/... on Windows, no trailing /, one letter case where paths
   # ignore it; no answer from bash compares as nothing else does, so the start is refused
@@ -335,7 +341,7 @@ if ($Contract) {
 }
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
 if (-not "$OwnerOk".Trim()) { $OwnerOk = '' }   # words of blanks only are no words
-$rl = if ($Runs) { [IO.Path]::Combine((Get-Location).Path, $Runs) } else { Join-Path $root 'coordinator/RUNS.tsv' }; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
+$rl = if ($Runs) { [IO.Path]::Combine((Get-Location).Path, $Runs) } elseif ($State) { "$sdir/RUNS.tsv" } else { Join-Path $root 'coordinator/RUNS.tsv' }; $okTail = if ($OwnerOk) { " (the owner's words: $OwnerOk)" } else { '' }
 # no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
 $rnc = -not $gId -and -not $asst -and $crole -in @('worker', 'lead') -and $Name -cmatch '^#([A-Za-z0-9_-]+) '; if ($rnc) { $gId = $Matches[1] }
 $rno = if ($asst) { 'an assistant' } elseif ($crole -notin @('worker', 'lead', '')) { "a $crole" } elseif (-not $gId) { 'no contract' }
@@ -611,8 +617,8 @@ if ($notes) {
   }
 }
 # the contract's copy for the merge queue (#387, the header)
-$cTo = "$root/coordinator/briefs/$("$Branch".Replace('/', '-'))-contract.md"
-if ($cCopy -and (Test-Path -LiteralPath "$root/coordinator/briefs" -PathType Container)) {
+$cTo = "$(if ($State) { $sdir } else { "$root/coordinator" })/briefs/$("$Branch".Replace('/', '-'))-contract.md"
+if ($cCopy -and (Test-Path -LiteralPath (Split-Path -Parent $cTo) -PathType Container)) {
   if ($DryRun) { "[dry-run] copy the contract to $cTo" }
   else { try { [IO.File]::WriteAllBytes($cTo, $cCopy) } catch { Fail "cannot copy the contract to $cTo. Created: $made - clean it with cleanup-worker (-Worktree $wtFwd), or start again with the same branch" }; "contract copied for the merge queue: $cTo" }
 }
