@@ -113,7 +113,7 @@ case "$kind" in
           case "$x" in
           land|status) a+=("$x") ;; --method) a+=(-Method); nx=value ;; --shared) nx=shared ;; --touches) nx=touches ;;
           --poll) a+=(-Poll); nx=value ;; --timeout) a+=(-Timeout); nx=value ;; --dry-run) a+=(-DryRun) ;;
-          --over-bounds-ok) a+=(-OverBoundsOk); nx=value ;; --runs) a+=(-Runs); nx=value ;; --*) a+=("$x") ;;
+          --over-bounds-ok) a+=(-OverBoundsOk); nx=value ;; --runs) a+=(-Runs); nx=value ;; --state) a+=(-State); nx=value ;; --*) a+=("$x") ;;
           [0-9]*) prs="${prs:+$prs,}$x" ;; *) a+=("$x") ;; esac; done
         [ -n "$prs" ] && a+=(-Pr "$prs"); [ -n "$sh" ] && a+=(-Shared "$sh"); [ -n "$tc" ] && a+=(-Touches "$tc")
         "$ps" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" "${a[@]}"; } ;;
@@ -449,6 +449,19 @@ fresh "a glob holding an important one, on a file that is not: stops"; qo 43 scr
 fresh "ordinary bounds around an important one, all OVER: stops, each its own line"; qo 44 scripts/mix.sh 'scripts/mix.* 3' 'scripts/* 3' 'scripts/mix.sh 3'; code 3; notcalled "pr merge 44"; has "left: #44 (OVER BOUNDS)"; hasline "OVER BOUNDS 44 scripts/* 5/3"; hasline "bounds over, not important: 44 scripts/mix.* 5/3"; hasline "bounds over, not important: 44 scripts/mix.sh 5/3"
 fresh "check-bounds exit 2 on an ordinary glob still stops"; qpr 19 "$H19" 19-gone; qpr 20 "$H20" 20-dir; qpr 21 "$H21" 21-bad; run land 19 20 21 --poll 0; code 3; notcalled "pr merge"; has "left: #19 (BOUNDS), #20 (BOUNDS), #21 (BOUNDS)"; hasnt "not important"
 fresh "a contract with no bounds: as today"; qo 45 src/45.txt; code 0; has "MERGED #45"; hasnt "OVER BOUNDS"; hasnt "not important"
+
+# one coordinator, a second repository (#613): a working copy with no coordinator/ lands with --state <the coordinator's state folder> (.ps1: -State) -
+# the contract is read from <state>/briefs/, the run log's default is <state>/RUNS.tsv; a --state that is not a folder: exit 1; without it: as before
+git clone -q "$tmp/q.git" "$tmp/q2" 2>/dev/null; cd "$tmp/q2" || exit 1; [ ! -e coordinator ] || { echo "FAIL: the second working copy has a coordinator/"; exit 1; }
+fresh "--state: a repository with no coordinator/, its contract read from the state folder - over its bound, stopped"; qpr 15 "$H15" 15-over
+run land 15 --poll 0 --state "$tmp/q/coordinator"; code 3; hasline "OVER BOUNDS 15 src/* 5/3"; notcalled "pr merge 15"; hasnt "no contract"
+fresh "--state: within its bound it lands; the run log named is the state folder's"; qpr 16 "$H16" 16-fine
+run land 16 --poll 0 --state "$tmp/q/coordinator"; code 0; has "MERGED #16"; hasnt "no contract"; has "/q/coordinator/RUNS.tsv "
+fresh "--state with --runs: the log given wins"; qpr 16 "$H16" 16-fine; run land 16 --poll 0 --state "$tmp/q/coordinator" --runs "$tmp/q613.tsv"; code 0; has "/q613.tsv "; hasnt "coordinator/RUNS.tsv"
+fresh "no --state there: as before - no contract at coordinator/briefs, not checked, the default log"; qpr 15 "$H15" 15-over
+run land 15 --poll 0; code 0; hasline "BOUNDS #15: no contract at coordinator/briefs/15-contract.md - not checked"; has "MERGED #15"; has "run-stats coordinator/RUNS.tsv "
+fresh "--state that is not a folder: exit 1, named, nothing merged"; qpr 16 "$H16" 16-fine; run land 16 --poll 0 --state "$tmp/q/no-such"; code 1; has "q/no-such"; notcalled "pr merge"
+cd "$tmp/q" || exit 1
 
 # the wrong folder: a subfolder, another repository (its origin lacks the branch), no repository at all
 mkdir -p "$tmp/q/wrong-sub" "$tmp/wrong-none"; git init -q --bare "$tmp/w.git"; git init -q -b main "$tmp/wrong-repo"; git -C "$tmp/wrong-repo" remote add origin "$tmp/w.git"

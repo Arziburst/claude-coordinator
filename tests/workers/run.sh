@@ -17,6 +17,9 @@
 # roles/lead.md step 2) or an assistant: no gate, exactly one line starting `round gate: `.
 # Access point of the contract's copy (#387): a start of a worker or a lead whose contract (--contract or in the brief) has `bounds:` leaves
 # <repo>/coordinator/briefs/<branch, / as ->-contract.md; exactly one output line names that file name, a dry run's too (which writes nothing).
+# Access point of the state folder (#613): --state <folder> (.ps1: -State), start-worker and merge-queue alike - the coordinator's state folder, default
+# <repo>/coordinator: the run log's default is <state>/RUNS.tsv, the contract's copy goes to and is read from <state>/briefs/, an assistant's folder is
+# <state>/assistants/<name>; a --state that is not a folder: exit 1, one line naming it. Without it: as before.
 # WK_PART=<k>/<n> (#405): the k-th of n parts of the sections (a section: from a line starting `# --- ` to the next; section i in part
 # (i - 1) mod n + 1, so a new section lands in one part by itself); the set-up above the first section runs in every part, the summary
 # names the part. WK_LIST=1: that part's section lines, nothing run. What a section needs from another one is made in the set-up.
@@ -130,7 +133,7 @@ start() {
         --worktree-root) a+=(-WorktreeRoot "$2"); shift 2 ;; --base) a+=(-Base "$2"); shift 2 ;;
         --effort) a+=(-Effort "$2"); shift 2 ;; --contract) a+=(-Contract "$2"); shift 2 ;;
         --tester-commit) a+=(-TesterCommit "$2"); shift 2 ;; --tester-tests) a+=(-TesterTests "$2"); shift 2 ;;
-        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; --go) a+=(-Go "$2"); shift 2 ;;
+        --owner-ok) a+=(-OwnerOk "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; --go) a+=(-Go "$2"); shift 2 ;; --state) a+=(-State "$2"); shift 2 ;;
         *) a+=("$1"); shift ;;
       esac
     done
@@ -1255,6 +1258,28 @@ echo older > "$cbd/601-d-contract.md"; check 0 "copy: a dry run names it, writes
 for cbx in "601-g|coordinator/briefs"; do cbb="${cbx%%|*}"; cbc="${cbx#*|}/$cbb-contract.md"; cp "$tmp/cb.md" "$cbd/$cbb-contract.md"; cd "$cb" || exit 1; check 0 "copy: --contract named as the copy itself, $cbb" -- start --name "#601 worker: $cbb" "${CBW[@]}" --branch "$cbb" --contract "$cbc"; cd - >/dev/null || exit 1
   cmp -s "$tmp/cb.md" "$cbd/$cbb-contract.md" && grep -qxF "#601 worker: $cbb" "$STUB_LOG.names" || { echo "FAIL (copy, --contract named as the copy itself, $cbb): its bytes changed ($(wc -c < "$cbd/$cbb-contract.md") of $(wc -c < "$tmp/cb.md")), or claude was not started"; fail=1; }; done
 [ "$(git -C "$cb" rev-list --all --count)" = 1 ] || { echo "FAIL (copy): start-worker committed"; fail=1; }
+
+# --- one coordinator, a second repository (#613, the header): the whole cycle from the first repository's state folder - the round gate, the contract's copy, the merge queue's bounds - in a repository with no coordinator/ ---
+st="$tmp/st1/coordinator" s2="$tmp/st2"; mkdir -p "$st/briefs"; git init -q --bare "$tmp/st2.git"; git init -q -b main "$s2"; git -C "$s2" config core.autocrlf false
+g -C "$s2" commit -q --allow-empty -m init; git -C "$s2" remote add origin "$tmp/st2.git"; git -C "$s2" push -q origin main 2>/dev/null
+{ printf 'date\trole\ttask\tcost\tkind\tmodel\tresult\tstart\n'; for sth in 1 2; do printf '2026-11-01\tworker\tgps-7\t1.00\tordinary\topus\tdone\t2026-11-01T0%s:00:00Z\n' "$sth"; done; } > "$st/RUNS.tsv"
+{ printf -- '---\nwall: only a test\n'; rgc gps-7 14 | sed -e 1d -e 's|^  - sort.sh 10|  - tests/*/run.* 3|'; } > "$tmp/st.md"
+ST=(--name "#gps-7 worker: S" --repo "$s2" --model opus --safety "$tmp/safety.json" --report-to x --brief-file "$tmp/brief.md" --branch gps-7-x --contract "$tmp/st.md")
+check 1 "state: the round gate reads <state>/RUNS.tsv" -- start "${ST[@]}" --state "$st" --dry-run
+says "state: the round gate" "refused: " "round 3" "task gps-7," "spent 2.00 against estimate 14"
+check 0 "state: without it, as before - no run log, no copy" -- start "${ST[@]}" --dry-run
+expect_in "round gate: no run log, no gate"; case "$LAST" in *"copy the contract"*) echo "FAIL (state: without it): a copy is named"; fail=1 ;; esac
+check 1 "state: not a folder is refused" -- start "${ST[@]}" --state "$tmp/st1/no-such" --dry-run; says "state: not a folder" "tate" "st1/no-such" "not a folder"
+check 0 "state: a real start copies the contract to <state>/briefs/" -- start "${ST[@]}" --state "$st" --owner-ok "the owner said go on"
+says "state: the copy's line" "contract copied for the merge queue: " "st1/coordinator/briefs/gps-7-x-contract.md"; says "state: the gate's line" "round gate: " "round 3" "task gps-7," "the owner said go on"
+tr -d '\r' < "$st/briefs/gps-7-x-contract.md" 2>/dev/null | cmp -s - "$tmp/st.md" && [ ! -e "$s2/coordinator" ] ||
+  { echo "FAIL (state): <state>/briefs/gps-7-x-contract.md is not the contract, or the second repository got a coordinator/"; fail=1; }
+# the merge queue in the second repository, its PR's head five lines over a bound of three: found through the same --state (the stub gh answers `pr view` with $STUB_HEADS)
+stw="$s2/.claude/worktrees/gps-7-x"; mkdir -p "$stw/tests/a"; printf '1\n2\n3\n4\n5\n' > "$stw/tests/a/run.sh"; g -C "$stw" add -A; g -C "$stw" commit -q -m five; git -C "$stw" push -q origin gps-7-x 2>/dev/null
+stq() { cd "$s2" || return 9; if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" land -Pr 7 -DryRun -State "$st"; else bash "$core/scripts/merge-queue.sh" land 7 --dry-run --state "$st"; fi; }
+STUB_HEADS="OPEN false $(git -C "$stw" rev-parse HEAD) gps-7-x main false" check 3 "state: the merge queue finds the copy and checks the bounds there" -- stq
+printf '%s\n' "$LAST" | tr -d '\r' | grep -qxF 'OVER BOUNDS 7 tests/*/run.* 5/3' || { echo "FAIL (state: the merge queue): no line OVER BOUNDS 7 tests/*/run.* 5/3"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
+mkas st-a; check 0 "state: an assistant's folder is <state>/assistants/<name>" -- start --name "assistant: st-a" --repo "$s2" --state "$ar/coordinator" --model sonnet --report-to x --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run; expect_in "[dry-run]"
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"

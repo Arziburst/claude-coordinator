@@ -202,6 +202,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   mode (reported on 2.1.310: two coordinators on the same version were never refused, and one's
   system prompt says it works in place — so it seems to depend on how the session was started, not
   the version; not proven): one-time step `coordinator-bg-isolation` (#283).
+- **Several repositories, one coordinator (#613):** `PROJECT.md` *Repositories* names each repository's
+  root, default branch and safety file. Only the project's own repository holds `coordinator/`. A session in
+  another one starts with `start-worker --repo <its root> --state <the project's coordinator folder>` (`-Repo`,
+  `-State`): the round gate reads `<state>/RUNS.tsv` (`--runs` still wins), the contract's copy goes to
+  `<state>/briefs/`, an assistant's folder is `<state>/assistants/<name>`. Its PRs land with `merge-queue land
+  <pr>@<sha> --state <the same folder>`, run from that repository's root: the queue reads the copy there and
+  checks the bounds. One safety file serves them all: its `COORD_PROTECTED_ROOT` lists every root, `|` between
+  them (*Safety*). Without `--state` both scripts read `<repo>/coordinator` as before; one that is not a folder
+  is refused.
   Before anything is created (`--dry-run` too) it runs check-contract (CORE §4) on `--contract <file>` /
   `-Contract <file>` or, for a worker or a lead, on the contract in the brief (a block after a `---`
   line, to the next one or the brief's end, holding any key check-contract requires): an ERROR refuses the start with check-contract's lines, WARNs
