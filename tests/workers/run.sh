@@ -147,7 +147,7 @@ cleanup() {
     while [ $# -gt 0 ]; do
       case "$1" in
         --worktree) a+=(-Worktree "$2"); shift 2 ;; --session) a+=(-Session "$2"); shift 2 ;;
-        --dry-run) a+=(-DryRun); shift ;; --task) a+=(-Task "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; *) a+=("$1"); shift ;;
+        --dry-run) a+=(-DryRun); shift ;; --task) a+=(-Task "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; --state) a+=(-State "$2"); shift 2 ;; *) a+=("$1"); shift ;;
       esac
     done
     "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/cleanup-worker.ps1" "${a[@]}"
@@ -1271,6 +1271,16 @@ says "state: the round gate" "refused: " "round 3" "task gps-7," "spent 2.00 aga
 check 0 "state: without it, as before - no run log, no copy" -- start "${ST[@]}" --dry-run
 expect_in "round gate: no run log, no gate"; case "$LAST" in *"copy the contract"*) echo "FAIL (state: without it): a copy is named"; fail=1 ;; esac
 check 1 "state: not a folder is refused" -- start "${ST[@]}" --state "$tmp/st1/no-such" --dry-run; says "state: not a folder" "tate" "st1/no-such" "not a folder"
+# the state paths loud (#633, #635): a --state folder holding neither RUNS.tsv nor briefs/ (the project root, the natural typo) and a --runs file that does not
+# exist are refused before anything is made; a fresh folder (briefs/, no run log yet) starts; --runs beside --state wins; a relative --state prints the absolute copy
+check 1 "state: a folder that is not a coordinator's is refused" -- start "${ST[@]}" --state "$tmp/st1"; says "state: not a coordinator's" "tate" "st1 holds neither RUNS.tsv nor briefs/"
+check 1 "runs: a file that does not exist is refused" -- start "${ST[@]}" --runs "$tmp/st1/no-such.tsv"; says "runs: a missing file" "uns" "st1/no-such.tsv does not exist"
+check 1 "runs: a missing file beside --state is refused" -- start "${ST[@]}" --state "$st" --runs "$tmp/st1/no-such.tsv" --owner-ok "the owner said go on"; says "runs beside state: a missing file" "st1/no-such.tsv does not exist"
+[ ! -e "$s2/.claude/worktrees/gps-7-x" ] && [ ! -e "$st/briefs/gps-7-x-contract.md" ] || { echo "FAIL (state paths): a refused start made the worktree or the copy"; fail=1; }
+mkdir -p "$tmp/st3/briefs"; check 0 "state: a fresh folder, briefs/ and no RUNS.tsv yet, starts" -- start "${ST[@]}" --state "$tmp/st3" --dry-run; expect_in "round gate: no run log, no gate"
+sed -n '1,2p' "$st/RUNS.tsv" > "$tmp/st-r.tsv"; check 0 "state: --runs beside --state wins" -- start "${ST[@]}" --state "$st" --runs "$tmp/st-r.tsv" --dry-run; says "state: --runs wins" "round gate: " "round 2" "spent 1.00"
+strel() { (cd "$tmp/st1" && start "${ST[@]}" --state coordinator --owner-ok "the owner said go on" --dry-run); }
+check 0 "state: a relative --state, the copy named by its absolute path" -- strel; says "state: relative" "copy the contract" "$(basename "$tmp")/st1/coordinator/briefs/gps-7-x-contract.md"
 check 0 "state: a real start copies the contract to <state>/briefs/" -- start "${ST[@]}" --state "$st" --owner-ok "the owner said go on"
 says "state: the copy's line" "contract copied for the merge queue: " "st1/coordinator/briefs/gps-7-x-contract.md"; says "state: the gate's line" "round gate: " "round 3" "task gps-7," "the owner said go on"
 tr -d '\r' < "$st/briefs/gps-7-x-contract.md" 2>/dev/null | cmp -s - "$tmp/st.md" && [ ! -e "$s2/coordinator" ] ||
@@ -1280,7 +1290,7 @@ stw="$s2/.claude/worktrees/gps-7-x"; mkdir -p "$stw/tests/a"; printf '1\n2\n3\n4
 stq() { cd "$s2" || return 9; if [ "$kind" = ps ]; then "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/merge-queue.ps1" land -Pr 7 -DryRun -State "$st"; else bash "$core/scripts/merge-queue.sh" land 7 --dry-run --state "$st"; fi; }
 STUB_HEADS="OPEN false $(git -C "$stw" rev-parse HEAD) gps-7-x main false" check 3 "state: the merge queue finds the copy and checks the bounds there" -- stq
 printf '%s\n' "$LAST" | tr -d '\r' | grep -qxF 'OVER BOUNDS 7 tests/*/run.* 5/3' || { echo "FAIL (state: the merge queue): no line OVER BOUNDS 7 tests/*/run.* 5/3"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
-mkas st-a; check 0 "state: an assistant's folder is <state>/assistants/<name>" -- start --name "assistant: st-a" --repo "$s2" --state "$ar/coordinator" --model sonnet --report-to x --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run; expect_in "[dry-run]"
+mkas st-a; mkdir -p "$ar/coordinator/briefs"; check 0 "state: an assistant's folder is <state>/assistants/<name>" -- start --name "assistant: st-a" --repo "$s2" --state "$ar/coordinator" --model sonnet --report-to x --brief-file "$ad/BRIEF.md" --safety "$asf" --dry-run; expect_in "[dry-run]"
 
 # --- cleanup-worker ---
 wt="$tmp/repo/.claude/worktrees/12-fix"
@@ -1904,6 +1914,12 @@ expect_in "removed c6210001 (#621 worker: a)"; expect_in "MISSING c6210002 #621 
 s621 1 done "#621 worker: a2" "$r5c" 621-x   # its row is written above
 STUB_RM_FAIL="rm broke" check 4 "#621: a failing claude rm" -- t621 --task 621; expect_in "SESSION KEPT: c6210001 (#621 worker: a2): claude rm failed"
 STUB_LIST_FAIL=1 check 3 "#621: a failing listing" -- t621 --task 621; expect_in "LISTING FAILED"; check 3 "#621: no run log" -- t621 --task 621 --runs "$tmp/none.tsv"; expect_in "RUNS CHECK FAILED"
+# --state (#635): the run log is <state>/RUNS.tsv; --runs beside it wins; a folder that is not a coordinator's, or no folder, is refused
+mkdir -p "$tmp/st635"; sed -n 1p "$r5/coordinator/RUNS.tsv" > "$tmp/st635/RUNS.tsv"; check 0 "#635: --task, the default log" -- t621 --task 621 --dry-run; b635="$(printf '%s\n' "$LAST" | tr -d '\r' | grep '^task 621: ')"
+check 0 "#635: --state, its RUNS.tsv is the log" -- t621 --task 621 --state "$tmp/st635" --dry-run; expect_in "task 621: 0 would be removed, "; case "$b635" in "task 621: 0 "*|"") echo "FAIL (#635): the fixture has no session with a run row"; fail=1 ;; esac
+check 0 "#635: --runs beside --state wins" -- t621 --task 621 --state "$tmp/st635" --runs "$r5/coordinator/RUNS.tsv" --dry-run; expect_in "$b635"
+check 1 "#635: a --state that is not a coordinator's" -- t621 --task 621 --state "$tmp/cfg" --dry-run; says "#635: not a coordinator's" "tate" "cfg holds neither RUNS.tsv nor briefs/"
+check 1 "#635: a --state that is no folder" -- t621 --task 621 --state "$tmp/st635/none" --dry-run; says "#635: no folder" "tate" "st635/none" "not a folder"
 check 1 "#621: neither --worktree nor --task" -- t621 --dry-run; check 1 "#621: a task id that is no id" -- t621 --task '6*'
 # with --worktree: the worker's cleanup first, then the task's sessions of that repository (c6210001 above is another project's there)
 mk 621-z; s621 0 done "#621 tester: z" "$(cd "$tmp/repo" && { pwd -W 2>/dev/null || pwd -P; })" "" row; : > "$STUB_LOG"
