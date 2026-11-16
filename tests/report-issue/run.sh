@@ -37,6 +37,8 @@
 #     it - the root's .md files, procedures/, roles/, skills/, scripts/ (tests/ is not the core's text) - or it
 #     is one of the fixed tool-error words (unable, auto-detect, pathspec, committer, mounting, ...); any other
 #     word is `_` (a run of them may be one `_`)
+#   fixture words (#643): a word a case asserts dropped is a made-up token (zqacme, zqshop, ...) no prose holds, never an
+#     ordinary word: the signature keeps the core's own words, so a core text that gains the word turns the case red
 #   round 6: a title from the repository (CHECK, REPEAT, FIXED UPSTREAM) is untrusted data: printed with no
 #     control or escape byte (C0, DEL, C1), at most 120 characters of it and a cut mark (... or the ellipsis
 #     character) when longer, in double quotes, after a line holding the word `untrusted` that names them
@@ -218,8 +220,8 @@ shsame() {
 [ -z "${RI_PART:-}" ] || { LC_ALL=C awk -v k="$pk" -v n="$pn" '{ sub(/\r$/, "") } /^# --- / { s++; p = ((s - 1) % n == k - 1) } /^echo "report-issue \(/ { p = 1 } s && p' "$0" > "$tmp/part.sh"; . "$tmp/part.sh"; exit; }
 
 # --- signature: the same error from two machines -> one signature ---
-EA=$'Error: Cannot open \'C:\\Users\\a\\x\\RUNS.tsv\'  at 2026-10-29T12:34:56Z\tfor commit 3e15b27a9c0d1e2f3a4b5c6d7e8f901234567890 (ref 3e15b27), see https://github.com/acme/one/pull/12 - 42 rows\r\n'
-EB=$'error: cannot open "/home/b/x/RUNS.tsv" at 2025-01-02T03:04:05Z for commit 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432 (ref abcdef1), see https://gitlab.example.org/b/two/-/merge_requests/7 - 7 rows\n'
+EA=$'Error: Cannot open \'C:\\Users\\a\\x\\RUNS.tsv\'  at 2026-10-29T12:34:56Z\tfor commit 3e15b27a9c0d1e2f3a4b5c6d7e8f901234567890 (ref 3e15b27), see https://github.com/zqacme/one/pull/12 - 42 rows\r\n'
+EB=$'error: cannot open "/home/b/x/RUNS.tsv" at 2025-01-02T03:04:05Z for commit 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432 (ref abcdef1), see https://zqgitlab.example.org/b/two/-/merge_requests/7 - 7 rows\n'
 SA=scripts/run-stats.sh
 fresh "signature: paths, drive letters, ids, dates, URLs, numbers, quotes, case, whitespace and CRLF normalized"
 run signature --source "$SA" --step "read the run log" --exit 1 --error "$EA"; code 0; s1="$out"
@@ -230,7 +232,7 @@ run signature --source "$SA" --step "read the run log" --exit 1 --error "$EB"; c
 out="$s1"
 case "$s1" in "$SA: read the run log: exit 1: "*) ok ;; *) bad "does not start with <source>: <step>: exit <code>: " ;; esac
 has "cannot open"; has "for commit"
-for x in Error Cannot users home acme gitlab 3e15b27 abcdef1 2026 2025 12:34 '42' "'" '"' "$T" '  '; do hasnt "$x"; done
+for x in Error Cannot users home zqacme zqgitlab 3e15b27 abcdef1 2026 2025 12:34 '42' "'" '"' "$T" '  '; do hasnt "$x"; done
 fresh "signature: at most 120 characters for a long error"
 long="fatal: $(printf 'the guard refused the command again and again %.0s' 1 2 3 4 5 6)"
 run signature --source scripts/hooks/safety-guard.sh --step guard --exit 2 --error "$long"; code 0
@@ -273,8 +275,8 @@ same 'cannot read \\srv01\builds$\a b\x.log: denied' 'cannot read \\other\share\
   srv01 builds other share x.log y.log 'b\' 'd\' denied
 has "cannot read"
 fresh "signature: an scp-style remote is one token - no account, repository or host"
-same "failed to push some refs to 'git@github.com:acme/shop.git'" "failed to push some refs to 'git@gitlab.com:x/y.git'" \
-  acme shop github.com gitlab.com shop.git y.git
+same "failed to push some refs to 'git@github.com:zqacme/zqshop.git'" "failed to push some refs to 'git@zqgitlab.com:x/y.git'" \
+  zqacme zqshop github.com zqgitlab.com zqshop.git y.git
 has "failed to push some refs to"
 fresh "signature: user@host:/path is one token - no user, host or folder"
 sig --source scripts/run-stats.sh --step deploy --exit 1 --error "cannot reach user@host:/srv/app now"; code 0
@@ -293,40 +295,40 @@ has "scripts/run-stats.sh: st: exit -1073741819: the process crashed"
 # start reaches the issue); Windows relative and home paths; a backtick-quoted path and a quoted file:// URL
 # with a space; e-mails and user@host; bare host names. The words before them stay.
 fresh "signature: after an unquoted Windows path start the rest of the line is gone (OneDrive - Acme Corp)"
-same 'run-stats: cannot read C:\Users\jo\OneDrive - Acme Corp\Documents\dev\shop\runs.tsv' 'run-stats: cannot read D:\work\runs.tsv' \
-  acme corp shop documents
+same 'run-stats: cannot read C:\Users\jo\OneDrive - Zqacme Zqcorp\Zqdocuments\dev\zqshop\runs.tsv' 'run-stats: cannot read D:\work\runs.tsv' \
+  zqacme zqcorp zqshop zqdocuments
 has "cannot read"
 fresh "signature: after an unquoted POSIX path start the rest of the line is gone (Mobile Documents)"
-sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read /Users/jo/Library/Mobile Documents/com~apple~CloudDocs/acme-shop/runs.tsv'; code 0
-for x in acme mobile documents clouddocs; do hasnt "$x"; done; has "cannot read"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read /Users/jo/Library/Zqmobile Zqdocuments/com~apple~CloudDocs/zqacme-zqshop/runs.tsv'; code 0
+for x in zqacme zqmobile zqdocuments clouddocs; do hasnt "$x"; done; has "cannot read"
 fresh "signature: a path in parentheses with a space - the rest of the line is gone"
-sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read the log (/home/jo smith/acme/x)'; code 0
-for x in acme smith; do hasnt "$x"; done; has "cannot read the log"
+sig --source scripts/run-stats.sh --step "read the run log" --exit 1 --error 'cannot read the log (/home/jo smith/zqacme/x)'; code 0
+for x in zqacme smith; do hasnt "$x"; done; has "cannot read the log"
 fresh "signature: Windows relative and home paths - ..\\, .\\ and ~\\ are paths"
-sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot run ..\acme-shop\build.ps1'; code 0
-hasnt acme; hasnt build.ps1; has "cannot run"
-sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open .\acme-shop\x'; code 0
-hasnt acme; has "cannot open"
-sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open ~\Documents\Acme Corp\x.txt'; code 0
-hasnt acme; hasnt corp; hasnt documents; has "cannot open"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot run ..\zqacme-zqshop\build.ps1'; code 0
+hasnt zqacme; hasnt build.ps1; has "cannot run"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open .\zqacme-zqshop\x'; code 0
+hasnt zqacme; has "cannot open"
+sig --source scripts/run-stats.sh --step build --exit 1 --error 'cannot open ~\Zqdocuments\Zqacme Zqcorp\x.txt'; code 0
+hasnt zqacme; hasnt zqcorp; hasnt zqdocuments; has "cannot open"
 fresh "signature: a backtick-quoted path with a space is one path token"
 sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open `/home/jo smith/x`'; code 0
 hasnt smith; has "cannot open"
 fresh "signature: a quoted file:// URL with a space is one URL token"
-sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open "file:///C:/Users/Jo Smith/acme/x"'; code 0
-hasnt smith; hasnt acme; has "cannot open"
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'cannot open "file:///C:/Users/Jo Smith/zqacme/x"'; code 0
+hasnt smith; hasnt zqacme; has "cannot open"
 fresh "signature: an e-mail in git's auto-detect message - no user, host or machine name"
-sig --source scripts/run-stats.sh --step commit --exit 128 --error "fatal: unable to auto-detect email address (got 'jo@DESKTOP-ACME7.(none)')"; code 0
-for x in jo acme desktop; do hasnt "$x"; done; has "unable to auto-detect email address"
+sig --source scripts/run-stats.sh --step commit --exit 128 --error "fatal: unable to auto-detect email address (got 'jo@DESKTOP-ZQACME7.(none)')"; code 0
+for x in jo zqacme desktop; do hasnt "$x"; done; has "unable to auto-detect email address"
 fresh "signature: a bare e-mail address - no name or domain"
-sig --source scripts/run-stats.sh --step push --exit 1 --error 'committer jo.smith@acme.com not allowed'; code 0
-for x in jo smith acme; do hasnt "$x"; done; has "committer"; has "not allowed"
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'committer jo.smith@zqacme.com not allowed'; code 0
+for x in jo smith zqacme; do hasnt "$x"; done; has "committer"; has "not allowed"
 fresh "signature: Name <e-mail> - no name or domain"
-sig --source scripts/run-stats.sh --step push --exit 1 --error 'Author: Jo Smith <jo@acme.com>'; code 0
-for x in jo smith acme; do hasnt "$x"; done
+sig --source scripts/run-stats.sh --step push --exit 1 --error 'Author: Jo Smith <jo@zqacme.com>'; code 0
+for x in jo smith zqacme; do hasnt "$x"; done
 fresh "signature: bare host names are a token - no company or service name"
-sig --source scripts/run-stats.sh --step fetch --exit 128 --error 'ssh: Could not resolve hostname git.acme.internal: unknown'; code 0
-hasnt acme; has "could not resolve hostname"; has "unknown"
+sig --source scripts/run-stats.sh --step fetch --exit 128 --error 'ssh: Could not resolve hostname git.zqacme.internal: unknown'; code 0
+hasnt zqacme; has "could not resolve hostname"; has "unknown"
 fresh "signature: a core file name with a dot and a version are no host (guard)"
 sig --source scripts/run-stats.sh --step st --exit 1 --error 'start-worker.sh needs CORE.md from core 2.1.310'; code 0
 has "start-worker.sh"; has "core.md"; has "N.N.N"
@@ -335,17 +337,17 @@ has "start-worker.sh"; has "core.md"; has "N.N.N"
 # A word holding / or \ (a repository, a branch, a relative path, an env-variable or home path, a drive
 # without a slash) is one token, unless it is a core path; the message words around it stay. (word: the set-up)
 fresh "signature: a repository owner/name in a git remote message is a token"
-word 'remote: Permission to acme/shop.git denied' "permission to" -- acme shop
+word 'remote: Permission to zqacme/zqshop.git denied' "permission to" -- zqacme zqshop
 fresh "signature: a branch name with a slash is a token, the words after it stay"
-word 'REMOVE FAILED: git branch -d feature/acme-login - left as is' "remove failed" "left as is" -- acme login
+word 'REMOVE FAILED: git branch -d feature/zqacme-login - left as is' "remove failed" "left as is" -- zqacme login
 fresh "signature: a relative path is a token"
-word 'error: open src/acme/config.json' "error: open" -- acme config
+word 'error: open src/zqacme/config.json' "error: open" -- zqacme config
 fresh "signature: a Windows path without a drive, an env-variable path, a drive with no slash, ~user - tokens"
-word 'cannot read Users\jo\acme\x' "cannot read" -- acme jo users
-word 'cannot read %USERPROFILE%\acme\x' "cannot read" -- acme userprofile
-word 'cannot read $HOME/acme/x' "cannot read" -- acme home
-word 'cannot read D:acme\x' "cannot read" -- acme
-word 'cannot read ~jo/acme/x' "cannot read" -- acme jo
+word 'cannot read Users\jo\zqacme\x' "cannot read" -- zqacme jo users
+word 'cannot read %USERPROFILE%\zqacme\x' "cannot read" -- zqacme userprofile
+word 'cannot read $HOME/zqacme/x' "cannot read" -- zqacme home
+word 'cannot read D:zqacme\x' "cannot read" -- zqacme
+word 'cannot read ~jo/zqacme/x' "cannot read" -- zqacme jo
 fresh "signature: core paths stay as written, lower-cased (guard)"
 word 'cannot run scripts/start-worker.sh now' "cannot run scripts/start-worker.sh now" -- PATH HOST
 word 'see procedures/CORE-FINDINGS.md first' "see procedures/core-findings.md first" -- PATH HOST
@@ -365,10 +367,10 @@ same 'cannot connect to 10.1.2.3:8443 now' 'cannot connect to 10.9.9.9:22 now' 8
 has "cannot connect to"; has "now"
 
 # --- signature, round 6 of #338: a word reaches it only when the core's own text holds it ---
-# The names below are in no core file (tests/ is no core text: acme is all over this file).
+# The names below are in no core file (tests/ is no core text; the zq words: the header's fixture words).
 fresh "signature: names as plain words are gone - only the core's words and the fixed tool-error words stay"
 word 'remote: Permission to x denied to jsmith.' "permission to" "denied to _" -- jsmith
-word 'ssh: Could not resolve hostname acmenas: unknown' "could not resolve hostname" "unknown" -- acmenas acme nas
+word 'ssh: Could not resolve hostname zqacmenas: unknown' "could not resolve hostname" "unknown" -- zqacmenas zqacme nas
 word "user $jose not allowed" "user _ not allowed" -- "$jose" jos
 fresh "signature: the same error with two different names - one signature"
 same 'remote: Permission to x denied to jsmith.' 'remote: Permission to x denied to abrown.' jsmith abrown
@@ -404,28 +406,28 @@ ver() {
   case "$w" in *N*) ok ;; *) bad "the version's digits are no token: [$w]" ;; esac
   for x in "$@"; do hasnt "$x"; done; }
 fresh "signature: a version keeps only its digits - a name glued to it is gone"
-ver 'build 1.2.3-acme failed' acme
+ver 'build 1.2.3-zqacme failed' zqacme
 ver 'requires sdk 2.1.0-zorblat.jsmith' zorblat jsmith
 ver 'tag v1.0.jsmith' jsmith
-ver 'release 2024.10.acme-shop' acme
+ver 'release 2024.10.zqacme-zqshop' zqacme
 fresh "signature: build 1.2.3 failed and build 1.2.3-acme failed - failed kept, no name, they differ only by _"
 sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3 failed'; code 0; s1="$out"; has failed
-sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3-acme failed'; code 0; has failed; hasnt acme
+sig --source scripts/run-stats.sh --step st --exit 1 --error 'build 1.2.3-zqacme failed'; code 0; has failed; hasnt zqacme
 # nous <sig>: the signature with each _ and the punctuation joining it to a word gone, spaces collapsed
 nous() { printf '%s' "$1" | sed -E 's/[-._]*_[-._]*/ /g; s/ +/ /g; s/ $//'; }
 [ -n "$s1" ] && [ "$(nous "$s1")" = "$(nous "$out")" ] && ok || bad "they differ in more than _: [$s1] [$out]"
 fresh "signature: control bytes go before the rules - \\001 and \\002, ESC sequences, BEL"
-sig --source scripts/run-stats.sh --step st --exit 1 --error "$(printf 'cannot read \001jsmith acme\002 now \033[31mred\033[0m bell\007 end')"; code 0
-hasnt jsmith; hasnt acme; has "cannot read"
+sig --source scripts/run-stats.sh --step st --exit 1 --error "$(printf 'cannot read \001jsmith zqacme\002 now \033[31mred\033[0m bell\007 end')"; code 0
+hasnt jsmith; hasnt zqacme; has "cannot read"
 printf '%s' "$out" > "$tmp/sig"
 LC_ALL=C grep -q '[[:cntrl:]]' "$tmp/sig" && { bad "a byte below 0x20 or 0x7f in the signature"; od -c "$tmp/sig" | sed 's/^/    od: /'; } || ok
 fresh "signature: --source and --step pass the allowlist - a core path kept, any other source a token"
 sig --source scripts/start-worker.sh --step push --exit 1 --error 'cannot push'; code 0
 case "$out" in "scripts/start-worker.sh: push: exit 1: "*) ok ;; *) bad "the core path in --source is not kept" ;; esac
-for x in acme/deploy.sh; do
+for x in zqacme/deploy.sh; do
   sig --source "$x" --step push --exit 1 --error 'cannot push'; code 0
   case "${out%%: *}" in *[!A-Z]*|"") bad "--source $x is no token: [${out%%: *}]" ;; *) ok ;; esac
-  hasnt acme; hasnt zorblat; hasnt deploy.sh
+  hasnt zqacme; hasnt zorblat; hasnt deploy.sh
 done
 sig --source scripts/run-stats.sh --step "push to jsmith" --exit 1 --error 'cannot push'; code 0
 hasnt jsmith; has "scripts/run-stats.sh: push"
