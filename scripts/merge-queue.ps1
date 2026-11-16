@@ -5,7 +5,7 @@
 #                    [-Shared <glob>,...] [-Poll <seconds>] [-Timeout <minutes>] [-OverBoundsOk <pr>:<the owner's words>] [-Runs <log>] [-State <folder>] [-DryRun]
 # -Runs: the run log (as check-contract takes it, #525) the finished sessions are judged by and the AFTER MERGE run-stats line names; default <state>/RUNS.tsv.
 # -State: the coordinator's state folder (#613), default coordinator (the current folder's own): the PR's contract is read from <state>/briefs/ and the run log's default is there,
-#   so a second repository of one coordinator lands with no coordinator/ of its own (start-worker takes the same -State); not a folder: a usage error.
+#   so a second repository of one coordinator lands with no coordinator/ of its own (start-worker takes the same -State); not a folder, or one holding neither RUNS.tsv nor briefs/ (the project's root in place of its coordinator/, #635): a usage error.
 #   powershell -File scripts\merge-queue.ps1 status [-Shared <glob>,...] [-Touches <path or glob>,...]
 # land, per PR in order: open and not a draft; its head the approved commit (when @<sha> is given); runs of
 # its branch on an older head cancelled; behind its base -> `gh pr update-branch` (GitHub merges the base
@@ -25,7 +25,7 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md),
+# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md, the exact name; the id: up to the first `-`, or a prefixed one, `gps-7` of `gps-7-x`, #633),
 # scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its -Important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's stopping OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
 # The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
@@ -45,6 +45,7 @@ if ($Method -notin @('squash', 'merge', 'rebase')) { Usage '-Method: squash, mer
 if ($Poll -notmatch '^[0-9]+$' -or $Timeout -notmatch '^[0-9]+$') { Usage '-Poll and -Timeout take whole numbers' }
 # the coordinator's state folder (#613, the header), kept apart from the loop's own $state (a PR's): variable names ignore letter case
 if ($State -and -not (Test-Path -LiteralPath $State -PathType Container)) { Usage "-State: $State is not a folder - give the coordinator's state folder (#613)" }
+if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Usage "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635)" }
 $sdir = if ($State) { $State.Replace('\', '/').TrimEnd('/') } else { 'coordinator' }; if (-not $Runs) { $Runs = "$sdir/RUNS.tsv" }
 $okPr = ''; $okW = ''
 if ($PSBoundParameters.ContainsKey('OverBoundsOk')) { if ($OverBoundsOk -cnotmatch '^([0-9]+):(.*\S.*)$') { Usage "-OverBoundsOk takes <pr>:<the owner's words>" }; $okPr = $Matches[1]; $okW = $Matches[2] }
@@ -134,7 +135,8 @@ foreach ($item in $prs) {
     Leave $pr 'NOT APPROVED' "its head $(Short $head) is not the approved $(Short $want) - verify the new commit, then queue $pr@$(Short $head)"; continue
   }
   # the contract's bounds (#381, the header)
-  $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$(($branch -split '-')[0])-contract.md" }
+  $bid = if ($branch -cmatch '^([A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*-[0-9]+)(-|$)') { $Matches[1] } else { ($branch -split '-')[0] }   # a prefixed id (#633): gps-7 of gps-7-x
+  $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bid-contract.md" }
   if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE

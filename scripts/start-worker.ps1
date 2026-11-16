@@ -4,10 +4,12 @@
 #       -Branch 12-fix-login -Model opus [-Effort high] -BriefFile brief.md -Safety <worker settings .json> [-Mode auto] [-Base main]
 #       -ReportTo <coordinator session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>]
 #       [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <the owner's words>] [-Runs <log>] [-State <folder>] [-DryRun]
-# -Runs: the run log (as check-contract takes it, #525) for the round gate and the earlier sessions; default <state>/RUNS.tsv.
+# -Runs: the run log (as check-contract takes it, #525) for the round gate and the earlier sessions; default <state>/RUNS.tsv. A file that does
+#       not exist: refused (#633) - a mistyped path would switch the gate off in silence.
 # -State: the coordinator's state folder (#613), default <repo>/coordinator: the run log's default, the contract's copy (<state>/briefs/) and an assistant's
 #       folder (<state>/assistants/<name>) come from it, so a second repository of one coordinator needs no coordinator/ of its own (merge-queue takes the
-#       same -State); not a folder: refused. What is kept out of the repository's git is still its own coordinator/.
+#       same -State); not a folder, or one holding neither RUNS.tsv nor briefs/ (the project's root in place of its coordinator/, #635): refused; a
+#       relative one is taken from the current folder and named by its absolute path. What is kept out of the repository's git is still its own coordinator/.
 # -Effort: low, medium, high, xhigh or max, passed as claude --effort (CORE section 7, the contract's
 # budget.effort); without it the session runs at the user's default effort for its model.
 # -ReportTo: the session the worker reports to - the coordinator's name as ListAgents shows it now
@@ -62,7 +64,7 @@
 # <config>/coordinator/briefs/launch-<branch>-<time>-<pid>.md, decided before anything is created, the
 # first message one short instruction to read it in full with the Read tool; one line names the file.
 # A launch that fails names what it created and cleanup-worker, and exits 1.
-# An assistant (#281): -Name "assistant: <name>" and -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md start
+# An assistant (#281): -Name "assistant: <name>" and -BriefFile <state>/assistants/<name>/BRIEF.md (<state>: -State, default <repo>/coordinator) start
 # a persistent session with no worktree and no branch from the repository root, its -Safety env
 # COORD_ASSISTANT_DIR naming that folder; -Branch, -Base, -WorktreeRoot, -LaunchFrom, -Contract, -TesterCommit and
 # -TesterTests are refused, and so is a session of that name already listed, or a listing that fails or prints no
@@ -108,7 +110,7 @@ if ($asst) {
 }
 if (-not ($Repo -and $Name -and ($Branch -or $asst) -and $Model -and $ReportTo -and $BriefFile -and $Safety) -or
     -not (Test-Path -LiteralPath $BriefFile -PathType Leaf) -or -not (Test-Path -LiteralPath $Safety -PathType Leaf)) {
-  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <repo>/coordinator/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-AssistantDir <folder>] [-Mode dontAsk] [-DryRun]') }
+  if ($asst) { [Console]::Error.WriteLine('usage: -Repo <path> -Name "assistant: <name>" -Model <model> [-Effort <level>] -BriefFile <state>/assistants/<name>/BRIEF.md -Safety <settings.json> -ReportTo <session> [-State <folder>, default <repo>/coordinator] [-AssistantDir <folder>] [-Mode dontAsk] [-DryRun]') }
   Fail 'usage: -Repo <path> -Name <session name> -Branch <branch> -Model <model> [-Effort <level>] -BriefFile <file> -Safety <settings.json> -ReportTo <session> [-Contract <file>] [-TesterCommit <sha> | -TesterTests <path>] [-Mode auto] [-Base main] [-LaunchFrom <folder>] [-WorktreeRoot <folder>] [-OwnerOk <words>] [-Runs <log>] [-State <folder>] [-Go <words>] [-DryRun]'
 }
 foreach ($v in @(@('Repo', $Repo), @('Name', $Name), @('Branch', $Branch), @('Model', $Model), @('Effort', $Effort), @('BriefFile', $BriefFile),
@@ -121,6 +123,8 @@ if ($Mode -eq 'bypassPermissions') { Fail "refusing bypassPermissions for a work
 if ($Effort -and $Effort -cnotin @('low', 'medium', 'high', 'xhigh', 'max')) { Fail "-Effort: low, medium, high, xhigh or max (got $Effort)" }
 if ($Contract -and -not (Test-Path -LiteralPath $Contract -PathType Leaf)) { Fail "-Contract: $Contract does not exist" }
 if ($State -and -not (Test-Path -LiteralPath $State -PathType Container)) { Fail "-State: $State is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613)" }
+if ($State -and -not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { Fail "-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator (#635)" }
+if ($Runs -and -not (Test-Path -LiteralPath $Runs -PathType Leaf)) { Fail "-Runs: $Runs does not exist - the round gate reads it, a mistyped path would switch the gate off: give the run log (<state>/RUNS.tsv, #633)" }
 if ($TesterCommit -and $TesterTests) { Fail "-TesterCommit and -TesterTests are alternatives: give one - the tester's commit, or (a lead's case) the path of the tests its tester returned (CORE $([char]0x00A7)4 step 3)" }
 # Absolute paths: both files are used from inside the worktree; the contract is read by .NET, whose
 # current folder is not PowerShell's.
@@ -132,7 +136,7 @@ if ($WorktreeRoot -and -not [IO.Path]::IsPathRooted($WorktreeRoot)) { $WorktreeR
 $root = (git -C $Repo rev-parse --show-toplevel)
 if ($LASTEXITCODE -ne 0) { Fail "not a git repository: $Repo" }
 # the coordinator's state folder (#613, the header): absolute, .NET's current folder is not PowerShell's
-$sdir = if ($State) { [IO.Path]::Combine((Get-Location).Path, $State).Replace('\', '/').TrimEnd('/') } else { "$($root.Replace('\', '/'))/coordinator" }
+$sdir = if ($State) { (Resolve-Path -LiteralPath $State).ProviderPath.Replace('\', '/').TrimEnd('/') } else { "$($root.Replace('\', '/'))/coordinator" }
 # an assistant's name and folder: <state>/assistants/<name>/, its brief BRIEF.md there
 $aname = ''; $adir = ''
 if ($asst) {
@@ -180,7 +184,7 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) printf '%s' "$q" | tr '[:uppe
     $adir = $AssistantDir
   }
   if ((Split-Path -Leaf $BriefFile) -cne 'BRIEF.md' -or (FCanon (Split-Path -Parent $BriefFile)) -cne (FCanon $adir)) {
-    Fail "refused: an assistant's brief is $adir/BRIEF.md (its folder in coordinator/assistants/), got $BriefFile"
+    Fail "refused: an assistant's brief is $adir/BRIEF.md (its folder in <state>/assistants/: -State, default <repo>/coordinator), got $BriefFile"
   }
   # COORD_ASSISTANT_DIR in the safety file's env: the guard keeps the assistant's writes inside that folder
   $acfg = [IO.File]::ReadAllText($Safety) | ConvertFrom-Json
