@@ -351,7 +351,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `coordinator/assistants/`; it removes that throwaway session and folder at its end — the one exception.
 - **Its spend** goes to the run log as rows of role and kind `assistant`, the assistant's name in the task
   column, apart from the tasks' and the coordinator's own (CORE §7: each row's cost is its session's
-  `session-tokens` cost less the earlier rows of the same name and session `start`).
+  `session-tokens` priced total - the `priced` line; without `prices.txt`, or with a model not in it, the `cost` line - less the earlier rows of the same name and session `start`, #624).
 
 ## Messages between sessions
 - `ListAgents` + `SendMessage` (Claude uses them itself); `notify_when_idle: true` gives one notice when
