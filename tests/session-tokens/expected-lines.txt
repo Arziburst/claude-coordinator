@@ -3,5 +3,5 @@ claude-opus-5-5	654172	in=22 out>=1150 cache_read=600000 cache_write=53000
 total	665272	in=122 out>=2150 cache_read=600000 cache_write=63000
 cost	$0.4012
 priced	$0.5688	the context buckets together (the same requests, at the prices file); the cost line is $0.1676 less: the CLI counter is not kept when a process of the session ends without a stop
-time	wall=4m active=4m start=2026-10-24T10:00:00Z end=2026-10-24T10:03:30Z
+time	wall=4444m active=4m start=2026-10-21T08:00:00Z end=2026-10-24T10:03:30Z first=2026-10-24T10:00:00Z
 context	under100k=3/61764/$0.4148 100-200k=1/151205/$0.0420 200-400k=0/0/$0.0000 400-700k=1/452303/$0.1120 over700k=0/0/$0.0000 unpriced=0

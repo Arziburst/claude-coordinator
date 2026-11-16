@@ -145,7 +145,8 @@ expect "context: --prices with no such file" 2 - - -- "$here/context" k1 --price
 # #597, the lines agree. r1: a message id written twice (counted once, its largest output), a subagent, a compaction, a resume
 # after a cost-state record, a file-history-snapshot three days older than the first record. With --prices a `priced` line
 # before the time line: the context buckets together, and for one session how the cost line (the CLI counter) differs from
-# it; the time line starts at the first record's own time, not at the snapshot's.
+# it. The time line's start= and wall= stay as before #597, from the file's first timestamp, the snapshot's (runs and the
+# status line know a session by it); first= after end= is the first record's own time, printed only when it is later.
 ln="$here/lines"; B='the context buckets together (the same requests, at the prices file)'
 n=$((n + 1)); run "$ln" r1 --prices "$PF"
 [ "$rc" = 0 ] && [ "$(cat "$tmp/out")" = "$(tr -d '\r' < "$t/expected-lines.txt")" ] && echo "ok   lines: a duplicate id, a subagent, a compaction, a resume - the whole output" || { bad "lines: differs from expected-lines.txt"; sed 's/^/  got: /' "$tmp/out"; }
@@ -161,5 +162,11 @@ has "lines: a cost line equal to the priced line" "$(printf 'priced\t$0.0820\t%s
 has "lines: a subagent, no cost line to compare" "$(printf 'priced\t$0.0018\t%s' "$B")" "$ln" r1a --prices "$PF"
 has "lines: --since with --prices" "$(printf 'priced\t$1.4020\t%s' "$B")" "$here/context" --since 2026-10-01T00:00:00Z --prices "$PF"
 n=$((n + 1)); run "$ln" r1; if grep -q '^priced' "$tmp/out"; then bad "lines: a priced line without --prices"; else echo "ok   lines: no priced line without --prices"; fi
+# start= is the transcript's first "timestamp", read here as the status line reads a session's start; first= the first record's own
+n=$((n + 1)); s="$(LC_ALL=C grep -a -m 1 -o '"timestamp": *"[0-9T:-]*' "$ln/projects/-w/r1.jsonl" | sed 's/.*"//' | cut -c1-19)Z"
+[ "$s" = 2026-10-21T08:00:00Z ] && grep -qx "time	wall=4444m active=4m start=$s end=2026-10-24T10:03:30Z first=2026-10-24T10:00:00Z" "$tmp/out" && echo "ok   lines: a transcript that begins with a snapshot - start= its first timestamp, first= the first record's" || { bad "lines: start= is not the first timestamp $s, or no first="; sed 's/^/  got: /' "$tmp/out"; }
+# an unpriced model: the difference is named with the unpriced requests, no cause from the counter
+mkdir -p "$tmp/un/coordinator/sessions"; cp -r "$here/context/projects" "$tmp/un/"; printf '{"session_id":"k1","cost":{"total_cost_usd":1.5}}\n' > "$tmp/un/coordinator/sessions/k1.json"
+has "lines: unpriced requests - named, no counter cause" "$(printf 'priced\t$1.4020\t%s; the cost line is $0.0980 more, unpriced=1: the requests of a model not in the prices file are not priced here' "$B")" "$tmp/un" k1 --prices "$PF"
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
 exit "$fail"

@@ -22,7 +22,7 @@
 #   from it: out=<n> (exact) instead of out>=, and thinking=<n> at the end (not added to the total);
 #   the cost line is its totalCostUSD (before the status file's). Otherwise (no record, or the session
 #   ran after it: a crash, a resume) the lines above. --since always sums the messages.
-#   time     wall=<m>m active=<m>m start=<UTC> end=<UTC>   — one session or subagent only, the last line:
+#   time     wall=<m>m active=<m>m start=<UTC> end=<UTC> [first=<UTC>]   — one session or subagent only, the last line:
 #            the timestamps of every record in the files counted above (the transcript and its
 #            subagents', as one set; a subagent working while the transcript is quiet is active time);
 #            wall = the last minus the first; active = wall minus the idle gaps between two consecutive
@@ -30,12 +30,14 @@
 #            work up to 30 minutes, the rest of it idle; a gap inside only a call of a tool that asks a
 #            person (a name ending in AskUserQuestion) is idle at any length, the owner's time; any other
 #            gap over 5 minutes is idle (a limit, an answer, a sleeping machine); minutes rounded to the
-#            nearest, a half up; start and end to the second; absent when no record has a timestamp. A
-#            file-history-snapshot record has no time of its own and is not read: its snapshot may be days older (#597)
+#            nearest, a half up; start and end to the second; absent when no record has a timestamp. start=
+#            is the first of them all, a file-history-snapshot record's inner one too: the session's identity for runs
+#            and the status line (#597); first= only when the first record with a time of its own is later than it
 #   priced   $<usd>  <what it is>[; the cost line is $<usd> less: <why> | $<usd> more: <why> | agrees]   — with --prices,
 #            before the time line (#597): the context line's buckets added as printed, so the same requests (each message
 #            id once, the subagents', what ran before a compaction or a resume) at the same prices; for one session with
-#            a cost line, how far that line (the CLI counter) is from it, both to the fourth place
+#            a cost line, how far that line (the CLI counter) is from it, both to the fourth place; with unpriced above 0
+#            no cause is given: `$<usd> less|more, unpriced=<n>: the requests of a model not in the prices file are not priced here`
 #   context  under100k=<requests>/<tokens> 100-200k=… 200-400k=… 400-700k=… over700k=…   — the last line wherever
 #            a transcript is read (#342): the requests (each message id once) by their context, input + cache read +
 #            cache write (100000 is in 100-200k, 700000 in 400-700k), tokens as the total line sums them; with
@@ -46,7 +48,7 @@
 set -eu
 pr=""; a=(); while [ $# -gt 0 ]; do case "$1" in --prices) [ $# -ge 2 ] || exit 2; pr="$2"; shift ;; *) a+=("$1") ;; esac; shift; done
 set -- ${a[@]+"${a[@]}"}; [ -z "$pr" ] || [ -r "$pr" ] || { echo "cannot read the prices file $pr" >&2; exit 2; }
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,47s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 # an empty or blank id would match every session as a prefix (#209)
 [ -n "$(printf '%s' "$arg" | tr -d ' \t')" ] || {
@@ -114,13 +116,13 @@ span() {
     function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = int(y / 400); yoe = y - e * 400
       doy = int((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1
       return e * 146097 + yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy - 719468 }
-    /"type":[ \t]*"file-history-snapshot"/ { next }   # no time of its own: its snapshot may be days older than the session (#597)
     { ts = rects($0)
       if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) next
       f = ""; if (substr(ts, 20, 1) == "." && match(substr(ts, 21), /^[0-9]+/)) f = substr(ts, 21, RLENGTH)
       ms = ((days(substr(ts, 1, 4) + 0, substr(ts, 6, 2) + 0, substr(ts, 9, 2) + 0) * 24 + substr(ts, 12, 2)) * 60 + substr(ts, 15, 2)) * 60 + substr(ts, 18, 2)
       ms = ms * 1000 + substr(f "000", 1, 3)
-      printf "%.0f\t0\t%s\n", ms, substr(ts, 1, 19)
+      # the fourth field marks a file-history-snapshot record: its time is the one inside its snapshot, not its own (#597)
+      printf "%.0f\t0\t%s\t%s\n", ms, substr(ts, 1, 19), ($0 ~ /"type":[ \t]*"file-history-snapshot"/ ? "s" : "")
       # the tool calls this record starts (parallel ones too) and the results it carries
       r = $0; while (match(r, /"type":[ \t]*"tool_use",[ \t]*"id":[ \t]*"[^"]*"/)) {
         id = substr(r, RSTART, RLENGTH); r = substr(r, RSTART + RLENGTH); sub(/^.*"id":[ \t]*/, "", id)
@@ -144,9 +146,10 @@ span() {
         if (calls > 0) { if (g > 1800000) idle += g - 1800000 }   # a tool call: work, up to 30 minutes a gap
         else if (asks > 0) idle += g                              # waiting for the owner, at any length
         else if (g > 300000) idle += g }                          # over 5 minutes, no call: nobody worked
+      if ($4 == "" && own == "") own = $3
       prev = $1; end = $3 }
     # minutes, rounded to the nearest, a half up
-    END { if (n) printf "time\twall=%.0fm active=%.0fm start=%sZ end=%sZ\n", int((prev - first + 30000) / 60000), int((prev - first - idle + 30000) / 60000), start, end }'
+    END { if (n) printf "time\twall=%.0fm active=%.0fm start=%sZ end=%sZ%s\n", int((prev - first + 30000) / 60000), int((prev - first - idle + 30000) / 60000), start, end, (own != "" && own != start ? " first=" own "Z" : "") }'
 }
 # the session's own totals from the transcript on stdin: Claude Code appends a "cost-state" record
 # (totalCostUSD, and modelUsage: one flat object per model) when its process exits normally, a stop
@@ -256,8 +259,10 @@ if [ -f "$status" ] && [ -z "$cost" ]; then
 fi
 if [ -n "$main" ] && [ -f "$main" ]; then
   # the priced line, and how the cost line (the CLI counter) differs from it: both as printed, to the fourth place (#597)
-  printf '%s\n' "$all" | LC_ALL=C awk -F '\t' -v c="$cost" '$1 == "priced" { d = c - substr($2, 2); a = sprintf("%.4f", d < 0 ? -d : d)
-    print $0 (c == "" ? "" : a + 0 == 0 ? "; the cost line agrees" : "; the cost line is $" a (d < 0 ? " less: the CLI counter is not kept when a process of the session ends without a stop" : " more: the CLI counter also holds requests the transcript does not")) }'
+  # with unpriced requests the difference has no one cause: they are named, the counter is not
+  printf '%s\n' "$all" | LC_ALL=C awk -F '\t' -v c="$cost" '$1 == "priced" { p = $0; v = substr($2, 2) } $1 == "context" { u = $0; sub(/^.* unpriced=/, "", u) }
+    END { if (p == "") exit; d = c - v; a = sprintf("%.4f", d < 0 ? -d : d); w = d < 0 ? " less" : " more"
+      print p (c == "" ? "" : a + 0 == 0 ? "; the cost line agrees" : "; the cost line is $" a (u + 0 > 0 ? w ", unpriced=" u ": the requests of a model not in the prices file are not priced here" : d < 0 ? w ": the CLI counter is not kept when a process of the session ends without a stop" : w ": the CLI counter also holds requests the transcript does not")) }'
   { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | span
   printf '%s\n' "$all" | sed -n '$p'
 fi
