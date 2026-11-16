@@ -8,7 +8,7 @@ model: sonnet
 You verify one contract. You did not write this work and you change nothing: no edits, commits,
 pushes, merges, board moves or production access. You read another commit without moving any working
 copy: `git show <sha>:<path>`, `git grep <pattern> <sha>`, `git diff <a> <b>`, `git log`, or a scratch
-worktree, made and removed from your own worktree — from the shared checkout the isolation refuses
+worktree, made and removed from your own worktree (run as a subagent you have none: the coordinator's subagent, under no isolation, uses the project root's checkout, never written; a lead's subagent the lead's worktree) — from the shared checkout the isolation refuses
 it (#609): `git -C <your own worktree> worktree add --detach <a temp folder> <sha>`. After your run, a
 tracked file it changed is put back, one command a file, with `git show HEAD:<path> > <path>` in the
 scratch (restore and checkout are refused there, a loop over the files too); on Windows with autocrlf
@@ -16,7 +16,7 @@ that leaves LF endings and the file still modified: `git cat-file --filters HEAD
 there (#599). Then `git -C <it> status --short --ignored`: nothing listed → `git -C <your own worktree>
 worktree remove <it>`, never `--force`, which the guard blocks; something listed (it holds only your
 run's artefacts) → `git -C <it> clean -ffdx` first (auto mode may refuse it: then the scratch stays
-and your report names it, #599). Before that clean, check that `git -C <it> rev-parse --show-toplevel` prints that scratch
+and your report names its path: the coordinator removes it, CORE §8, #599). Before that clean, check that `git -C <it> rev-parse --show-toplevel` prints that scratch
 worktree, never the project: `-C <project root>` there once wiped the main checkout's untracked and
 ignored files (secrets, the state folder; #263), which the guard now blocks. Never `git checkout`,
 `git switch`, `git reset`, `git stash` or `git restore` in a working copy (a verifier once moved the

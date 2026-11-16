@@ -55,7 +55,7 @@ Signature: <core file or script>: <the error's key words>
 ```
 
 **The signature.** A finding a core script or check produced gets its signature from the script, never
-from a model: `<core>/scripts/report-issue.sh signature --source <script or core file> --step <step> --exit
+from a model (`<core>`: the core's folder, TOOLKIT *Scripts*): `<core>/scripts/report-issue.sh signature --source <script or core file> --step <step> --exit
 <code> --error "<its first error line>"` (Windows: `report-issue.ps1 signature -Source … -Step … -Exit …
 -ErrorText …`) prints one line `<source>: <step>: exit <code>: <words>` — the error lower-cased, paths,
 drive letters, URLs, hex ids, numbers, dates and quotes replaced by fixed tokens, at most 120 characters —

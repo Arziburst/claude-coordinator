@@ -220,7 +220,7 @@ the report notes the interruption and the resume time.
      `b`), then merges `selftest/<c>/st1` into `selftest/<c>/base` (a worktree of the base under
      `.claude/worktrees/`: the one `selftest prepare` made, `<project>/.claude/worktrees/selftest/<c>/base`;
      `merge --no-ff`, pushed where there is a remote).
-   - **Tester, scout, researcher:** each started as a subagent on the light model with "read
+   - **Tester, scout, researcher:** each started as a subagent on the light model (`<core>`: the core's folder, TOOLKIT *Scripts*) with "read
      `<core>/roles/<role>.md` (the absolute path); answer in one line: `role: <the name in its
      frontmatter>; contract: st1`". PASS only when the line gives the exact role name (`tester`,
      `scout`, `researcher`) and `st1`: a subagent that did not find the file answers from its system
