@@ -918,7 +918,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   <added>/<max>`; exit 0 / 1, usage 2; a binary file counts as 0 and is named; no `bounds:` is `check-bounds: no
   bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md). A folder that is
   not the contract's repository is refused, exit 2 and why, never OK (#615): none of its `touches` among the folder's
-  tracked files or the range's, or an origin that is not its `repository: <owner>/<name>`.
+  tracked files or the range's (a bound over is still reported there, `OVER`, exit 1), or an origin that is not its `repository: <owner>/<name>`.
 - `scripts/ci-times.sh|.ps1 [--baseline <file>] <run id | file>` (#373) — the seconds of a check-core run from
   `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`

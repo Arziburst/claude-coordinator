@@ -95,7 +95,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   an oracle, and `scripts/merge-queue land` on the contract it finds at `coordinator/briefs/<head branch>-contract.md`
   (a branch's `/` as `-`), then by the id the PR's branch starts with, `coordinator/briefs/<id>-contract.md`.
   Run in a folder that is not the contract's repository it refuses (exit 2), never OK (#615): none of `touches` is among the folder's
-  files or the range's, or the folder's origin is not `repository:`.
+  files or the range's (a bound over is still reported there, `OVER`, exit 1), or the folder's origin is not `repository:`.
   At the queue (#419) an OVER stops the PR only when its glob matches or holds an important glob (the list above);
   any other OVER prints one line (`bounds over, not important: <pr> <glob> <added>/<max>`) and the PR goes on. The worker
   still stops and asks past any bound, and the verifier still reads it.

@@ -2,7 +2,7 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-bounds.ps1 <contract> <base>...<head>
 # Lines: `<glob> <added>/<max>` per bound, `binary: <path> counts as 0`, `check-bounds: OK`, `check-bounds: OVER <glob>
 # <added>/<max>`, `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, unreadable, a malformed bound
-# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound).
+# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound), the #615 refusal (touches found nowhere, or another repository's origin; with touches found nowhere an OVER is still reported, exit 1).
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
 function Stop2([string]$m) { $m; exit 2 }

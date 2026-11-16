@@ -8,7 +8,8 @@
 # is not limited): `<glob> <added>/<max>`, a binary file it matches named before it, `binary: <path> counts as 0`.
 # Then `check-bounds: OK`, or one `check-bounds: OVER <glob> <added>/<max>` per bound over. No bound: the one line
 # `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, an unreadable contract or range, a malformed bound
-# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound).
+# (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound),
+# the #615 refusal (touches found nowhere, or another repository's origin; with touches found nowhere an OVER is still reported, exit 1).
 usage() { sed -n '2,3s/^# \{0,1\}//p' "$0" >&2; exit 2; }
 # globmatch <path> <glob> [<from>]: the glob matches the path; each `**/` from <from> on: none, or `*/` (one or more folders)
 globmatch() { local f="${3:-0}" r a; r="${2:$f}"; case "$r" in *'**/'*) a="${2:0:$f}${r%%'**/'*}"; r="${r#*'**/'}"
