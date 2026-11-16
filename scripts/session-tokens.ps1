@@ -9,11 +9,16 @@
 # subagents included (2.1.296; an internal name). When the LAST one has no assistant message after it, the model and
 # total lines come from it - out=<n> (exact) instead of out>=, and thinking=<n> at the end (not in the total) - and the
 # cost line is its totalCostUSD (before the status file's); otherwise (none, or the session ran after it) as above.
-# -Since always sums the messages.
-# Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC>" from the records' timestamps
+# -Since always sums the messages. The cost line is the CLI's counter, not a sum of the transcript (#597): under what the
+# session spent when a process of it ended without a stop, over the transcript by the CLI's own unwritten requests.
+# With -Prices, before the time line: "priced $<usd> <what it is>" - the context line's buckets added as printed, the same
+# requests at the same prices - and for one session with a cost line how far that line is from it (less, more, agrees;
+# with unpriced above 0 the unpriced requests are named, no cause given).
+# Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC> [first=<UTC>]" from the records' timestamps
 # (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes, but a gap inside a tool call
 # is work up to 30 minutes and one inside only a question to a person, a tool named *AskUserQuestion, is idle at any
-# length; minutes rounded, a half up).
+# length; minutes rounded, a half up). start= is the first timestamp of all, a file-history-snapshot record's inner one too:
+# the session's identity for runs and the status line (#597); first= only when the first record with its own time is later.
 # Last of all, wherever a transcript is read (#342): "context under100k=<requests>/<tokens> 100-200k=... 200-400k=... 400-700k=...
 # over700k=...", the requests (each message id once) by their context, input + cache read + cache write (100000 is in 100-200k,
 # 700000 in 400-700k), tokens as the total line sums them; with -Prices <file> (coordinator/prices.txt's format, as run-stats
@@ -32,7 +37,7 @@ if ($PSBoundParameters.ContainsKey('Session') -and -not $Session.Trim()) {
   [Console]::Error.WriteLine('empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)'); exit 2
 }
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 22 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 28 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 if ($Prices -and -not (Test-Path -LiteralPath $Prices -PathType Leaf)) { [Console]::Error.WriteLine("cannot read the prices file $Prices"); exit 2 }
 $ErrorActionPreference = 'Stop'
@@ -119,8 +124,9 @@ function Days([long]$y, [long]$m, [long]$d) {
 $reStamp = [regex]'^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?'
 $reUse = [regex]'"type":[ \t]*"tool_use",[ \t]*"id":[ \t]*("[^"]*")(,[ \t]*"name":[ \t]*"[^"]*AskUserQuestion")?'
 $reResult = [regex]'"tool_use_id":[ \t]*("[^"]*")'
+$reSnap = [regex]'"type":[ \t]*"file-history-snapshot"'
 function Span([string[]]$Files) {
-  $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''
+  $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''; $own = [long]::MaxValue; $ownTs = ''
   $use = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
   $res = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
   $ask = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -134,6 +140,8 @@ function Span([string[]]$Files) {
       $t.Add($ms)
       if ($ms -lt $first) { $first = $ms; $start = $ts.Substring(0, 19) }
       if ($ms -gt $last) { $last = $ms; $end = $ts.Substring(0, 19) }
+      # a file-history-snapshot record's time is its snapshot's, not its own (#597): start= keeps it, first= is the first other record's
+      if ($ms -lt $own -and -not ($line.Contains('"file-history-snapshot"') -and $reSnap.IsMatch($line))) { $own = $ms; $ownTs = $ts.Substring(0, 19) }
       # the tool calls this record starts (parallel ones too) and the results it carries
       if ($line.Contains('"tool_use"')) {
         foreach ($u in $reUse.Matches($line)) {
@@ -171,7 +179,7 @@ function Span([string[]]$Files) {
     elseif ($gap -gt 300000) { $idle += $gap }                               # over 5 minutes, no call: nobody worked
   }
   $wall = $last - $first
-  "time`twall={0}m active={1}m start={2}Z end={3}Z" -f [long][Math]::Floor(($wall + 30000) / 60000), [long][Math]::Floor(($wall - $idle + 30000) / 60000), $start, $end
+  "time`twall={0}m active={1}m start={2}Z end={3}Z{4}" -f [long][Math]::Floor(($wall + 30000) / 60000), [long][Math]::Floor(($wall - $idle + 30000) / 60000), $start, $end, $(if ($ownTs -and $ownTs -cne $start) { " first=${ownTs}Z" } else { '' })
 }
 function CountUsage([string[]]$Files) {
   $best = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
@@ -214,8 +222,11 @@ function CountUsage([string[]]$Files) {
   foreach ($n in $names) { Line $n $per[$n] }
   Line 'total' $t
   $N = 'under100k', '100-200k', '200-400k', '400-700k', 'over700k'; $s = 'context'
-  for ($i = 1; $i -le 5; $i++) { $s += $(if ($i -gt 1) { ' ' } else { "`t" }) + $N[$i - 1] + '=' + $BN[$i] + '/' + ('{0:0}' -f $BT[$i]) + $(if ($Prices) { '/$' + ('{0:0.0000}' -f ($BC[$i] / 1e6)) } else { '' }) }
-  $script:ctx = $s + $(if ($Prices) { " unpriced=$np" } else { '' })
+  $usd = [double]0
+  for ($i = 1; $i -le 5; $i++) { $v = '{0:0.0000}' -f ($BC[$i] / 1e6); $usd += [double]$v; $s += $(if ($i -gt 1) { ' ' } else { "`t" }) + $N[$i - 1] + '=' + $BN[$i] + '/' + ('{0:0}' -f $BT[$i]) + $(if ($Prices) { '/$' + $v } else { '' }) }
+  $script:ctx = $s + $(if ($Prices) { " unpriced=$np" } else { '' }); $script:np = $np
+  # the priced line (#597): the buckets as printed, added - they sum to it to the fourth place
+  $script:priced = if ($Prices) { "priced`t`${0:0.0000}`tthe context buckets together (the same requests, at the prices file)" -f $usd } else { $null }
 }
 function Line($n, $v) { "{0}`t{1}`tin={2} out>={3} cache_read={4} cache_write={5}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3] }
 # the session's own totals from its transcript: Claude Code appends a "cost-state" record (totalCostUSD, and
@@ -262,7 +273,7 @@ function RecLine($n, $v) { "{0}`t{1}`tin={2} out={3} cache_read={4} cache_write=
 if ($Since) {
   if (-not (Test-Path -LiteralPath $projects)) { [Console]::Error.WriteLine("no transcripts in $projects"); exit 1 }
   CountUsage @(Get-ChildItem -LiteralPath $projects -Filter '*.jsonl' -Recurse -File | ForEach-Object { $_.FullName })
-  $script:ctx; exit 0
+  if ($script:priced) { $script:priced }; $script:ctx; exit 0
 }
 $main = $null
 if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } elseif (Test-Path -LiteralPath $projects) {
@@ -312,9 +323,20 @@ if ($main) {
   if ($null -ne $rec) { $rec } else { $sum }
 } elseif (-not (Test-Path -LiteralPath $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
 # the record's cost when it has one, else the status file's
-if ((Test-Path -LiteralPath $status) -and -not ($null -ne $rec -and @($rec | Where-Object { $_.StartsWith('cost') }).Count)) {
+$cost = if ($null -ne $rec) { $rec | Where-Object { $_.StartsWith('cost') } | Select-Object -First 1 }
+if ((Test-Path -LiteralPath $status) -and -not $cost) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
-  if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
+  if ($null -ne $c) { $cost = "cost`t`${0:0.0000}" -f [double]$c; $cost }
+}
+if ($main -and $script:priced) {
+  # the priced line, and how the cost line (the CLI counter) differs from it: both as printed, to the fourth place (#597)
+  $p = $script:priced
+  if ($cost) {
+    $d = [double]$cost.Substring(6) - [double]$p.Split("`t")[1].Substring(1); $a = '{0:0.0000}' -f [Math]::Abs($d)
+    $w = if ($d -lt 0) { 'less' } else { 'more' }   # with unpriced requests the difference has no one cause: they are named, the counter is not
+    $p += $(if ([double]$a -eq 0) { '; the cost line agrees' } elseif ($script:np -gt 0) { "; the cost line is `$$a $w, unpriced=$($script:np): the requests of a model not in the prices file are not priced here" } elseif ($d -lt 0) { "; the cost line is `$$a less: the CLI counter is not kept when a process of the session ends without a stop" } else { "; the cost line is `$$a more: the CLI counter also holds requests the transcript does not" })
+  }
+  $p
 }
 if ($main) { Span $files; $script:ctx }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }
