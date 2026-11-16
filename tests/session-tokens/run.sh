@@ -142,5 +142,24 @@ ctx "context: --prices, four models' costs, an unpriced model" "$here/context" "
 ctx "context: --since with --prices" "$here/context" "$K" --since 2026-10-01T00:00:00Z --prices "$PF"
 ctx "context: a stopped session, from its transcript, not its record" "$st" 'under100k=1/1013/$0.0002 100-200k=0/0/$0.0000 200-400k=0/0/$0.0000 400-700k=0/0/$0.0000 over700k=0/0/$0.0000 unpriced=0' c1 --prices "$PF"
 expect "context: --prices with no such file" 2 - - -- "$here/context" k1 --prices "$(winpath "$tmp/none.txt")"
+# #597, the lines agree. r1: a message id written twice (counted once, its largest output), a subagent, a compaction, a resume
+# after a cost-state record, a file-history-snapshot three days older than the first record. With --prices a `priced` line
+# before the time line: the context buckets together, and for one session how the cost line (the CLI counter) differs from
+# it; the time line starts at the first record's own time, not at the snapshot's.
+ln="$here/lines"; B='the context buckets together (the same requests, at the prices file)'
+n=$((n + 1)); run "$ln" r1 --prices "$PF"
+[ "$rc" = 0 ] && [ "$(cat "$tmp/out")" = "$(tr -d '\r' < "$t/expected-lines.txt")" ] && echo "ok   lines: a duplicate id, a subagent, a compaction, a resume - the whole output" || { bad "lines: differs from expected-lines.txt"; sed 's/^/  got: /' "$tmp/out"; }
+# the buckets' dollars as printed add up to the priced line, to the fourth place
+n=$((n + 1)); awk -F '\t' '$1 == "priced" { p = substr($2, 2) } $1 == "context" { k = split($2, a, " "); for (i = 1; i <= k; i++) if (split(a[i], f, "$") == 2) s += f[2] }
+  END { exit !(p != "" && sprintf("%.4f", s) == p) }' "$tmp/out" && echo "ok   lines: the context buckets sum to the priced line" || bad "lines: the context buckets do not sum to the priced line"
+# has <name> <the line wanted> <config dir> <arguments...>: the output holds that line, whole
+has() { n=$((n + 1)); run "${@:3}"; [ "$rc" = 0 ] && grep -qxF "$2" "$tmp/out" && echo "ok   $1" || { bad "$1: want the line $2"; sed 's/^/  got: /' "$tmp/out"; }; }
+has "lines: a stopped session whose record holds more than its transcript" "$(printf 'priced\t$0.0820\t%s; the cost line is $0.0080 more: the CLI counter also holds requests the transcript does not' "$B")" "$ln" r2 --prices "$PF"
+mkdir -p "$tmp/ag/projects/-w" "$tmp/ag/coordinator/sessions"; sed '$d' "$ln/projects/-w/r2.jsonl" > "$tmp/ag/projects/-w/r3.jsonl"
+printf '{"session_id":"r3","cost":{"total_cost_usd":0.08204}}\n' > "$tmp/ag/coordinator/sessions/r3.json"
+has "lines: a cost line equal to the priced line" "$(printf 'priced\t$0.0820\t%s; the cost line agrees' "$B")" "$tmp/ag" r3 --prices "$PF"
+has "lines: a subagent, no cost line to compare" "$(printf 'priced\t$0.0018\t%s' "$B")" "$ln" r1a --prices "$PF"
+has "lines: --since with --prices" "$(printf 'priced\t$1.4020\t%s' "$B")" "$here/context" --since 2026-10-01T00:00:00Z --prices "$PF"
+n=$((n + 1)); run "$ln" r1; if grep -q '^priced' "$tmp/out"; then bad "lines: a priced line without --prices"; else echo "ok   lines: no priced line without --prices"; fi
 [ "$fail" = 0 ] && echo "session-tokens: $n cases passed" || echo "session-tokens: failures above ($n cases)"
 exit "$fail"
