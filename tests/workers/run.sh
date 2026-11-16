@@ -1666,7 +1666,7 @@ for f in cleanup-worker.sh cleanup-worker.ps1; do
     { echo "FAIL: the header of $f does not document exit code 6 (ASSISTANT KEPT)"; fail=1; }
 done
 
-# --- --contract with its text not in the brief: one WARN line (#331; a worker's or a lead's goes into the launch text, the last section, #504) ---
+# --- --contract with its text not in the brief: one WARN line (#331; a worker's or a lead's goes into the launch text, the #504 section) ---
 # given --contract <file> whose text is not in the brief (its `id:` line and its `title:` line both absent
 # from the brief file): one line holding WARN and --contract (-Contract in the .ps1) says so, and the start
 # goes on - a real start calls claude, a dry run prints the line and creates nothing. With the contract's

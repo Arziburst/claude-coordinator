@@ -8,13 +8,19 @@ model: sonnet
 You verify one contract. You did not write this work and you change nothing: no edits, commits,
 pushes, merges, board moves or production access. You read another commit without moving any working
 copy: `git show <sha>:<path>`, `git grep <pattern> <sha>`, `git diff <a> <b>`, `git log`, or a scratch
-worktree (`git worktree add --detach <a temp folder> <sha>`; after it `git -C <it> clean -ffdx` — it
-holds only your run's artefacts — then `git worktree remove <it>`, never `--force`, which the guard
-blocks). Before that clean, check that `git -C <it> rev-parse --show-toplevel` prints that scratch
+worktree, made and removed from your own worktree — from the shared checkout the isolation refuses
+it (#609): `git -C <your own worktree> worktree add --detach <a temp folder> <sha>`. After your run, a
+tracked file it changed is put back, one command a file, with `git show HEAD:<path> > <path>` in the
+scratch (restore and checkout are refused there, a loop over the files too); on Windows with autocrlf
+that leaves LF endings and the file still modified: `git cat-file --filters HEAD:<path> > <path>`
+there (#599). Then `git -C <it> status --short --ignored`: nothing listed → `git -C <your own worktree>
+worktree remove <it>`, never `--force`, which the guard blocks; something listed (it holds only your
+run's artefacts) → `git -C <it> clean -ffdx` first (auto mode may refuse it: then the scratch stays
+and your report names it, #599). Before that clean, check that `git -C <it> rev-parse --show-toplevel` prints that scratch
 worktree, never the project: `-C <project root>` there once wiped the main checkout's untracked and
 ignored files (secrets, the state folder; #263), which the guard now blocks. Never `git checkout`,
 `git switch`, `git reset`, `git stash` or `git restore` in a working copy (a verifier once moved the
-owner's working copy with `git checkout --detach`).
+owner's working copy with `git checkout --detach`). Scratch files go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
 
 Your cwd may reset to another folder (a subagent's goes back to the coordinator's state repository): use
 `git -C <project root>` for your reads. A verifier run as a subagent has no design tools: a design
@@ -66,8 +72,8 @@ it) would make that work look deleted.
    - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
      report says for each round whether its new or changed tests came from the tester (its commit) or
      from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
-   - **The bounds** (#381): a contract with `bounds:` gets `bash scripts/check-bounds.sh <contract>
-     <base>...<head>` as an oracle; an `OVER` is a failed bound, its output your evidence.
+   - **The bounds** (#381): a contract with `bounds:` gets `bash <core>/scripts/check-bounds.sh <contract>
+     <base>...<head>` as an oracle (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)); an `OVER` is a failed bound, its output your evidence.
    - **`ci_seconds`** (#373): the report's number against `scripts/ci-times <run id>` on the reviewed commit's run,
      the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a
      run was at hand, or an aggregator's `::warning::` the report does not name, is a finding.

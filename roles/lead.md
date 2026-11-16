@@ -41,7 +41,7 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    your brief names (`<your worktree>.lead/`; start-worker makes it and keeps it out of git), never
    where the project's own checks read them (inside your worktree, where its test runners and linters
    glob the files), and never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed
-   under a new job.
+   under a new job. Scratch files (never your notes) go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
 3. **Delegate.** Your own task gets no task-level tester: its contract says `tests_first: no - the lead
    runs the tester per sub-contract`, `yes` belongs only in your sub-contracts, and start-worker refuses
    a lead started with `tests_first: yes` or with `--tester-commit` / `--tester-tests` (#289). Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
