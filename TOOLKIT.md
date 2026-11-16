@@ -223,7 +223,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   and money gate (#381):** for a worker or a lead, from `<repo>/coordinator/RUNS.tsv` (or `--runs <log>` / `-Runs`, as check-contract takes it, which the earlier sessions' cleanup reads too, #525) through `scripts/runs task`:
   rounds = the id's worker rows plus this start; round 3 or later, or the task's rows summing to at least twice
   `budget.cost`, is refused with the numbers (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API
-  list price`) unless `--owner-ok <the owner's words>` / `-OwnerOk`, printed; no log, no contract, a lead's
+  list price`) unless `--owner-ok <the owner's words>` / `-OwnerOk`, printed; with no contract (#616) the id is the name's
+  (`#<id> <role>:`; letters, digits, `_`, `-`; matched whole) and, when it has worker rows, the round count alone gates it, the line saying the cost rule could not
+  apply; no log, no contract and no rows for the name's id, a lead's
   sub-contract, another role or an assistant is one `round gate:` line and no gate. A mistyped `-OwnerOk` is swallowed
   by param() and the gate still refuses. A round given by a message passes no gate (CORE §4 step 5); a running
   session has no row yet, so its spend is not in the sum. **The lead's go gate (#558):** a lead's sub-task (named
