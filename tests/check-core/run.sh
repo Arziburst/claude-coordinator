@@ -42,18 +42,16 @@ summary() {   # summary <case> <exit code> <errors>: the last line ends with ", 
     { echo "FAIL ($1): expected exit $2 and $3 errors, got exit $RC:"; printf '%s\n' "$LAST" | sed 's/^/    /'; fail=1; }
 }
 
+sz="$d/tests/check-core-sizes.txt"; printf 'margin 10%%\n' > "$sz"   # no records: the one run gives the counts too (#611)
 run; summary "the copy as it is" 0 0
 nowarn() { n=$((n + 1)); ! printf '%s\n' "$LAST" | grep -q "^WARN: $2" || { echo "FAIL ($1): a WARN:"; printf '%s\n' "$LAST" | grep '^WARN' | sed 's/^/    /'; fail=1; }; }
 
-# the start-read texts' sizes (#600). The expected counts are the copy's own, never the repository's records: first a
-# run with no records, each watched text a WARN with its count (in ps mode the same lines as check-core.sh's); then
+# the start-read texts' sizes (#600). The expected counts are the copy's own, never the repository's records: the first
+# run has no records, each watched text a WARN with its count (in ps mode the same lines as check-core.sh's); then
 # records at those counts and a margin of 10 % of each record, the texts grown: over it a WARN naming the text, the
 # record and the count, at it nothing; a text with no record a WARN; spaces, tabs and CRs separate words; the exit
 # code unchanged. Last a margin of 50 words, seen in the next run: 50 words more nothing, 51 a WARN
-sz="$d/tests/check-core-sizes.txt"
 ws() { awk -v n="$1" 'BEGIN { for (i = 0; i < n; i++) printf "w "; print "" }'; }
-printf 'margin 10%%\n' > "$sz"
-run
 summary "texts with no record leave the exit code and the errors alone" 0 0
 nr="$(printf '%s\n' "$LAST" | sed -n 's/^WARN: \([^ ]*\) has \([0-9][0-9]*\) words and no record in tests\/check-core-sizes.txt$/\1 \2/p')"
 cnt() { printf '%s\n' "$nr" | awk -v t="$1" '$1 == t { print $2 }'; }
