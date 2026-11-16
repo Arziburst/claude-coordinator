@@ -90,7 +90,10 @@ named() { local body="${out#cc-formats: FAIL claude $2: }" e k=${#want[@]}; [ -z
 
 # hang: a listing that never answers (its stub's child sleeps on), the payload's fields removed
 setup; : > "$STUB_DIR/hang"; remove hang; s=$SECONDS; cc; named hang 2.1.300 "agents: claude agents --json --all did not answer in 5 s"
-[ $((SECONDS - s)) -le 10 ] || bad "a listing that never answers: the line within 10 s (took $((SECONDS - s)) s)"
+# the behaviour is the check (that line, exit 1, the child below): a probe without its limit waits the stub's 30 s out and
+# names no such line. The clock only bounds a probe that stops late: 60 s, as a loaded Windows runner took 14 and 23 s for
+# a right run, which the former 10 s called a failure (#630)
+[ $((SECONDS - s)) -le 60 ] || bad "a listing that never answers: the line within 60 s (took $((SECONDS - s)) s)"
 # its whole tree ended (the stub's child too); the next run's listing answers in time (its FAIL names run agents' items only)
 c="$(cat "$STUB_DIR/child" 2>/dev/null)"; k=0; while [ -n "$c" ] && kill -0 "$c" 2>/dev/null && [ $k -lt 10 ]; do sleep 0.1; k=$((k + 1)); done
 [ -n "$c" ] && ! kill -0 "$c" 2>/dev/null || bad "a listing that never answers: its child ended with it"
