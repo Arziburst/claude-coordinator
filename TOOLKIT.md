@@ -21,7 +21,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree it entered, and no branch; `claude rm` drops the listing only: its transcript, its kept brief and its worktree stay.
   So start-worker (before a tester's, worker's or lead's launch) and merge-queue (after a merge) find a task's finished sessions by
   the worktree the brief kept by their `sessionId` names, else by the name `#<id> `, and `claude rm` those `runs check` finds a row for.
-  After a merge by a human neither runs: `scripts/cleanup-worker.sh --task <id> [--runs <log>] [--dry-run]` (`.ps1`: `-Task`), from the project's
+  After a merge by a human neither runs: `scripts/cleanup-worker.sh --task <id> [--runs <log>] [--state <folder>] [--dry-run]` (`.ps1`: `-Task`; `--state`: the run log is `<folder>/RUNS.tsv`, #635), from the project's
   root or with `--worktree`, does the same for task `<id>`: `removed <id> (<name>)`, or `MISSING <id> <name>` for one with no run row (write
   it, run it again); exit 3 a failed listing or `runs check`, 4 a failed `claude rm` (#621).
   [agent-view](https://code.claude.com/docs/en/agent-view.md), [cli-reference](https://code.claude.com/docs/en/cli-reference.md)
@@ -246,8 +246,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   `<state>/briefs/`, an assistant's folder is `<state>/assistants/<name>`. Its PRs land with `merge-queue land
   <pr>@<sha> --state <the same folder>`, run from that repository's root: the queue reads the copy there and
   checks the bounds. One safety file serves them all: its `COORD_PROTECTED_ROOT` lists every root, `|` between
-  them (*Safety*). Without `--state` both scripts read `<repo>/coordinator` as before; one that is not a folder
-  is refused.
+  them (*Safety*). Without `--state` both scripts read `<repo>/coordinator` as before; one that is not a folder, or holds neither `RUNS.tsv` nor `briefs/` (the project's root in place of its `coordinator/`, #635),
+  is refused (`cleanup-worker --task --state` alike; a new state folder needs `briefs/` made in it first), and so is start-worker's `--runs` naming a file that does not exist (#633): a mistyped path never switches the gate or the bounds off in silence.
 - **A big brief through a file** (#291): Windows cuts a command line at 32 767 characters, and a brief
   that long once failed a start after the worktree and branch existed. start-worker decides by the size
   of the full launch text (the first line, the report line, the role, the brief) before anything is
@@ -823,7 +823,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   the open PRs changing a task's `touches` (start-worker runs it). Each merge ends with its
   `AFTER MERGE` lines, the event table's merge row one thing a line (CORE §4); never filter them out. A fork's PR deletes no branch on origin (`left the fork's branch`, #392). It calls `gh`, and `git` only to read the folder and origin and to fetch the head check-bounds reads (`--dry-run` fetches too, remote-tracking refs only), and `claude agents --json --all` once after a merge for the sessions line (the task's finished sessions, found as start-worker finds them: those whose run rows are written removed, the rest named below the run rows line: rows first, then `claude rm`; the worker's own is among them, #521): the owner's
   checkout is left as it is, pulled after the merges as before. **The bounds (#381, #387):** run from the project's root, it
-  runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`):
+  runs check-bounds on the contract found at `coordinator/briefs/<head branch>-contract.md` (a branch's `/` as `-`), then by the id the branch starts with (`coordinator/briefs/<id>-contract.md`, the exact name; a prefixed id whole: `gps-7-contract.md` for the branch `gps-7-x`, never `gps-contract.md`, #633):
   an OVER on a bound whose glob matches or holds an important glob (#419; the list from `check-contract --important`; when it cannot be read the result differs by script and is not tested, so do not count on a stop (#424))
   stops that PR with `OVER BOUNDS <pr> <glob> <added>/<max>`; any other OVER prints `bounds over, not important: <pr> <glob> <added>/<max>` and the PR goes on
   (a worker still stops and asks past any bound, a verifier still reads it); check-bounds exit 2 stops it fail-closed

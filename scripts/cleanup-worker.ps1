@@ -18,15 +18,16 @@
 # listing names the session `assistant: <name>` (#281) - nothing is stopped, removed or changed, decided before
 # any other check: an assistant is removed only on the owner's word; with -Session, a listing that fails or
 # prints no JSON list is exit 3 (LISTING FAILED, nothing stopped, removed or changed) - it cannot tell an assistant.
-#   powershell -File scripts\cleanup-worker.ps1 -Task <id> [-Runs <log>] [-DryRun]     alone, from the project's root; or with -Worktree: after its cleanup
+#   powershell -File scripts\cleanup-worker.ps1 -Task <id> [-Runs <log>] [-State <folder>] [-DryRun]     alone, from the project's root; or with -Worktree: after its cleanup
 # -Task (#621; after a merge by a human, which merge-queue's removal of them never follows): the finished sessions of task <id> in this
 # project (the folder it runs in; with -Worktree that repository's main checkout), found by merge-queue's rule (#493, #521; kept equal to it by
 # hand): the brief kept by the sessionId names a worktree `<id>-...`, else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
-# (-Runs <log>, default coordinator/RUNS.tsv under the project) finds a row for is removed (`claude rm`: the listing only), `removed <id> (<name>)`,
+# (-Runs <log>; else <folder>/RUNS.tsv of -State <folder>, the coordinator's state folder as start-worker and merge-queue take it, refused when it is no
+# folder or holds neither RUNS.tsv nor briefs/, #635; default coordinator/RUNS.tsv under the project) finds a row for is removed (`claude rm`: the listing only), `removed <id> (<name>)`,
 # -DryRun: `[dry-run] claude rm <id> (<name>)`; the others are `MISSING <id> <name>`; then `task <id>: <n> removed, <m> without a run row`. A live
 # session (a status field, or a state other than done, stopped, failed) and another project's are never touched. Its exit codes: 0, MISSING
 # lines or none; 1 usage; 3 LISTING FAILED or RUNS CHECK FAILED, nothing removed; 4 SESSION KEPT: a claude rm failed, the others still handled.
-param([string]$Worktree, [string]$Session, [switch]$DryRun, [string]$Task, [string]$Runs = 'coordinator/RUNS.tsv')
+param([string]$Worktree, [string]$Session, [switch]$DryRun, [string]$Task, [string]$Runs = '', [string]$State = '')
 # native output (git, bash) is read and this script's own output written as UTF-8, whatever the console's
 # code page (cp866 on a Russian Windows garbles a non-ASCII path or a section sign); no console: left as is.
 # The caller's console gets its own encoding back on every way out (the end, any exit N, a terminating
@@ -126,13 +127,20 @@ function TaskSessions([string]$root) {
   }
   "task ${Task}: $nr $(if ($DryRun) { 'would be removed' } else { 'removed' }), $nm without a run row"
 }
-$usage = 'usage: -Worktree <path> [-Session <id>] [-Task <id> [-Runs <log>]] [-DryRun], or -Task <id> [-Runs <log>] [-DryRun]'
+$usage = 'usage: -Worktree <path> [-Session <id>] [-Task <id> [-Runs <log>] [-State <folder>]] [-DryRun], or -Task <id> [-Runs <log>] [-State <folder>] [-DryRun]'
 if (-not $Worktree -and (-not $Task -or $Session)) { [Console]::Error.WriteLine($usage); exit 1 }
 # a flag where a value belongs (-Session --dry-run): a usage error, never a session or path of that name
-foreach ($v in @(@('Worktree', $Worktree), @('Session', $Session), @('Task', $Task), @('Runs', $Runs))) {
+foreach ($v in @(@('Worktree', $Worktree), @('Session', $Session), @('Task', $Task), @('Runs', $Runs), @('State', $State))) {
   if ("$($v[1])".StartsWith('-')) { [Console]::Error.WriteLine("missing value for -$($v[0]) (got the flag $($v[1])); $usage"); exit 1 }
 }
 if ($Task -cnotmatch '^[A-Za-z0-9._-]*$') { [Console]::Error.WriteLine("-Task: not a task id: $Task; $usage"); exit 1 }
+# -State (#635): the coordinator's state folder, its RUNS.tsv the run log unless -Runs names one
+if ($State) {
+  if (-not (Test-Path -LiteralPath $State -PathType Container)) { [Console]::Error.WriteLine("-State: $State is not a folder - give the coordinator's state folder (<its repository>/coordinator, #613); $usage"); exit 1 }
+  if (-not (Test-Path -LiteralPath (Join-Path $State 'RUNS.tsv')) -and -not (Test-Path -LiteralPath (Join-Path $State 'briefs') -PathType Container)) { [Console]::Error.WriteLine("-State: $State holds neither RUNS.tsv nor briefs/ - not a coordinator's state folder, give <its repository>/coordinator, or make briefs/ in a new one (#635); $usage"); exit 1 }
+  if (-not $Runs) { $Runs = Join-Path (Resolve-Path -LiteralPath $State).ProviderPath 'RUNS.tsv' }
+}
+if (-not $Runs) { $Runs = 'coordinator/RUNS.tsv' }
 if (-not $Worktree) { TaskSessions $pwd.ProviderPath; exit $script:trc }
 
 # an assistant (#281: the listing names the session `assistant: <name>`) is never stopped or removed here,

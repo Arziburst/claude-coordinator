@@ -438,6 +438,11 @@ qc 30a-part 3; qc 31-slash-name 3; qc 32-both 3; qc 32 100; qpr 30 "$H30" 30a-pa
 run land 30 31 32 --poll 0
 code 3; hasline "OVER BOUNDS 30 src/* 5/3"; hasline "OVER BOUNDS 31 src/* 5/3"; hasline "OVER BOUNDS 32 src/* 5/3"; notcalled "pr merge"; hasnt "no contract"
 
+fresh "a prefixed id (#633): the copy saved by the id (gps-7) is found for its branch, by its exact name - never the prefix's (gps)"
+qbranch gps-7-x 5; HG7=$QH; qbranch gps-8-y 5; HG8=$QH; qc gps-7 3; qc gps 100; qpr 33 "$HG7" gps-7-x; qpr 34 "$HG8" gps-8-y
+run land 33 34 --poll 0
+code 3; hasline "OVER BOUNDS 33 src/* 5/3"; notcalled "pr merge 33"; hasline "BOUNDS #34: no contract at coordinator/briefs/gps-8-contract.md - not checked"; has "MERGED #34"
+
 # one coordinator, a second repository (#613): a working copy with no coordinator/ lands with --state <the coordinator's state folder> (.ps1: -State) -
 # the contract is read from <state>/briefs/, the run log's default is <state>/RUNS.tsv; a --state that is not a folder: exit 1; without it: as before
 git clone -q "$tmp/q.git" "$tmp/q2" 2>/dev/null; cd "$tmp/q2" || exit 1; [ ! -e coordinator ] || { echo "FAIL: the second working copy has a coordinator/"; exit 1; }
@@ -449,6 +454,8 @@ fresh "--state with --runs: the log given wins"; qpr 16 "$H16" 16-fine; run land
 fresh "no --state there: as before - no contract at coordinator/briefs, not checked, the default log"; qpr 15 "$H15" 15-over
 run land 15 --poll 0; code 0; hasline "BOUNDS #15: no contract at coordinator/briefs/15-contract.md - not checked"; has "MERGED #15"; has "run-stats coordinator/RUNS.tsv "
 fresh "--state that is not a folder: exit 1, named, nothing merged"; qpr 16 "$H16" 16-fine; run land 16 --poll 0 --state "$tmp/q/no-such"; code 1; has "q/no-such"; notcalled "pr merge"
+fresh "--state a folder that is not a coordinator's (the project root, #635): exit 1, named, nothing merged"; qpr 16 "$H16" 16-fine
+run land 16 --poll 0 --state "$tmp/q"; code 1; has "q holds neither RUNS.tsv nor briefs/"; notcalled "pr merge"
 cd "$tmp/q" || exit 1
 
 # which OVER stops (#419, the header), the row gone: the core's default list alone. qo <id> <file> [<bound>...]: a pushed branch adding 5 lines to <file>, its contract, its PR landed
