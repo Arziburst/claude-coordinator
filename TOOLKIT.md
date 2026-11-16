@@ -1065,7 +1065,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `escalated` `failed` `dropped` (stopped without a result) `ready`; any other word is refused (exit 2), as
   is a missing transcript (exit 1) and a second row of the same session start and role (exit 1; an
   assistant's rows share their start and are allowed, their cost the session's since that assistant's
-  previous row; so are a coordinator's). **The coordinator's own row, one per day (#389):** `add --log
+  previous row; so are a coordinator's. Both rest on the session's `priced` total at `prices.txt` next to the log, not on the `cost` line, which reads low when a process ended without a stop; the next row so makes up what earlier rows missed; no `prices.txt`, or a model not in it: the `cost` line as before, and a line `runs:` says why, #624). **The coordinator's own row, one per day (#389):** `add --log
   coordinator/RUNS.tsv --session <its id> --task - --role coordinator --kind coordinator --model <m> --effort <e>
   --estimate - --estimate-time - --result done` (`-Task:- -Role coordinator ...`): the task column `-`, as the
   retro reads the coordinator's own line. The file keeps its BOM and line ends. A subagent's row: `add --log … --in <parent>

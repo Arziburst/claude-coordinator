@@ -459,5 +459,29 @@ fresh "check: a session that begins with a snapshot, logged by that start before
 printf '%s\n2026-10-09\t15\tworker\tordinary\topus\tmedium\t3\t1\t0.1\tapproved\t%s\t20\t3\t\t-\n' "$H" "$S0" > "$L"
 run check --log "$L" --root "$ROOT"; code 0; has "^ALL LOGGED\$"; hasnt "^MISSING"
 
+# #624: a coordinator's and an assistant's row rest on the priced total (the requests at prices.txt next to the log), not
+# on the cost line, which reads low when a process of the session ended without a stop; other roles as before.
+PRS=a6b2c4d0-0000-4000-8000-00000000000c
+for m in 0 5; do printf '{"type":"assistant","sessionId":"%s","message":{"id":"msg_p%s","model":"claude-opus-5-5","usage":{"input_tokens":500000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}},"timestamp":"2026-10-10T10:0%s:00.000Z"}\n' $PRS $m $m; done > "$CLAUDE_CONFIG_DIR/projects/-proj/$PRS.jsonl"
+printf '{"session_id":"%s","cost":{"total_cost_usd":2.5}}\n' $PRS > "$CLAUDE_CONFIG_DIR/coordinator/sessions/$PRS.json"
+# priced <role> <prices line|-> <want> <note pattern|->: an earlier row of 1.5, the cost line 2.5, the priced total 4.0
+priced() { if [ "$2" = - ]; then rm -f "$tmp/prices.txt"; else printf '%s\n' "$2" > "$tmp/prices.txt"; fi
+  printf '%s\n2026-10-28\tcore\t%s\t%s\topus\thigh\t-\t100\t1.5\tdone\t2026-10-10T10:00:00Z\t5\t5\t\t-\n' "$H" "$1" "$1" > "$L"
+  run add --log "$L" --session $PRS --task core --role "$1" --kind "$1" --model opus --effort high --estimate - --estimate-time - --result done --date 2026-10-29; code 0
+  [ "$(cell "$L" cost)" = "$3" ] && [ "$(rows "$L")" = 2 ] && ok || bad "cost '$(cell "$L" cost)', want the plain number $3"
+  if [ "$4" = - ]; then hasnt '^runs: '; else has "$4"; fi; }
+fresh "add: a coordinator's row is the priced total less the earlier row (4.0 - 1.5), not the cost line less it (#624)"
+priced coordinator 'claude-opus-5-5 4 0 0 0' 2.5000 -
+fresh "add: an assistant's row rests on the priced total too"; priced assistant 'claude-opus-5-5 4 0 0 0' 2.5000 -
+fresh "add: a model not in the prices file - the row from the cost line as before, one line says why"
+priced coordinator 'claude-other-1 4 0 0 0' 1.0000 '^runs: 2 requests of a model not in prices.txt; .*cost line'
+[ "$(printf '%s\n' "$out" | grep -c '^runs: ')" = 1 ] && ok || bad "more than one note"
+fresh "add: no prices file - the row from the cost line as before, one line says why"
+priced coordinator - 1.0000 '^runs: no prices.txt next to the run log; .*cost line'
+fresh "add: a worker's row stays the cost line, a prices file or not"; printf '%s\n' "$H" > "$L"; printf 'claude-opus-5-5 4 0 0 0\n' > "$tmp/prices.txt"
+run add --log "$L" --session $PRS --task 62 --role worker --kind ordinary --model opus --effort high --estimate 3 --estimate-time 30 --result approved; code 0; hasnt '^runs: '
+awk -v a="$(cell "$L" cost)" 'BEGIN { exit !(a + 0 == 2.5) }' && ok || bad "a worker's cost '$(cell "$L" cost)', want the cost line's 2.5"
+rm -f "$tmp/prices.txt"
+
 echo "runs ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" = 0 ]

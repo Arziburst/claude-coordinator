@@ -625,7 +625,7 @@ never assumed (below).
   `assistant` apart whatever its task column holds), its model and effort, `start` its session's start
   (the `time` line of `scripts/session-tokens <id>`: the rows of one session share it, a replacing
   session's rows have another), and the cost its session spent since that assistant's previous row — the
-  session's `scripts/session-tokens <id>` `cost` less the costs of the earlier rows of the same name and
+  session's `scripts/session-tokens <id>` `priced` total (its requests at `coordinator/prices.txt`; the `cost` line reads low, #624; a coordinator's rows alike) less the costs of the earlier rows of the same name and
   the same `start` (a fresh session's first row: its whole cost) — a row on each day it ran, read at the
   sync, and one when its session is removed or replaced, read before `claude rm`. `scripts/run-stats` leaves them out of every task's cost and time and shows them under kind and
   role `assistant` with `--per-run`; the retro's local report gives them one value of their own,
