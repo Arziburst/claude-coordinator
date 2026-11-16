@@ -84,7 +84,9 @@
 # The round and money gate (#381): for a worker or a lead, from <repo>/coordinator/RUNS.tsv through `scripts/runs task`:
 # rounds = the id's worker rows + this start; round 3 or later, or the task's rows summing to at least twice budget.cost,
 # is refused (`refused: round <n>, task <id>, spent <sum> against estimate <cost>, API list price`, exit 1, before
-# anything is created) unless --owner-ok <the owner's words>, printed. No log, no contract, a lead's sub-contract, another
+# anything is created) unless --owner-ok <the owner's words>, printed. No contract (#616): the id is the name's
+# (`#<id> <role>:`, a worker or a lead; letters, digits, _ and -, matched whole: 426 is not 426-2); with worker rows it is gated by the round count alone, the line saying the cost rule
+# could not apply (no estimate). No log, no contract and no rows for the name's id, a lead's sub-contract, another
 # role or an assistant: one `round gate:` line, no gate. Limits: a round given by a message to a live session passes no
 # gate (CORE §6: a third round is always a fresh worker); a running session has no row yet, its spend is not in the sum.
 # The lead's go gate (#558): a lead's sub-task - named `#<n>.<m> ...`, or --report-to a `#<n> lead: ...` - starts only on
@@ -319,6 +321,8 @@ if [ -n "$cfile" ]; then case "$crole" in worker|lead|"")
 # the round and money gate (#381, the header): the numbers from scripts/runs, the id and the cost from check-contract
 rl="${runs:-$root/coordinator/RUNS.tsv}" rid="" rno="" sd="$(dirname "$0")" okt=""; [ -z "$owok" ] || okt=" (the owner's words: $owok)"
 [ -z "$cfile" ] || rid="$(bash "$sd/check-contract.sh" --field id "$cfile" 2>/dev/null | tr -d '\r' || true)"
+rnc=""   # no contract (#616): the id from the name `#<id> <role>:`, gated by the round count when it has worker rows
+[ -n "$rid" ] || [ -n "$asst" ] || case "$crole" in worker|lead) rid="$(printf '%s' "$name" | sed -n 's/^#\([A-Za-z0-9_-]\{1,\}\) .*/\1/p')"; rnc="${rid:+1}" ;; esac
 if [ -n "$asst" ]; then rno="an assistant"
 elif ! case "$crole" in worker|lead|"") true ;; *) false ;; esac; then rno="a $crole"
 elif [ -z "$rid" ]; then rno="no contract"
@@ -327,9 +331,11 @@ else case "$rid" in *.*) rno="a sub-contract" ;; esac; fi
 if [ -n "$rno" ]; then echo "round gate: $rno, no gate$okt"
 else
   rs="$(bash "$sd/runs.sh" task --log "$rl" --task "$rid" 2>&1 | tr -d '\r')" || { echo "refused: the run log cannot be read, the round gate cannot tell: $rs" >&2; exit 1; }
-  rn=$((${rs%% *} + 1)) rsp="${rs#* }" rest="$(bash "$sd/check-contract.sh" --field budget.cost "$cfile" 2>/dev/null | tr -d '\r' || true)"
+  rn=$((${rs%% *} + 1)) rsp="${rs#* }" rest=""; [ -n "$rnc" ] || rest="$(bash "$sd/check-contract.sh" --field budget.cost "$cfile" 2>/dev/null | tr -d '\r' || true)"
   rline="round $rn, task $rid, spent $rsp against estimate ${rest:-none}, API list price"
-  if [ "$rn" -ge 3 ] || awk -v s="$rsp" -v e="${rest#\$}" 'BEGIN { exit !(e + 0 > 0 && s + 0 >= 2 * e) }'; then
+  [ -z "$rnc" ] || rline="round $rn, task $rid, spent $rsp, no contract so no estimate: the cost rule could not apply, the round count only, API list price"
+  if [ -n "$rnc" ] && [ "$rn" = 1 ]; then echo "round gate: no contract, no gate$okt"
+  elif [ "$rn" -ge 3 ] || awk -v s="$rsp" -v e="${rest#\$}" 'BEGIN { exit !(e + 0 > 0 && s + 0 >= 2 * e) }'; then
     [ -n "$owok" ] || { echo "refused: $rline - a third round or twice the estimate needs the owner's word: --owner-ok <the owner's words> (CORE §6)" >&2; exit 1; }
     echo "round gate: $rline - passed on the owner's words: $owok"
   else echo "round gate: $rline$okt"; fi
