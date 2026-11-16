@@ -557,7 +557,15 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   trailing separator, `.` and `..` taken out by the text (a `..` out of a worktree back into the root is
   blocked), a relative path from the call's cwd, letter case ignored on Windows and macOS (exact on
   Linux), whole path segments (`<root>-old` is another folder; the root itself is not under it).
-  Unset or empty: nothing changes (opt-in). `selftest hooks --settings` checks it: set, the root must
+  Unset or empty: nothing changes (opt-in). **A project of several repositories (#613)** lists every
+  repository's root in the one value, separated by `|` (`"C:/client/backend|C:/client/frontend"`; `|` cannot
+  be in a Windows file name, and a drive's colon does not split): each root is protected alike, whichever
+  root the session's cwd is in, and each root's own `.claude/worktrees/` stays free — one safety file serves
+  them all. An entry that is empty, not absolute or not a folder on this machine protects nothing, so the
+  guard fails closed, for a single root too: every edit tool's call is refused with the entry named, and the
+  self-test prints `NOT WORKING` with it, until the safety file is fixed. (`selftest hooks --settings` and
+  the edit probe still read the value as one folder: on a list they fail until #613-B.)
+  `selftest hooks --settings` checks it: set, the root must
   be an absolute path to a folder on the machine — on Windows a drive path (`C:/…`, `C:\…`, or Git
   Bash's `/c/…`, which the guard reads as `C:/…`), since Claude Code passes `C:\…` file paths there —
   and the matcher must take in the four tools; unset, a SKIP line. Through Claude Code it is proven by
