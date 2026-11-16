@@ -239,6 +239,15 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   worktree root outside `.claude/` in `BINDINGS.md` and name it in `PROJECT.md` *Settings* *Worktree roots*
   (one-time step `worktree-roots`), so the retro counts the sessions started there.
   [worktrees](https://code.claude.com/docs/en/worktrees.md)
+- **Several repositories, one coordinator (#613):** `PROJECT.md` *Repositories* names each repository's
+  root, default branch and safety file. Only the project's own repository holds `coordinator/`. A session in
+  another one starts with `start-worker --repo <its root> --state <the project's coordinator folder>` (`-Repo`,
+  `-State`): the round gate reads `<state>/RUNS.tsv` (`--runs` still wins), the contract's copy goes to
+  `<state>/briefs/`, an assistant's folder is `<state>/assistants/<name>`. Its PRs land with `merge-queue land
+  <pr>@<sha> --state <the same folder>`, run from that repository's root: the queue reads the copy there and
+  checks the bounds. One safety file serves them all: its `COORD_PROTECTED_ROOT` lists every root, `|` between
+  them (*Safety*). Without `--state` both scripts read `<repo>/coordinator` as before; one that is not a folder
+  is refused.
 - **A big brief through a file** (#291): Windows cuts a command line at 32 767 characters, and a brief
   that long once failed a start after the worktree and branch existed. start-worker decides by the size
   of the full launch text (the first line, the report line, the role, the brief) before anything is
