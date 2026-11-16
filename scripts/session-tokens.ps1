@@ -9,7 +9,11 @@
 # subagents included (2.1.296; an internal name). When the LAST one has no assistant message after it, the model and
 # total lines come from it - out=<n> (exact) instead of out>=, and thinking=<n> at the end (not in the total) - and the
 # cost line is its totalCostUSD (before the status file's); otherwise (none, or the session ran after it) as above.
-# -Since always sums the messages.
+# -Since always sums the messages. The cost line is the CLI's counter, not a sum of the transcript (#597): under what the
+# session spent when a process of it ended without a stop, over the transcript by the CLI's own unwritten requests.
+# With -Prices, before the time line: "priced $<usd> <what it is>" - the context line's buckets added as printed, the same
+# requests at the same prices - and for one session with a cost line how far that line is from it (less, more, agrees).
+# A file-history-snapshot record has no time of its own and is not read for the time line (its snapshot may be days older).
 # Last, for one session or subagent: "time wall=<m>m active=<m>m start=<UTC> end=<UTC>" from the records' timestamps
 # (the transcript and its subagents' as one set; active leaves out every gap over 5 minutes, but a gap inside a tool call
 # is work up to 30 minutes and one inside only a question to a person, a tool named *AskUserQuestion, is idle at any
@@ -32,7 +36,7 @@ if ($PSBoundParameters.ContainsKey('Session') -and -not $Session.Trim()) {
   [Console]::Error.WriteLine('empty session id: give a session id, a prefix, an agentId or a transcript (CLAUDE_CODE_SESSION_ID may be unset in this tool)'); exit 2
 }
 if (-not $Session -and -not $Since -and -not $Prune) {
-  Get-Content -LiteralPath $PSCommandPath -TotalCount 22 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
+  Get-Content -LiteralPath $PSCommandPath -TotalCount 26 | ForEach-Object { $_ -replace '^# ?', '' }; exit 2
 }
 if ($Prices -and -not (Test-Path -LiteralPath $Prices -PathType Leaf)) { [Console]::Error.WriteLine("cannot read the prices file $Prices"); exit 2 }
 $ErrorActionPreference = 'Stop'
@@ -119,6 +123,7 @@ function Days([long]$y, [long]$m, [long]$d) {
 $reStamp = [regex]'^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?'
 $reUse = [regex]'"type":[ \t]*"tool_use",[ \t]*"id":[ \t]*("[^"]*")(,[ \t]*"name":[ \t]*"[^"]*AskUserQuestion")?'
 $reResult = [regex]'"tool_use_id":[ \t]*("[^"]*")'
+$reSnap = [regex]'"type":[ \t]*"file-history-snapshot"'
 function Span([string[]]$Files) {
   $t = New-Object 'System.Collections.Generic.List[long]'; $first = [long]::MaxValue; $last = [long]::MinValue; $start = ''; $end = ''
   $use = New-Object 'System.Collections.Generic.Dictionary[string,long]' ([StringComparer]::Ordinal)
@@ -127,6 +132,7 @@ function Span([string[]]$Files) {
   foreach ($file in $Files) {
     foreach ($line in [IO.File]::ReadLines($file)) {
       if (-not $line) { continue }
+      if ($line.Contains('"file-history-snapshot"') -and $reSnap.IsMatch($line)) { continue }   # no time of its own: its snapshot may be days older than the session (#597)
       $ts = RecTime $line; if (-not $ts) { continue }
       $m = $reStamp.Match($ts); if (-not $m.Success) { continue }
       $n = $m.Groups
@@ -214,8 +220,11 @@ function CountUsage([string[]]$Files) {
   foreach ($n in $names) { Line $n $per[$n] }
   Line 'total' $t
   $N = 'under100k', '100-200k', '200-400k', '400-700k', 'over700k'; $s = 'context'
-  for ($i = 1; $i -le 5; $i++) { $s += $(if ($i -gt 1) { ' ' } else { "`t" }) + $N[$i - 1] + '=' + $BN[$i] + '/' + ('{0:0}' -f $BT[$i]) + $(if ($Prices) { '/$' + ('{0:0.0000}' -f ($BC[$i] / 1e6)) } else { '' }) }
+  $usd = [double]0
+  for ($i = 1; $i -le 5; $i++) { $v = '{0:0.0000}' -f ($BC[$i] / 1e6); $usd += [double]$v; $s += $(if ($i -gt 1) { ' ' } else { "`t" }) + $N[$i - 1] + '=' + $BN[$i] + '/' + ('{0:0}' -f $BT[$i]) + $(if ($Prices) { '/$' + $v } else { '' }) }
   $script:ctx = $s + $(if ($Prices) { " unpriced=$np" } else { '' })
+  # the priced line (#597): the buckets as printed, added - they sum to it to the fourth place
+  $script:priced = if ($Prices) { "priced`t`${0:0.0000}`tthe context buckets together (the same requests, at the prices file)" -f $usd } else { $null }
 }
 function Line($n, $v) { "{0}`t{1}`tin={2} out>={3} cache_read={4} cache_write={5}" -f $n, ($v[0] + $v[1] + $v[2] + $v[3]), $v[0], $v[1], $v[2], $v[3] }
 # the session's own totals from its transcript: Claude Code appends a "cost-state" record (totalCostUSD, and
@@ -262,7 +271,7 @@ function RecLine($n, $v) { "{0}`t{1}`tin={2} out={3} cache_read={4} cache_write=
 if ($Since) {
   if (-not (Test-Path -LiteralPath $projects)) { [Console]::Error.WriteLine("no transcripts in $projects"); exit 1 }
   CountUsage @(Get-ChildItem -LiteralPath $projects -Filter '*.jsonl' -Recurse -File | ForEach-Object { $_.FullName })
-  $script:ctx; exit 0
+  if ($script:priced) { $script:priced }; $script:ctx; exit 0
 }
 $main = $null
 if (Test-Path -LiteralPath $Session -PathType Leaf) { $main = $Session } elseif (Test-Path -LiteralPath $projects) {
@@ -312,9 +321,19 @@ if ($main) {
   if ($null -ne $rec) { $rec } else { $sum }
 } elseif (-not (Test-Path -LiteralPath $status)) { [Console]::Error.WriteLine("no transcript or status file for $Session"); exit 1 }
 # the record's cost when it has one, else the status file's
-if ((Test-Path -LiteralPath $status) -and -not ($null -ne $rec -and @($rec | Where-Object { $_.StartsWith('cost') }).Count)) {
+$cost = if ($null -ne $rec) { $rec | Where-Object { $_.StartsWith('cost') } | Select-Object -First 1 }
+if ((Test-Path -LiteralPath $status) -and -not $cost) {
   $c = (Get-Content -Raw -LiteralPath $status | ConvertFrom-Json).cost.total_cost_usd
-  if ($null -ne $c) { "cost`t`${0:0.0000}" -f [double]$c }
+  if ($null -ne $c) { $cost = "cost`t`${0:0.0000}" -f [double]$c; $cost }
+}
+if ($main -and $script:priced) {
+  # the priced line, and how the cost line (the CLI counter) differs from it: both as printed, to the fourth place (#597)
+  $p = $script:priced
+  if ($cost) {
+    $d = [double]$cost.Substring(6) - [double]$p.Split("`t")[1].Substring(1); $a = '{0:0.0000}' -f [Math]::Abs($d)
+    $p += $(if ([double]$a -eq 0) { '; the cost line agrees' } elseif ($d -lt 0) { "; the cost line is `$$a less: the CLI counter is not kept when a process of the session ends without a stop" } else { "; the cost line is `$$a more: the CLI counter also holds requests the transcript does not" })
+  }
+  $p
 }
 if ($main) { Span $files; $script:ctx }
 } finally { if ($enc0) { try { [Console]::OutputEncoding = $enc0 } catch { } } }

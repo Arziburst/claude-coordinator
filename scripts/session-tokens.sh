@@ -13,6 +13,9 @@
 #   cost     $<usd>   — one session only: the CLI's own cumulative cost at list price, from the status
 #            line's per-session file ~/.claude/coordinator/sessions/<id>.json; absent if never drawn,
 #            and for a subagent (its tokens are already counted in its parent session's lines)
+#            It is the CLI's counter, not a sum of the transcript (#597): under what the session spent when a process of
+#            it ended without a stop (a kill, a crash, a restart: the counter goes on from its last saved state), over
+#            the transcript by the requests the CLI makes and does not write there. The priced line says by how much.
 #   After a normal stop (claude stop, an exit) Claude Code appends to the transcript a "cost-state"
 #   record with the session's own totals, subagents included (2.1.296; the name is internal). When the
 #   transcript's LAST such record has no assistant message after it, the model and total lines come
@@ -27,7 +30,12 @@
 #            work up to 30 minutes, the rest of it idle; a gap inside only a call of a tool that asks a
 #            person (a name ending in AskUserQuestion) is idle at any length, the owner's time; any other
 #            gap over 5 minutes is idle (a limit, an answer, a sleeping machine); minutes rounded to the
-#            nearest, a half up; start and end to the second; absent when no record has a timestamp
+#            nearest, a half up; start and end to the second; absent when no record has a timestamp. A
+#            file-history-snapshot record has no time of its own and is not read: its snapshot may be days older (#597)
+#   priced   $<usd>  <what it is>[; the cost line is $<usd> less: <why> | $<usd> more: <why> | agrees]   — with --prices,
+#            before the time line (#597): the context line's buckets added as printed, so the same requests (each message
+#            id once, the subagents', what ran before a compaction or a resume) at the same prices; for one session with
+#            a cost line, how far that line (the CLI counter) is from it, both to the fourth place
 #   context  under100k=<requests>/<tokens> 100-200k=… 200-400k=… 400-700k=… over700k=…   — the last line wherever
 #            a transcript is read (#342): the requests (each message id once) by their context, input + cache read +
 #            cache write (100000 is in 100-200k, 700000 in 400-700k), tokens as the total line sums them; with
@@ -38,7 +46,7 @@
 set -eu
 pr=""; a=(); while [ $# -gt 0 ]; do case "$1" in --prices) [ $# -ge 2 ] || exit 2; pr="$2"; shift ;; *) a+=("$1") ;; esac; shift; done
 set -- ${a[@]+"${a[@]}"}; [ -z "$pr" ] || [ -r "$pr" ] || { echo "cannot read the prices file $pr" >&2; exit 2; }
-[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,37s/^# \{0,1\}//p' "$0"; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 2; }
 arg="$1"
 # an empty or blank id would match every session as a prefix (#209)
 [ -n "$(printf '%s' "$arg" | tr -d ' \t')" ] || {
@@ -90,7 +98,9 @@ count() {
           close("LC_ALL=C sort")
           print line("total", I, O, R, W)
           split("under100k 100-200k 200-400k 400-700k over700k", N, " "); s = "context"
-          for (b = 1; b <= 5; b++) s = s (b > 1 ? " " : "\t") N[b] "=" BN[b] + 0 "/" sprintf("%.0f", BT[b]) (pf != "" ? sprintf("/$%.4f", BC[b] / 1e6 + 1e-12) : "")
+          for (b = 1; b <= 5; b++) { v = sprintf("%.4f", BC[b] / 1e6 + 1e-12); S += v; s = s (b > 1 ? " " : "\t") N[b] "=" BN[b] + 0 "/" sprintf("%.0f", BT[b]) (pf != "" ? "/$" v : "") }
+          # the priced line (#597): the buckets as printed, added - they sum to it to the fourth place
+          if (pf != "") printf "priced\t$%.4f\tthe context buckets together (the same requests, at the prices file)\n", S
           print s (pf != "" ? " unpriced=" np + 0 : "") }'
 }
 # the time line from the records on stdin: each record's own timestamp (YYYY-MM-DDTHH:MM:SS[.fff],
@@ -104,6 +114,7 @@ span() {
     function days(y, m, d,   e, yoe, doy) { y -= (m <= 2); e = int(y / 400); yoe = y - e * 400
       doy = int((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1
       return e * 146097 + yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy - 719468 }
+    /"type":[ \t]*"file-history-snapshot"/ { next }   # no time of its own: its snapshot may be days older than the session (#597)
     { ts = rects($0)
       if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) next
       f = ""; if (substr(ts, 20, 1) == "." && match(substr(ts, 21), /^[0-9]+/)) f = substr(ts, 21, RLENGTH)
@@ -230,18 +241,23 @@ if [ -n "$main" ] && [ -f "$main" ]; then
   # the session's own record (its subagents included) when it has stopped since it last ran; else the sums
   rec="$(record < "$main")"   # the sums always: the context line (the last) comes from the transcript, never the record
   all="$({ cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | count)"
-  if [ -n "$rec" ]; then printf '%s\n' "$rec"; else printf '%s\n' "$all" | sed '$d'; fi
+  if [ -n "$rec" ]; then printf '%s\n' "$rec"; else printf '%s\n' "$all" | sed -e '$d' -e '/^priced/d'; fi
 elif [ ! -f "$status" ]; then
   echo "no transcript or status file for $arg" >&2; exit 1
 fi
 # the record's cost when it has one, else the status file's
-if [ -f "$status" ] && ! printf '%s\n' "$rec" | grep -q '^cost'; then
+cost="$(printf '%s\n' "$rec" | sed -n 's/^cost.[$]//p')"
+if [ -f "$status" ] && [ -z "$cost" ]; then
   # LC_ALL=C: under a decimal-comma locale the BSD awk reads 0.0071 as 0; + 1e-12 as above
-  LC_ALL=C awk '{ s = s $0 }
+  cost="$(LC_ALL=C awk '{ s = s $0 }
     END { if (match(s, /"total_cost_usd"[ \t]*:[ \t]*[0-9.eE+-]+/)) {
-            t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "cost\t$%.4f\n", t + 1e-12 } }' "$status"
+            t = substr(s, RSTART, RLENGTH); sub(/^[^:]*:[ \t]*/, "", t); printf "%.4f\n", t + 1e-12 } }' "$status")"
+  [ -z "$cost" ] || printf 'cost\t$%s\n' "$cost"
 fi
 if [ -n "$main" ] && [ -f "$main" ]; then
+  # the priced line, and how the cost line (the CLI counter) differs from it: both as printed, to the fourth place (#597)
+  printf '%s\n' "$all" | LC_ALL=C awk -F '\t' -v c="$cost" '$1 == "priced" { d = c - substr($2, 2); a = sprintf("%.4f", d < 0 ? -d : d)
+    print $0 (c == "" ? "" : a + 0 == 0 ? "; the cost line agrees" : "; the cost line is $" a (d < 0 ? " less: the CLI counter is not kept when a process of the session ends without a stop" : " more: the CLI counter also holds requests the transcript does not")) }'
   { cat "$main"; [ -d "$sub" ] && find "$sub" -maxdepth 1 -name '*.jsonl' -exec cat {} + ; true; } | span
   printf '%s\n' "$all" | sed -n '$p'
 fi

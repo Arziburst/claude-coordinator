@@ -990,6 +990,14 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   format run-stats reads; unreadable: exit 2) each bucket adds `/$<cost at list price, 4 places>` and
   the line ends `unpriced=<requests of a model not in the file: counted, no cost>`. A dearer rate above
   a context size (Haiku over 100k) cannot be expressed in the prices file, so those requests read low.
+  **What each dollar line counts (#597):** `cost` is the CLI's own counter, not a sum of the transcript: it goes
+  on from its last saved state, so what a process of the session spent before it ended without a stop (a kill, a
+  crash, a restart) is missing (measured: a three-week coordinator's counter held 70 % of its requests' price), and
+  it holds requests the CLI does not write to the transcript (workers: 0-7 % more). With `--prices`, a `priced`
+  line before the `time` line: the `context` buckets added, the same requests at the same prices (each message id
+  once, subagents', before and after a compaction or a resume), then for one session `the cost line is $<n> less`
+  / `more` / `agrees`. A long session's spend is the `priced` line. The `time` line reads no
+  `file-history-snapshot` record: it has no time of its own, and its snapshot may be days older than the session.
   A reader that picks the lines by their first word (run-stats, runs) is not affected. The status JSON's
   `context_window.total_input_tokens` / `total_output_tokens` are the **last request's** usage, not the
   session's (measured on a real project), so tokens always come from the transcript. No `cost` line → the tokens
