@@ -57,7 +57,8 @@ if [ "${1:-}" = agents ]; then
   [ -f "$S" ] || : > "$S"; [ -f "$S.cwd" ] || : > "$S.cwd"
   b="$(awk -v all="$all" 'FILENAME == ARGV[1] { k = index($0, "\t"); if (k) cw[substr($0, 1, k - 1)] = substr($0, k + 1); next }
     $3 != "done" || all { n = $0; sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); w = cw[$1]; gsub(/\\/, "\\\\", w)
-    printf "%s{\n    \"id\": \"%s\",\n%s    \"sessionId\": \"%s\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"\n  }", (m++ ? ",\n  " : ""), $1, (w == "" ? "" : "    \"cwd\": \"" w "\",\n"), $2, n, $3 }' "$S.cwd" "$S" 2>/dev/null)"
+    st = $3; x = sub(/\+status$/, "", st) ? ",\n    \"status\": \"busy\"" : ""   # #621: a state `<state>+status` is listed with a status field (a live session)
+    printf "%s{\n    \"id\": \"%s\",\n%s    \"sessionId\": \"%s\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"%s\n  }", (m++ ? ",\n  " : ""), $1, (w == "" ? "" : "    \"cwd\": \"" w "\",\n"), $2, n, st, x }' "$S.cwd" "$S" 2>/dev/null)"
   printf '[%s%s%s]\n' "$a" "$([ -n "$a" ] && [ -n "$b" ] && echo ,)" "$b"
 fi
 # stop / rm: as Claude Code 2.1.296 - the short job id only, a full sessionId is no job; rm fails with
@@ -143,7 +144,7 @@ cleanup() {
     while [ $# -gt 0 ]; do
       case "$1" in
         --worktree) a+=(-Worktree "$2"); shift 2 ;; --session) a+=(-Session "$2"); shift 2 ;;
-        --dry-run) a+=(-DryRun); shift ;; *) a+=("$1"); shift ;;
+        --dry-run) a+=(-DryRun); shift ;; --task) a+=(-Task "$2"); shift 2 ;; --runs) a+=(-Runs "$2"); shift 2 ;; *) a+=("$1"); shift ;;
       esac
     done
     "${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "$core/scripts/cleanup-worker.ps1" "${a[@]}"
@@ -1833,5 +1834,32 @@ check 0 "#525, #527: --runs, a backslash folder" -- start "${F5[@]}" --branch BI
 for i in 1 3; do expect_in "removed the earlier session c525000$i"; grep -qx "rm c525000$i" "$STUB_LOG" || { echo "FAIL (#525): c525000$i not removed"; fail=1; }; done
 for i in "2 (#BIN-525 worker: b)" "4 (#BIN-525 tester: d)"; do expect_in "earlier session c525000$i kept: no run row"; i="${i%% *}"; grep -qx "rm c525000$i" "$STUB_LOG" && { echo "FAIL (#525): c525000$i removed"; fail=1; }; done
 expect_in "/r525.tsv --session c5250002 ..."; expect_watch "$(stub_id)"
+# cleanup-worker --task (#621), after a human's merge: the task's finished sessions of the project the command runs in, found as merge-queue finds
+# them (the kept brief naming a worktree `<id>-...`, else the name `#<id> ` or `#<id>.`); with a run row removed, the others `MISSING <id> <name>`
+s621() { local i="c621000$1" sid="5e562100-0000-4000-8000-00000000000$1" t="2026-11-06T12:0$1:00Z"; printf '%s %s %s %s\n' "$i" "$sid" "$2" "$3" >> "$STUB_LOG.sessions"; printf '%s\t%s\n' "$i" "$4" >> "$STUB_LOG.sessions.cwd"
+  printf '{"cwd":"x","sessionId":"%s","type":"assistant","message":{"id":"k%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$sid" "$1" "$t" > "$tmp/cfg/projects/p521/$sid.jsonl"
+  [ -z "${5:-}" ] || printf 'FIRST ACTION, before anything else: use the EnterWorktree tool with path = %s/.claude/worktrees/%s. Work only inside it.\n' "$r5c" "$5" > "$tmp/cfg/coordinator/briefs/$sid.md"
+  [ -z "${6:-}" ] || printf '2026-11-06\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> "$r5/coordinator/RUNS.tsv"; }
+t621() { (cd "$r5c" && cleanup "$@"); }
+# 1 a row; 2 no row; 3 live by its state; 4 another project's; 5 a sub-task, by its name; 6 another task; 7 live by its status; 8 by its brief, any name; 9 its brief names another worktree
+s621 1 done "#621 worker: a" "$r5c" 621-x row; s621 2 done "#621 verifier: b" "$r5c" 621-x; s621 3 working "#621 worker: c" "$r5c" 621-x row
+s621 4 done "#621 tester: d" "$tmp/other" 621-x row; s621 5 failed "#621.2 worker: e" "$r5c" "" row; s621 6 done "#6210 worker: f" "$r5c" "" row
+s621 7 done+status "#621 worker: g" "$r5c" 621-x row; s621 8 stopped "#OTHER worker: renamed" "$r5c" 621-x row; s621 9 done "#621 worker: h" "$r5c" 77-y row
+: > "$STUB_LOG"; check 0 "#621: --task alone, a dry run" -- t621 --task 621 --dry-run
+for i in 1 5 8; do expect_in "[dry-run] claude rm c621000$i ("; done; expect_in "MISSING c6210002 #621 verifier: b"; expect_in "task 621: 3 would be removed, 1 without a run row"
+grep -q '^rm ' "$STUB_LOG" && { echo "FAIL (#621): the dry run removed a session"; fail=1; }
+check 0 "#621: --task alone removes the finished sessions with a run row, names the others MISSING" -- t621 --task 621
+for i in 1 5 8; do expect_in "removed c621000$i ("; grep -qx "rm c621000$i" "$STUB_LOG" || { echo "FAIL (#621): c621000$i not removed"; fail=1; }; done
+expect_in "removed c6210001 (#621 worker: a)"; expect_in "MISSING c6210002 #621 verifier: b"; expect_in "task 621: 3 removed, 1 without a run row"
+[ "$(grep -c -e '^rm ' -e '^stop ' "$STUB_LOG")" = 3 ] || { echo "FAIL (#621): not exactly the three sessions removed:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
+[ "$(printf '%s\n' "$LAST" | grep -cE 'c62100(0[34679])|c52')" = 0 ] || { echo "FAIL (#621): a live session or one of another task or project named"; fail=1; }
+s621 1 done "#621 worker: a2" "$r5c" 621-x   # its row is written above
+STUB_RM_FAIL="rm broke" check 4 "#621: a failing claude rm" -- t621 --task 621; expect_in "SESSION KEPT: c6210001 (#621 worker: a2): claude rm failed"
+STUB_LIST_FAIL=1 check 3 "#621: a failing listing" -- t621 --task 621; expect_in "LISTING FAILED"; check 3 "#621: no run log" -- t621 --task 621 --runs "$tmp/none.tsv"; expect_in "RUNS CHECK FAILED"
+check 1 "#621: neither --worktree nor --task" -- t621 --dry-run; check 1 "#621: a task id that is no id" -- t621 --task '6*'
+# with --worktree: the worker's cleanup first, then the task's sessions of that repository (c6210001 above is another project's there)
+mk 621-z; s621 0 done "#621 tester: z" "$(cd "$tmp/repo" && { pwd -W 2>/dev/null || pwd -P; })" "" row; : > "$STUB_LOG"
+STUB_HEADS="$h" check 0 "#621: --task with --worktree" -- cleanup --worktree "$w" --task 621 --runs "$r5/coordinator/RUNS.tsv"
+expect_in "cleaned: no session"; expect_in "removed c6210000 (#621 tester: z)"; [ "$(tr '\n' ' ' < "$STUB_LOG" | sed 's/agents --json --all //g')" = "rm c6210000 " ] || { echo "FAIL (#621): with --worktree, not only c6210000 removed"; fail=1; }
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
