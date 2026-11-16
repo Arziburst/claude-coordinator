@@ -972,8 +972,10 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   subscription for comparing runs; needs the status line installed). **After a normal stop** (`claude
   stop <id>`, idle or mid-tool-call, or the process exiting) Claude Code appends to the session's own
   transcript a `cost-state` record with its totals — `totalCostUSD` (equal to the status file's cost to
-  the last digit) and `modelUsage` per model, subagents' requests included; a resumed session restores
-  and accumulates them, so a later record holds the whole total (measured on 2.1.296; the docs describe
+  the last digit) and `modelUsage` per model, subagents' requests included; a resumed session goes on from
+  the last saved totals, so a later record holds the whole total only when every process of the session ended
+  with a stop: what one spent before a kill, a crash or a restart is in no record, and the `cost` line of a long
+  session then reads low, its request-priced total being the `priced` line (#597; measured on 2.1.296; the docs describe
   it — [cost-tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking): "saves the session's
   totals to its transcript when the process exits normally" — the record's name is internal). When the
   transcript's **last** such record has no assistant message after it, session-tokens takes the model
