@@ -281,7 +281,9 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   not matter), then `git worktree remove`. After the session is stopped the worktree is checked again: a
   commit or change since the checks is `CHANGED: <worktree> moved since the checks - left as is`, exit 3;
   a failed removal puts the branch back at its commit (`REMOVE FAILED: …; branch <branch> put back at
-  <sha>`, exit 1) — run it again later. One commit, a push or a dirty worktree takes the usual checks.
+  <sha>`, exit 1) — run it again later. One commit, a push or a dirty worktree takes the usual checks. A never-pushed branch a person already applied to the base
+  (a project where nobody pushes, #498) is removed the same way: every commit in the base as an equal patch (`git cherry <base>`: a `-` line for each, no merge commit), or its whole diff from the merge base as one commit there, and merging the branch into the base changes nothing (`git merge-tree --write-tree`, git 2.38 or later: no conflict, the base's own tree — a patch equal only apart from blanks, or one that is twice on the branch and once in the base, does not pass) — `APPLIED: <branch> has no remote branch; its <n> commits are in <base> (git cherry) - removed`, for the whole diff `(the whole diff as one commit, git cherry)`.
+  A person's commit that holds more than the branch's change, or is not yet in the base, is no equal patch: `NO UPSTREAM`, removed by hand as before.
 
 ## Assistants
 An assistant ([roles/assistant.md](roles/assistant.md), #281) is a persistent background session beside
