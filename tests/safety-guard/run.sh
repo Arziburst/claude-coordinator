@@ -3,7 +3,7 @@
 #   tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
 #   tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1   (the shim)
 # Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores). SG_CASES=<file>: that file
-# for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384).
+# for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384; #650: 200 characters a line, then the shell's report of a signal).
 # SG_PART=<k>/<n> (#405): the k-th of n parts of the cases (case i in part (i - 1) mod n + 1, so a case added at the end lands in one
 # part by itself); the sections after the cases run in part 1 only. SG_LIST=1: the line numbers of that part's cases, no hook run.
 set -u
@@ -156,6 +156,7 @@ bounded() {
   } 2>/dev/null
   return "$r"
 }
+cutl() { local l; while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$1${l:0:200}"; done; }   # #650: cutl <prefix>: stdin's lines after the prefix, each cut at 200 characters (by bash, so never inside a character)
 shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
   local ln=0 i=0 hung="" e="$tmp/err.$1"   # e: the hook's stderr of the case at hand (printed when it fails)
   n=0 fail=0
@@ -220,13 +221,13 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir pm; do
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" COORD_ASSISTANT_DIR="$adir" "${CMD[@]}" >/dev/null 2>"$e"
   else
     printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" COORD_PROTECTED_ROOT="$root" COORD_PROTECTED_BRANCHES="$pbr" "${CMD[@]}" >/dev/null 2>"$e"
-  fi
+  fi 2>"$e.sig"   # #650: the shard's own report of a hook that a signal ended ("<pid> Segmentation fault: 11 ..."), under its FAIL line too
   rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
   [ "$rc" = 124 ] && { got="no answer within ${SG_CASE_LIMIT:-10}s"; hung=1; }
   [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
-  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}${pm:+, mode $pm}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || head -n 20 "$e" | sed "s/^/$ln     /"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}${pm:+, mode $pm}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || { head -n 20 "$e"; head -n 5 "$e.sig"; } | cutl "$ln     "; fail=1; }
 done < "$cases"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
 }
@@ -249,11 +250,12 @@ n=$((n + ran))
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
 # (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
+crash() { case "$1" in 0|2) ;; *) printf '%s\n' "$2" | head -n 20 | cutl "    " ;; esac; }   # #650: crash <exit> <stderr>, under a FAIL line of the sections below: the first lines of the stderr of a hook that ended in neither 0 nor 2
 sess() {   # sess <expect> <what> <tool call JSON> [env assignments...]
-  local expect="$1" what="$2" js="$3" rc got d; shift 3; n=$((n + 1)); d="$(winpath m "$tmp/work")"
-  printf '%s' "$js" | sed "s#@CWD@#$d#" | env CLAUDE_PROJECT_DIR="$d" "$@" "${CMD[@]}" >/dev/null 2>&1; rc=$?
+  local expect="$1" what="$2" js="$3" rc got d err; shift 3; n=$((n + 1)); d="$(winpath m "$tmp/work")"
+  err="$(printf '%s' "$js" | sed "s#@CWD@#$d#" | env CLAUDE_PROJECT_DIR="$d" "$@" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = "$expect" ] || { echo "FAIL (sessions) expected $expect, got $got (exit $rc): $what"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "FAIL (sessions) expected $expect, got $got (exit $rc): $what"; crash "$rc" "$err"; fail=1; }
 }
 sess allow "the listing cannot be read: claude rm of another folder's session" '{"tool_name":"Bash","tool_input":{"command":"claude rm b0000001"},"cwd":"@CWD@"}' SG_AGENTS_FAIL=1
 sess allow "the listing cannot be read: a message to another folder's session" '{"tool_name":"SendMessage","tool_input":{"to":"Other Coordinator","message":"x"},"cwd":"@CWD@"}' SG_AGENTS_FAIL=1
@@ -281,10 +283,10 @@ n=$((n + 1))
 
 # The input itself: a BOM before the JSON is read through; what is not a JSON object blocks.
 raw() {   # raw <expect> <what> <stdin bytes, printf format>
-  local expect="$1" what="$2" rc got; n=$((n + 1))
-  printf "$3" | "${CMD[@]}" >/dev/null 2>&1; rc=$?
+  local expect="$1" what="$2" rc got err; n=$((n + 1))
+  err="$(printf "$3" | "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = "$expect" ] || { echo "FAIL (input) expected $expect, got $got (exit $rc): $what"; fail=1; }
+  [ "$got" = "$expect" ] || { echo "FAIL (input) expected $expect, got $got (exit $rc): $what"; crash "$rc" "$err"; fail=1; }
 }
 CMD=("$@")
 raw block "a BOM, then a push to main" '\357\273\277{"tool_input":{"command":"git push origin main"}}'
@@ -307,7 +309,7 @@ denied() {   # denied <what> <project folder> [<text the message holds>]
   local rc got d err; n=$((n + 1)); d="$(winpath m "$2")"
   err="$(printf '{"tool_input":{"command":"ls"},"cwd":"%s"}' "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = block ] || { echo "FAIL (deny file) expected block, got $got (exit $rc): $1"; fail=1; }
+  [ "$got" = block ] || { echo "FAIL (deny file) expected block, got $got (exit $rc): $1"; crash "$rc" "$err"; fail=1; }
   [ -z "${3:-}" ] || case "$err" in *"$3"*) ;; *) echo "FAIL (deny file) the message lacks '$3': $1: $err"; fail=1 ;; esac
 }
 mkdir -p "$tmp/denydir/.claude/coordinator-deny.txt"
@@ -369,7 +371,7 @@ ptok() {   # ptok <expect> <what> <the file's bytes, printf format; - for no fil
   if [ -z "${6:-}" ]; then err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$pdm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   else err="$(cd "$tmp/probe-other" && printf '%s' "$js" | env -u CLAUDE_PROJECT_DIR "${ABS[@]}" 2>&1 >/dev/null)"; rc=$?; fi
   got=allow; [ "$rc" = 2 ] && got=block
-  [ "$got" = "$expect" ] || { echo "FAIL (probe token) expected $expect, got $got (exit $rc): $what"; fail=1; return; }
+  [ "$got" = "$expect" ] || { echo "FAIL (probe token) expected $expect, got $got (exit $rc): $what"; crash "$rc" "$err"; fail=1; return; }
   [ "$got" = allow ] || case "$err" in
     *"Blocked by safety-guard: the self-test's probe token (.claude/coordinator-probe.txt): this hook runs and its block holds."*) ;;
     *) echo "FAIL (probe token) the message is not the probe token's: $what: $err"; fail=1 ;;
@@ -400,7 +402,7 @@ amsg() {   # amsg <what> <tool> <tool_input> [, "permission_mode": ...]
   local rc err js; n=$((n + 1))
   js="{\"tool_name\":\"$2\",\"tool_input\":$3,\"cwd\":\"$wkm\"${4:-}}"
   err="$(printf '%s' "$js" | CLAUDE_PROJECT_DIR="$wkm" COORD_ASSISTANT_DIR="$adm" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
-  [ "$rc" = 2 ] || { echo "FAIL (assistant) expected block, got exit $rc: $1"; fail=1; return; }
+  [ "$rc" = 2 ] || { echo "FAIL (assistant) expected block, got exit $rc: $1"; crash "$rc" "$err"; fail=1; return; }
   case "$err" in *dontAsk*settings.example.assistant*) ;; *) echo "FAIL (assistant) the reason does not name dontAsk and settings.example.assistant: $1: $err"; fail=1 ;; esac
 }
 amsg "a shell call, no permission_mode" Bash '{"command":"git log -1"}'
