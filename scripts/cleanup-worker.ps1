@@ -222,7 +222,7 @@ if (-not $u -and $branch -cne 'HEAD') {
     # a patch id is not the content (git's ignores blanks; one commit of the base answers for two equal ones of the branch), so for either proof merging the
     # branch into the base must change nothing: `git merge-tree --write-tree` (git 2.38 or later; an older git: not applied) with no conflict and the base's own tree
     if ($applied) {
-      $mt = "$(git -C $Worktree merge-tree --write-tree $base HEAD 2>$null)".Trim()
+      $mt = "$(git -C $Worktree -c merge.renormalize=false merge-tree --write-tree $base HEAD 2>$null)".Trim()
       if ($LASTEXITCODE -ne 0 -or -not $mt -or $mt -cne "$(git -C $Worktree rev-parse "$base^{tree}" 2>$null)".Trim()) { $applied = '' }
     }
     if ($cnt -eq '0' -or $applied) {

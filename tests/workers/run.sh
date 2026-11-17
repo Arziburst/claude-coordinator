@@ -1605,9 +1605,11 @@ kept 43-empty "pushed to another remote"
 git -C "$tmp/repo" remote remove backup
 # the main checkout's HEAD behind the base (origin/main moved on, local main did not): the branch is
 # still deleted with git branch -d (checked against its own commit, not the main checkout's HEAD)
-git clone -q "$tmp/remote.git" "$tmp/server2" 2>/dev/null && g -C "$tmp/server2" commit -q --allow-empty -m "main moves on" &&
-  git -C "$tmp/server2" push -q origin main 2>/dev/null
+# (clone -b main: the bare remote's HEAD names git's default branch, which is not main on every machine - #661)
+git clone -q -b main "$tmp/remote.git" "$tmp/server2" 2>/dev/null && g -C "$tmp/server2" commit -q --allow-empty -m "main moves on" &&
+  git -C "$tmp/server2" push -q origin main 2>/dev/null || { echo "FAIL: could not move origin's main on (37-empty)"; fail=1; }
 git -C "$tmp/repo" fetch -q
+[ "$(git -C "$tmp/repo" rev-list --count main..origin/main 2>/dev/null)" = 1 ] || { echo "FAIL: origin/main is not ahead of the main checkout's HEAD (37-empty)"; fail=1; }
 me 37-empty origin/main
 STUB_GH_RC=1 check 0 "cleanup: an empty branch ahead of the main checkout's HEAD" -- cleanup --worktree "$w"
 expect_in "EMPTY: 37-empty has no commits beyond origin/main and was never pushed - removed"
@@ -1678,6 +1680,15 @@ blanks 68-applied 'one\r\ntwo\r\n' 'one\ntwo\n'; refused 68-applied "applied wit
 me 69-applied; f69="$w/69.txt"; put() { awk -v n="$1" 'NR == n { print "x" } { print }' "$f69" > "$f69.new" && mv "$f69.new" "$f69" && g -C "$w" commit -q -a -m "x at $1" 2>/dev/null; }
 awk 'BEGIN { for (i = 0; i < 20; i++) print "a" }' > "$f69" && git -C "$w" add 69.txt 2>/dev/null && g -C "$w" commit -q -m 69 && put 5 && put 15
 person 69-applied FETCH_HEAD~2; person 69-applied FETCH_HEAD~1; refused 69-applied "the same patch twice on the branch, once in the base"
+# a clean merge that gives another tree (#663, the verifier's probe p36): a person applied the branch's commit and then reverted it - `git cherry` still has its '-' line and
+# merging the branch into the base has no conflict, but it would bring the file back: refused by the comparison with the base's tree alone
+ap 70-applied a70.txt; person 70-applied FETCH_HEAD
+g -C "$tmp/server2" revert --no-edit HEAD >/dev/null 2>&1 && git -C "$tmp/server2" push -q origin HEAD:main 2>/dev/null || { echo "FAIL: could not revert 70-applied as a person"; fail=1; }
+refused 70-applied "applied, then reverted in the base"
+# merge.renormalize on with core.autocrlf=input (#663, the probe p43): the merge would read CRLF against LF as no difference - the merge-tree call turns it off, refused as 68
+blanks 71-applied 'one\r\ntwo\r\n' 'one\ntwo\n'; git -C "$tmp/repo" config merge.renormalize true; git -C "$tmp/repo" config core.autocrlf input
+refused 71-applied "applied with LF where the branch has CRLF, merge.renormalize on"
+git -C "$tmp/repo" config --unset merge.renormalize; git -C "$tmp/repo" config --unset core.autocrlf
 
 # --- a lead's notes beside its worktree (#310): <worktree>.lead/ is removed with the worktree (one line
 # says so, naming the folder), kept whenever the worktree is left (a dry run, NOT CLEAN, NOT MERGED,
