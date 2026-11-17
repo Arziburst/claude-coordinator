@@ -72,8 +72,8 @@ it) would make that work look deleted.
    - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
      report says for each round whether its new or changed tests came from the tester (its commit) or
      from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
-   - **The bounds** (#381): a contract with `bounds:` gets `bash <core>/scripts/check-bounds.sh <contract>
-     <base>...<head>` as an oracle from the project's root or worktree (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)); an `OVER` is a failed bound, its output your evidence.
+   - **The bounds** (#381): a contract with `bounds:` gets `cd <project root or worktree> && bash <core>/scripts/check-bounds.sh <contract>
+     <base>...<head>` as an oracle (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)); an `OVER` is a failed bound, its output your evidence.
    - **`ci_seconds`** (#373): the report's number against `scripts/ci-times <run id>` on the reviewed commit's run,
      the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a
      run was at hand, or an aggregator's `::warning::` the report does not name, is a finding.
