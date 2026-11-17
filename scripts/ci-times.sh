@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Seconds per step per OS of a check-core run (#373; macOS / Linux; Windows: ci-times.ps1 - the same lines and codes).
 #   scripts/ci-times.sh [--baseline <file>] <run id | file>     the JSON of `gh run view <id> --json jobs`, or a file holding it
-# Lines: `wall <s>` (the latest job's end - the earliest job's start), `total <os> <s>` (the sum of its counted steps),
+# Lines: `wall <s>` (the latest job's end - the earliest job's start), `total <os> <s>` (the sum of its counted steps), `shard <name> <s>` (#555:
+# a `shard-<os> (<name>)` job's end - its start, by OS, then by appearance; none for a job not finished),
 # `step <os> <s> <name>` (a step completed and not skipped; the shards of an OS summed, by first appearance); with
 # --baseline `over <os> <s> <limit> <name>` for a step over max(floor(b * 1.3), b + 60) of its line `<os><TAB><b><TAB><name>`
 # (# lines ignored). A job counts when named `shard-<os> (...)`, or `check (<os>-latest)` when the run has no shard-<os>
@@ -58,6 +59,8 @@ printf '%s\n' "$json" | LC_ALL=C awk -v base="$base" '
     split("ubuntu macos windows", L, " ")
     if (first != "" && last != "") print "wall", last - first
     for (x = 1; x <= 3; x++) if (L[x] in counted) print "total", L[x], tot[L[x]] + 0
+    for (x = 1; x <= 3; x++) for (j = 1; j <= nj; j++) if (J[j, "kind"] == "shard" && J[j, "os"] == L[x]) { a = epoch(J[j, "startedAt"]); b = epoch(J[j, "completedAt"])
+      nm = J[j, "name"]; sub(/^[^(]*\(/, "", nm); sub(/\)$/, "", nm); if (a != "" && b != "") print "shard", nm, b - a }
     for (x = 1; x <= 3; x++) for (k = 1; k <= cnt[L[x]]; k++) print "step", L[x], sum[L[x], ord[L[x], k]], ord[L[x], k]
     for (x = 1; x <= 3; x++) for (k = 1; k <= cnt[L[x]]; k++) { o = L[x]; nm = ord[o, k]
       if ((o, nm) in bl) { b = bl[o, nm]; lim = int(b * 13 / 10); if (b + 60 > lim) lim = b + 60; if (sum[o, nm] > lim) print "over", o, sum[o, nm], lim, nm } }

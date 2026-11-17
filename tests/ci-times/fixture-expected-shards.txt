@@ -2,6 +2,8 @@ wall 1250
 total ubuntu 10
 total macos 7
 total windows 1710
+shard windows-1 900
+shard windows-2 1140
 step ubuntu 10 Done step
 step macos 7 Old form step
 step windows 70 Which step

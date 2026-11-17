@@ -1,6 +1,7 @@
 # Seconds per step per OS of a check-core run (#373; Windows PowerShell 5.1 and pwsh; macOS / Linux: ci-times.sh - the same lines and codes).
 #   scripts/ci-times.ps1 [--baseline <file>] <run id | file>     the JSON of `gh run view <id> --json jobs`, or a file holding it
-# Lines: `wall <s>` (the latest job's end - the earliest job's start), `total <os> <s>` (the sum of its counted steps),
+# Lines: `wall <s>` (the latest job's end - the earliest job's start), `total <os> <s>` (the sum of its counted steps), `shard <name> <s>` (#555:
+# a `shard-<os> (<name>)` job's end - its start, by OS, then by appearance; none for a job not finished),
 # `step <os> <s> <name>` (a step completed and not skipped; the shards of an OS summed, by first appearance); with
 # --baseline `over <os> <s> <limit> <name>` for a step over max(floor(b * 1.3), b + 60) of its line `<os><TAB><b><TAB><name>`
 # (# lines ignored). A job counts when named `shard-<os> (...)`, or `check (<os>-latest)` when the run has no shard-<os>
@@ -52,6 +53,9 @@ if ($base -ne '') { foreach ($l in [IO.File]::ReadAllLines((Convert-Path -Litera
 $out = New-Object Collections.Generic.List[string]; $L = 'ubuntu', 'macos', 'windows'
 if ($null -ne $first -and $null -ne $last) { $out.Add("wall $($last - $first)") }
 foreach ($o in $L) { if ($counted.ContainsKey($o)) { $out.Add("total $o $([int64]$tot[$o])") } }
+foreach ($o in $L) { for ($i = 0; $i -lt $jobs.Count; $i++) { if ($kind[$i] -ne 'shard' -or $jos[$i] -ne $o) { continue }
+  $s = Sec $jobs[$i].startedAt; $e = Sec $jobs[$i].completedAt; $nm = "$($jobs[$i].name)" -replace '^[^(]*\(', '' -replace '\)$', ''
+  if ($null -ne $s -and $null -ne $e) { $out.Add("shard $nm $($e - $s)") } } }
 foreach ($o in $L) { if ($ord.ContainsKey($o)) { foreach ($nm in $ord[$o]) { $out.Add("step $o $($sum["$o`t$nm"]) $nm") } } }
 foreach ($o in $L) { if (-not $ord.ContainsKey($o)) { continue }
   foreach ($nm in $ord[$o]) { $key = "$o`t$nm"; if (-not $bl.ContainsKey($key)) { continue }
