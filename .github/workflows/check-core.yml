@@ -127,7 +127,7 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then bash -c '[ "${BASH_VERSINFO[0]}" = 3 ]' || { echo "expected bash 3.2 on macOS"; exit 1; }; fi
       - name: Links and section references (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
-        run: bash scripts/check-core.sh | sed 's/^WARN: .*/::warning::&/'   # #608: a WARN is an annotation
+        run: bash scripts/check-core.sh | sed 's/^WARN:/::warning::&/'   # #608: a WARN is an annotation
       - name: Links and section references (PowerShell)
         if: matrix.shard == 'windows-1'
         shell: powershell
