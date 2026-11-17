@@ -4,7 +4,8 @@
 # pushed head (a reused branch name with newer commits does not count) (CORE §8). Also, with no PR, a
 # branch that holds nothing to lose (#257): no commits beyond its base (origin's default branch; with no
 # origin the local main or master), never pushed (no upstream, no remote branch of its name) and the
-# worktree clean - `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
+# worktree clean - `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`. And a never-pushed
+# branch a person already applied to that base (#498) - `APPLIED: <branch> was never pushed; its <n> commits are in <base> (<the proof>) - removed`.
 # Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
 # is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   scripts/cleanup-worker.sh --worktree <path> [--session <id>] [--dry-run]
@@ -140,7 +141,7 @@ elif git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null
 # itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
 # (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
 # the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
-empty="" base=""
+empty="" base="" applied="" how=""
 lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 if [ -z "$u" ] && [ "$branch" != HEAD ] &&
    [ -z "$(git -C "$wt" config --get "branch.$branch.merge" || true)$(git -C "$wt" config --get "branch.$branch.remote" || true)" ] &&
@@ -152,7 +153,20 @@ if [ -z "$u" ] && [ "$branch" != HEAD ] &&
     [ "$(lc "$b")" != "$(lc "refs/heads/$branch")" ] || continue
     git -C "$wt" rev-parse -q --verify "$b^{commit}" >/dev/null && { base="$b"; break; }
   done
-  if [ -n "$base" ] && [ "$(git -C "$wt" rev-list --count "$base..HEAD" 2>/dev/null || true)" = 0 ]; then
+  cnt=""; [ -z "$base" ] || cnt="$(git -C "$wt" rev-list --count "$base..HEAD" 2>/dev/null || true)"
+  # applied (#498: a project where nobody pushes and a person commits the diff): the commits beyond the base are in it as equal patches under
+  # other shas, so removed as an empty branch is. Two proofs, both git's own patch ids: `git cherry <base> HEAD` has a '-' line for every commit
+  # beyond the base (a merge commit it does not list: its branch is never applied by this proof); or the whole diff from the merge base, not
+  # empty, is one commit of the base - `git cherry` of a commit made of that diff (commit-tree: an object no ref names, written in a dry run too).
+  # A '+' line, a person's commit that holds more, a diff not yet in the base: not applied, the checks below as before.
+  ck() { git -C "$wt" cherry "$base" "$1" 2>/dev/null | grep -c '^- ' || true; }
+  if [ "${cnt:-0}" != 0 ]; then
+    if [ "$(ck HEAD)" = "$cnt" ]; then applied="$cnt" how="git cherry"
+    elif mb="$(git -C "$wt" merge-base --all "$base" HEAD 2>/dev/null)" && { git -C "$wt" diff-tree --quiet "$mb" HEAD >/dev/null 2>&1; [ $? = 1 ]; } &&
+         sq="$(git -C "$wt" -c user.name=cleanup-worker -c user.email=cleanup-worker@localhost commit-tree 'HEAD^{tree}' -p "$mb" -m squash 2>/dev/null </dev/null)" &&
+         [ "$(ck "$sq")" = 1 ]; then applied="$cnt" how="the whole diff as one commit, git cherry"; fi
+  fi
+  if [ "$cnt" = 0 ] || [ -n "$applied" ]; then
     if [ -z "$o" ]; then empty=1
     elif rh="$(git -C "$wt" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" && [ -z "$rh" ]; then empty=1; fi
   fi
@@ -292,7 +306,9 @@ else
     echo "removed the empty folder git left: $wt"
   fi
 fi
-if [ -n "$empty" ]; then
+if [ -n "$empty" ] && [ -n "$applied" ]; then
+  echo "APPLIED: $branch was never pushed; its $applied commits are in $base ($how) - $([ "$dry" = 1 ] && echo "would be removed" || echo removed)"
+elif [ -n "$empty" ]; then
   if [ "$dry" = 1 ]; then echo "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed"
   else echo "EMPTY: $branch has no commits beyond $base and was never pushed - removed"; fi
 else run git -C "$root" branch -d "$branch" || echo "branch $branch kept (not fully merged locally)"; fi

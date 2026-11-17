@@ -4,7 +4,8 @@
 # with newer commits does not count) (CORE section 8). Also, with no PR, a branch that holds nothing to
 # lose (#257): no commits beyond its base (origin's default branch; with no origin the local main or
 # master), never pushed (no upstream, no remote branch of its name) and the worktree clean -
-# `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`.
+# `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`. And a never-pushed branch a person
+# already applied to that base (#498) - `APPLIED: <branch> was never pushed; its <n> commits are in <base> (<the proof>) - removed`.
 # Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
 # is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
@@ -190,7 +191,7 @@ else {
 # itself (ls-remote) - the clean worktree was checked above. The base: origin's default branch
 # (origin/HEAD, else origin/main, else origin/master); with no origin the local main, else master - never
 # the branch itself. Anything else (a commit, a push, no base found, origin unreadable) keeps the PR checks.
-$empty = $false; $base = ''
+$empty = $false; $base = ''; $applied = ''; $how = ''
 if (-not $u -and $branch -cne 'HEAD') {
   $cfg = "$(git -C $Worktree config --get "branch.$branch.merge" 2>$null)$(git -C $Worktree config --get "branch.$branch.remote" 2>$null)"
   $cfg += "$(git -C $Worktree for-each-ref --format='%(refname)' "refs/remotes/*/$branch" 2>$null)"
@@ -204,7 +205,21 @@ if (-not $u -and $branch -cne 'HEAD') {
       git -C $Worktree rev-parse -q --verify "$b^{commit}" *> $null
       if ($LASTEXITCODE -eq 0) { $base = $b; break }
     }
-    if ($base -and "$(git -C $Worktree rev-list --count "$base..HEAD" 2>$null)".Trim() -eq '0') {
+    $cnt = ''; if ($base) { $cnt = "$(git -C $Worktree rev-list --count "$base..HEAD" 2>$null)".Trim() }
+    # applied (#498), as in the .sh: `git cherry <base> HEAD` has a '-' line for every commit beyond the base (a merge commit it does not list:
+    # never applied by this proof); or the whole diff from the merge base, not empty, is one commit of the base - `git cherry` of a commit made
+    # of that diff (commit-tree: an object no ref names, written in a dry run too). Anything else: not applied, the checks below as before.
+    function Ck([string]$c) { @(git -C $Worktree cherry $base $c 2>$null | Where-Object { "$_" -cmatch '^- ' }).Count }
+    if ($cnt -match '^[1-9][0-9]*$') {
+      if ("$(Ck HEAD)" -eq $cnt) { $applied = $cnt; $how = 'git cherry' }
+      else {
+        $mb = "$(git -C $Worktree merge-base --all $base HEAD 2>$null)".Trim(); $sq = ''
+        if ($mb) { git -C $Worktree diff-tree --quiet $mb HEAD *> $null }
+        if ($mb -and $LASTEXITCODE -eq 1) { $sq = "$(git -C $Worktree -c user.name=cleanup-worker -c user.email=cleanup-worker@localhost commit-tree 'HEAD^{tree}' -p $mb -m squash 2>$null)".Trim() }
+        if ($sq -and (Ck $sq) -eq 1) { $applied = $cnt; $how = 'the whole diff as one commit, git cherry' }
+      }
+    }
+    if ($cnt -eq '0' -or $applied) {
       if (-not $o) { $empty = $true }
       else {
         $rh = @(git -C $Worktree ls-remote --heads origin "refs/heads/$branch" 2>$null)
@@ -367,7 +382,9 @@ else {
     "removed the empty folder git left: $Worktree"
   }
 }
-if ($empty) {
+if ($empty -and $applied) {
+  "APPLIED: $branch was never pushed; its $applied commits are in $base ($how) - $(if ($DryRun) { 'would be removed' } else { 'removed' })"
+} elseif ($empty) {
   if ($DryRun) { "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed" }
   else { "EMPTY: $branch has no commits beyond $base and was never pushed - removed" }
 } else {

@@ -1622,6 +1622,46 @@ git -C "$tmp/local" show-ref -q --verify refs/heads/38-empty && { echo "FAIL (no
 w="$tmp/local/.claude/worktrees/39-empty"; git -C "$tmp/local" worktree add -q -b 39-empty "$w" main && g -C "$w" commit -q --allow-empty -m one
 STUB_GH_RC=1 check 3 "cleanup: one commit, no origin" -- cleanup --worktree "$w"
 [ -d "$w" ] && git -C "$tmp/local" show-ref -q --verify refs/heads/39-empty || { echo "FAIL (one commit, no origin): touched"; fail=1; }
+# applied (#498): a never-pushed branch whose every commit a person applied to the base as an equal patch under another sha (git cherry: a '-' line for each
+# commit of the branch), or its whole diff as one commit, is removed as a merged one, gh not needed; a commit not applied, more in the person's commit, a merge commit or a dirty worktree: as before
+ap() {   # ap <branch> <file>...: a worktree on a new branch, never pushed, with one commit per file (each adds that file)
+  me "$1"; shift; for f in "$@"; do echo "$f" > "$w/$f" && git -C "$w" add "$f" 2>/dev/null && g -C "$w" commit -q -m "$f"; done; }
+person() {   # person <branch> <commits> [more]: a person applies those commits of the branch (FETCH_HEAD, FETCH_HEAD~1, a range) to origin's main in one commit of their own; more: with one more file in it
+  git -C "$tmp/server2" fetch -q "$tmp/repo" "$1" 2>/dev/null && g -C "$tmp/server2" cherry-pick -n "$2" >/dev/null 2>&1 &&
+    { [ -z "${3:-}" ] || { echo more > "$tmp/server2/more-$1.txt" && git -C "$tmp/server2" add "more-$1.txt" 2>/dev/null; }; } &&
+    g -C "$tmp/server2" commit -q -m "applied by a person" && git -C "$tmp/server2" push -q origin main 2>/dev/null || { echo "FAIL: could not apply $1 as a person"; fail=1; }
+}
+ap 60-applied a60.txt; person 60-applied FETCH_HEAD; echo dirt > "$w/dirt.txt"
+STUB_GH_RC=1 check 3 "cleanup: an applied never-pushed branch, untracked file" -- cleanup --worktree "$w"
+expect_in "NOT CLEAN"; kept 60-applied "applied, untracked file"; rm -f "$w/dirt.txt"
+printf '%s %s %s %s\n' a6060606 a6060606-1111-4222-8333-444455556666 running "#60 worker: a" > "$SS"; printf 'a6060606\t%s\n' "$(native "$w")" > "$SS.cwd"; : > "$STUB_LOG"
+STUB_GH_RC=1 check 0 "cleanup: an applied never-pushed branch, dry run" -- cleanup --worktree "$w" --session a6060606 --dry-run
+expect_in "APPLIED: 60-applied was never pushed; its 1 commits are in origin/main (git cherry) - would be removed"; kept 60-applied "applied, dry run"
+STUB_GH_RC=1 check 0 "cleanup: an applied never-pushed branch" -- cleanup --worktree "$w" --session a6060606
+expect_in "APPLIED: 60-applied was never pushed; its 1 commits are in origin/main (git cherry) - removed"; expect_in "cleaned: a6060606"; gone 60-applied "applied"
+grep -qx "stop a6060606" "$STUB_LOG" && grep -qx "rm a6060606" "$STUB_LOG" || { echo "FAIL: the applied branch's session was not stopped and removed"; fail=1; }
+# two commits, one of them applied: refused as before; the other applied too: removed
+ap 61-applied a61.txt b61.txt; person 61-applied FETCH_HEAD~1
+check 3 "cleanup: one of two commits applied" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"; kept 61-applied "one of two commits applied"
+person 61-applied FETCH_HEAD
+STUB_GH_RC=1 check 0 "cleanup: both commits applied" -- cleanup --worktree "$w"
+expect_in "APPLIED: 61-applied was never pushed; its 2 commits are in origin/main (git cherry) - removed"; gone 61-applied "both commits applied"
+# a person's commit that holds the branch's change and more is no equal patch: refused as before
+ap 62-applied a62.txt; person 62-applied FETCH_HEAD more
+check 3 "cleanup: applied with more in the person's commit" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"; kept 62-applied "applied with more"
+# two commits a person applied as one commit, the whole diff: removed, the line naming that proof; with more in that commit: refused as before
+ap 64-applied a64.txt b64.txt; person 64-applied FETCH_HEAD~2..FETCH_HEAD
+STUB_GH_RC=1 check 0 "cleanup: the whole diff applied as one commit" -- cleanup --worktree "$w"
+expect_in "APPLIED: 64-applied was never pushed; its 2 commits are in origin/main (the whole diff as one commit, git cherry) - removed"; gone 64-applied "the whole diff as one commit"
+ap 65-applied a65.txt b65.txt; person 65-applied FETCH_HEAD~2..FETCH_HEAD more
+check 3 "cleanup: the whole diff applied as one commit with more in it" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"; kept 65-applied "the whole diff with more"
+# the base merged into the applied branch: git cherry does not list the merge commit, one '-' line for two commits - refused as before
+ap 63-applied a63.txt; person 63-applied FETCH_HEAD; git -C "$w" fetch -q && g -C "$w" merge -q --no-ff -m "merge main" origin/main >/dev/null 2>&1
+check 3 "cleanup: applied, with a merge commit on the branch" -- cleanup --worktree "$w"
+expect_in "NO UPSTREAM"; kept 63-applied "a merge commit on the branch"
 
 # --- a lead's notes beside its worktree (#310): <worktree>.lead/ is removed with the worktree (one line
 # says so, naming the folder), kept whenever the worktree is left (a dry run, NOT CLEAN, NOT MERGED,
