@@ -140,6 +140,7 @@ for item in "${prs[@]}"; do
   bid="${branch%%-*}" bl="" tid='<n>' bre='^([A-Za-z0-9_]+-[0-9]+)(-|$)'; [[ "$branch" =~ $bre ]] && bl="${BASH_REMATCH[1]}"
   case "$bid" in *[!0-9]*) [ -z "$bl" ] || bid="$bl" tid="$bl"; bl="" ;; ?*) tid="$bid" ;; esac
   bc="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || [ -z "$bl" ] || bc="$sdir/briefs/$bl-contract.md"; [ -e "$bc" ] || bc="$sdir/briefs/$bid-contract.md"
+  rt="$tid"; [ -z "$bl" ] || [ "$bc" != "$sdir/briefs/$bl-contract.md" ] || rt="$bl"   # the rows' task: the sub-id whose copy was found (426-1); the issue stays the parent's
   if [ ! -e "$bc" ]; then echo "BOUNDS #$pr: no contract at $bc - not checked"
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?
@@ -255,11 +256,11 @@ for item in "${prs[@]}"; do
       if (ok && f("id") != "" && (st == "done" || st == "stopped" || st == "failed") && $0 !~ /"status":/) print f("id") "\t" f("sessionId") "\t" nm }')"
   while IFS= read -r l; do [ -z "$l" ] || echo "AFTER MERGE #$pr: $l"; done <<EOF
 cleanup-worker --worktree .claude/worktrees/$branch (CORE §8)
-the run rows of task $n (branch $branch), then runs check, and the journal line (CORE §7)
+the run rows of task $rt (branch $branch), then runs check, and the journal line (CORE §7)
 ${rmd:+removed the finished sessions of this task whose run rows are written: $rmd}
 ${fin:+other finished sessions of task $n are still listed; claude rm only after the run rows above: $fin}
 close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none
-the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $rlog --task $n --pr-json - --append
+the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $rlog --task $rt --pr-json - --append
 tell each AFFECTED PR's session to merge $base (CORE §4a)
 did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE §10)? an escape (CORE §12)?
 the project's own after-merge duties (PROJECT.md)

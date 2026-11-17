@@ -139,6 +139,7 @@ foreach ($item in $prs) {
   $bid = ($branch -split '-')[0]; $tid = '<n>'; $bl = if ($branch -cmatch '^([A-Za-z0-9_]+-[0-9]+)(-|$)') { $Matches[1] } else { '' }
   if ($bid -match '[^0-9]') { if ($bl) { $bid = $bl; $tid = $bl }; $bl = '' } elseif ($bid) { $tid = $bid }
   $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if ($bl -and -not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bl-contract.md" }; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bid-contract.md" }
+  $rt = if ($bl -and $bc -eq "$sdir/briefs/$bl-contract.md") { $bl } else { $tid }   # the rows' task: the sub-id whose copy was found (426-1); the issue stays the parent's
   if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE
@@ -253,11 +254,11 @@ foreach ($item in $prs) {
       if ($rc -eq 0) { $rmd += "$($s.id) ($nm)" } else { $fin += "claude rm $($s.id) ($nm)" } } } } catch { }
   foreach ($l in @(
     "cleanup-worker -Worktree .claude/worktrees/$branch (CORE ${sect}8)",
-    "the run rows of task $n (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
+    "the run rows of task $rt (branch $branch), then runs check, and the journal line (CORE ${sect}7)",
     $(if ($rmd.Count) { "removed the finished sessions of this task whose run rows are written: $($rmd -join '; ')" }),
     $(if ($fin.Count) { "other finished sessions of task $n are still listed; claude rm only after the run rows above: $($fin -join '; ')" }),
     "close issue #$n and move it on the board, by the project's words (PROJECT.md) where it has none",
-    "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $Runs -Task $n -PrJson:- -Append",
+    "the task row, from the product repository: gh pr view $pr --json statusCheckRollup,mergedAt,createdAt | run-stats $Runs -Task $rt -PrJson:- -Append",
     "tell each AFFECTED PR's session to merge $base (CORE ${sect}4a)",
     "did a rule or number in the project's own files move? did a core rule or check fail us, the verifier's core_findings too (CORE ${sect}10)? an escape (CORE ${sect}12)?",
     "the project's own after-merge duties (PROJECT.md)"
