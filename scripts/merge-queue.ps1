@@ -25,7 +25,7 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md, the exact name; the id: up to the first `-`, or a prefixed one, `gps-7` of `gps-7-x`, #633),
+# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md, the exact name; the id: a prefixed one, `gps-7` of `gps-7-x`, #633; a numeric one the longest first, `426-1` of `426-1-x`, then `426`, #645; the AFTER MERGE lines name it, `gps-7` or the number, else `<n>`),
 # scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its -Important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. -OverBoundsOk passes that PR's stopping OVER, its words printed; -File does not repeat a parameter, two PRs go in two runs.
 # The folder (#387), land and -DryRun, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
@@ -135,8 +135,10 @@ foreach ($item in $prs) {
     Leave $pr 'NOT APPROVED' "its head $(Short $head) is not the approved $(Short $want) - verify the new commit, then queue $pr@$(Short $head)"; continue
   }
   # the contract's bounds (#381, the header)
-  $bid = if ($branch -cmatch '^([A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*-[0-9]+)(-|$)') { $Matches[1] } else { ($branch -split '-')[0] }   # a prefixed id (#633): gps-7 of gps-7-x
-  $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bid-contract.md" }
+  # the task id, one reading (#633, #645): prefixed, gps-7 of gps-7-x (tid, bid); numeric, 426-1 of 426-1-x (bl) before 426 (tid, bid); none: tid <n>
+  $bid = ($branch -split '-')[0]; $tid = '<n>'; $bl = if ($branch -cmatch '^([A-Za-z0-9_]+-[0-9]+)(-|$)') { $Matches[1] } else { '' }
+  if ($bid -match '[^0-9]') { if ($bl) { $bid = $bl; $tid = $bl }; $bl = '' } elseif ($bid) { $tid = $bid }
+  $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if ($bl -and -not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bl-contract.md" }; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bid-contract.md" }
   if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE
@@ -235,7 +237,7 @@ foreach ($item in $prs) {
     if ($both) { "AFFECTED #$($f[0]): $($f[3]) - merge $base now: $both" }
   }
   # the merge row of CORE section 4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
-  $n = if ($branch -match '^([0-9]+)-') { $Matches[1] } else { '<n>' }
+  $n = $tid
   # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
   # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
   # their rm; a failing listing or none found: no line

@@ -25,7 +25,7 @@
 # Lines (wrappers read them), each `<TAG> #<pr>: ...`: MERGED, AFFECTED, AFTER MERGE, SKIP, NOT APPROVED,
 # CONFLICT, REVIEW, HEAD MOVED, FAILED, NO CHECKS, TIMEOUT, MERGE FAILED; status: CONFLICTING, OVERLAP,
 # TOUCHES.
-# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md, the exact name; the id: up to the first `-`, or a prefixed one, `gps-7` of `gps-7-x`, #633),
+# The bounds (#381, #387), land: the contract at <state>/briefs/<head branch, / as ->-contract.md (start-worker saves it there), else by the id its branch starts with (<state>/briefs/<id>-contract.md, the exact name; the id: a prefixed one, `gps-7` of `gps-7-x`, #633; a numeric one the longest first, `426-1` of `426-1-x`, then `426`, #645; the AFTER MERGE lines name it, `gps-7` or the number, else `<n>`),
 # scripts/check-bounds on origin/<base>...<head>. OVER on a bound whose glob matches or holds an important glob (#419; check-contract's list, its --important): `OVER BOUNDS <pr> <glob> <added>/<max>`, left; any other OVER: `bounds over, not important: <pr> <glob> <added>/<max>`, it goes on. Its exit 2: `BOUNDS #<pr>: check-bounds ...`, left,
 # fail-closed. No contract: `BOUNDS #<pr>: no contract ...`, no stop. --over-bounds-ok passes that PR's stopping OVER, its words printed; one per run, two PRs go in two runs.
 # The folder (#387), land and --dry-run, checked before any PR merges: the cwd is a repository's root whose origin has each open PR's branch (`git ls-remote`; a fork's PR has no branch there, so only the root holds for it), else a usage error naming the folder,
@@ -136,8 +136,10 @@ for item in "${prs[@]}"; do
   if [ -n "$want" ]; then case "$head" in "$want"*) ;; *)
     leave "$pr" "NOT APPROVED" "its head ${head:0:7} is not the approved ${want:0:7} - verify the new commit, then queue $pr@${head:0:7}"; continue ;; esac; fi
   # the contract's bounds (#381, the header)
-  bid="${branch%%-*}" bre='^([A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*-[0-9]+)(-|$)'; [[ "$branch" =~ $bre ]] && bid="${BASH_REMATCH[1]}"   # a prefixed id (#633): gps-7 of gps-7-x
-  bc="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || bc="$sdir/briefs/$bid-contract.md"
+  # the task id, one reading (#633, #645): prefixed, gps-7 of gps-7-x (tid, bid); numeric, 426-1 of 426-1-x (bl) before 426 (tid, bid); none: tid <n>
+  bid="${branch%%-*}" bl="" tid='<n>' bre='^([A-Za-z0-9_]+-[0-9]+)(-|$)'; [[ "$branch" =~ $bre ]] && bl="${BASH_REMATCH[1]}"
+  case "$bid" in *[!0-9]*) [ -z "$bl" ] || bid="$bl" tid="$bl"; bl="" ;; ?*) tid="$bid" ;; esac
+  bc="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || [ -z "$bl" ] || bc="$sdir/briefs/$bl-contract.md"; [ -e "$bc" ] || bc="$sdir/briefs/$bid-contract.md"
   if [ ! -e "$bc" ]; then echo "BOUNDS #$pr: no contract at $bc - not checked"
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?
@@ -233,7 +235,7 @@ for item in "${prs[@]}"; do
     [ -n "$both" ] && echo "AFFECTED #$num: $(printf '%s\n' "$l" | cut -f4) - merge $base now: $both"
   done <<< "$list"
   # the merge row of CORE §4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
-  n='<n>'; printf '%s' "$branch" | grep -qE '^[0-9]+-' && n="${branch%%-*}"
+  n="$tid"
   # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
   # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
   # their rm; a failing listing or none found: no line
