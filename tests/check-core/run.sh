@@ -140,7 +140,7 @@ expect "a path named twice listed once" 1 "FEATURES.md:$u: tested by \`--$g-twic
 summary "fourteen errors in all: quoted case arguments are no paths" 1 14
 # links and sections (#658): reported with the file and the line; a fenced block and a nested repository not read
 hr="$(printf '%s\n' "$LAST" | sed -n '$s/.*, \([0-9]*\) hard rules,.*/\1/p')"
-mkdir -p "$d/sub/nested/.git"; printf '[a](gone.md) §99\n' > "$d/sub/nested/x.md"
+mkdir -p "$d/sub/nested/.git" "$d/sub/nested/in"; printf '[a](gone.md) §99\n' > "$d/sub/nested/in/x.md"
 printf 'text\r\n[a](gone.md) [b](../CORE.md#top) §99 §1.99\n```\n[c](gone.md)\n```\n' > "$d/sub/y.md"
 run
 expect "a broken link" 1 "sub/y.md:2: broken link gone.md"
