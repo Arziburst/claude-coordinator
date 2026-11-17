@@ -139,7 +139,7 @@ foreach ($item in $prs) {
   $bid = ($branch -split '-')[0]; $tid = '<n>'; $bl = if ($branch -cmatch '^([A-Za-z0-9_]+-[0-9]+)(-|$)') { $Matches[1] } else { '' }
   if ($bid -match '[^0-9]') { if ($bl) { $bid = $bl; $tid = $bl }; $bl = '' } elseif ($bid) { $tid = $bid }
   $bc = "$sdir/briefs/$($branch.Replace('/', '-'))-contract.md"; if ($bl -and -not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bl-contract.md" }; if (-not (Test-Path -LiteralPath $bc)) { $bc = "$sdir/briefs/$bid-contract.md" }
-  $rt = if ($bl -and $bc -eq "$sdir/briefs/$bl-contract.md") { $bl } else { $tid }   # the rows' task: the sub-id whose copy was found (426-1); the issue stays the parent's
+  $rt = $tid; if (Test-Path -LiteralPath $bc -PathType Leaf) { $ri = "$(@(Get-Content -LiteralPath $bc) -match '^id:' | Select-Object -First 1)" -replace '^id:\s*', '' -replace "[`"' ]", ''; if ($ri) { $rt = $ri } }   # the rows' task: the found copy's own id: (426-1, 613-C), else the branch's; the issue stays the branch's
   if (-not (Test-Path -LiteralPath $bc)) { "BOUNDS #${pr}: no contract at $bc - not checked" }
   else { & { $ErrorActionPreference = 'Continue'; & git fetch -q origin $base 2>&1 | Out-Null; & git fetch -q origin $branch 2>&1 | Out-Null }
     $bo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'check-bounds.ps1') $bc "origin/$base...$head" 2>&1 } | ForEach-Object { "$_" }); $brc = $LASTEXITCODE

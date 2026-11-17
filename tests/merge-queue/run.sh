@@ -449,8 +449,8 @@ qbranch 426-1-x 5; HS1=$QH; qbranch 427-2-y 5; HS2=$QH; qbranch 428-3-z 5; HS3=$
 run land 35 36 37 --poll 0
 code 3; hasline "OVER BOUNDS 35 src/* 5/3"; notcalled "pr merge 35"; hasline "OVER BOUNDS 36 src/* 5/3"; notcalled "pr merge 36"
 hasline "BOUNDS #37: no contract at coordinator/briefs/428-contract.md - not checked"; has "MERGED #37"; has "AFTER MERGE #37: the run rows of task 428 (branch 428-3-z), then runs check"
-fresh "a sub-id's copy found (#645): the run-rows and task-row lines name the sub-id (426-1), the issue line the parent (426); the parent's copy found: the parent (427)"
-qc 426-1 100; qc 427 100; qpr 35 "$HS1" 426-1-x; qpr 36 "$HS2" 427-2-y; run land 35 36 --poll 0; code 0; has "AFTER MERGE #36: the run rows of task 427 (branch 427-2-y)"; hasnt "no contract"
+fresh "the found copy's own id: (#645): a full-branch copy with id: 426-1 - the run-rows and task-row lines name 426-1, the issue line the branch's (426); a copy with no id: line: the branch's (427)"
+sed 's/^id: 16/id: 426-1/; s/src\/\* 3/src\/* 100/' coordinator/briefs/16-contract.md > coordinator/briefs/426-1-x-contract.md; sed '/^id:/d; s/src\/\* 3/src\/* 100/' coordinator/briefs/16-contract.md > coordinator/briefs/427-contract.md; qpr 35 "$HS1" 426-1-x; qpr 36 "$HS2" 427-2-y; run land 35 36 --poll 0; code 0; has "AFTER MERGE #36: the run rows of task 427 (branch 427-2-y)"; hasnt "no contract"
 has "AFTER MERGE #35: the run rows of task 426-1 (branch 426-1-x)"; has "AFTER MERGE #35: close issue #426 and"; has "run-stats coordinator/RUNS.tsv $(printf '%s' "$amt" | sed 's/466/426-1/')"
 
 # one coordinator, a second repository (#613): a working copy with no coordinator/ lands with --state <the coordinator's state folder> (.ps1: -State) -

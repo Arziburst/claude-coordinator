@@ -140,7 +140,7 @@ for item in "${prs[@]}"; do
   bid="${branch%%-*}" bl="" tid='<n>' bre='^([A-Za-z0-9_]+-[0-9]+)(-|$)'; [[ "$branch" =~ $bre ]] && bl="${BASH_REMATCH[1]}"
   case "$bid" in *[!0-9]*) [ -z "$bl" ] || bid="$bl" tid="$bl"; bl="" ;; ?*) tid="$bid" ;; esac
   bc="$sdir/briefs/$(printf '%s' "$branch" | tr / -)-contract.md"; [ -e "$bc" ] || [ -z "$bl" ] || bc="$sdir/briefs/$bl-contract.md"; [ -e "$bc" ] || bc="$sdir/briefs/$bid-contract.md"
-  rt="$tid"; [ -z "$bl" ] || [ "$bc" != "$sdir/briefs/$bl-contract.md" ] || rt="$bl"   # the rows' task: the sub-id whose copy was found (426-1); the issue stays the parent's
+  rt="$tid"; [ ! -f "$bc" ] || { ri="$(sed -n 's/^id:[[:space:]]*//p' "$bc" | head -n 1 | tr -d "\r\"' ")"; [ -z "$ri" ] || rt="$ri"; }   # the rows' task: the found copy's own id: (426-1, 613-C), else the branch's; the issue stays the branch's
   if [ ! -e "$bc" ]; then echo "BOUNDS #$pr: no contract at $bc - not checked"
   else git fetch -q origin "$base" >/dev/null 2>&1; git fetch -q origin "$branch" >/dev/null 2>&1
     bo="$(bash "$(dirname "$0")/check-bounds.sh" "$bc" "origin/$base...$head" 2>&1 | tr -d '\r')"; brc=$?
