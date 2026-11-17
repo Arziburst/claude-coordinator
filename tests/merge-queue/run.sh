@@ -19,7 +19,7 @@
 # Access point (#419): land stops as above only on an OVER whose glob matches or holds an important glob (check-contract's list: its defaults and the row *Important components* of the PROJECT.md
 # two folders above the scripts). Any other OVER, instead of `OVER BOUNDS`: exactly the line `bounds over, not important: <pr> <glob> <added>/<max>`, and if no OVER stops it the PR goes on.
 # Access point (#466): after each MERGED and its AFFECTED lines, in place of the one AFTER MERGE line, exactly these `AFTER MERGE #<pr>: ` lines in this order (the case "after a merge" holds them word by word). <n> is the
-# number the branch starts with (`<n>-...`), else the literal `<n>`. The .ps1 prints its own flags (-Worktree, -Task <n> -PrJson:- -Append). Printed only: gh sees no call beyond today's.
+# task id the branch starts with, read as the contract lookup reads it (`466` of `466-feat`, `gps-7` of `gps-7-x`, #645), else the literal `<n>`. The .ps1 prints its own flags (-Worktree, -Task <n> -PrJson:- -Append). Printed only: gh sees no call beyond today's.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift
@@ -200,11 +200,11 @@ s5() { local s="5e550000-0000-4000-8000-0000000000${1#a}" t="2026-11-0${1#b}T10:
   s5 b4 "#ARXVR-12 worker: d" done "$qroot-other" ARXVR-12-feat row; echo ,; s5 b5 "#ARXVR-12 worker: e" working "$qroot" ARXVR-12-feat row; echo ,; s5 b6 "#ARXVR-12 worker: f" done "$qroot" ARXVR-12-other row; echo; echo ']'; } > "$STUB_D/agents"
 pr 82 $H82 ARXVR-12-feat; pr 83 $H83 reception-flow; echo src/x.ts > "$STUB_D/files-82"; echo src/y.ts > "$STUB_D/files-83"; echo pass > "$STUB_D/checks-$H82"; echo pass > "$STUB_D/checks-$H83"
 run land 82 83 --poll 0; code 0; has "AFTER MERGE #82: removed the finished sessions of this task whose run rows are written: b1 (#ARXVR-12 worker: a)"
-has "AFTER MERGE #82: other finished sessions of task <n> are still listed; claude rm only after the run rows above: claude rm b2 (#12 tester: b)"
-has "AFTER MERGE #83: removed the finished sessions of this task whose run rows are written: b3 (#RECEPTION-FLOW worker: c)"; has "AFTER MERGE #82: the run rows of task <n> (branch ARXVR-12-feat), then runs check"
+has "AFTER MERGE #82: other finished sessions of task ARXVR-12 are still listed; claude rm only after the run rows above: claude rm b2 (#12 tester: b)"
+has "AFTER MERGE #83: removed the finished sessions of this task whose run rows are written: b3 (#RECEPTION-FLOW worker: c)"; has "AFTER MERGE #82: the run rows of task ARXVR-12 (branch ARXVR-12-feat), then runs check"
 for x in b4 b5 b6; do hasnt "$x ("; done; [ "$(grep -c '^rm ' "$STUB_D/claude-rm" 2>/dev/null)" = 2 ] && grep -qx 'rm b1' "$STUB_D/claude-rm" && grep -qx 'rm b3' "$STUB_D/claude-rm" && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm" 2>/dev/null), want b1 and b3"
 touch "$STUB_D/rm-fail"; { echo '['; sess b1 "#ARXVR-12 worker: a" done "$qroot"; echo; echo ']'; } > "$STUB_D/agents"
-pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0; code 0; has "other finished sessions of task <n> are still listed; claude rm only after the run rows above: claude rm b1 (#ARXVR-12 worker: a)"
+pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0; code 0; has "other finished sessions of task ARXVR-12 are still listed; claude rm only after the run rows above: claude rm b1 (#ARXVR-12 worker: a)"
 rm "$STUB_D/rm-fail" "$STUB_D/claude-rm"; head -n 1 coordinator/RUNS.tsv > "$tmp/q525.tsv"; L5="$tmp/q525.tsv"   # #525: --runs names the log; #527: a backslash folder, the drive letter in another case
 qb="$(printf '%s' "$qroot" | tr '/' '\\' | sed 's/\\/\\\\/g' | awk '{ c = substr($0, 1, 1); if (substr($0, 2, 1) == ":") c = (c == toupper(c)) ? tolower(c) : toupper(c); print c substr($0, 2) }')"
 { echo '['; s5 b7 "#ARXVR-12 worker: g" done "$qroot" ARXVR-12-feat; echo ,; s5 b8 "#ARXVR-12 worker: h" done "$qb" ARXVR-12-feat; echo ,; s5 b9 "#ARXVR-12 worker: i" done "$qb" ARXVR-12-feat row; echo; echo ']'; } > "$STUB_D/agents"
@@ -442,6 +442,16 @@ fresh "a prefixed id (#633): the copy saved by the id (gps-7) is found for its b
 qbranch gps-7-x 5; HG7=$QH; qbranch gps-8-y 5; HG8=$QH; qc gps-7 3; qc gps 100; qpr 33 "$HG7" gps-7-x; qpr 34 "$HG8" gps-8-y
 run land 33 34 --poll 0
 code 3; hasline "OVER BOUNDS 33 src/* 5/3"; notcalled "pr merge 33"; hasline "BOUNDS #34: no contract at coordinator/briefs/gps-8-contract.md - not checked"; has "MERGED #34"
+has "AFTER MERGE #34: the run rows of task gps-8 (branch gps-8-y), then runs check"; has "AFTER MERGE #34: close issue #gps-8 and"; hasnt "<n>"
+
+fresh "a numeric sub-id (#645): the longer id's copy (426-1) before the parent's (426), by its exact name; with no such copy the parent's, then none, as before"
+qbranch 426-1-x 5; HS1=$QH; qbranch 427-2-y 5; HS2=$QH; qbranch 428-3-z 5; HS3=$QH; qc 426-1 3; qc 426 100; qc 427 3; qpr 35 "$HS1" 426-1-x; qpr 36 "$HS2" 427-2-y; qpr 37 "$HS3" 428-3-z
+run land 35 36 37 --poll 0
+code 3; hasline "OVER BOUNDS 35 src/* 5/3"; notcalled "pr merge 35"; hasline "OVER BOUNDS 36 src/* 5/3"; notcalled "pr merge 36"
+hasline "BOUNDS #37: no contract at coordinator/briefs/428-contract.md - not checked"; has "MERGED #37"; has "AFTER MERGE #37: the run rows of task 428 (branch 428-3-z), then runs check"
+fresh "the found copy's own id: (#645): a full-branch copy with id: 426-1 - the run-rows and task-row lines name 426-1, the issue line the branch's (426); a copy with no id: line: the branch's (427)"
+sed 's/^id: 16/id: 426-1/; s/src\/\* 3/src\/* 100/' coordinator/briefs/16-contract.md > coordinator/briefs/426-1-x-contract.md; sed '/^id:/d; s/src\/\* 3/src\/* 100/' coordinator/briefs/16-contract.md > coordinator/briefs/427-contract.md; qpr 35 "$HS1" 426-1-x; qpr 36 "$HS2" 427-2-y; run land 35 36 --poll 0; code 0; has "AFTER MERGE #36: the run rows of task 427 (branch 427-2-y)"; hasnt "no contract"
+has "AFTER MERGE #35: the run rows of task 426-1 (branch 426-1-x)"; has "AFTER MERGE #35: close issue #426 and"; has "run-stats coordinator/RUNS.tsv $(printf '%s' "$amt" | sed 's/466/426-1/')"
 
 # one coordinator, a second repository (#613): a working copy with no coordinator/ lands with --state <the coordinator's state folder> (.ps1: -State) -
 # the contract is read from <state>/briefs/, the run log's default is <state>/RUNS.tsv; a --state that is not a folder: exit 1; without it: as before
