@@ -1658,8 +1658,8 @@ expect_in "APPLIED: 64-applied was never pushed; its 2 commits are in origin/mai
 ap 65-applied a65.txt b65.txt; person 65-applied FETCH_HEAD~2..FETCH_HEAD more
 check 3 "cleanup: the whole diff applied as one commit with more in it" -- cleanup --worktree "$w"
 expect_in "NO UPSTREAM"; kept 65-applied "the whole diff with more"
-# the base merged into the applied branch: git cherry does not list the merge commit, one '-' line for two commits - refused as before
-ap 63-applied a63.txt; person 63-applied FETCH_HEAD; git -C "$w" fetch -q && g -C "$w" merge -q --no-ff -m "merge main" origin/main >/dev/null 2>&1
+# a merge of the base with a change of its own on the branch, the other commit applied: git cherry does not list a merge commit (one '-' line for two commits) and the whole diff is more than the person's commit - refused as before
+ap 63-applied a63.txt; git -C "$w" fetch -q && g -C "$w" merge -q --no-ff --no-commit origin/main >/dev/null 2>&1; echo more > "$w/m63.txt" && git -C "$w" add m63.txt 2>/dev/null && g -C "$w" commit -q -m "merge main" && person 63-applied FETCH_HEAD~1
 check 3 "cleanup: applied, with a merge commit on the branch" -- cleanup --worktree "$w"
 expect_in "NO UPSTREAM"; kept 63-applied "a merge commit on the branch"
 
