@@ -93,6 +93,32 @@ mk within2 'src/* 6'; n=$((n + 1)); o="$(cb ../c/within2.md main...no-such-branc
 mk bad1 'src/* lots'; u "a malformed bound" ../c/bad1.md "$R"
 mk bad2 'src/* 5' 'lib/*'; u "a malformed bound beside a good one" ../c/bad2.md "$R"
 for v in 'src/* 99999999999999999999' 'src/[* 1'; do mk bad3 "$v"; for r in main...main; do n=$((n + 1)); o="$(cb ../c/bad3.md "$r")"; rc=$?; { [ "$rc" = 2 ] && printf '%s\n' "$o" | grep -qF "$v" && ! printf '%s\n' "$o" | grep -q 'check-bounds: OK'; } || { echo "FAIL (a bad bound, $v on $r): want exit 2 and a line naming it, got exit $rc:"; printf '%s\n' "$o" | sed 's/^/    /'; fail=1; }; done; done
+# #615: never an OK from a folder that is not the contract's repository. The header's `touches:` (a file, a folder or a glob per
+# item, inline or a block list) none of whose items is among the folder's tracked files or the range's files, or its
+# `repository: <owner>/<name>` that the folder's origin does not end with (`.git` dropped, letter case ignored; no origin: not it):
+# exit 2 and one line naming why, no bound's line. Without them, and in the right repository, as before.
+mkh() { local f="$tmp/c/$1.md"; shift; { printf -- '---\nid: 1\n'; printf '%s\n' "$@"; printf 'bounds:\n  - src/* 6\nwall: only a test\n---\n'; } > "$f"; }
+# rf <case> <contract> <text>...: refused - exit 2 and exactly one line, which holds every text
+rf() { local what="$1" c="$2" out rc x ok=1; shift 2; n=$((n + 1))
+  out="$(cb "../c/$c.md" "$R")"; rc=$?; out="$(printf '%s\n' "$out" | tr -d '\r')"; [ "$rc" = 2 ] && [ "$(printf '%s\n' "$out" | grep -c .)" = 1 ] || ok=0
+  for x in "$@"; do printf '%s\n' "$out" | grep -qF -- "$x" || ok=0; done
+  [ $ok = 1 ] || { echo "FAIL ($what): want exit 2 and one line holding: $*"; echo "  got exit $rc and:"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1; }; }
+mkh tin 'touches: [app/main.c, src/three.txt]'; t "one of the touches is in the folder" tin 0 'src/* 5/6' 'check-bounds: OK'
+mkh tdir 'touches:' '  - app/' '  - docs/   # a folder'; t "touches as a block list, a folder" tdir 0 'src/* 5/6' 'check-bounds: OK'
+mkh tglob 'touches: [src/**/thr*.txt]'; t "a glob among the touches" tglob 0 'src/* 5/6' 'check-bounds: OK'
+mkh tempty 'touches: []'; t "empty touches: as without them" tempty 0 'src/* 5/6' 'check-bounds: OK'
+mkh tnone 'touches: [app/main.c, web/, lib/*.go]'
+rf "none of the touches is in the folder" tnone "check-bounds: none of the contract's touches" 'app/main.c web/ lib/*.go' '/repo' "$R"
+sed 's#src/\* 6#src/* 4#' "$tmp/c/tnone.md" > "$tmp/c/tover.md"; t "the refusal stands in for an OK only: an OVER there is still said" tover 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
+g checkout -q main   # the checkout on the base: a file only the range's head has is still the contract's
+t "a touched file only in the range" tin 0 'src/* 5/6' 'check-bounds: OK'; rf "none of the touches, on the base" tnone "none of the contract's touches"
+g checkout -q work
+mkh rin 'repository: acme/front   # the first repository' 'touches: [src/]'; mkh rout 'repository: acme/back'
+rf "a repository named, the folder without an origin" rin 'check-bounds: the origin' 'acme/front' '/repo'
+for o in https://github.com/Acme/front.git git@github.com:acme/front https://github.com/acme/front/; do g remote remove origin 2>/dev/null; g remote add origin "$o"
+  t "the contract's repository ($o)" rin 0 'src/* 5/6' 'check-bounds: OK'; rf "another repository ($o)" rout 'check-bounds: the origin' "${o%/}" 'acme/back' '/repo'; done
+g remote set-url origin https://github.com/bigacme/front.git; rf "a longer owner's name is another repository" rin 'bigacme/front' 'acme/front'
+g remote remove origin
 
 echo "check-bounds ($kind): $n cases, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail

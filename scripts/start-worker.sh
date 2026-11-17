@@ -261,7 +261,12 @@ hook="$(hookpath "$(sed -n "${n}p" "$safety")")"
 case "$hook" in *.sh) ;; *) hook="" ;; esac
 [ -n "$hook" ] || { echo "safety settings: the PreToolUse guard is not safety-guard.sh - start a PowerShell-hook file with start-worker.ps1" >&2; exit 1; }
 grep -q 'bgIsolation' "$safety" || { echo "safety settings: add \"worktree\": {\"bgIsolation\": \"none\"}" >&2; exit 1; }
-selftest=$(bash "$hook" --self-test || true)
+# the self-test runs with the safety file's env block (#613), as the session's guard will: a root list with an entry
+# that protects nothing is refused here, before any worktree (the block's string values, JSON escapes taken out)
+senv=(); while IFS= read -r l; do [ -z "$l" ] || senv+=("$l"); done <<EOF
+$(tr -d '\r\n' < "$safety" | sed -nE 's/.*"env"[[:space:]]*:[[:space:]]*\{([^{}]*)\}.*/\1/p' | { grep -oE '"[A-Za-z_][A-Za-z0-9_]*"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' || true; } | sed -E 's/^"([^"]*)"[[:space:]]*:[[:space:]]*"(.*)"$/\1=\2/; s/\\(.)/\1/g')
+EOF
+selftest=$(env ${senv[@]+"${senv[@]}"} bash "$hook" --self-test || true)
 [ -n "$selftest" ] || { echo "safety settings: the hook's self-test printed nothing ($hook)" >&2; exit 1; }
 [ "$selftest" = "safety-guard: OK" ] || { echo "$selftest" >&2; exit 1; }
 # an assistant is one session per name: one already listed (running or stopped) is refused, never a second

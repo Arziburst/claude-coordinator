@@ -546,15 +546,32 @@ hooks)
     # on Windows Claude Code passes C:\... file paths, so the root is a drive path: C:/... or C:\..., or
     # Git Bash's /c/... (/mnt/c/..., /cygdrive/c/...), which the guard reads as C:/...
     win=0; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) win=1 ;; esac
-    dir="$root"; [ $win = 1 ] && dir="$(printf '%s' "$root" | sed -E 's#^/(mnt/|cygdrive/)?([A-Za-z])(/|$)#\2:/#')"
-    case "$root" in
-      /*|\\*|[A-Za-z]:[/\\]*)
-        if [ $win = 1 ] && ! printf '%s' "$dir" | grep -Eq '^[A-Za-z]:[/\\]'; then
-          fail "COORD_PROTECTED_ROOT is not a drive path (C:/... or C:\\...): $root - Claude Code passes C:\\... file paths on Windows"
-        elif [ -d "$dir" ]; then pass "COORD_PROTECTED_ROOT is an absolute path to a folder"
-        else fail "COORD_PROTECTED_ROOT is not a folder on this machine: $root"; fi ;;
-      *) fail "COORD_PROTECTED_ROOT is not an absolute path: $root" ;;
-    esac
+    # a list (#613): several roots separated by |, split as the guard splits them; each entry is checked as the
+    # one root is and named `entry <k> of <n>` (one root: the lines as before)
+    rs=(); rest="$root|"; while [ -n "$rest" ]; do rs+=("${rest%%|*}"); rest="${rest#*|}"; done; k=0; f0=$f
+    for r in "${rs[@]}"; do
+      k=$((k + 1)); w=COORD_PROTECTED_ROOT; [ ${#rs[@]} = 1 ] || w="$w entry $k of ${#rs[@]}"
+      dir="$r"; [ $win = 1 ] && dir="$(printf '%s' "$r" | sed -E 's#^/(mnt/|cygdrive/)?([A-Za-z])(/|$)#\2:/#')"
+      case "$r" in
+        /*|\\*|[A-Za-z]:[/\\]*)
+          if [ $win = 1 ] && ! printf '%s' "$dir" | grep -Eq '^[A-Za-z]:[/\\]'; then
+            fail "$w is not a drive path (C:/... or C:\\...): $r - Claude Code passes C:\\... file paths on Windows"
+          elif [ -d "$dir" ]; then pass "$w is an absolute path to a folder"
+          else fail "$w is not a folder on this machine: $r"; fi ;;
+        *) fail "$w is not an absolute path: $r" ;;
+      esac
+    done
+    # the list's edit probe, with every entry sound: an Edit under each root, fed to this core's guard with the
+    # file's value, must be blocked as the owner's working copy
+    k=0; [ ${#rs[@]} -gt 1 ] && [ "$f" = "$f0" ] && for r in "${rs[@]}"; do
+      k=$((k + 1)); r="${r//\\//}"
+      err="$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s/probe-root.txt"},"cwd":"%s"}' "$r" "$r" |
+        COORD_ASSISTANT_DIR= COORD_PROTECTED_ROOT="$root" bash "$core/scripts/hooks/safety-guard.sh" 2>&1 >/dev/null)"; rc=$?
+      case "$rc:$err" in
+        "2:Blocked by safety-guard: the owner's working copy is never edited by a worker"*) pass "the guard blocks an edit tool under entry $k of ${#rs[@]}" ;;
+        *) fail "the guard does not block an edit tool under entry $k of ${#rs[@]} as the owner's working copy (exit $rc)" ;;
+      esac
+    done
     miss=""
     for t in Edit Write MultiEdit NotebookEdit; do
       case "$m" in ''|'*'|'.*') ;; *) printf '%s\n' "$t" | grep -Eqx -- "$m" 2>/dev/null || miss="$miss${miss:+, }$t" ;; esac
