@@ -21,40 +21,50 @@ sections=" $(cat CORE.md procedures/*.md 2>/dev/null | sed -n 's/^## \([0-9][0-9
 rules="$(awk '/^## 1\. /{on=1; next} /^## /{on=0} on && /^[0-9]+\. \*\*/{n++} END{print n+0}' CORE.md)"
 
 errors=0; files=0
-while IFS= read -r f; do
-  files=$((files + 1))
-  dir="$(dirname "$f")"
-  # one record per link or § reference outside fenced code: "<line> L <target>" / "<line> S <sec> <sub>"
-  while read -r n kind a b; do
-    if [ "$kind" = L ]; then
-      path="${a%%#*}"
-      [ -z "$path" ] || [ -e "$dir/$path" ] || { echo "${f#./}:$n: broken link $a"; errors=$((errors + 1)); }
-    else
-      case "$sections" in
-        *" $a "*) if [ "$a" = 1 ] && [ -n "$b" ] && { [ "$b" -lt 1 ] || [ "$b" -gt "$rules" ]; }; then
-                    echo "${f#./}:$n: §1.$b does not exist (CORE §1 has $rules hard rules)"; errors=$((errors + 1)); fi ;;
-        *) echo "${f#./}:$n: §$a does not exist"; errors=$((errors + 1)) ;;
-      esac
-    fi
-  done < <(awk '
-    { sub(/\r$/, "") }
-    /^[ \t]*```/ { code = !code; next }
-    code { next }
-    {
-      s = $0
+# Every loop below reads the records of one awk over all its files: a process started per file or per line costs
+# little on Linux and tens of milliseconds each under Git Bash (#658). Here, per file "0 F" and its path on the next
+# line, then one record per link or § reference outside fenced code: "<line> L <target>" / "<line> S <sec> <sub>"
+while read -r n kind a b; do
+  if [ "$kind" = F ]; then
+    IFS= read -r f; files=$((files + 1)); dir="${f%/*}"
+  elif [ "$kind" = L ]; then
+    path="${a%%#*}"
+    [ -z "$path" ] || [ -e "$dir/$path" ] || { echo "${f#./}:$n: broken link $a"; errors=$((errors + 1)); }
+  else
+    case "$sections" in
+      *" $a "*) if [ "$a" = 1 ] && [ -n "$b" ] && { [ "$b" -lt 1 ] || [ "$b" -gt "$rules" ]; }; then
+                  echo "${f#./}:$n: §1.$b does not exist (CORE §1 has $rules hard rules)"; errors=$((errors + 1)); fi ;;
+      *) echo "${f#./}:$n: §$a does not exist"; errors=$((errors + 1)) ;;
+    esac
+  fi
+done < <(find . -name .claude -prune -o -name .git -print -prune -o -name '*.md' -print | LC_ALL=C sort | awk '
+  function scan(f,   line, nr, code, s, t, r, sec, subn) {
+    print 0, "F"; print f
+    while ((getline line < f) > 0) {
+      nr++; sub(/\r$/, "", line)
+      if (line ~ /^[ \t]*```/) { code = !code; continue }
+      if (code) continue
+      s = line
       while (match(s, /\]\([^) \t]+\)/)) {
         t = substr(s, RSTART + 2, RLENGTH - 3); s = substr(s, RSTART + RLENGTH)
-        if (t !~ /^[a-z]+:/ && t !~ /^#/) print NR, "L", t
+        if (t !~ /^[a-z]+:/ && t !~ /^#/) print nr, "L", t
       }
-      s = $0
+      s = line
       while (match(s, /§[0-9]+[a-z]?(\.[0-9]+)?/)) {
         r = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
         sub(/^§/, "", r); sec = r; subn = ""
         if (index(r, ".")) { sec = substr(r, 1, index(r, ".") - 1); subn = substr(r, index(r, ".") + 1) }
-        print NR, "S", sec, subn
+        print nr, "S", sec, subn
       }
-    }' "$f")
-done < <(find . \( -name .git -o -name .claude \) -prune -o -type d ! -path . -exec test -e {}/.git \; -prune -o -name '*.md' -print | LC_ALL=C sort)
+    }
+    close(f)
+  }
+  /\/\.git$/ { git[substr($0, 1, length($0) - 5)] = 1; next }
+  { md[++nf] = $0 }
+  # a file in or below a folder that holds .git (the root aside) is in a nested repository or worktree: not read
+  END { for (i = 1; i <= nf; i++) { p = md[i] "/"; skip = 0
+      while (sub(/\/[^\/]*$/, "", p) && p != ".") if (p in git) { skip = 1; break }
+      if (!skip) scan(md[i]) } }')
 # (not .git, not .claude/ - agent worktrees of a checkout - and not a nested repository or worktree)
 
 # FEATURES.md, the feature map: every file a block names exists; every script, procedure, role and
@@ -113,12 +123,13 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
       for (i = 1; i <= nb; i++) if (!(bord[i] in row)) print "E", blk[bord[i]], bord[i] " is not in the summary table"
       for (i = 1; i <= nr; i++) if (!(rord[i] in blk)) print "E", row[rord[i]], rord[i] " has no block"
       print "N", nb }' FEATURES.md)
-  for f in $(find scripts -maxdepth 2 -name '*.sh' | LC_ALL=C sort) $(find procedures roles -maxdepth 1 -name '*.md' | LC_ALL=C sort); do
-    grep -qF "${f%.sh}" FEATURES.md || { echo "FEATURES.md: $f is in no feature"; errors=$((errors + 1)); }
-  done
-  for id in $(sed -n 's/^| `\([a-z0-9-]*\)` |.*/\1/p' ONE-TIME.md); do
-    grep -qF "\`$id\`" FEATURES.md || { echo "FEATURES.md: one-time step $id is in no feature"; errors=$((errors + 1)); }
-  done
+  # each script (without its .sh), procedure and role, and each one-time step's id in backticks, occurs in FEATURES.md
+  while IFS= read -r m; do echo "FEATURES.md: $m is in no feature"; errors=$((errors + 1)); done < <(
+    { find scripts -maxdepth 2 -name '*.sh' | LC_ALL=C sort; find procedures roles -maxdepth 1 -name '*.md' | LC_ALL=C sort
+      sed -n 's/^| `\([a-z0-9-]\{1,\}\)` |.*/one-time step \1/p' ONE-TIME.md; } | awk '
+      { w[++n] = $0; k[n] = $0; if (sub(/^one-time step /, "", k[n])) k[n] = "`" k[n] "`"; else sub(/\.sh$/, "", k[n]) }
+      END { while ((getline l < "FEATURES.md") > 0) for (i = 1; i <= n; i++) if (!ok[i] && index(l, k[i])) ok[i] = 1
+        for (i = 1; i <= n; i++) if (!ok[i]) print w[i] }')
   # a "tested by" field's backtick token that looks like a flag, a path or a case form (not a plain word,
   # no space, no <placeholder>, * or …) occurs in a tests/ file the field names or in a file below a tests/
   # folder it names, or a tests trim left it stale (#562, #548). A field naming no tests/ path is not
@@ -141,7 +152,9 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
     { flush() }
     END { flush() }' FEATURES.md)"
   while IFS= read -r m; do [ -n "$m" ] && { echo "$m"; errors=$((errors + 1)); }; done < <([ -n "$tb" ] &&
-    printf '%s\n' "$tb" | cut -f3- | tr '\t' '\n' | LC_ALL=C sort -u | while IFS= read -r d; do if [ -d "$d" ]; then find "$d" -type f; elif [ -f "$d" ]; then echo "$d"; fi; done |
+    printf '%s\n' "$tb" | cut -f3- | tr '\t' '\n' | LC_ALL=C sort -u | { ds=()   # one find over the named folders
+      while IFS= read -r d; do if [ -d "$d" ]; then ds[${#ds[@]}]="$d"; elif [ -f "$d" ]; then echo "$d"; fi; done
+      [ ${#ds[@]} -eq 0 ] || find "${ds[@]}" -type f; } |
     LC_ALL=C sort -u | TB="$tb" awk 'BEGIN { n = split(ENVIRON["TB"], r, "\n")
         for (i = 1; i <= n; i++) { nd[i] = split(r[i], x, "\t") - 2; ln[i] = x[1]; tk[i] = x[2]; for (j = 1; j <= nd[i]; j++) d[i, j] = x[j + 2] } }
       { m = 0; for (i = 1; i <= n; i++) if (!ok[i]) for (j = 1; j <= nd[i]; j++) if ($0 == d[i, j] || index($0, d[i, j] "/") == 1) { s[++m] = i; break }
@@ -164,38 +177,51 @@ fi
 
 # the core's skills (CORE §12b, #243): skills/coord-*/SKILL.md, its frontmatter name its folder, its description
 # saying it is the coordinator's, every `coordinator/core/<path>` it names a file of this core
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  d="$(basename "$(dirname "$f")")"
-  case "$d" in coord-*) ;; *) echo "$f: a core skill's folder starts with coord-"; errors=$((errors + 1)) ;; esac
-  nm="$(tr -d '\r' < "$f" | sed -n '2,6s/^name: *//p' | head -n 1)"
-  [ "$nm" = "$d" ] || { echo "$f: name '$nm' is not its folder '$d'"; errors=$((errors + 1)); }
-  tr -d '\r' < "$f" | sed -n '2,6p' | grep -q "^description: '\{0,1\}Coordinator only" ||
-    { echo "$f: the description does not start with 'Coordinator only'"; errors=$((errors + 1)); }
-  while read -r n p; do [ -e "$p" ] || { echo "$f:$n: no such core file $p"; errors=$((errors + 1)); }
-  done < <(tr -d '\r' < "$f" | awk '{ s = $0
-    while (match(s, /coordinator\/core\/[A-Za-z0-9._\/-]+/)) { p = substr(s, RSTART + 17, RLENGTH - 17); s = substr(s, RSTART + RLENGTH)
-      sub(/[.\/]+$/, "", p); print NR, p } }')
-done < <([ -d skills ] && find skills -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
+# Per skill "H <1 when lines 2-6 hold the description, else 0>", its path and its name (lines 2-6), a line each, then
+# one "<line> <path>" per core path it names
+while read -r n p; do
+  if [ "$n" = H ]; then
+    IFS= read -r f; IFS= read -r nm; d="${f%/*}"; d="${d##*/}"
+    case "$d" in coord-*) ;; *) echo "$f: a core skill's folder starts with coord-"; errors=$((errors + 1)) ;; esac
+    [ "$nm" = "$d" ] || { echo "$f: name '$nm' is not its folder '$d'"; errors=$((errors + 1)); }
+    [ "$p" = 1 ] || { echo "$f: the description does not start with 'Coordinator only'"; errors=$((errors + 1)); }
+  else [ -e "$p" ] || { echo "$f:$n: no such core file $p"; errors=$((errors + 1)); }; fi
+done < <([ -d skills ] && find skills -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort | awk '
+  $0 != "" { f = $0; nm = ""; got = 0; desc = 0; out = ""; nr = 0
+    while ((getline l < f) > 0) { nr++; gsub(/\r/, "", l)
+      if (nr >= 2 && nr <= 6) { if (!got && l ~ /^name:/) { got = 1; nm = l; sub(/^name: */, "", nm) }
+        if (l ~ /^description: '\''?Coordinator only/) desc = 1 }
+      s = l
+      while (match(s, /coordinator\/core\/[A-Za-z0-9._\/-]+/)) { p = substr(s, RSTART + 17, RLENGTH - 17); s = substr(s, RSTART + RLENGTH)
+        sub(/[.\/]+$/, "", p); out = out nr " " p "\n" } }
+    close(f); print "H", desc; print f; print nm; printf "%s", out }')
 
 # the start-read texts' sizes (#600): the words of CORE.md, its section 1 (from `## 1. ` to the next `## `), its event
 # table (from `| Event |` to `**Where the topics live`) and each roles/*.md - a word is a run of characters between
 # spaces, tabs and line ends (a CR is a line end), the same in check-core.ps1 - against tests/check-core-sizes.txt.
 # Over its record by more than the margin, or no record: a WARN, never an error (TOOLKIT check-core)
 sz=tests/check-core-sizes.txt
-words() { LC_ALL=C awk -v m="${2:-}" '{ gsub(/\r/, " ") }
-  m == "s1" { if (/^## 1\. /) on = 1; else if (/^## /) on = 0 }
-  m == "ev" { if (/^\| Event \|/) on = 1; else if (/^\*\*Where the topics live/) on = 0 }
-  m == "" || on { n += NF } END { print n + 0 }' "$1"; }
-mg="$(tr -d '\r' 2>/dev/null < "$sz" | sed -n 's/^margin \([0-9][0-9]*%\{0,1\}\)$/\1/p' | head -n 1)"; mg="${mg:-0}"
-for t in CORE.md CORE.md#section-1 CORE.md#event-table $([ -d roles ] && find roles -maxdepth 1 -name '*.md' | LC_ALL=C sort); do
-  case "$t" in *#section-1) w=$(words CORE.md s1) ;; *#event-table) w=$(words CORE.md ev) ;; *) w=$(words "$t") ;; esac
-  r="$(tr -d '\r' 2>/dev/null < "$sz" | awk -v t="$t" '$1 == t && NF == 2 && $2 ~ /^[0-9]+$/ { print $2; exit }')"
+# One awk: the margin (0 when the file names none) on the first line, then per text "<text> <words> <its record, if any>"
+{ IFS= read -r mg; while read -r t w r; do
   if [ -z "$r" ]; then echo "WARN: $t has $w words and no record in $sz"; continue; fi
   case "$mg" in *%) x=$((r * ${mg%\%} / 100)) ;; *) x=$mg ;; esac
   [ "$w" -le $((r + x)) ] || echo "WARN: $t has $w words, over its record $r by more than the margin $mg ($sz)"
-done
+done; } < <(LC_ALL=C awk '
+  function words(file, m,   n, on) {
+    while ((getline < file) > 0) { gsub(/\r/, " ")
+      if (m == "s1") { if (/^## 1\. /) on = 1; else if (/^## /) on = 0 }
+      if (m == "ev") { if (/^\| Event \|/) on = 1; else if (/^\*\*Where the topics live/) on = 0 }
+      if (m == "" || on) n += NF }
+    close(file); return n + 0 }
+  BEGIN { sz = ARGV[1]; mg = 0
+    while ((getline < sz) > 0) { gsub(/\r/, "")
+      if (!gm && /^margin [0-9]+%?$/) { gm = 1; mg = substr($0, 8) }
+      if (NF == 2 && $2 ~ /^[0-9]+$/ && !($1 in rec)) rec[$1] = $2 }
+    close(sz); print mg
+    for (i = 2; i < ARGC; i++) { t = ARGV[i]
+      if (t ~ /#section-1$/) w = words("CORE.md", "s1"); else if (t ~ /#event-table$/) w = words("CORE.md", "ev"); else w = words(t, "")
+      print t, w, rec[t] } }' "$sz" CORE.md CORE.md#section-1 CORE.md#event-table $([ -d roles ] && find roles -maxdepth 1 -name '*.md' | LC_ALL=C sort))
 
-nsec=$(echo $sections | wc -w | tr -d ' ')
+nsec=0; for s in $sections; do nsec=$((nsec + 1)); done
 echo "check-core: $files files, $nsec sections, $rules hard rules, $nfeat features, $errors errors"
 [ "$errors" -eq 0 ]
