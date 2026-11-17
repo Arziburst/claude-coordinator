@@ -174,10 +174,11 @@ code 0; silent
 
 fresh "idle, working, idle again: the quiet time starts again, no QUIET under the limit"
 printf '%s\n%s\n' $A $B > "$L"; printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-1"
-printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-2"; printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-3"
-printf '%s idle w-a\n%s done w-b\n' $A $B > "$STUB_D/list-4"
-run --list "$L" --interval 1 --quiet-seconds 3
-code 0; has "^STOPPED $B w-b\$"; hasnt "^QUIET"; calls -eq 4
+printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-6"; printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-7"
+printf '%s idle w-a\n%s done w-b\n' $A $B > "$STUB_D/list-12"
+# a limit of 10 intervals: idle 4 s, at work, idle 5 s (11 s in all: past the limit only with no restart); a poll must be 5 s late to reach it early (#593)
+run --list "$L" --interval 1 --quiet-seconds 10
+code 0; has "^STOPPED $B w-b\$"; hasnt "^QUIET"; calls -eq 12
 
 fresh "the list file missing: EMPTY, claude not called"
 run --list "$L" --interval 1
