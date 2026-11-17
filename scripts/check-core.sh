@@ -152,7 +152,7 @@ if [ ! -f FEATURES.md ]; then echo "FEATURES.md: missing"; errors=$((errors + 1)
     { flush() }
     END { flush() }' FEATURES.md)"
   while IFS= read -r m; do [ -n "$m" ] && { echo "$m"; errors=$((errors + 1)); }; done < <([ -n "$tb" ] &&
-    printf '%s\n' "$tb" | cut -f3- | tr '\t' '\n' | LC_ALL=C sort -u | { ds=()   # the named folders' files from one find
+    printf '%s\n' "$tb" | cut -f3- | tr '\t' '\n' | LC_ALL=C sort -u | { ds=()   # one find over the named folders
       while IFS= read -r d; do if [ -d "$d" ]; then ds[${#ds[@]}]="$d"; elif [ -f "$d" ]; then echo "$d"; fi; done
       [ ${#ds[@]} -eq 0 ] || find "${ds[@]}" -type f; } |
     LC_ALL=C sort -u | TB="$tb" awk 'BEGIN { n = split(ENVIRON["TB"], r, "\n")
