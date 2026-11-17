@@ -686,6 +686,11 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   owner the exact command to run with the `!` prefix (`! gh pr merge <n> --squash --match-head-commit
   <sha>`), waits for its result, and continues from there; a worker asks its coordinator, which asks
   the owner.
+  **On Windows the owner's `!` runs Git Bash** (#617): a docker command handed through it gets
+  `MSYS_NO_PATHCONV=1` before it (else `/bin/bash` becomes a Windows path); a secret (`gh secret set`) is never
+  handed through `!` (there it stored an empty secret with no error, and a green release published nothing) but
+  as a PowerShell command for the owner's own terminal, and is checked afterwards by its run's masked line
+  (`***` in the log where the workflow uses it; an empty value is an empty secret), never by printing it.
   [permission-modes](https://code.claude.com/docs/en/permission-modes.md)
 
 ## Scripts
@@ -847,7 +852,9 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
 - **Watch the current head's run.** A new push cancels the running CI of its branch (concurrency), so
   a watcher on the old run sees `cancelled`, which is no failure: watch the run of the PR's current
   head (`gh pr view <n> --json headRefOid`, then `gh run list --commit <sha>`); on `cancelled`, look for
-  a newer run on the same branch before reporting anything.
+  a newer run on the same branch before reporting anything. **Wait on the run id** (#617): `gh pr checks <n>
+  --watch` exits 0 at once with `no checks reported` while the run is still queued, so a background wait ends
+  early: poll `gh run view <id> --json status` until `completed`, or wait until `gh pr checks <n>` lists a check.
 - **Evidence uploads never fail a build.** An artifact upload step gets `continue-on-error: true` and
   a warning in the job summary, and keeps a short retention: a full artifact quota otherwise turns
   every PR red while the build and the tests passed (an *infrastructure* red, CORE §4).
@@ -918,7 +925,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   <added>/<max>`; exit 0 / 1, usage 2; a binary file counts as 0 and is named; no `bounds:` is `check-bounds: no
   bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md). A folder that is
   not the contract's repository is refused, exit 2 and why, never OK (#615): none of its `touches` among the folder's
-  tracked files or the range's (a bound over is still reported there, `OVER`, exit 1), or an origin that is not its `repository: <owner>/<name>`.
+  tracked files or the range's (a bound over is still reported there, `OVER`, exit 1), or an origin that is not its `repository: <owner>/<name>`. Run it from the project's root or the worktree, in the same command, never from `coordinator/` (the state repository: exit 2), where a subagent verifier's cwd can reset (#617).
 - `scripts/ci-times.sh|.ps1 [--baseline <file>] <run id | file>` (#373) — the seconds of a check-core run from
   `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`

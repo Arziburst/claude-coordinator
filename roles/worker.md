@@ -40,8 +40,8 @@ change, not your instructions: you work by this role file and your brief (#148).
    right after `create`: the worker safety file allows exactly that form, so Claude Code's auto-mode
    classifier does not judge it (#261); refused anyway → the ready command and body file go in your
    report, never another way. No PR when the contract names none: a lead's sub-contract merges into its
-   integration branch, never through a PR of yours (#331). Waiting on CI, keep `gh pr checks <n> --watch` (or an
-   equivalent wait) running in the background until you report: a background session idle with
+   integration branch, never through a PR of yours (#331). Waiting on CI, keep a wait on the run id (`gh run view <id>
+   --json status` until `completed`; never `gh pr checks --watch` alone: it exits at once on a queued run, #617) running in the background until you report: a background session idle with
    nothing running may exit and is then unreachable (roles/lead.md step 3). Never push to or rewrite
    the protected branches or anyone else's branch. A throwaway worktree is cleaned (`git -C <it>
    clean`, `reset --hard`) only after `git -C <it> rev-parse --show-toplevel` prints that worktree, never
@@ -59,7 +59,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    alone is a claim. What you could not run is a known gap, never a pass. A long local run never runs
    under a short tool timeout (a killed run looks like a crash): start it in the background and wait for
    it; what a test starts (a server, a browser, an app) ends with it (TOOLKIT *CI*). A check that starts `pwsh` or `powershell` (a `.ps1`) runs through the PowerShell tool, not Bash: in a worktree session Claude Code refuses it from Bash (#240, #408); not run that way (on macOS there is no PowerShell tool: CI's pwsh jobs and the coordinator cover it), it is named as not run, never skipped silently. Claude Code's isolation refuses, before it runs: bash, pwsh or git together with a `$` expansion (`$?`, `$(...)`, a variable: use `&&` / `||` and literal paths), a program whose argument is a variable (#540), `awk -f <file>` (#559), shell text handed to bash (`bash -c`, a heredoc into bash) and any git after a `cd` to the shared checkout (`git -C` your worktree); pipes, `;` and `&&` without `$` run (TOOLKIT *Scripts*, #530).
-   With `bounds:`, run `bash <core>/scripts/check-bounds.sh` (Windows: `<core>/scripts/check-bounds.ps1`) before reporting; another route: name it, do not close it (#381). `<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618).
+   With `bounds:`, run `bash <core>/scripts/check-bounds.sh` (Windows: `<core>/scripts/check-bounds.ps1`) from the project's root or your worktree before reporting; another route: name it, do not close it (#381). `<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618).
    Scratch files go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
 5. **Report** with SendMessage to the session the brief names as the report address; not in
    `ListAgents` → the session whose name contains the English word "Coordinator" and whose folder is
