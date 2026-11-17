@@ -81,6 +81,12 @@ tmo tests/selftest/hooks/timeout/t60.json timeout/t60.json PASS
 for f in settings.example.json settings.example.windows.json; do
   sed "s#C:/ABSOLUTE/PATH#$core#g; s#C:/ABSOLUTE/PROJECT#$core#g; s#/ABSOLUTE/PATH#$core#g; s#/ABSOLUTE/PROJECT#$core#g" "$f" > "$fx/$f"
   tmo "$fx/$f" "$f" PASS
+  # the start load (#603): each worker example turns the Artifact tool and the synced skills off, denies the five
+  # bare tool names and turns off every coord-* skill this core ships
+  n=$((n + 1)); bad=""; tr -d '\r' < "$f" | grep -v '^  "_comment"' > "$tmp/w.json"
+  for k in '^  "enableArtifact": false,$' '^  "syncClaudeAiSkills": false,$' '^      "AskUserQuestion",$' '^      "ReportFindings",$' '^      "ScheduleWakeup",$' '^      "SendFeedback",$' '^      "Workflow",$'; do grep -q "$k" "$tmp/w.json" || bad="$bad; no line $k"; done
+  for s in skills/coord-*/; do s="${s#skills/}"; grep '^  "skillOverrides": {' "$tmp/w.json" | grep -qF "\"${s%/}\": \"off\"" || bad="$bad; skillOverrides does not turn off ${s%/}"; done
+  [ -z "$bad" ] || { echo "FAIL ($f, the start load)${bad#;}"; fail=1; }
 done
 
 # COORD_NO_PUSH (#367). The access point, which selftest implements as written: a file whose top-level env sets
@@ -125,7 +131,9 @@ ast() {   # ast <assistant example> <worker example> <placeholder of the project
   grep -q '"defaultMode": "dontAsk"' "$tmp/a.json" || bad="$bad; no defaultMode dontAsk"
   grep -q '^  "_comment": "..*assistant' "$tmp/a.json" || bad="$bad; no _comment about the assistant"
   for s in a w; do awk '/"deny": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/$s.json" | sed 's/,$//' > "$tmp/$s.deny"; done
-  while IFS= read -r l; do grep -qxF -- "$l" "$tmp/a.deny" || bad="$bad; the deny list lacks $l"; done < "$tmp/w.deny"
+  # but the five bare tool names of the worker's start load (#603): they take a tool out of a worker's session and guard nothing
+  grep -vxE ' *"(AskUserQuestion|ReportFindings|ScheduleWakeup|SendFeedback|Workflow)"' "$tmp/w.deny" > "$tmp/w.guard"
+  while IFS= read -r l; do grep -qxF -- "$l" "$tmp/a.deny" || bad="$bad; the deny list lacks $l"; done < "$tmp/w.guard"
   awk '/"allow": \[/ { f = 1; next } f && /\]/ { f = 0 } f' "$tmp/a.json" > "$tmp/a.allow"
   grep -Eq '"(Bash\((gh api|bash|sh|node|python|npx)|PowerShell)' "$tmp/a.allow" && bad="$bad; the allow list holds a gh api, PowerShell or interpreter rule"
   grep '"Bash(git' "$tmp/a.allow" | grep -vxE ' *"Bash\(git branch\)",?| *"Bash\(git config --get \*\)",?' | grep -q . && bad="$bad; the allow list holds a git rule other than git branch / git config --get"

@@ -191,9 +191,15 @@ if (-not $Root) { Show-Usage }
 if ($Since -and $Since -notmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') { Die 2 "--since must be YYYY-MM-DD: $Since" }
 CanOpen $Log 'Read'
 # Canon <path>: the path to compare - its full form when it exists, forward slashes, no trailing slash, a drive
-# letter in lower case (C:\x and C:/x the same)
+# letter in lower case (C:\x and C:/x the same). Off Windows its real folder, as runs.sh's `pwd -P`: git lists a
+# worktree with its links followed (macOS: /private/var/... for /var/...), FullName does not follow them (#509)
 function Canon([string]$p) {
-  if ($p -and (Test-Path -LiteralPath $p -PathType Container)) { try { $p = (Get-Item -LiteralPath $p -Force).FullName } catch { } }
+  if ($p -and (Test-Path -LiteralPath $p -PathType Container)) {
+    try { $p = (Get-Item -LiteralPath $p -Force).FullName } catch { }
+    if ([IO.Path]::DirectorySeparatorChar -eq [char]'/') {
+      try { $q = [string](@(& /bin/sh -c 'cd -- "$1" && pwd -P' sh $p 2>$null) | Select-Object -First 1); if ($q) { $p = $q } } catch { }
+    }
+  }
   $p = ($p -replace '\\', '/') -replace '/+$', ''
   if ($p -match '^[A-Za-z]:') { $p = $p.Substring(0, 1).ToLowerInvariant() + $p.Substring(1) }
   $p
