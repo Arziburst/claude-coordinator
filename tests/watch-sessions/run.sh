@@ -174,9 +174,10 @@ code 0; silent
 
 fresh "idle, working, idle again: the quiet time starts again, no QUIET under the limit"
 printf '%s\n%s\n' $A $B > "$L"; printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-1"
-printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-6"; printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-7"
-printf '%s idle w-a\n%s done w-b\n' $A $B > "$STUB_D/list-12"
-# a limit of 10 intervals: idle 4 s, at work, idle 5 s (11 s in all: past the limit only with no restart); a poll must be 5 s late to reach it early (#593)
+for n in 4 8 11; do printf '%s working w-a\n%s working w-b\n' $A $B > "$STUB_D/list-$n"; done
+for n in 5 9; do printf '%s idle w-a\n%s working w-b\n' $A $B > "$STUB_D/list-$n"; done; printf '%s idle w-a\n%s done w-b\n' $A $B > "$STUB_D/list-12"
+# w-a: idle polls 1-3, 5-7, 9-10, 12, at work 4, 8, 11. Each idle stretch <= 2 intervals against a limit of 10 s: holds up to ~5 s a poll;
+# with no restart, poll 12 is 11 intervals idle: past the limit (#593)
 run --list "$L" --interval 1 --quiet-seconds 10
 code 0; has "^STOPPED $B w-b\$"; hasnt "^QUIET"; calls -eq 12
 
