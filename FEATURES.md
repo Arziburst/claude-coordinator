@@ -483,9 +483,9 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-SAFE-07 Deny rules
 - defined: settings.example.json, settings.example.windows.json, TOOLKIT.md
 - entry: the worker safety file; the strict preset; the cautious override
-- promises: the baseline denies protected-branch writes in shell and PowerShell forms (a push or a force push to main or master with further arguments too; a project listing more branches in `COORD_PROTECTED_BRANCHES` adds the same rules for each, INIT) and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed
-- tested by: none
-- not covered: MCP tools are covered by deny rules only, not by the hook
+- promises: the baseline denies protected-branch writes in shell and PowerShell forms (a push or a force push to main or master with further arguments too; a project listing more branches in `COORD_PROTECTED_BRANCHES` adds the same rules for each, INIT) and the GitHub MCP write tools; strict adds merge and ready; stack candidates are offered, never imposed; the worker examples also keep out of a worker's requests what a background session never uses (#603): `enableArtifact` false, the five bare tool names `AskUserQuestion`, `ReportFindings`, `ScheduleWakeup`, `SendFeedback`, `Workflow` in the deny list (no protection: the assistants' examples do not repeat them), `syncClaudeAiSkills` false and `skillOverrides` off for every `coord-*` skill the core ships, MCP servers and plugins untouched; a project's worker safety file gains them at its next update of the core, named in the impact report (UPDATE-CORE step 3)
+- tested by: tests/selftest/hooks.sh (the start-load keys in both worker examples, every `skills/coord-*` turned off; the assistants' examples need every other deny line of the worker's); the protection rules themselves: none
+- not covered: MCP tools are covered by deny rules only, not by the hook; the start load's saving is measured by a probe worker, not in CI (60.5k → 39.1k tokens on Windows; the skills' part only where the skill listing is under Claude Code's cut of about 30 000 characters); a project's own coordinator-only skills are turned off only when the project adds them
 
 ### F-SAFE-08 The owner's voice
 - defined: CORE.md §11, TOOLKIT.md, settings.example.json
