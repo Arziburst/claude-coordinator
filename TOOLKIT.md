@@ -874,7 +874,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
   stale runs on its next push, never a run on main. **What a pull request skips (#561):** a `#need` line whose one pattern is `!pr` is false
-  on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends the step before its `ps pwsh`) run on
+  on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends the step before its `ps pwsh`) and pwsh on macOS (runs and selftest's guard settings, `/bin/bash` first: #637, #657) run on
   main, the nightly and a manual run only; the guard's, the hooks' and the status line's run on a PR too. **How a step lands in a shard:** every shard holds about 6 to 8
   minutes by the measured seconds (#426): `ubuntu-1`, `macos-1` and `windows-1` the common steps; every other step packed
   longest first into the shortest shard of its OS, each part of a split set on a shard of its own (the workflow's
@@ -898,7 +898,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   parts or in none (`parts sh`, by hand on macOS or Ubuntu: the whole set and every part really run, the counts summed,
   a broken script failing its part alone). It does not prove a step's input from another step: a step reading a file
   under `$RUNNER_TEMP` that another step wrote runs in the shard of the step that writes it (#460). **Step times:** `scripts/ci-times.sh|.ps1
-  [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>` and `step <os> <s> <name>` from `gh run
+  [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>`, `shard <name> <s>` (#555) and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
   failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (900 s
@@ -931,7 +931,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   not the contract's repository is refused, exit 2 and why, never OK (#615): none of its `touches` among the folder's
   tracked files or the range's (a bound over is still reported there, `OVER`, exit 1), or an origin that is not its `repository: <owner>/<name>`. Run it from the project's root or the worktree, in the same command, never from `coordinator/` (the state repository: exit 2), where a subagent verifier's cwd can reset (#617).
 - `scripts/ci-times.sh|.ps1 [--baseline <file>] <run id | file>` (#373) — the seconds of a check-core run from
-  `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `step <os> <s> <name>` (a
+  `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `shard <name> <s>` (a shard job's end - its start), `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`
   per step past `max(floor(baseline × 1.3), baseline + 60)`; exit 0 also with over lines, 2 usage, 1 `ci-times:
   cannot read <what>`. Run by the aggregator jobs on their own run (*CI* above), by a worker for its `ci_seconds`,
@@ -960,7 +960,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   references (CORE §10), and the feature map [FEATURES.md](FEATURES.md) in sync with the files. Windows: `powershell -File scripts\check-core.ps1`.
   It also counts the words (runs between spaces, tabs and line ends) of the start-read texts - CORE.md, its §1, its
   event table, each `roles/*.md` - against [tests/check-core-sizes.txt](tests/check-core-sizes.txt) (#600): a text
-  over its record by more than the file's `margin`, or with no record, is a WARN that never blocks (the exit code
+  over its record by more than the file's `margin`, or with no record, is a WARN that never blocks (in CI a `::warning::` annotation, #608; the exit code
   as without it). A PR that grows a text past it raises the record there, with a line in its body naming the owner's word.
   `scripts/check-scripts.sh|.ps1 [folder ...]` — every `.sh` (`bash -n`) and `.ps1` (PowerShell's own
   parser; under `powershell` for 5.1's rules) parses; `<file>:<line>: <message>` per error, nothing

@@ -8,7 +8,8 @@ name: check-core
 # lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
 # without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
 # A line whose one pattern is !pr runs on no pull request, whatever it changes, and on every other run (#561): pwsh on Windows
-# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's and the hooks' keep it) and reset-coordinator (tests only).
+# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's and the hooks' keep it), reset-coordinator (tests only)
+# and pwsh on macOS (#657).
 #need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$ ^scripts/start-worker\. ^scripts/cleanup-worker\. ^settings\.example ^scripts/check-contract\. ^scripts/check-core\. ^scripts/check-scripts\. ^scripts/statusline\.  # selftest's guard settings, transcripts, probes, the throwaway assistant, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template, the assistant's start, cleanup and settings examples, and the scripts selftest scripts runs (#312)
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
@@ -27,6 +28,7 @@ name: check-core
 #need runs       ^scripts/runs\. ^scripts/session-tokens\. ^tests/runs/  # runs against fixture transcripts and a stub claude (it reads them through session-tokens)
 #need reset      !pr  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
 #need winpwsh    !pr  # pwsh on Windows in a non-hook script set: the gate line before a Windows step's last command, its ps pwsh
+#need macpwsh    !pr  # pwsh on macOS (#657): runs and selftest's guard settings, /bin/bash first on PATH (#637, #651)
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 #need citimes    ^scripts/ci-times\. ^tests/ci-times ^tests/safety-guard/run\.sh$ ^tests/workers/ ^tests/report-issue/  # the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr, the split sets' parts (it lists and runs them)
 on:
@@ -53,6 +55,8 @@ jobs:
 # seconds of runs 42376067684 and 42379649294 (main) and 42382598781 (#554; a Windows step varies by about a fifth from run to run):
 # every shard about 6 to 8 minutes, Windows bound by watch-sessions' one step; a longer one is rebalanced at the next CI audit. A shard past SHARD_LIMIT is a warning below.
 # #564: the PowerShell guard's ten parts gone, the Git Bash guard on five Windows shards; run-stats and check-bounds moved by run 43015604202.
+# #657: the throwaway assistant's 5.1 step from windows-4 (median 586 s) to windows-10 (402 s), by main's runs 44069262826,
+# 44016551258 and 44012667570; macOS pwsh on macos-2 (median 406 s, macos-1 428 s), not on a pull request.
   shard-ubuntu:
     strategy:
       fail-fast: false
@@ -123,7 +127,7 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then bash -c '[ "${BASH_VERSINFO[0]}" = 3 ]' || { echo "expected bash 3.2 on macOS"; exit 1; }; fi
       - name: Links and section references (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
-        run: bash scripts/check-core.sh
+        run: bash scripts/check-core.sh | sed 's/^WARN:/::warning::&/'   # #608: a WARN is an annotation
       - name: Links and section references (PowerShell)
         if: matrix.shard == 'windows-1'
         shell: powershell
@@ -213,7 +217,7 @@ jobs:
         if: matrix.shard == 'ubuntu-1' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh ps pwsh
       - name: selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
-        if: matrix.shard == 'windows-4' && steps.need.outputs.selftest == 'true'
+        if: matrix.shard == 'windows-10' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh ps powershell
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-8' && steps.need.outputs.selftest == 'true'
@@ -539,6 +543,12 @@ jobs:
           bash tests/runs/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/runs/run.sh ps pwsh
+      - name: runs and selftest's guard settings under pwsh on macOS, /bin/bash first (#651)
+        if: matrix.shard == 'macos-2' && steps.need.outputs.macpwsh == 'true'
+        run: |
+          export PATH="/bin:$PATH"   # the shim's bash is /bin/bash, as on a Mac (#637)
+          bash tests/runs/run.sh ps pwsh
+          bash tests/selftest/hooks.sh ps pwsh
       - name: reset-coordinator on scratch projects (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-2') && steps.need.outputs.reset == 'true'
         run: bash tests/reset-coordinator/run.sh sh

@@ -21,7 +21,7 @@
 #        cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 # 2. scripts/ci-times.sh and .ps1: `[--baseline <file>] <run id|file>`, in either order. All digits: the JSON of `gh run view <id> --json jobs`; else the file, any line
 #    ends and spacing. Output, one space between fields, in this order: `wall <seconds>` (the latest finished job's completedAt - the earliest startedAt, of all jobs);
-#    `total <os> <seconds>` (the sum of its steps; no counted job: no line); `step <os> <seconds> <name>` (by first appearance, a name in several shards summed);
+#    `total <os> <seconds>` (the sum of its steps; no counted job: no line); `shard <name> <seconds>` (#555: a `shard-<os> (<name>)` job's completedAt - startedAt, by OS then appearance; not finished: no line); `step <os> <seconds> <name>` (by first appearance, a name in several shards summed);
 #    with --baseline `over <os> <seconds> <limit> <name>` in the order of the step lines. <os> ubuntu, macos, windows, in that order. A job counts when named
 #    `shard-<os> (...)`, or `check (<os>-latest)` if the file has no shard-<os> job (an old run); others count for wall only. A step counts when completed and not
 #    skipped. A time of 0001-01-01 (not started, not finished) is never read. Whole seconds, across midnight and a month's end. Baseline: lines `<os><TAB><seconds><TAB><name>`,
@@ -178,7 +178,7 @@ script="$core/scripts/ci-times.sh"; [ "$kind" = ps ] && script="$core/scripts/ci
 if [ ! -f "$script" ]; then bad ci-times "no $script"
 else
   e() { tr -d '\r' < "$here/fixture-expected-$1.txt"; }; real="$(e real)"; shards="$(e shards)"; over="$shards"$'\n'"$(e over)"; r="$(m "$here/fixture-run-main.json")"; s="$(m "$here/fixture-run-shards.json")"; b="$(m "$here/fixture-baseline.tsv")"
-  same "a real run" 0 "$real" "$r"; same "shards summed, the aggregator and what has not finished left out, a month's end" 0 "$shards" "$s"
+  same "a real run" 0 "$real" "$r"; same "shards summed, a shard line each (#555), the aggregator and what has not finished left out, a month's end" 0 "$shards" "$s"
   awk '{ gsub(/,"/, ",\r\n  \""); print }' "$here/fixture-run-main.json" > "$tmp/pretty.json"; same "other line ends and spacing" 0 "$real" "$(m "$tmp/pretty.json")"
   same "--baseline: a line per step over, none at the line, exit 0" 0 "$over" --baseline "$b" "$s"; same "the same, the run first" 0 "$over" "$s" --baseline "$b"
   mkdir "$tmp/bin"; printf '%s\n' '#!/usr/bin/env bash' '[ "$*" = "run view 123 --json jobs" ] || exit 1' 'cat "$CT_RUN"' > "$tmp/bin/gh"; chmod +x "$tmp/bin/gh"
