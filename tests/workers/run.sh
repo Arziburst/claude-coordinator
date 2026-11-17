@@ -1627,9 +1627,9 @@ STUB_GH_RC=1 check 3 "cleanup: one commit, no origin" -- cleanup --worktree "$w"
 ap() {   # ap <branch> <file>...: a worktree on a new branch, never pushed, with one commit per file (each adds that file)
   me "$1"; shift; for f in "$@"; do echo "$f" > "$w/$f" && git -C "$w" add "$f" 2>/dev/null && g -C "$w" commit -q -m "$f"; done; }
 person() {   # person <branch> <commits> [more]: a person applies those commits of the branch (FETCH_HEAD, FETCH_HEAD~1, a range) to origin's main in one commit of their own; more: with one more file in it
-  git -C "$tmp/server2" fetch -q "$tmp/repo" "$1" 2>/dev/null && g -C "$tmp/server2" cherry-pick -n "$2" >/dev/null 2>&1 &&
+  git -C "$tmp/server2" fetch -q origin 2>/dev/null && git -C "$tmp/server2" checkout -q --detach origin/main 2>/dev/null && git -C "$tmp/server2" fetch -q "$tmp/repo" "$1" 2>/dev/null && g -C "$tmp/server2" cherry-pick -n "$2" >/dev/null 2>&1 &&   # (detached: the clone has no main where git's default branch name is another)
     { [ -z "${3:-}" ] || { echo more > "$tmp/server2/more-$1.txt" && git -C "$tmp/server2" add "more-$1.txt" 2>/dev/null; }; } &&
-    g -C "$tmp/server2" commit -q -m "applied by a person" && git -C "$tmp/server2" push -q origin main 2>/dev/null || { echo "FAIL: could not apply $1 as a person"; fail=1; }
+    g -C "$tmp/server2" commit -q -m "applied by a person" && git -C "$tmp/server2" push -q origin HEAD:main 2>/dev/null || { echo "FAIL: could not apply $1 as a person"; fail=1; }
 }
 ap 60-applied a60.txt; person 60-applied FETCH_HEAD; echo dirt > "$w/dirt.txt"
 STUB_GH_RC=1 check 3 "cleanup: an applied never-pushed branch, untracked file" -- cleanup --worktree "$w"
