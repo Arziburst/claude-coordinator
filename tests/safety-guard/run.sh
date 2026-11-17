@@ -145,15 +145,15 @@ case "$jobs" in ''|*[!0-9]*|0) jobs=4 ;; esac
 # Only the started process and the group set -m made for it are killed (Git Bash too: measured, a child there
 # has the group and dies with it, so the guard's hung awk does not go on growing), never a process found by a
 # tree walk or a looked-up PID. That happens only on a broken guard; stdout goes to /dev/null and stderr to the shard's file, so no pipe is held.
-bounded() {
+bounded() {   # #662: bounded <file> [<stdout file>]; the shell's signal report goes to the caller's stderr ($e.sig)
   local p w=0 lim=$((${SG_CASE_LIMIT:-10} * 5)) r
   {
-    set -m; "${CMD[@]}" < "$1" >/dev/null 2>"$e" & p=$!; set +m
+    set -m; "${CMD[@]}" < "$1" >"${2:-/dev/null}" 2>"$e" & p=$!; set +m
     while kill -0 "$p" 2>/dev/null && [ "$w" -lt "$lim" ]; do sleep 0.2; w=$((w + 1)); done
     if kill -0 "$p" 2>/dev/null; then
       kill -9 -- "-$p" 2>/dev/null; kill -9 "$p" 2>/dev/null; wait "$p"; r=124
     else wait "$p"; r=$?; fi
-  } 2>/dev/null
+  }
   return "$r"
 }
 cutl() { local l; while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$1${l:0:200}"; done; }   # #650: cutl <prefix>: stdin's lines after the prefix, each cut at 200 characters (by bash: in a UTF-8 locale never inside a character)
@@ -423,19 +423,22 @@ rootmsg "an entry that is no folder" "$SG_TMP/gone|$wkm" "entry 1 of 2 ($SG_TMP/
 rootmsg "one root that is no folder" "$SG_TMP/gone" "entry 1 of 1 ($SG_TMP/gone) is not a folder on this machine"
 
 # The self-test: OK for this hook; not OK for a copy that blocks every call (as a bash syntax error does).
+# #662: stt <command...>, a self-test call as a timed case runs (stdin /dev/null, SG_CASE_LIMIT; no answer: a FAIL): out its stdout without CR, rc its exit
+stt() { local e="$tmp/st.err" CMD=("$@"); { bounded /dev/null "$tmp/st.out"; } 2>"$e.sig"; rc=$?; out="$(tr -d '\r' < "$tmp/st.out")"; [ "$rc" != 124 ] || { echo "FAIL (self-test) no answer within ${SG_CASE_LIMIT:-10}s: $*"; stf; fail=1; }; }
+stf() { { head -n 20 "$tmp/st.err"; head -n 5 "$tmp/st.err.sig"; } | cutl "    "; }   # under a FAIL of the self-test: the hook's stderr, then the shell's signal report
 for a in "$@"; do guard="$a"; done
 case "$guard" in *.sh) flag=--self-test; brk='fi' ;; *.ps1) flag=-SelfTest; brk='exit 2' ;; *) flag="" ;; esac
 if [ -n "$flag" ]; then
   # #613: the one line OK for one sound root and for a list of sound roots; an entry that protects nothing: NOT WORKING, naming it
   for r in "$wkm" "$wkm|$SG_TMP/other"; do
-    n=$((n + 1)); out="$(COORD_PROTECTED_ROOT="$r" "$@" "$flag" 2>/dev/null | tr -d '\r')"
-    [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) with COORD_PROTECTED_ROOT=$r expected OK, got: $out"; fail=1; }
+    n=$((n + 1)); COORD_PROTECTED_ROOT="$r" stt "$@" "$flag"
+    [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) with COORD_PROTECTED_ROOT=$r expected OK, got: $out"; stf; fail=1; }
   done
-  n=$((n + 1)); out="$(COORD_PROTECTED_ROOT="$wkm|$SG_TMP/gone" "$@" "$flag" 2>/dev/null | tr -d '\r')"
-  case "$out" in "safety-guard: NOT WORKING"*"COORD_PROTECTED_ROOT entry 2 of 2 ($SG_TMP/gone) is not a folder on this machine"*) ;; *) echo "FAIL (self-test) a root that is no folder: expected NOT WORKING naming it, got: $out"; fail=1 ;; esac
+  n=$((n + 1)); COORD_PROTECTED_ROOT="$wkm|$SG_TMP/gone" stt "$@" "$flag"
+  case "$out" in "safety-guard: NOT WORKING"*"COORD_PROTECTED_ROOT entry 2 of 2 ($SG_TMP/gone) is not a folder on this machine"*) ;; *) echo "FAIL (self-test) a root that is no folder: expected NOT WORKING naming it, got: $out"; stf; fail=1 ;; esac
   n=$((n + 1))
-  out="$("$@" "$flag" 2>/dev/null | tr -d '\r')"
-  [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) expected OK, got: $out"; fail=1; }
+  stt "$@" "$flag"
+  [ "$out" = "safety-guard: OK" ] || { echo "FAIL (self-test) expected OK, got: $out"; stf; fail=1; }
   n=$((n + 1))
   broken="$tmp/broken-guard.${guard##*.}"
   awk -v brk="$brk" '{ print } /^input="\$\(cat\)"/ || /^\$in = \[Console\]::OpenStandardInput\(\)/ { print brk }' "$guard" > "$broken"
@@ -444,25 +447,25 @@ if [ -n "$flag" ]; then
   B+=("$(winpath m "$broken")")
   if [ "$(wc -l < "$broken")" -le "$(wc -l < "$guard")" ]; then echo "FAIL (self-test) could not build a broken copy of $guard"; fail=1
   else
-    out="$("${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
-    [ "$out" != "safety-guard: OK" ] || { echo "FAIL (self-test) a guard that blocks every call still says OK"; fail=1; }
+    stt "${B[@]}" "$flag"
+    [ "$out" != "safety-guard: OK" ] || { echo "FAIL (self-test) a guard that blocks every call still says OK"; stf; fail=1; }
   fi
   # in an assistant's session (#281): the settings set COORD_ASSISTANT_DIR, and the session's start runs the
   # self-test with it - still OK (exit 0) for this hook, still not OK for the copy that blocks every call
   n=$((n + 1))
-  out="$(COORD_ASSISTANT_DIR="$adm" "$@" "$flag" 2>/dev/null)"; rc=$?; out="$(printf '%s' "$out" | tr -d '\r')"
-  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (self-test) with COORD_ASSISTANT_DIR set expected OK (exit 0), got (exit $rc): $out"; fail=1; }
+  COORD_ASSISTANT_DIR="$adm" stt "$@" "$flag"
+  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (self-test) with COORD_ASSISTANT_DIR set expected OK (exit 0), got (exit $rc): $out"; stf; fail=1; }
   if [ -f "$broken" ]; then
     n=$((n + 1))
-    out="$(COORD_ASSISTANT_DIR="$adm" "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
-    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_ASSISTANT_DIR set, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
+    COORD_ASSISTANT_DIR="$adm" stt "${B[@]}" "$flag"
+    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_ASSISTANT_DIR set, a guard that blocks every call does not say NOT WORKING: $out"; stf; fail=1 ;; esac
   fi
   # with COORD_NO_PUSH=1 in the settings (#367) a guard that blocks every call still does not say OK; this
   # hook's own OK with it: no-push.sh
   if [ -f "$broken" ]; then
     n=$((n + 1))
-    out="$(COORD_NO_PUSH=1 "${B[@]}" "$flag" 2>/dev/null | tr -d '\r')"
-    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_NO_PUSH=1, a guard that blocks every call does not say NOT WORKING: $out"; fail=1 ;; esac
+    COORD_NO_PUSH=1 stt "${B[@]}" "$flag"
+    case "$out" in *"NOT WORKING"*) ;; *) echo "FAIL (self-test) with COORD_NO_PUSH=1, a guard that blocks every call does not say NOT WORKING: $out"; stf; fail=1 ;; esac
   fi
 fi
 # COORD_NO_PUSH (#367): tests/safety-guard/no-push.txt, in a file of its own that also runs alone

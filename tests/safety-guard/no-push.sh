@@ -24,6 +24,7 @@ git init -q -b work "$r" && git -C "$r" -c user.email=t@t -c user.name=t commit 
   git -C "$r" branch main && git -C "$r" branch 12-fix || { echo "FAIL (no-push) could not make the repository"; exit 1; }
 d="$r"; command -v cygpath >/dev/null 2>&1 && d="$(cygpath -m "$r")"
 CMD=("$@")
+cutl() { local l; while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$1${l:0:200}"; done; }   # as run.sh's (#650): stdin's lines after the prefix, each cut at 200 characters
 
 # one <expect> <value, or the word UNSET> <tool> <command>: \n in the command is a newline
 one() {
@@ -32,13 +33,13 @@ one() {
   json="$(printf '%s' "$cmd" | awk -v cwd="$d" -v tool="$tool" '
     { gsub(/\\n/, "\001"); gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\001/, "\\n")
       printf "{\"tool_name\":\"%s\",\"tool_input\":{\"command\":\"%s\"},\"cwd\":\"%s\"}", tool, $0, cwd }')"
-  if [ "$val" = UNSET ]; then
-    err="$(printf '%s' "$json" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  if [ "$val" = UNSET ]; then   # #662: in this shell, not in $(...): the shell's report of a signal goes to e.sig (bash 3.2 gives none in $(...))
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" >/dev/null 2>"$tmp/e"
   else
-    err="$(printf '%s' "$json" | CLAUDE_PROJECT_DIR="$d" COORD_NO_PUSH="$val" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
-  fi
+    printf '%s' "$json" | CLAUDE_PROJECT_DIR="$d" COORD_NO_PUSH="$val" "${CMD[@]}" >/dev/null 2>"$tmp/e"
+  fi 2>"$tmp/e.sig"; rc=$?; err="$(cat "$tmp/e")"
   case "$rc" in 0) got=allow ;; 2) got=block ;; *) got=error ;; esac
-  [ "$got" = "$expect" ] || { echo "FAIL (no-push, $tool, COORD_NO_PUSH=$val) expected $expect, got $got (exit $rc): $cmd"; fail=1; return; }
+  [ "$got" = "$expect" ] || { echo "FAIL (no-push, $tool, COORD_NO_PUSH=$val) expected $expect, got $got (exit $rc): $cmd"; { head -n 20 "$tmp/e"; head -n 5 "$tmp/e.sig"; } | cutl "    "; fail=1; return; }
   [ "$got" = block ] || return
   case "$err" in
     *COORD_NO_PUSH*) [ "$val" = 1 ] || { echo "FAIL (no-push, $tool, COORD_NO_PUSH=$val) the setting is off, the message names it: $cmd: $err"; fail=1; } ;;
@@ -63,8 +64,8 @@ for a in "$@"; do guard="$a"; done
 case "$guard" in *.sh) flag=--self-test ;; *.ps1) flag=-SelfTest ;; *) flag="" ;; esac
 if [ -n "$flag" ]; then
   n=$((n + 1))
-  out="$(COORD_NO_PUSH=1 "$@" "$flag" 2>/dev/null)"; rc=$?; out="$(printf '%s' "$out" | tr -d '\r')"
-  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (no-push self-test) with COORD_NO_PUSH=1 expected OK (exit 0), got (exit $rc): $out"; fail=1; }
+  { COORD_NO_PUSH=1 "$@" "$flag" < /dev/null > "$tmp/out" 2>"$tmp/e"; } 2>"$tmp/e.sig"; rc=$?; out="$(tr -d '\r' < "$tmp/out")"   # #662: stdin from /dev/null
+  [ "$out" = "safety-guard: OK" ] && [ "$rc" = 0 ] || { echo "FAIL (no-push self-test) with COORD_NO_PUSH=1 expected OK (exit 0), got (exit $rc): $out"; { head -n 20 "$tmp/e"; head -n 5 "$tmp/e.sig"; } | cutl "    "; fail=1; }
 fi
 echo "safety-guard no-push: $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
