@@ -3,7 +3,7 @@
 #   tests/safety-guard/run.sh bash scripts/hooks/safety-guard.sh
 #   tests/safety-guard/run.sh powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hooks/safety-guard.ps1   (the shim)
 # Exit 1 if any verdict differs from the expected one. SG_JOBS=<n>: cases at once (default: the cores). SG_CASES=<file>: that file
-# for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384; #650: 200 characters a line, then the shell's report of a signal).
+# for cases.txt, then the summary line and exit (#373). A failing case prints the hook's stderr (its first 20 lines, #384; #650: 200 characters a line, then the shell's report of a signal; a passing case that a signal ended: that report under a crash line).
 # SG_PART=<k>/<n> (#405): the k-th of n parts of the cases (case i in part (i - 1) mod n + 1, so a case added at the end lands in one
 # part by itself); the sections after the cases run in part 1 only. SG_LIST=1: the line numbers of that part's cases, no hook run.
 set -u
@@ -156,7 +156,7 @@ bounded() {
   } 2>/dev/null
   return "$r"
 }
-cutl() { local l; while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$1${l:0:200}"; done; }   # #650: cutl <prefix>: stdin's lines after the prefix, each cut at 200 characters (by bash, so never inside a character)
+cutl() { local l; while IFS= read -r l || [ -n "$l" ]; do printf '%s\n' "$1${l:0:200}"; done; }   # #650: cutl <prefix>: stdin's lines after the prefix, each cut at 200 characters (by bash: in a UTF-8 locale never inside a character)
 shard() {   # shard <k> <shards> [timed]: only the timed: cases, or (without it) all the others
   local ln=0 i=0 hung="" e="$tmp/err.$1"   # e: the hook's stderr of the case at hand (printed when it fails)
   n=0 fail=0
@@ -227,6 +227,7 @@ while IFS="$(printf '\t')" read -r expect branch cmd root pdir pbr adir pm; do
   [ "$rc" = 124 ] && { got="no answer within ${SG_CASE_LIMIT:-10}s"; hung=1; }
   [ "$rc" = 125 ] && got="not run (an earlier timed case gave no answer)"
   nop=""; [ -n "$pdir" ] || nop=", CLAUDE_PROJECT_DIR unset"
+  [ "$got" != "$expect" ] || [ ! -s "$e.sig" ] || { echo "$ln crash (allow case passed, exit $rc): $cmd"; head -n 5 "$e.sig" | cutl "$ln     "; }   # #650: a signal's exit reads as allow, so the case passes: the shell's report is still shown, keyed to the case
   [ "$got" = "$expect" ] || { echo "$ln FAIL ($tool, $branch${root:+, root $root}${pbr:+, protected $pbr}${adir:+, assistant $adir}${pm:+, mode $pm}$nop) expected $expect, got $got (exit $rc): $cmd"; [ "$rc" = 125 ] || { head -n 20 "$e"; head -n 5 "$e.sig"; } | cutl "$ln     "; fail=1; }
 done < "$cases"
   echo "$n $fail $i" > "$tmp/shard.$1.done"
@@ -250,7 +251,7 @@ n=$((n + ran))
 
 # Sessions (CORE §1.17): a listing that cannot be read lets a call to another project's session through
 # (nothing to tell it by); only the session commands and SendMessage run claude agents at all.
-crash() { case "$1" in 0|2) ;; *) printf '%s\n' "$2" | head -n 20 | cutl "    " ;; esac; }   # #650: crash <exit> <stderr>, under a FAIL line of the sections below: the first lines of the stderr of a hook that ended in neither 0 nor 2
+crash() { case "$1" in 0|2) ;; *) [ -z "$2" ] || printf '%s\n' "$2" | head -n 20 | cutl "    " ;; esac; }   # #650: crash <exit> <stderr>, under a FAIL line of the sections below: the first lines of the stderr of a hook that ended in neither 0 nor 2
 sess() {   # sess <expect> <what> <tool call JSON> [env assignments...]
   local expect="$1" what="$2" js="$3" rc got d err; shift 3; n=$((n + 1)); d="$(winpath m "$tmp/work")"
   err="$(printf '%s' "$js" | sed "s#@CWD@#$d#" | env CLAUDE_PROJECT_DIR="$d" "$@" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
