@@ -196,6 +196,39 @@ SKIP hooks: its matcher leaves out SendMessage: a message to another project's s
 SKIP hooks: COORD_PROTECTED_ROOT not set: the working copy is not protected from edit tools
 protected branches: main master (default)
 selftest hooks: 8 pass, 0 fail, 2 skipped
+== protectedlist.json (exit 0)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+PASS hooks: its timeout gives a loaded machine time (>= 30 s)
+SKIP hooks: its matcher leaves out SendMessage: a message to another project's session is not guarded (CORE 1.17)
+PASS hooks: COORD_PROTECTED_ROOT entry 1 of 2 is an absolute path to a folder
+PASS hooks: COORD_PROTECTED_ROOT entry 2 of 2 is an absolute path to a folder
+PASS hooks: the guard blocks an edit tool under entry 1 of 2
+PASS hooks: the guard blocks an edit tool under entry 2 of 2
+PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
+protected branches: main master (default)
+selftest hooks: 13 pass, 0 fail, 1 skipped
+== protectedlistbad.json (exit 1)
+PASS hooks: a safety-guard hook
+PASS hooks: its path uses forward slashes
+PASS hooks: no $env: in its command
+PASS hooks: its path is quoted or has no space
+PASS hooks: no PowerShell shell around it
+PASS hooks: its matcher covers the PowerShell tool
+PASS hooks: onFailure "block": a guard that fails to run blocks
+PASS hooks: its timeout gives a loaded machine time (>= 30 s)
+SKIP hooks: its matcher leaves out SendMessage: a message to another project's session is not guarded (CORE 1.17)
+PASS hooks: COORD_PROTECTED_ROOT entry 1 of 3 is an absolute path to a folder
+FAIL hooks: COORD_PROTECTED_ROOT entry 2 of 3 is not a folder on this machine: C:/nonexistent-coordinator-root
+FAIL hooks: COORD_PROTECTED_ROOT entry 3 of 3 is not an absolute path: projects/app
+PASS hooks: its matcher covers Edit, Write, MultiEdit and NotebookEdit
+protected branches: main master (default)
+selftest hooks: 10 pass, 2 fail, 1 skipped
 == protectedmatcher.json (exit 1)
 PASS hooks: a safety-guard hook
 PASS hooks: its path uses forward slashes

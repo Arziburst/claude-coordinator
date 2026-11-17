@@ -30,4 +30,5 @@ tests-first-bad.md: FAIL (1 errors, 0 warnings)
 tests-first-no-reason.md: ERROR `tests_first` is neither yes nor no with its reason (no): write `tests_first: yes` or `tests_first: no - <why>`
 tests-first-no-reason.md: FAIL (1 errors, 0 warnings)
 bom.md: OK (0 errors, 0 warnings)
+repository.md: OK (0 errors, 0 warnings)
 missing.md: cannot read

@@ -46,6 +46,7 @@ budget:
   time: 18-40                      # optional: minutes of work, the median's range (CORE §7a)
 depends_on: [31]
 touches: [src/cart/]               # what it will change, for conflict foresight (CORE §4a)
+repository: owner/shop             # optional, a project of several repositories only (else leave it out): the one this task changes, <owner>/<name>
 bounds:                            # with tests_first: yes, or when touches holds an important component: the most lines a glob may add
   - src/cart/* 120
   - tests/cart/* 80
@@ -93,6 +94,8 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   compares the real diff with the bounds: the worker and the tester run it before reporting, the verifier as
   an oracle, and `scripts/merge-queue land` on the contract it finds at `coordinator/briefs/<head branch>-contract.md`
   (a branch's `/` as `-`), then by the id the PR's branch starts with, `coordinator/briefs/<id>-contract.md`.
+  Run in a folder that is not the contract's repository it refuses (exit 2), never OK (#615): none of `touches` is among the folder's
+  files or the range's (a bound over is still reported there, `OVER`, exit 1), or the folder's origin is not `repository:`.
   At the queue (#419) an OVER stops the PR only when its glob matches or holds an important glob (the list above);
   any other OVER prints one line (`bounds over, not important: <pr> <glob> <added>/<max>`) and the PR goes on. The worker
   still stops and asks past any bound, and the verifier still reads it.
