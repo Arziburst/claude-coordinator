@@ -85,7 +85,7 @@ sw() {   # sw <sh|ps>: the worker safety settings for that variant's guard
   if [ "$1" = ps ]; then sed 's#C:/ABSOLUTE/PATH/scripts/hooks/#'"$core"'/scripts/hooks/#g' "$core/settings.example.windows.json"
   else sed "s#/ABSOLUTE/PATH#$core#g" "$core/settings.example.json"; fi
 }
-sw "$kind" > "$tmp/safety.json"
+sw "$kind" | sed "s#C:/ABSOLUTE/PROJECT#$mtmp/repo#; s#/ABSOLUTE/PROJECT#$mtmp/repo#" > "$tmp/safety.json"   # #613: the self-test sees the file's env, so its root is a folder
 grep -q "$core/scripts/hooks/safety-guard" "$tmp/safety.json" || { echo "FAIL: could not point the safety settings at $core"; exit 1; }
 
 # runs <sh|ps> <script> <arguments in the .sh form>: the variant's script; the .ps1 with its own parameter names

@@ -119,6 +119,9 @@ else
   sed "s#/ABSOLUTE/PATH#$core#g" "$core/settings.example.json" > "$tmp/safety.json"
 fi
 grep -q "$core/scripts/hooks/safety-guard" "$tmp/safety.json" || { echo "FAIL: could not point the safety settings at $core"; exit 1; }
+# #613: start-worker runs the guard's self-test with the file's env, so its protected root is a folder here: the test repository
+proot="$(cygpath -m "$tmp/repo" 2>/dev/null || printf '%s' "$tmp/repo")"
+sed "s#C:/ABSOLUTE/PROJECT#$proot#; s#/ABSOLUTE/PROJECT#$proot#" "$tmp/safety.json" > "$tmp/safety.fill" && mv "$tmp/safety.fill" "$tmp/safety.json"
 
 start() {
   if [ "$kind" = ps ]; then
@@ -1925,5 +1928,21 @@ check 1 "#621: neither --worktree nor --task" -- t621 --dry-run; check 1 "#621: 
 mk 621-z; s621 0 done "#621 tester: z" "$(cd "$tmp/repo" && { pwd -W 2>/dev/null || pwd -P; })" "" row; : > "$STUB_LOG"
 STUB_HEADS="$h" check 0 "#621: --task with --worktree" -- cleanup --worktree "$w" --task 621 --runs "$r5/coordinator/RUNS.tsv"
 expect_in "cleaned: no session"; expect_in "removed c6210000 (#621 tester: z)"; [ "$(tr '\n' ' ' < "$STUB_LOG" | sed 's/agents --json --all //g')" = "rm c6210000 " ] || { echo "FAIL (#621): with --worktree, not only c6210000 removed"; fail=1; }
+# --- the guard's self-test sees the safety file's env (#613): a root list with an entry that protects nothing is refused before any worktree, the entry named; a sound list starts as before; every key of the env block reaches it ---
+: > "$STUB_LOG"; mkdir -p "$tmp/repo-b" "$tmp/envg"; rl="$proot|$mtmp/repo-b"; RL=(--repo "$tmp/repo" --name "#613 worker: a" --branch 613-a "${W[@]}")
+sed "s#\"COORD_PROTECTED_ROOT\": \"[^\"]*\"#\"COORD_PROTECTED_ROOT\": \"$rl\"#" "$tmp/safety.json" > "$tmp/safety-list.json"
+sed "s#\"COORD_PROTECTED_ROOT\": \"[^\"]*\"#\"COORD_PROTECTED_ROOT\": \"$rl|$mtmp/no-such-root\"#" "$tmp/safety.json" > "$tmp/safety-listbad.json"
+grep -q 'repo-b|' "$tmp/safety-listbad.json" && grep -q 'repo-b"' "$tmp/safety-list.json" || { echo "FAIL: could not write the root lists into the safety files"; fail=1; }
+for dry in "" --dry-run; do
+  check 1 "start: a root list with an entry that is no folder${dry:+, dry run}" -- start "${RL[@]}" --safety "$tmp/safety-listbad.json" $dry
+  expect_in "COORD_PROTECTED_ROOT entry 3 of 3"; expect_in "no-such-root) is not a folder on this machine"; nothing_made 613-a
+done
+check 0 "start: a sound root list, dry run" -- start "${RL[@]}" --safety "$tmp/safety-list.json" --dry-run
+expect_in "[dry-run] (cd "
+# a guard that prints what it was given: the other keys of the env block reach the self-test too, JSON escapes decoded
+printf '#!/usr/bin/env bash\necho "safety-guard: mark=${COORD_T613:-unset}"\n' > "$tmp/envg/safety-guard.sh"; cp "$core/scripts/hooks/safety-guard.ps1" "$tmp/envg/"
+sed -e "s#$core/scripts/hooks/#$mtmp/envg/#g" -e 's#"COORD_PROTECTED_BRANCHES": ""#"COORD_PROTECTED_BRANCHES": "", "COORD_T613": "a b\\\\c"#' "$tmp/safety.json" > "$tmp/safety-env.json"
+check 1 "start: the self-test runs with every key of the file's env" -- start "${RL[@]}" --safety "$tmp/safety-env.json"
+expect_in 'safety-guard: mark=a b\c'; nothing_made 613-a
 echo "worker scripts ($kind${WK_PART:+ part $pk/$pn}): $n checks ($nr agreement-guard starts kept from earlier cases), $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
