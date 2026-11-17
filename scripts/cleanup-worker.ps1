@@ -5,7 +5,7 @@
 # lose (#257): no commits beyond its base (origin's default branch; with no origin the local main or
 # master), never pushed (no upstream, no remote branch of its name) and the worktree clean -
 # `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`. And a never-pushed branch a person
-# already applied to that base (#498) - `APPLIED: <branch> was never pushed; its <n> commits are in <base> (<the proof>) - removed`.
+# already applied to that base (#498) - `APPLIED: <branch> has no remote branch; its <n> commits are in <base> (<the proof>) - removed`.
 # Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
 # is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   powershell -File scripts\cleanup-worker.ps1 -Worktree <path> [-Session <id>] [-DryRun]
@@ -219,6 +219,12 @@ if (-not $u -and $branch -cne 'HEAD') {
         if ($sq -and (Ck $sq) -eq 1) { $applied = $cnt; $how = 'the whole diff as one commit, git cherry' }
       }
     }
+    # a patch id is not the content (git's ignores blanks; one commit of the base answers for two equal ones of the branch), so for either proof merging the
+    # branch into the base must change nothing: `git merge-tree --write-tree` (git 2.38 or later; an older git: not applied) with no conflict and the base's own tree
+    if ($applied) {
+      $mt = "$(git -C $Worktree merge-tree --write-tree $base HEAD 2>$null)".Trim()
+      if ($LASTEXITCODE -ne 0 -or -not $mt -or $mt -cne "$(git -C $Worktree rev-parse "$base^{tree}" 2>$null)".Trim()) { $applied = '' }
+    }
     if ($cnt -eq '0' -or $applied) {
       if (-not $o) { $empty = $true }
       else {
@@ -383,7 +389,7 @@ else {
   }
 }
 if ($empty -and $applied) {
-  "APPLIED: $branch was never pushed; its $applied commits are in $base ($how) - $(if ($DryRun) { 'would be removed' } else { 'removed' })"
+  "APPLIED: $branch has no remote branch; its $applied commits are in $base ($how) - $(if ($DryRun) { 'would be removed' } else { 'removed' })"
 } elseif ($empty) {
   if ($DryRun) { "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed" }
   else { "EMPTY: $branch has no commits beyond $base and was never pushed - removed" }

@@ -5,7 +5,7 @@
 # branch that holds nothing to lose (#257): no commits beyond its base (origin's default branch; with no
 # origin the local main or master), never pushed (no upstream, no remote branch of its name) and the
 # worktree clean - `EMPTY: <branch> has no commits beyond <base> and was never pushed - removed`. And a never-pushed
-# branch a person already applied to that base (#498) - `APPLIED: <branch> was never pushed; its <n> commits are in <base> (<the proof>) - removed`.
+# branch a person already applied to that base (#498) - `APPLIED: <branch> has no remote branch; its <n> commits are in <base> (<the proof>) - removed`.
 # Otherwise report and change nothing. A lead's notes folder beside the worktree, <worktree>.lead/ (#310),
 # is removed with the worktree (one line names it) and kept whenever the worktree is left.
 #   scripts/cleanup-worker.sh --worktree <path> [--session <id>] [--dry-run]
@@ -166,6 +166,9 @@ if [ -z "$u" ] && [ "$branch" != HEAD ] &&
          sq="$(git -C "$wt" -c user.name=cleanup-worker -c user.email=cleanup-worker@localhost commit-tree 'HEAD^{tree}' -p "$mb" -m squash 2>/dev/null </dev/null)" &&
          [ "$(ck "$sq")" = 1 ]; then applied="$cnt" how="the whole diff as one commit, git cherry"; fi
   fi
+  # A patch id is not the content (git's ignores blanks; one commit of the base answers for two equal ones of the branch), so for either proof merging the
+  # branch into the base must change nothing: `git merge-tree --write-tree` (git 2.38 or later; an older git: not applied) with no conflict and the base's own tree.
+  [ -z "$applied" ] || { mt="$(git -C "$wt" merge-tree --write-tree "$base" HEAD 2>/dev/null)" && [ -n "$mt" ] && [ "$mt" = "$(git -C "$wt" rev-parse "$base^{tree}" 2>/dev/null)" ]; } || applied=""
   if [ "$cnt" = 0 ] || [ -n "$applied" ]; then
     if [ -z "$o" ]; then empty=1
     elif rh="$(git -C "$wt" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" && [ -z "$rh" ]; then empty=1; fi
@@ -307,7 +310,7 @@ else
   fi
 fi
 if [ -n "$empty" ] && [ -n "$applied" ]; then
-  echo "APPLIED: $branch was never pushed; its $applied commits are in $base ($how) - $([ "$dry" = 1 ] && echo "would be removed" || echo removed)"
+  echo "APPLIED: $branch has no remote branch; its $applied commits are in $base ($how) - $([ "$dry" = 1 ] && echo "would be removed" || echo removed)"
 elif [ -n "$empty" ]; then
   if [ "$dry" = 1 ]; then echo "EMPTY: $branch has no commits beyond $base and was never pushed - would be removed"
   else echo "EMPTY: $branch has no commits beyond $base and was never pushed - removed"; fi
