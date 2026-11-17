@@ -58,7 +58,7 @@
 # the one wildcard, it crosses folders; `**/` zero or more folders, #529), or a folder item whose path with its slash starts a glob or lies under its wildcard, must carry `bounds:`
 # (lines `- <glob> <max added lines>`, each a whole number, at least one) and `wall:` (one non-empty line); missing or
 # malformed: one ERROR per field, naming the glob. The list: the defaults below and the row *Important components* of
-# the PROJECT.md two folders above this script's (a space-separated list; adds, never removes; `<fill>` adds nothing).
+# the PROJECT.md two folders above this script's (a space-separated list; adds, never removes; `<fill>` adds nothing). Only an item that looks like a path (#517): it holds a `/` or a `.`, or names a file or folder in the working directory (`touches: [none]` is no file).
 # `--field budget.cost`: budget's cost as written, for start-worker's gate.
 # A bound on tests (#390): `tests_first: yes` with no well-formed line under `bounds:` is an ERROR naming `tests_first`, in
 # every mode. An important-file contract keeps its own ERROR: a malformed line there is that ERROR alone.
@@ -92,6 +92,7 @@ if [ -d "$here/../roles" ]; then
   [ -z "$core_roles" ] || core_roles="$core_roles|"
 fi
 pf="$here/../../PROJECT.md"
+top="|$(for x in *; do [ -e "$x" ] && printf '%s|' "$x"; done)"   # #517: the working directory's names, |a|b|: a touches item with no / or . is a path only when it names one
 [ ! -f "$pf" ] || important="$important $(awk -F'|' '{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }
   n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</) print v; exit }' "$pf")"
 [ -z "$listimp" ] || { set -f; printf '%s\n' $important; exit 0; }
@@ -165,7 +166,7 @@ prog='
       return gmz(a r, p, i - 1) || gmz(a "*/" r, p, i + 1) }
     function imp(t,   n, it, m, G, i, j, s, k) { gsub(/(^|[ \t\n])#[^\n]*/, " ", t); n = split(t, it, /[,\n]/); m = split(ENVIRON["IMP"], G, " ")
       for (j = 1; j <= m; j++) for (i = 1; i <= n; i++) { s = it[i]; gsub("^[ \t]*(\\[[ \t]*)?(-[ \t]+)?[\"" q "]?|[\"" q "]?[ \t]*\\]?[ \t]*$", "", s)
-        k = index(G[j], "*"); if (s != "" && (gmz(G[j], s, 0) || (s ~ /\/$/ && (index(G[j], s) == 1 || (k && substr(s, 1, k - 1) == substr(G[j], 1, k - 1)))))) return G[j] }
+        k = index(G[j], "*"); if (s != "" && (s ~ /[\/.]/ || index(ENVIRON["TOP"], "|" s "|")) && (gmz(G[j], s, 0) || (s ~ /\/$/ && (index(G[j], s) == 1 || (k && substr(s, 1, k - 1) == substr(G[j], 1, k - 1)))))) return G[j] }
       return "" }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
@@ -320,6 +321,6 @@ EOF
     R="$(forecast "${ck:-$rkind}" "$cm" "$cc" "$ct")"
   fi
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" IMP="$important" awk "$prog" "$f" || failed=1
+  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" IMP="$important" TOP="$top" awk "$prog" "$f" || failed=1
 done
 exit $failed

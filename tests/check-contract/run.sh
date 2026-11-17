@@ -325,7 +325,7 @@ imk i-wall1.md scripts/hooks/x.sh "${B1}wall:\n"; iname="an empty wall"; ierr i-
 imk i-none1.md 'sort.sh, src/x.sh' ''; iname="no important file"; inone i-none1.md
 imk i-none2.md 'scripts/hooks.sh, scripts/hooksy/x.sh, tests/run.sh, docs/tests/a/run.sh, tests/a/runner.sh, .github/workflows.yml' ''; iname="near misses"; inone i-none2.md
 # the project's row: PROJECT.md two folders above the script's own (the header), from copies of the scripts
-for d in proj fillp; do
+for d in proj fillp wordp; do
   mkdir -p "$d/coordinator/core/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/coordinator/core/scripts/"
 done
 printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| Work mode | by task | owner | 2026-11-02 | - |\n| **Important components** (CONTRACT.md) | `src/pay/* lib/core/* src/i18n/**/*.test.*` | owner | 2026-11-02 | added to the default list |\n' > proj/coordinator/PROJECT.md
@@ -341,6 +341,15 @@ iname="a **/ glob, a file directly in its folder"; ierr i-p5.md bounds 'src/i18n
 iname="a **/ glob, a file two folders down"; ierr i-p6.md wall 'src/i18n/**/*.test.*'
 ccore="$(pwd)/fillp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hooks/*'
+# a touches word that is no path (#517): matched only when it holds a / or a ., or names a file or folder in the working directory
+printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `none Makefile build` |\n' > wordp/coordinator/PROJECT.md
+: > Makefile; mkdir -p build; imk i-w1.md none ''; imk i-w2.md Makefile "$W1"; imk i-w3.md build "$B1"; imk i-w4.md '' 'touches: []\n'
+ccore="$(pwd)/wordp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+iname="touches: [none], a report-only contract, no bounds"; inone i-w1.md
+iname="a word naming a top-level file"; ierr i-w2.md bounds Makefile
+iname="a word naming a top-level folder"; ierr i-w3.md wall build
+iname="touches: [] keeps its WARN"; crun i-w4.md; [ "$CRC" = 0 ] || ifail "exit $CRC, want 0"
+printf '%s\n' "$CO" | grep -qF 'i-w4.md: WARN  touches missing or empty' && printf '%s\n' "$CO" | grep -qxF 'i-w4.md: OK (0 errors, 1 warnings)' || ifail "want the touches WARN alone"
 ccore=""
 # tests_first: yes names a bound (#390, the header); `no` with none stays today's: quoted.md in expected.txt, i-none1..3 above
 tfm='`tests_first` is yes but `bounds` has no line (`- <glob> <max added lines>`): name the size of the tests this task adds (CONTRACT.md)'

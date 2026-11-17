@@ -32,10 +32,11 @@
 #   directory's) is not read for the word list; other items, title and intent as above; no such folder: none.
 #   Important components (#381; the rules: check-contract.sh): touches holding a glob of the list (the defaults below,
 #   and the row *Important components* of the PROJECT.md two folders above this script's) needs `bounds:` and `wall:`;
-#   missing or malformed: one ERROR per field, naming the glob. -Field budget.cost: budget's cost as written.
+#   missing or malformed: one ERROR per field, naming the glob; only an item holding a / or a ., or naming a file or folder here (#517). -Field budget.cost: budget's cost as written.
 #   A bound on tests (#390; the rules: check-contract.sh): `tests_first: yes` with no well-formed line under `bounds:`: an ERROR.
 #   -Important, alone (#419): read-only, the list below (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
 $Important = @('scripts/hooks/*', '.github/workflows/*', 'tests/*/run.*')
+$Top = @(Get-ChildItem -Force -Name -ErrorAction SilentlyContinue)   # #517: the working directory's names: a touches item with no / or . is a path only when it names one
 $pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT.md'
 if (Test-Path -LiteralPath $pf -PathType Leaf) {
   foreach ($ln in [IO.File]::ReadAllLines($pf)) { $x = $ln -split '\|'; if ($x.Count -lt 3) { continue }
@@ -47,7 +48,7 @@ function Imp([string]$t) {
   $its = @(($t -creplace '(^|[ \t\n])#[^\n]*', ' ') -split '[,\n]' | ForEach-Object { $_ -creplace ('^[ \t]*(\[[ \t]*)?(-[ \t]+)?["' + "'" + ']?|["' + "'" + ']?[ \t]*\]?[ \t]*\z'), '' } | Where-Object { $_ })
   foreach ($g in $Important) { $re = '^' + ([regex]::Escape($g) -creplace '\\\*\\\*/', '(?:.*/)?' -creplace '\\\*', '.*') + '\z'
     $lit = $g.Substring(0, [Math]::Max(0, $g.IndexOf('*'))); $hasW = $g.Contains('*')
-    foreach ($s in $its) { if ($s -cmatch $re -or ($s.EndsWith('/') -and ($g.StartsWith($s, [StringComparison]::Ordinal) -or ($hasW -and $s.StartsWith($lit, [StringComparison]::Ordinal))))) { return $g } } }
+    foreach ($s in $its) { if (-not ($s -cmatch '[/.]' -or $Top -ccontains $s)) { continue }; if ($s -cmatch $re -or ($s.EndsWith('/') -and ($g.StartsWith($s, [StringComparison]::Ordinal) -or ($hasW -and $s.StartsWith($lit, [StringComparison]::Ordinal))))) { return $g } } }
   ''
 }
 $CoreRoles = @{}
