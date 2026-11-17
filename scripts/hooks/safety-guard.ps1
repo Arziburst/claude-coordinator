@@ -40,8 +40,10 @@ $psi.UseShellExecute = $false
 $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
 # the .sh runs sed, awk and the like: Git's usr\bin on the child's PATH, whichever bash was found
 $sep = [IO.Path]::PathSeparator
-foreach ($d in @((Split-Path $bash), (Join-Path (Split-Path (Split-Path $bash)) 'usr\bin'))) {
-  if ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath $d -PathType Container)) { $psi.EnvironmentVariables['PATH'] = $d + $sep + $psi.EnvironmentVariables['PATH'] }
+if ($env:OS -eq 'Windows_NT') {   # only there: /bin/bash has no folder two levels up, and Join-Path would write an error (#637)
+  foreach ($d in @((Split-Path $bash), (Join-Path (Split-Path (Split-Path $bash)) 'usr\bin'))) {
+    if (Test-Path -LiteralPath $d -PathType Container) { $psi.EnvironmentVariables['PATH'] = $d + $sep + $psi.EnvironmentVariables['PATH'] }
+  }
 }
 try { $p = [Diagnostics.Process]::Start($psi) } catch { Stop-Guard "$bash did not start: $($_.Exception.Message)" }
 $out = New-Object IO.MemoryStream; $err = New-Object IO.MemoryStream
