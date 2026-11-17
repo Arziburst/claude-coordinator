@@ -88,6 +88,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   check-contract refuses such a contract without them. `bounds:` is lines `- <glob> <max added lines>`, each a
   whole number; a file no bound matches is not limited, and a bound's glob need not be the important one.
   A glob (bounds, touches, the important list) holds the whole path; `*` crosses folders; `**/` is zero or more folders (#529).
+  A report-only contract (it changes no file) writes `touches: [none]`: a word with no `/` or `.` that names no file or folder at the root is no path, so no bounds or wall (#517).
   `wall:` is one line: what really protects this component, and what this change only filters. **How a bound
   is chosen:** the smallest that can hold the criteria. A bound that cannot carry the criteria is the signal
   to ask what wall would hold, never to widen it silently. `scripts/check-bounds <contract> <base>...<head>`
