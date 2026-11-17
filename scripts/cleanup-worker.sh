@@ -168,7 +168,7 @@ if [ -z "$u" ] && [ "$branch" != HEAD ] &&
   fi
   # A patch id is not the content (git's ignores blanks; one commit of the base answers for two equal ones of the branch), so for either proof merging the
   # branch into the base must change nothing: `git merge-tree --write-tree` (git 2.38 or later; an older git: not applied) with no conflict and the base's own tree.
-  [ -z "$applied" ] || { mt="$(git -C "$wt" merge-tree --write-tree "$base" HEAD 2>/dev/null)" && [ -n "$mt" ] && [ "$mt" = "$(git -C "$wt" rev-parse "$base^{tree}" 2>/dev/null)" ]; } || applied=""
+  [ -z "$applied" ] || { mt="$(git -C "$wt" -c merge.renormalize=false merge-tree --write-tree "$base" HEAD 2>/dev/null)" && [ -n "$mt" ] && [ "$mt" = "$(git -C "$wt" rev-parse "$base^{tree}" 2>/dev/null)" ]; } || applied=""
   if [ "$cnt" = 0 ] || [ -n "$applied" ]; then
     if [ -z "$o" ]; then empty=1
     elif rh="$(git -C "$wt" ls-remote --heads origin "refs/heads/$branch" 2>/dev/null)" && [ -z "$rh" ]; then empty=1; fi
