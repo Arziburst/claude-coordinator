@@ -158,7 +158,7 @@ sed -e 's/^  model: opus$/  model: claude-opus-5-5/' -e 's/^  cost: 6$/  cost: 9
 sed 's/^kind: ordinary$/kind: hard/' runs-lf.md > runs-thin.md
 crun() {   # crun <arguments>: check-contract's output (no CRs) in CO, its exit in CRC
   if [ "$kind" = ps ]; then
-    local a=() x; for x in "$@"; do case "$x" in --runs) a+=(-Runs) ;; --kind) a+=(-Kind) ;; *) a+=("$x") ;; esac; done
+    local a=() x; for x in "$@"; do case "$x" in --runs) a+=(-Runs) ;; --kind) a+=(-Kind) ;; --important) a+=(-Important) ;; *) a+=("$x") ;; esac; done
     CO="$("${PS[@]}" -NoProfile -ExecutionPolicy Bypass -File "${ccore:-$core}/scripts/check-contract.ps1" "${a[@]}" 2>&1)"; CRC=$?
   else CO="$(bash "${ccore:-$core}/scripts/check-contract.sh" "$@" 2>&1)"; CRC=$?; fi
   CO="$(printf '%s\n' "$CO" | tr -d '\r')"
@@ -316,6 +316,12 @@ imk i-dir2.md 'tests/retro/' ''; iname="the folder tests/retro/ with neither fie
 for w in bounds wall; do printf '%s\n' "$CO" | grep -F -- "i-dir2.md: ERROR " | grep -F -- "$w" | grep -qF -- 'tests/*/run.*' || ifail "no line 'i-dir2.md: ERROR ...$w...tests/*/run.*...'"; done
 printf '%s\n' "$CO" | grep -qxF -- "i-dir2.md: FAIL (2 errors, 0 warnings)" || ifail "the summary is not 'i-dir2.md: FAIL (2 errors, 0 warnings)'"
 imk i-dirn.md 'docs/, scripts/hooksy/' ''; iname="folders holding no important glob"; inone i-dirn.md
+# a folder written without its trailing slash (#672): matched as that folder with the slash; a last part with a `.` or `*` is no folder
+imk i-dsb.md scripts/hooks "$W1"; iname="the folder scripts/hooks, no slash, without bounds"; ierr i-dsb.md bounds 'scripts/hooks/*'
+imk i-dsw.md .github/workflows "$B1"; iname="the folder .github/workflows, no slash, without wall"; ierr i-dsw.md wall '.github/workflows/*'
+imk i-dsr.md tests/retro "$W1"; iname="the folder tests/retro, no slash, under a wildcard"; ierr i-dsr.md bounds 'tests/*/run.*'
+imk i-dsk.md scripts/hooks "$B1$W1"; iname="the folder scripts/hooks, no slash, with both"; inone i-dsk.md
+imk i-dsn.md 'docs, docs/tests, scripts/hooksy, scripts/hook, tests/x.sh, tests/a/*' ''; iname="no-slash items holding no important glob"; inone i-dsn.md
 # a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
 i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do
   i=$((i + 1)); imk "i-bad$i.md" scripts/hooks/x.sh "$b$W1"; iname="a malformed bound: $b"; ierr "i-bad$i.md" bounds 'scripts/hooks/*'
@@ -325,7 +331,7 @@ imk i-wall1.md scripts/hooks/x.sh "${B1}wall:\n"; iname="an empty wall"; ierr i-
 imk i-none1.md 'sort.sh, src/x.sh' ''; iname="no important file"; inone i-none1.md
 imk i-none2.md 'scripts/hooks.sh, scripts/hooksy/x.sh, tests/run.sh, docs/tests/a/run.sh, tests/a/runner.sh, .github/workflows.yml' ''; iname="near misses"; inone i-none2.md
 # the project's row: PROJECT.md two folders above the script's own (the header), from copies of the scripts
-for d in proj fillp wordp; do
+for d in proj fillp wordp nonep; do
   mkdir -p "$d/coordinator/core/scripts"; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" "$d/coordinator/core/scripts/"
 done
 printf '| Setting | Value | Source | Since | Options |\n|---|---|---|---|---|\n| Work mode | by task | owner | 2026-11-02 | - |\n| **Important components** (CONTRACT.md) | `src/pay/* lib/core/* src/i18n/**/*.test.*` | owner | 2026-11-02 | added to the default list |\n' > proj/coordinator/PROJECT.md
@@ -339,15 +345,31 @@ iname="the row removes no default"; ierr i-p4.md bounds 'scripts/hooks/*'
 imk i-p5.md src/i18n/x.test.ts "$W1"; imk i-p6.md src/i18n/a/b/x.test.ts "$B1"
 iname="a **/ glob, a file directly in its folder"; ierr i-p5.md bounds 'src/i18n/**/*.test.*'
 iname="a **/ glob, a file two folders down"; ierr i-p6.md wall 'src/i18n/**/*.test.*'
+iname="--important, a row of real names"; crun --important
+[ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*' 'src/pay/*' 'lib/core/*' 'src/i18n/**/*.test.*')" ] || ifail "want the three defaults, then the row's three globs"
 ccore="$(pwd)/fillp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 iname="a row still <fill>: the defaults hold"; ierr i-p4.md bounds 'scripts/hooks/*'
-# a touches word that is no path (#517): matched only when it holds a / or a ., or names a file or folder in the working directory
-printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `none Makefile build` |\n' > wordp/coordinator/PROJECT.md
+# a row value starting with `none` adds nothing (#672), as `<fill>`: PROJECT.template's default row
+printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | none — the core'"'"'s default list alone (`scripts/hooks/* .github/workflows/* tests/*/run.*`) | owner |\n' > nonep/coordinator/PROJECT.md
+ccore="$(pwd)/nonep/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+iname="--important, a row starting with none"; crun --important
+[ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*')" ] || ifail "want the three defaults alone"
+imk i-n1.md none ''; iname="touches: [none] under a row starting with none"; inone i-n1.md
+imk i-n2.md "none, the, core's" ''; iname="the default row's words are no globs"; inone i-n2.md
+printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `none.txt src/pay/*` |\n' > nonep/coordinator/PROJECT.md
+iname="--important, a row whose first name only starts with none"; crun --important
+[ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*' 'none.txt' 'src/pay/*')" ] || ifail "want the three defaults, then none.txt and src/pay/*"
+# a touches word that is no path (#517, #672): matched against the list as the literal word, whether or not it names a file here
+printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `Makefile build Dockerfile` |\n' > wordp/coordinator/PROJECT.md
 : > Makefile; mkdir -p build; imk i-w1.md none ''; imk i-w2.md Makefile "$W1"; imk i-w3.md build "$B1"; imk i-w4.md '' 'touches: []\n'
+imk i-w5.md Dockerfile "$W1"; imk i-w6.md Dockerfile "$B1"; imk i-w7.md 'Dockerfiles, docker, makefile' ''
 ccore="$(pwd)/wordp/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 iname="touches: [none], a report-only contract, no bounds"; inone i-w1.md
 iname="a word naming a top-level file"; ierr i-w2.md bounds Makefile
 iname="a word naming a top-level folder"; ierr i-w3.md wall build
+iname="an important word naming no file here, without bounds"; ierr i-w5.md bounds Dockerfile
+iname="an important word naming no file here, without wall"; ierr i-w6.md wall Dockerfile
+iname="words near an important word"; inone i-w7.md
 iname="touches: [] keeps its WARN"; crun i-w4.md; [ "$CRC" = 0 ] || ifail "exit $CRC, want 0"
 printf '%s\n' "$CO" | grep -qF 'i-w4.md: WARN  touches missing or empty' && printf '%s\n' "$CO" | grep -qxF 'i-w4.md: OK (0 errors, 1 warnings)' || ifail "want the touches WARN alone"
 ccore=""
