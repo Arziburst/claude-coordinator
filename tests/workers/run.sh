@@ -549,11 +549,18 @@ T=(--repo "$tmp/repo" --branch 12-fix --model opus --brief-file "$tmp/brief-touc
 STUB_HEADS="$(printf '31\tMERGEABLE\tCLEAN\t31-a\tsrc/a.ts\tlib/b.ts')" check 0 "start: the conflict foresight" -- start --name "#12 worker: Fix" "${T[@]}"
 expect_in "foresight: TOUCHES #31: 31-a - src/a.ts"
 expect_in "foresight: merge-queue status: 1 open, 0 conflicting, 0 overlapping pairs, 1 touching the task"
-# gh failing as on an origin not on GitHub (#673): one line, nothing of gh's error, the start goes on
-STUB_GH_RC=1 STUB_GH_ERR="none of the git remotes configured for this repository point to a known GitHub host" check 0 "start: the conflict foresight, gh failing" -- start --name "#12 lead: Fix" "${T[@]}"
+# gh failing as on an origin not on GitHub (#673): one line, nothing of gh's error, the start goes on - gh.ps1, and a native gh
+# (gh.cmd on Windows, the bash stub elsewhere: no gh.ps1 beside it); merge-queue failing without gh: today's "failed" line
+mkdir -p "$tmp/ngh" && cp "$tmp/bin/gh" "$tmp/ngh/" && printf '@echo %%STUB_GH_ERR%% 1>&2\r\n@exit /b %%STUB_GH_RC%%\r\n' > "$tmp/ngh/gh.cmd"
+for gp in "$tmp/bin" "$tmp/ngh"; do
+PATH="$gp:$PATH" STUB_GH_RC=1 STUB_GH_ERR="none of the git remotes configured for this repository point to a known GitHub host" check 0 "start: the conflict foresight, gh failing (${gp##*/})" -- start --name "#12 lead: Fix" "${T[@]}"
 expect_in "foresight: merge-queue status skipped - gh cannot read this origin's pull requests; check the open PRs by hand (CORE §4a)"
 expect_in "[dry-run]"
 case "$LAST" in *"known GitHub host"*|*"gh pr list"*) echo "FAIL (#673): gh's error printed by the foresight"; fail=1 ;; esac
+done
+mkdir -p "$tmp/mqf" && cp -R "$core/scripts" "$core/roles" "$tmp/mqf/" && printf 'echo "merge-queue: broken" >&2; exit 1\n' > "$tmp/mqf/scripts/merge-queue.sh" && printf "[Console]::Error.WriteLine('merge-queue: broken'); exit 1\n" > "$tmp/mqf/scripts/merge-queue.ps1"
+core="$tmp/mqf" check 0 "start: the conflict foresight, merge-queue failing without gh" -- start --name "#12 worker: Fix" "${T[@]}"
+expect_in "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a): merge-queue: broken"
 check 0 "start: no conflict foresight for a verifier" -- start --name "#12 verifier: Fix" "${T[@]}"
 case "$LAST" in *foresight*) echo "FAIL: a verifier start printed the conflict foresight"; fail=1 ;; esac
 # touches as a YAML block list, which check-contract takes too (#258): one `- path` per line, a comment

@@ -656,10 +656,11 @@ if ($fr -in @('worker', 'lead', '')) {
   } else {
     $fo = @(); $frc = 1
     # merge-queue.ps1 runs in-process: its [Console]::Error lines escape 2>&1, so they are caught here (#673)
-    $cerr = [Console]::Error; $ew = New-Object IO.StringWriter; [Console]::SetError($ew)
+    # (Continue: under Stop a native gh's stderr through 2>&1 would end merge-queue before its own line)
+    $cerr = [Console]::Error; $ew = New-Object IO.StringWriter
     Push-Location -LiteralPath $root
-    try { $fo = @(& (Join-Path $PSScriptRoot 'merge-queue.ps1') status -Touches ($tl -join ',') 2>&1 | ForEach-Object { "$_" }); $frc = $LASTEXITCODE }
-    catch { $fo = @("$_") } finally { Pop-Location; [Console]::SetError($cerr) }
+    try { [Console]::SetError($ew); $fo = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'merge-queue.ps1') status -Touches ($tl -join ',') 2>&1 } | ForEach-Object { "$_" }); $frc = $LASTEXITCODE }
+    catch { $fo = @("$_") } finally { [Console]::SetError($cerr); Pop-Location }
     if ($frc -ne 0) { $fo = @($fo) + @("$ew" -split "`r?`n" | Where-Object { $_ }) }
     if ($frc -eq 0) { $fo | Where-Object { $_ -match '^(TOUCHES|merge-queue status:)' } | ForEach-Object { "foresight: $_" } }
     # gh cannot read the origin's PRs (not on GitHub, gh missing or failing, #673): one line, not gh's error
