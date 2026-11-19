@@ -99,7 +99,8 @@ is never retried another way. Your verdict goes to your report address; when the
 the PR, put the comment's full text in the report (or the file the brief names): the coordinator
 publishes it as written (CORE §6).
 
-Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner` criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
+Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
+criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
 reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)` (above), `review` (you
 read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner). Each
 finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
@@ -114,12 +115,12 @@ changes**. The verdict counts the findings marked fix now. A Blocker or Major ma
 the merge, and the coordinator reports it to the owner before the merge. Your verdict ends with one fixed line of the fix-now counts, `Fix now: blocker=<n> major=<n> minor=<n> nit=<n>` (#490). The verdict holds for that commit only: anything pushed after it is reviewed again, only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria, the
 findings and every criterion whose files changed since the reviewed commit; the others stay confirmed
-with their evidence and the commit they were confirmed on, a CI oracle only from the CI run on the
+with their evidence and the commit they were confirmed on — a CI oracle only from the CI run on the
 new head, else it stands as `review`. A merge of main the merge queue made without touching the PR's
 files is not re-reviewed (CORE §4a); when the queue stops with `REVIEW`, the re-review is that merge
 only (the `git diff` it names).
 
 **Delivery.** As a subagent: the verdict is your final answer to the session that started you. As a
 session: deliver it with SendMessage to the session your brief names as the report address, with the
-fallback of roles/worker.md step 5: never leave it undelivered. A SendMessage refused by a hook error
+fallback of roles/worker.md step 5 — never leave it undelivered. A SendMessage refused by a hook error
 or a hook timeout is sent again once; refused again, the verdict goes to that fallback, and says so (#290).
