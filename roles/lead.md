@@ -25,8 +25,16 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    `<core>/scripts/check-contract` (Windows: the full `powershell -NoProfile -ExecutionPolicy Bypass
    -File <core>/scripts/check-contract.ps1` command; `<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository, #618) and gets a model and effort from the routing (a
    research sub-run, the researcher role, is routed as research: the top rung from the balanced spend
-   level up, within its guard rails, CORE §7) and a cost estimate (`budget.cost`, CORE §7a). The
-   estimates plus your own share must fit the parent's `budget.cost`; your own session is no small
+   level up, within its guard rails, CORE §7) and a cost estimate (`budget.cost`, CORE §7a).
+   **The critic (#300):** after check-contract passes and before the plan goes to the coordinator, run the critic subagent
+   (the role critic, `roles/critic.md`; a subagent only, run through the Agent tool as the tester in step 3) on each
+   sub-contract the project's Critic setting covers (`PROJECT.md` *Settings*, row Critic: every contract but `trivial`, the
+   default · all · off), passing the sub-contract, your task's text and the base commit; it reads the base through git reads
+   (`git show <base>:<path>`, `git grep <pattern> <base>`), since your integration branch is not its checkout's HEAD. Fix in
+   the sub-contract each finding you accept (check-contract again); your plan message gives per sub-contract the critic's
+   findings count, how many you fixed and each rejected one with its reason. Its runs are in your own share of the estimate;
+   its run-log row has result `done` whatever its verdict, never `rework`. The coordinator's go stays the only start gate:
+   the critic approves nothing. The estimates plus your own share must fit the parent's `budget.cost`; your own session is no small
    overhead but often 30–100% of your workers' sum (measured, at list price: $14.7 against a $6–8
    guess; $36.7, about all its workers together): plan for it and read it at each stage (step 6). If
    they do not fit, send the plan with the numbers to the coordinator and **start nothing** (no
