@@ -1,0 +1,7 @@
+wall 540
+total tests_(unit) 280
+total tests_(ui) 390
+step tests_(unit) 20 Set up
+step tests_(unit) 260 Run tests
+step tests_(ui) 30 Set up
+step tests_(ui) 360 Run tests

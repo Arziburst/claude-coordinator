@@ -1,0 +1,4 @@
+# --jobs: a group is the job's name, each space made _
+tests_(unit)	100	Run tests
+tests_(ui)	300	Run tests
+lint	1	Set up

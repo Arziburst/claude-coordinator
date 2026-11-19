@@ -1,17 +1,20 @@
 # Seconds per step per OS of a check-core run (#373; Windows PowerShell 5.1 and pwsh; macOS / Linux: ci-times.sh - the same lines and codes).
-#   scripts/ci-times.ps1 [--baseline <file>] <run id | file>     the JSON of `gh run view <id> --json jobs`, or a file holding it
+#   scripts/ci-times.ps1 [--baseline <file>] [--jobs <regex>] <run id | file>     the JSON of `gh run view <id> --json jobs`, or a file holding it
 # Lines: `wall <s>` (the latest job's end - the earliest job's start), `total <os> <s>` (the sum of its counted steps), `shard <name> <s>` (#555:
 # a `shard-<os> (<name>)` job's end - its start, by OS, then by appearance; none for a job not finished),
 # `step <os> <s> <name>` (a step completed and not skipped; the shards of an OS summed, by first appearance); with
 # --baseline `over <os> <s> <limit> <name>` for a step over max(floor(b * 1.3), b + 60) of its line `<os><TAB><b><TAB><name>`
 # (# lines ignored). A job counts when named `shard-<os> (...)`, or `check (<os>-latest)` when the run has no shard-<os>
 # job; every job counts for wall. Exit 0 (also with over lines), 2 usage, 1 `ci-times: cannot read <what>` (a missing
-# run or baseline, gh failing).
+# run or baseline, gh failing). --jobs <regex> (#580; ERE, case-sensitive, no lookaround or backreferences): a job counts when
+# its name matches, its group (where <os> stands, also in the baseline) the name with each space made _, groups by first
+# appearance, no shard lines; none matching: the wall line and `ci-times: no job matches <regex>`, exit 0.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 function Usage { (Get-Content -LiteralPath $PSCommandPath)[1..2] -replace '^# ?', '' | ForEach-Object { [Console]::Error.WriteLine($_) }; exit 2 }
-$base = ''; $run = ''; $a = @($Rest | Where-Object { $null -ne $_ })
+$base = ''; $run = ''; $jset = $false; $jre = ''; $a = @($Rest | Where-Object { $null -ne $_ })
 for ($i = 0; $i -lt $a.Count; $i++) {
   if ($a[$i] -eq '--baseline') { if ($i + 1 -ge $a.Count) { Usage }; $base = $a[$i + 1]; $i++ }
+  elseif ($a[$i] -eq '--jobs') { if ($i + 1 -ge $a.Count -or $jset) { Usage }; $jset = $true; $jre = $a[$i + 1]; $i++ }
   elseif ($a[$i] -like '-*') { Usage } elseif ($run -ne '') { Usage } else { $run = $a[$i] }
 }
 if ($run -eq '') { Usage }
@@ -28,9 +31,10 @@ function Sec($t) {   # "YYYY-MM-DD HH:MM:SS" as UTC seconds; $null when not set 
   $p = [datetime]::ParseExact("$t", 'yyyy-MM-dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AssumeUniversal, AdjustToUniversal')
   return [int64]($p - [datetime]::new(1970, 1, 1)).TotalSeconds
 }
-$jobs = @($d.jobs); $shard = @{}; $jos = @{}; $kind = @{}; $first = $null; $last = $null
+$jobs = @($d.jobs); $shard = @{}; $jos = @{}; $kind = @{}; $first = $null; $last = $null; $G = New-Object Collections.Generic.List[string]
 for ($i = 0; $i -lt $jobs.Count; $i++) { $j = $jobs[$i]; $jos[$i] = ''; $kind[$i] = ''
-  if ("$($j.name)" -match '^shard-(ubuntu|macos|windows) ') { $jos[$i] = $Matches[1]; $kind[$i] = 'shard'; $shard[$Matches[1]] = 1 }
+  if ($jset) { if ("$($j.name)" -cmatch $jre) { $jos[$i] = "$($j.name)".Replace(' ', '_'); $kind[$i] = 'job'; if (-not $G.Contains($jos[$i])) { $G.Add($jos[$i]) } } }
+  elseif ("$($j.name)" -match '^shard-(ubuntu|macos|windows) ') { $jos[$i] = $Matches[1]; $kind[$i] = 'shard'; $shard[$Matches[1]] = 1 }
   elseif ("$($j.name)" -match '^check \((ubuntu|macos|windows)-latest\)$') { $jos[$i] = $Matches[1]; $kind[$i] = 'check' }
   $s = Sec $j.startedAt; $e = Sec $j.completedAt
   if ($null -ne $s -and ($null -eq $first -or $s -lt $first)) { $first = $s }
@@ -50,8 +54,9 @@ for ($i = 0; $i -lt $jobs.Count; $i++) { $o = $jos[$i]
 $bl = @{}
 if ($base -ne '') { foreach ($l in [IO.File]::ReadAllLines((Convert-Path -LiteralPath $base))) {
   if ($l -match '^#') { continue }; $f = $l.Split("`t"); if ($f.Count -ge 3 -and $f[1] -match '^[0-9]+$') { $bl["$($f[0])`t$($f[2])"] = [int64]$f[1] } } }
-$out = New-Object Collections.Generic.List[string]; $L = 'ubuntu', 'macos', 'windows'
+$out = New-Object Collections.Generic.List[string]; $L = 'ubuntu', 'macos', 'windows'; if ($jset) { $L = $G }
 if ($null -ne $first -and $null -ne $last) { $out.Add("wall $($last - $first)") }
+if ($jset -and $G.Count -eq 0) { $out.Add("ci-times: no job matches $jre") }
 foreach ($o in $L) { if ($counted.ContainsKey($o)) { $out.Add("total $o $([int64]$tot[$o])") } }
 foreach ($o in $L) { for ($i = 0; $i -lt $jobs.Count; $i++) { if ($kind[$i] -ne 'shard' -or $jos[$i] -ne $o) { continue }
   $s = Sec $jobs[$i].startedAt; $e = Sec $jobs[$i].completedAt; $nm = "$($jobs[$i].name)" -replace '^[^(]*\(', '' -replace '\)$', ''

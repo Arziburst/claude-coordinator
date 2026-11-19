@@ -899,7 +899,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   parts or in none (`parts sh`, by hand on macOS or Ubuntu: the whole set and every part really run, the counts summed,
   a broken script failing its part alone). It does not prove a step's input from another step: a step reading a file
   under `$RUNNER_TEMP` that another step wrote runs in the shard of the step that writes it (#460). **Step times:** `scripts/ci-times.sh|.ps1
-  [--baseline <file>] <run id | file>` prints `wall <s>`, `total <os> <s>`, `shard <name> <s>` (#555) and `step <os> <s> <name>` from `gh run
+  [--baseline <file>] [--jobs <regex>] <run id | file>` prints `wall <s>`, `total <os> <s>`, `shard <name> <s>` (#555) and `step <os> <s> <name>` from `gh run
   view <id> --json jobs` (the shards of an OS summed); each aggregator runs it on its own run with `--baseline
   tests/ci-times.tsv` and prints a step over `max(baseline × 1.3, baseline + 60 s)` as a `::warning::`, never a
   failure - the owner and the verifier read them; it also prints each shard's seconds, a shard past `SHARD_LIMIT` (900 s
@@ -931,13 +931,13 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   bounds`, exit 0. Run by the worker, the tester, the verifier and `merge-queue land` (CONTRACT.md). A folder that is
   not the contract's repository is refused, exit 2 and why, never OK (#615): none of its `touches` among the folder's
   tracked files or the range's (a bound over is still reported there, `OVER`, exit 1), or an origin that is not its `repository: <owner>/<name>`. A glob's one pair of surrounding quotes is dropped, and a glob matching no file of the diff or the head is named, `check-bounds: WARN <glob> matches no file`, a warning only (#586). Run it from the project's root or the worktree, in the same command, never from `coordinator/` (the state repository: exit 2), where a subagent verifier's cwd can reset (#617).
-- `scripts/ci-times.sh|.ps1 [--baseline <file>] <run id | file>` (#373) — the seconds of a check-core run from
+- `scripts/ci-times.sh|.ps1 [--baseline <file>] [--jobs <regex>] <run id | file>` (#373) — the seconds of a check-core run from
   `gh run view <id> --json jobs` (or that JSON in a file): `wall <s>`, `total <os> <s>`, `shard <name> <s>` (a shard job's end - its start), `step <os> <s> <name>` (a
   step completed and not skipped, the shards of an OS summed), with `--baseline` one `over <os> <s> <limit> <name>`
   per step past `max(floor(baseline × 1.3), baseline + 60)`; exit 0 also with over lines, 2 usage, 1 `ci-times:
   cannot read <what>`. Run by the aggregator jobs on their own run (*CI* above), by a worker for its `ci_seconds`,
   by the verifier to compare it and by the coordinator on the main run after a merge (CORE §4, #390). A run whose
-  jobs carry other names than the core's gives `wall` alone.
+  jobs carry other names than the core's gives `wall` alone; `--jobs <regex>` (#580: ERE, case-sensitive, no lookaround or backreferences; the project's, from its `PROJECT.md` *CI layout*) counts the jobs whose names match, each job's group (where `<os>` stands, also in a baseline) its name with each space made `_`, groups by first appearance, no `shard` lines; none matching: `wall` and `ci-times: no job matches <regex>`, exit 0.
 - `scripts/check-contract.sh|.ps1 <contract>` — a contract against CONTRACT.md (CORE §4): ERROR blocks
   delegation, WARN goes into the brief. A contract whose `touches` holds an important component (the default list
   and `PROJECT.md` *Important components*) without `bounds:` and `wall:` is an ERROR naming the glob (#381);
