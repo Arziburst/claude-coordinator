@@ -616,6 +616,9 @@ case "$role" in worker|lead|"")
     mq="$(cd "$(dirname "$0")" && pwd)/merge-queue.sh"
     if fo="$(cd "$root" && bash "$mq" status ${ta[@]+"${ta[@]}"} 2>&1)"; then
       printf '%s\n' "$fo" | grep -E '^(TOUCHES|merge-queue status:)' | sed 's/^/foresight: /' || true
+    # gh cannot read the origin's PRs (not on GitHub, gh missing or failing, #673): one line, not gh's error
+    elif printf '%s\n' "$fo" | head -n 1 | grep -q '^gh[ :]'; then
+      echo "foresight: merge-queue status skipped - gh cannot read this origin's pull requests; check the open PRs by hand (CORE §4a)"
     else echo "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE §4a): $(printf '%s\n' "$fo" | head -n 1)"; fi
   fi ;;
 esac

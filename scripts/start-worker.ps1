@@ -655,10 +655,15 @@ if ($fr -in @('worker', 'lead', '')) {
     "foresight: no touches in the brief - check the open PRs against the task yourself (CORE ${sect}4a)"
   } else {
     $fo = @(); $frc = 1
+    # merge-queue.ps1 runs in-process: its [Console]::Error lines escape 2>&1, so they are caught here (#673)
+    $cerr = [Console]::Error; $ew = New-Object IO.StringWriter; [Console]::SetError($ew)
     Push-Location -LiteralPath $root
     try { $fo = @(& (Join-Path $PSScriptRoot 'merge-queue.ps1') status -Touches ($tl -join ',') 2>&1 | ForEach-Object { "$_" }); $frc = $LASTEXITCODE }
-    catch { $fo = @("$_") } finally { Pop-Location }
+    catch { $fo = @("$_") } finally { Pop-Location; [Console]::SetError($cerr) }
+    if ($frc -ne 0) { $fo = @($fo) + @("$ew" -split "`r?`n" | Where-Object { $_ }) }
     if ($frc -eq 0) { $fo | Where-Object { $_ -match '^(TOUCHES|merge-queue status:)' } | ForEach-Object { "foresight: $_" } }
+    # gh cannot read the origin's PRs (not on GitHub, gh missing or failing, #673): one line, not gh's error
+    elseif (@($fo | Where-Object { $_ -cmatch '^gh[ :]' }).Count) { "foresight: merge-queue status skipped - gh cannot read this origin's pull requests; check the open PRs by hand (CORE ${sect}4a)" }
     else { "foresight: merge-queue status failed - check the open PRs against the task yourself (CORE ${sect}4a): $(@($fo)[0])" }
   }
 }
