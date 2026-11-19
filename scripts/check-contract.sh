@@ -93,7 +93,7 @@ if [ -d "$here/../roles" ]; then
 fi
 pf="$here/../../PROJECT.md"
 [ ! -f "$pf" ] || important="$important $(awk -F'|' '{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }
-  n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</ && v !~ /^[ \t]*none([^A-Za-z0-9_]|$)/) print v; exit }' "$pf")"
+  n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</ && v !~ /^[ \t]*none([ \t]|$)/) print v; exit }' "$pf")"
 [ -z "$listimp" ] || { set -f; printf '%s\n' $important; exit 0; }
 # the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: --runs)
 forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>

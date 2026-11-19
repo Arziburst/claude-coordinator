@@ -356,6 +356,9 @@ iname="--important, a row starting with none"; crun --important
 [ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*')" ] || ifail "want the three defaults alone"
 imk i-n1.md none ''; iname="touches: [none] under a row starting with none"; inone i-n1.md
 imk i-n2.md "none, the, core's" ''; iname="the default row's words are no globs"; inone i-n2.md
+printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `none.txt src/pay/*` |\n' > nonep/coordinator/PROJECT.md
+iname="--important, a row whose first name only starts with none"; crun --important
+[ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*' 'none.txt' 'src/pay/*')" ] || ifail "want the three defaults, then none.txt and src/pay/*"
 # a touches word that is no path (#517, #672): matched against the list as the literal word, whether or not it names a file here
 printf '| Setting | Value |\n|---|---|\n| **Important components** (CONTRACT.md) | `Makefile build Dockerfile` |\n' > wordp/coordinator/PROJECT.md
 : > Makefile; mkdir -p build; imk i-w1.md none ''; imk i-w2.md Makefile "$W1"; imk i-w3.md build "$B1"; imk i-w4.md '' 'touches: []\n'

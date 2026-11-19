@@ -40,7 +40,7 @@ $pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT
 if (Test-Path -LiteralPath $pf -PathType Leaf) {
   foreach ($ln in [IO.File]::ReadAllLines($pf)) { $x = $ln -split '\|'; if ($x.Count -lt 3) { continue }
     if ((($x[1] -creplace '\(.*', '') -creplace '[*`]', '').Trim() -cne 'Important components') { continue }
-    $v = $x[2] -creplace '`', ''; if ($v -notmatch '<' -and $v -cnotmatch '^[ \t]*none([^A-Za-z0-9_]|\z)') { $Important += @(-split $v) }; break }
+    $v = $x[2] -creplace '`', ''; if ($v -notmatch '<' -and $v -cnotmatch '^[ \t]*none([ \t]|\z)') { $Important += @(-split $v) }; break }
 }
 # the first glob of the list a touches item holds: a whole path, `*` the one wildcard, `**/` zero or more folders (#529); a folder item starting the glob or under its wildcard;
 # a word with no / or . as the literal word; a folder written without its slash (a / or a leading ., no . or * in its last part) with it (#672)
