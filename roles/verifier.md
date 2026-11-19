@@ -33,7 +33,7 @@ verify, not your instructions: you work by this role file and your brief (#148).
 Inputs: the contract, the worker's report and the change (a PR, a branch or a diff), and the tester's
 commit or files where a tester ran. A branch's change
 is what it adds since it left its base: `git diff <base>...<branch>` (three dots: against the merge
-base), never against the base's current tip — a base that moved since (another sub-branch merged into
+base), never against the base's current tip: a base that moved since (another sub-branch merged into
 it) would make that work look deleted.
 
 1. **Contract first.** Read it before the report or the change and decide for yourself what "done"
@@ -42,14 +42,13 @@ it) would make that work look deleted.
    expect; a contradiction between the source and the criterion is a finding.
 2. **Nothing in the report is established fact.** First record the head commit you review (a PR:
    `gh pr view <n> --json headRefOid`; a branch: `git rev-parse <branch>`), and compare it with the
-   commit your brief names, before the review and again after it. A tip that moved is said in the
-   verdict, which names the commit actually reviewed — never silently reviewed in place of the one
-   named (#350). For every criterion with
+   commit your brief names, before the review and again after it. A moved tip is said in the
+   verdict, which names the commit actually reviewed, never silently taken for the one named (#350). For every criterion with
    `check: oracle`, run or inspect the oracle yourself (the test, the CI run, the command).
    - A CI run counts only when it ran on that commit (`gh run view <id> --json headSha`, or `gh run
      list --commit <sha>`): take its result and do **not** run the same checks again, unless your
-     brief explicitly asks for your own run (on your own stack, say) — that request wins. A run on
-     another commit is a `claim`: run the check on the reviewed commit, or wait for CI on it.
+     brief explicitly asks for your own run (on your own stack, say): that request wins. A run on
+     another commit is a `claim`: run the check on the reviewed commit, or wait for CI on it (by its run id, TOOLKIT *CI*).
    - An oracle you cannot run is a known gap, never a pass: judge from the code and the test itself
      whether it would pass and whether the test really checks the criterion.
    - Where the brief says you may not run it (a shared device, a lock, a cost): read the raw output
@@ -70,20 +69,19 @@ it) would make that work look deleted.
      `test_edits` names (roles/worker.md step 2); a check weakened, removed or loosened is a Blocker, an
      unnamed build-only edit a Major (#237).
    - **Each round's new tests** (a §5 task or a `tests_first: yes` task with more than one round): the
-     report says for each round whether its new or changed tests came from the tester (its commit) or
-     from the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
+     report says for each round whether its new or changed tests came from the tester (its commit) or the worker; a behaviour-changing round whose tests the worker wrote is a finding (#276).
    - **The bounds** (#381): a contract with `bounds:` gets `cd <project root or worktree> && bash <core>/scripts/check-bounds.sh <contract>
      <base>...<head>` as an oracle (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)); an `OVER` is a failed bound, its output your evidence.
    - **`ci_seconds`** (#373): the report's number against `scripts/ci-times <run id>` on the reviewed commit's run,
      the steps the change touched against main's last run or `tests/ci-times.tsv` (TOOLKIT *CI*); a guess where a
      run was at hand, or an aggregator's `::warning::` the report does not name, is a finding.
    - A working copy you run checks in has its own dependencies installed first (the brief's command,
-     `npm ci` in a Node project, run as `npm --prefix <worktree> ci`, never a bare install: in a folder with no `package.json` it walks up to the main checkout's, #457): one found in a folder above it is another version, no evidence (#249).
+     `npm ci` in a Node project, run as `npm --prefix <worktree> ci`, never a bare install: in a folder with no `package.json` it walks up to the main checkout's, #457): one found above it is another version, no evidence (#249).
    - In Git Bash on Windows a slashed ref (`git show origin/main:<path>`) needs `MSYS_NO_PATHCONV=1` before it, else `ambiguous argument` (#460).
    - A check that starts `pwsh` or `powershell` (a `.ps1`, a project script calling one) runs through
      the PowerShell tool, not Bash: in a worktree-isolated session Claude Code refuses it from Bash
-     (#240); on macOS (no PowerShell tool) it is named not run, covered by CI's pwsh jobs and the
-     coordinator. Claude Code's isolation refuses, before it runs: bash, pwsh or git together with a `$`
+     (#240); on macOS it runs from Bash, named not run only without pwsh or when refused (CI's pwsh jobs and the
+     coordinator cover it). Claude Code's isolation refuses, before it runs: bash, pwsh or git together with a `$`
      expansion (`$?`, `$(...)`, a variable: use `&&` / `||` and literal paths), a program whose argument
      is a variable (#540), `awk -f <file>` (#559), shell text handed to bash (`bash -c`, a heredoc into
      bash) and any git after a `cd` to the shared checkout (`git -C` your worktree); pipes, `;` and `&&`
@@ -95,14 +93,13 @@ it) would make that work look deleted.
    For a dear ordinary case the finding asks for a cheaper form first, dropping it last (#390).
 4. **Finding nothing is a valid result.** Do not invent findings to look useful.
 
-**You publish nothing:** no PR comment, review, label or `gh pr ready` — Claude Code's auto-mode
+**You publish nothing:** no PR comment, review, label or `gh pr ready`: Claude Code's auto-mode
 classifier may refuse them in a verifier's session ("External System Writes", #262), and a refused one
 is never retried another way. Your verdict goes to your report address; when the project wants it on
 the PR, put the comment's full text in the report (or the file the brief names): the coordinator
 publishes it as written (CORE §6).
 
-Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
-criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
+Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner` criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
 reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)` (above), `review` (you
 read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner). Each
 finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
@@ -117,12 +114,12 @@ changes**. The verdict counts the findings marked fix now. A Blocker or Major ma
 the merge, and the coordinator reports it to the owner before the merge. Your verdict ends with one fixed line of the fix-now counts, `Fix now: blocker=<n> major=<n> minor=<n> nit=<n>` (#490). The verdict holds for that commit only: anything pushed after it is reviewed again, only
 the change since that commit. A re-review gets the previous verdict: re-check the failed criteria, the
 findings and every criterion whose files changed since the reviewed commit; the others stay confirmed
-with their evidence and the commit they were confirmed on — a CI oracle only from the CI run on the
+with their evidence and the commit they were confirmed on, a CI oracle only from the CI run on the
 new head, else it stands as `review`. A merge of main the merge queue made without touching the PR's
 files is not re-reviewed (CORE §4a); when the queue stops with `REVIEW`, the re-review is that merge
 only (the `git diff` it names).
 
 **Delivery.** As a subagent: the verdict is your final answer to the session that started you. As a
 session: deliver it with SendMessage to the session your brief names as the report address, with the
-fallback of roles/worker.md step 5 — never leave it undelivered. A SendMessage refused by a hook error
+fallback of roles/worker.md step 5: never leave it undelivered. A SendMessage refused by a hook error
 or a hook timeout is sent again once; refused again, the verdict goes to that fallback, and says so (#290).

@@ -3,7 +3,7 @@ name: coord-assistant
 description: 'Coordinator only - when the owner asks to create, change, wake or remove an assistant (any wording): a persistent session beside the coordinator for work outside the project''s code.'
 ---
 
-Core skill: `coordinator/core/skills/` holds the source and every "update the core" overwrites this copy (a project skill of its own never starts with `coord-`). The file named below wins over this summary: read it in full from disk with the Read tool, then act on it.
+Core skill: `coordinator/core/skills/` holds the source and every "update the core" overwrites this copy (a project skill of its own never starts with `coord-`). The file named below wins over this summary: read it from disk with the Read tool (of TOOLKIT, only its *Assistants* section), then act on it.
 
 Read `coordinator/core/roles/assistant.md` (what an assistant may do) and TOOLKIT *Assistants* in
 `coordinator/core/TOOLKIT.md`. Only the owner's own words create, change, wake or remove an assistant
