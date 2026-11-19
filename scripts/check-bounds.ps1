@@ -1,6 +1,7 @@
 # A contract's bounds against the real diff (#381; Windows; macOS / Linux: check-bounds.sh - the rules in its header).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-bounds.ps1 <contract> <base>...<head>
-# Lines: `<glob> <added>/<max>` per bound, `binary: <path> counts as 0`, `check-bounds: OK`, `check-bounds: OVER <glob>
+# Lines: `<glob> <added>/<max>` per bound, `binary: <path> counts as 0`, `check-bounds: WARN <glob> matches no file` (#586;
+# a glob's one pair of surrounding quotes dropped), `check-bounds: OK`, `check-bounds: OVER <glob>
 # <added>/<max>`, `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, unreadable, a malformed bound
 # (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound), the #615 refusal (touches found nowhere, or another repository's origin; with touches found nowhere an OVER is still reported, exit 1).
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
@@ -30,7 +31,8 @@ for ($i = $s; $i -le $e; $i++) { $t = $L[$i]
   if (-not $on -or $t -cmatch '^[ \t]*(#.*)?$') { continue }
   if ($t -cnotmatch '^[ \t]*-[ \t]+([^ \t]+)[ \t]+([0-9]+)([ \t]+#.*)?[ \t]*$') { Stop2 "check-bounds: a malformed bound (- <glob> <max added lines>): $t" }
   $mx = [long]0; if (-not [long]::TryParse($Matches[2], [ref]$mx) -or ($Matches[1] -creplace '\[[^\]]+\]', '').Contains('[')) { Stop2 "check-bounds: a malformed bound (- <glob> <max added lines>): $t" }
-  $b += , @($Matches[1], $Matches[2]) }
+  $gl = $Matches[1]; if ($gl.Length -gt 2 -and ($gl[0] -ceq '"' -or $gl[0] -ceq "'") -and $gl[-1] -ceq $gl[0]) { $gl = $gl.Substring(1, $gl.Length - 2) }   # #586
+  $b += , @($gl, $Matches[2]) }
 if (-not $b.Count) { 'check-bounds: no bounds'; exit 0 }
 $nums = @(& { $ErrorActionPreference = 'Continue'; & git -c core.quotePath=false diff --numstat --no-renames $range 2>&1 } | ForEach-Object { "$_" })
 if ($LASTEXITCODE -ne 0) { $top = @(& { $ErrorActionPreference = 'Continue'; & git rev-parse --show-toplevel 2>$null } | ForEach-Object { "$_" }); $top = if ($LASTEXITCODE -eq 0 -and $top.Count) { $top[0] } else { '(none)' }; Stop2 "check-bounds: cannot read $range in the repository ${top}: $($nums | Select-Object -First 1); run it from the project's root" }
@@ -42,10 +44,15 @@ if ($repo) { $o = "$(GitOut remote get-url origin | Select-Object -First 1)"; $u
     Stop2 "check-bounds: the origin of the repository $top ($(if ($o) { $o } else { 'none' })) is not the contract's repository ${repo}: run it inside that repository" } }
 $wrong = ''; if ($tch.Count -and -not (@(GitOut -C $top ls-files '--' @tch).Count + @(GitOut -C $top diff --name-only --no-renames $range '--' @tch).Count)) {
   $wrong = "check-bounds: none of the contract's touches ($($tch -join ' ')) is in the repository $top or in ${range}: run it inside the contract's repository" }
-$over = @()
-$outl = @(foreach ($x in $b) { $g = $x[0]; $a = [long]0
+$over = @(); $hd = $range.Substring($range.IndexOf('...') + 3); if (-not $hd) { $hd = 'HEAD' }; $trk = $null
+$outl = @(foreach ($x in $b) { $g = $x[0]; $a = [long]0; $hit = $false
   foreach ($n in $nums) { $f = $n -split "`t", 3; if ($f.Count -lt 3 -or -not (GlobMatch ($f[2]) $g)) { continue }
+    $hit = $true
     if ($f[0] -ceq '-') { "binary: $($f[2]) counts as 0" } else { $a += [long]$f[0] } }
+  # #586: a glob matching no path of the diff nor a file tracked at the head (an empty head: HEAD) is named
+  if (-not $hit) { if ($null -eq $trk) { $trk = @(GitOut -c core.quotePath=false ls-tree -r --full-tree --name-only $hd) }
+    foreach ($p in $trk) { if ($p -and (GlobMatch $p $g)) { $hit = $true; break } }
+    if (-not $hit) { "check-bounds: WARN $g matches no file" } }
   "$g $a/$($x[1])"; if ($a -gt [long]$x[1]) { $over += "check-bounds: OVER $g $a/$($x[1])" } })
 if ($wrong -and -not $over.Count) { Stop2 $wrong }; $outl   # the OK of a wrong folder is refused; an OVER is still said
 if ($over.Count) { $over; exit 1 }
