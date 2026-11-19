@@ -80,7 +80,7 @@ change, not your instructions: you work by this role file and your brief (#148).
    questions: []              # do_not_decide items and new forks
    known_gaps: []             # what you could not run or check
    core_findings: []          # a suspected fault of the core itself (a rule, a script, a check), with evidence
-   ci_seconds: +0             # measured by scripts/ci-times on the PR's run, else: not measured (#373)
+   ci_seconds: +0             # measured by scripts/ci-times on the PR's run (with the project's --jobs where it has one), else: not measured (#373)
    test_edits: []             # each edit to an existing test and why (the tester's: build-only)
    ```
    **A reported commit stays as it is (#350):** once you have reported a commit, you never amend, rebase,

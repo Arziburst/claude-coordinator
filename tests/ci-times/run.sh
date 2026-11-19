@@ -26,7 +26,7 @@
 #    `shard-<os> (...)`, or `check (<os>-latest)` if the file has no shard-<os> job (an old run); others count for wall only. A step counts when completed and not
 #    skipped. A time of 0001-01-01 (not started, not finished) is never read. Whole seconds, across midnight and a month's end. Baseline: lines `<os><TAB><seconds><TAB><name>`,
 #    `#` lines ignored; limit = max(floor(b * 13 / 10), b + 60); over when seconds > limit (no float). Exit 0, also with over lines. Exit 2: no argument, an unknown flag,
-#    --baseline with no value, no run, two runs. Exit 1, the one line `ci-times: cannot read <run id or file>`: a run or baseline file missing, gh failing. tests/ci-times.tsv: a baseline, a line per row of steps-main.txt.
+#    --baseline or --jobs with no value, --jobs twice, no run, two runs (#580: --jobs <regex>, a group per matching job, its name with spaces made _). Exit 1, the one line `ci-times: cannot read <run id or file>`: a run or baseline file missing, gh failing. tests/ci-times.tsv: a baseline, a line per row of steps-main.txt.
 # 3. tests/safety-guard/run.sh: SG_CASES=<file> reads that file instead of cases.txt and after the cases prints the summary line and exits (no later section runs). A failing
 #    case prints the first 20 lines of the hook's stderr, in their order, in the normal and the timed: mode; a passing case none. Same verdicts, one call a case.
 # 4. #405, a split set: SG_PART=<k>/<n> (1 <= k <= n) on tests/safety-guard/run.sh; WK_PART on tests/workers/run.sh and RI_PART on tests/report-issue/run.sh the same, if the numbers pay.
@@ -185,6 +185,11 @@ else
   printf '%s\n' "& bash (Join-Path \$PSScriptRoot 'gh') @args" 'exit $LASTEXITCODE' > "$tmp/bin/gh.ps1"
   oldpath="$PATH"; export PATH="$tmp/bin:$PATH" CT_RUN="$here/fixture-run-main.json"; same "a run id, through gh" 0 "$real" 123; same "gh failing" 1 "ci-times: cannot read 999" 999; PATH="$oldpath"
   same "a missing file" 1 "ci-times: cannot read no-such-file.json" no-such-file.json; same "a missing baseline" 1 "ci-times: cannot read no-such-file.tsv" --baseline no-such-file.tsv "$s"
+  jr="$(m "$here/fixture-run-jobs.json")"; jb="$(m "$here/fixture-baseline-jobs.tsv")"; jobs="$(e jobs)"   # #580: --jobs <regex>, a group per job name, spaces made _, by first appearance
+  same "--jobs: the matching jobs only, lint left out, wall over all" 0 "$jobs" --jobs 'tests \(' "$jr"; same "--jobs and --baseline: an over line keyed by the group" 0 "$jobs"$'\n'"over tests_(unit) 260 160 Run tests" "$jr" --baseline "$jb" --jobs 'tests \('
+  same "--jobs: ^, $, | and a group" 0 "$jobs" --jobs '^tests \((unit|ui)\)$' "$jr"; same "--jobs is case-sensitive" 0 "wall 540"$'\n'"ci-times: no job matches Tests \(" --jobs 'Tests \(' "$jr"
+  same "--jobs matching nothing" 0 "wall 540"$'\n'"ci-times: no job matches ^lint.*x" --jobs '^lint.*x' "$jr"; same "no --jobs: those jobs count for wall only" 0 "wall 540" "$jr"
+  same "--jobs with no value" 2 - "$jr" --jobs; same "--jobs twice" 2 - --jobs lint --jobs lint "$jr"
   same "no argument" 2 -; same "--baseline with no value" 2 - --baseline; same "--baseline and no run" 2 - --baseline "$b"; same "an unknown flag" 2 - --nope "$s"; same "two runs" 2 - "$s" "$r"
   tsv="$core/tests/ci-times.tsv"; if [ ! -f "$tsv" ]; then bad ci-times "no tests/ci-times.tsv"
   else same "the committed baseline reads" 0 - --baseline "$(m "$tsv")" "$r"
