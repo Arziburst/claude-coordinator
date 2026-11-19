@@ -8,7 +8,7 @@ name: check-core
 # lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
 # without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
 # A line whose one pattern is !pr runs on no pull request, whatever it changes, and on every other run (#561): pwsh on Windows
-# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's and the hooks' keep it), reset-coordinator (tests only)
+# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's, the hooks' and the status line's keep it), reset-coordinator (tests only)
 # and pwsh on macOS (#657).
 #need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$ ^scripts/start-worker\. ^scripts/cleanup-worker\. ^settings\.example ^scripts/check-contract\. ^scripts/check-core\. ^scripts/check-scripts\. ^scripts/statusline\.  # selftest's guard settings, transcripts, probes, the throwaway assistant, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template, the assistant's start, cleanup and settings examples, and the scripts selftest scripts runs (#312)
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)

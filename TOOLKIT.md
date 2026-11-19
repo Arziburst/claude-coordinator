@@ -143,7 +143,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   subagent of that project starts from its own core copy, and **a project's role wins** over a user-level
   one of the same name (measured on both OS), so what another project writes there changes nothing. The
   user-level copy stays only for a project without the link (`roles-link` not run yet, or declined); a
-  project with it copies nothing there and removes nothing. For a project without it, the roles are
+  project with it copies nothing there and removes nothing. A worktree outside the project (`--worktree-root`) does not see the link and gets the user-level copy, no longer refreshed for that project. The first update's self-test runs before the link is made, so that one run does not prove it. For a project without it, the roles are
   **installed automatically, without asking**, at every start (CORE §2 step 7) and after
   every "update the core": each `roles/*.md` is copied to `~/.claude/agents/` when missing or different
   (a different file of the same name is first saved as `<name>.md.bak`; say so in one report line). The
@@ -711,6 +711,7 @@ One style for every script in `scripts/`, so each runs on a bare Mac and a bare 
   self-test through it, so WSL's bash ahead of Git's on PATH refuses no worker start) and blocks when it or the `.sh` cannot run
   (`tests/safety-guard/shim.sh`). A guard rule is written once, in the `.sh`; check-core refuses a shim that does
   not name `safety-guard.sh` or grows past 80 lines.
+- **Probing the guard by hand:** write each JSON payload to a file first (`printf '%s' '<json>' > <file>`), then pipe the file in: Claude Code's removal check refuses some inline forms (a payload that only echoes `git push` was read as "a shell -c script that runs rm", #589).
 - **Run a `.ps1` with its full command** on Windows: `powershell -NoProfile -ExecutionPolicy Bypass
   -File <script> …` (or `pwsh` the same way). A bare `.\script.ps1` or `-File` without `-ExecutionPolicy
   Bypass` is refused under the default execution policy — a lead's cost read failed that way. Briefs
@@ -874,7 +875,7 @@ middle, tasks without an estimate or a cost left out, assistant and task rows ne
   `check (macos-latest)`, `check (windows-latest)` (`if: always()`): red when any shard of their OS failed, was
   cancelled or was skipped, so branch protection names what it named before. `concurrency` cancels a pull request's
   stale runs on its next push, never a run on main. **What a pull request skips (#561):** a `#need` line whose one pattern is `!pr` is false
-  on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends the step before its `ps pwsh`) and pwsh on macOS (runs and selftest's guard settings, `/bin/bash` first: #637, #657) run on
+  on every PR: reset-coordinator's sets and pwsh on Windows in the non-hook script sets (a gate line ends a step before its `ps pwsh`; cc-formats' Windows pwsh line is wrapped in an `if` on the gate's output instead) and pwsh on macOS (runs and selftest's guard settings, `/bin/bash` first: #637, #657) run on
   main, the nightly and a manual run only; the guard's, the hooks' and the status line's run on a PR too. **How a step lands in a shard:** every shard holds about 6 to 8
   minutes by the measured seconds (#426): `ubuntu-1`, `macos-1` and `windows-1` the common steps; every other step packed
   longest first into the shortest shard of its OS, each part of a split set on a shard of its own (the workflow's
