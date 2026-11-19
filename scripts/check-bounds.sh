@@ -5,7 +5,9 @@
 # top-level `contract:`, else the file, as check-contract reads it). A glob holds the whole path from the root, `*`
 # crosses folders, `**/` is zero or more folders (#529), letter case counts. Per bound the added lines of
 # `git diff --numstat --no-renames` of the files it matches (a file in two globs counts in both; a rename by its new path, all its lines added; a file no bound matches
-# is not limited): `<glob> <added>/<max>`, a binary file it matches named before it, `binary: <path> counts as 0`.
+# is not limited): `<glob> <added>/<max>`, a binary file it matches named before it, `binary: <path> counts as 0`, and
+# `check-bounds: WARN <glob> matches no file` before it for a glob matching no path of the diff (either side) nor a file
+# tracked at the head (#586). One pair of matching surrounding quotes (`"..."`, `'...'`) is dropped from a glob (#586).
 # Then `check-bounds: OK`, or one `check-bounds: OVER <glob> <added>/<max>` per bound over. No bound: the one line
 # `check-bounds: no bounds`. Exit 0 OK or no bounds, 1 OVER, 2 usage, an unreadable contract or range, a malformed bound
 # (also a max too large for a long, or a `[` not closed: refused before the diff is read, the line naming the bound),
@@ -35,7 +37,9 @@ b="$(LC_ALL=C awk '
       if (l ~ /^[a-z_]+:/) { if (l ~ /^bounds:/) { on = 1; sub(/^bounds:[ \t]*/, "", l); if (l !~ /^(#.*)?$/) print " " L[i] }; continue }
       if (!on || l ~ /^[ \t]*(#.*)?$/) continue
       if (l !~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) { print " " l; continue }
-      sub(/^[ \t]*-[ \t]+/, "", l); split(l, a, /[ \t]+/); x = a[2]; sub(/^0+/, "", x); y = a[1]; gsub(/\[[^]]+\]/, "", y)
+      sub(/^[ \t]*-[ \t]+/, "", l); split(l, a, /[ \t]+/); x = a[2]; q = substr(a[1], 1, 1)
+      if (length(a[1]) > 2 && (q == "\"" || q == "\047") && substr(a[1], length(a[1])) == q) a[1] = substr(a[1], 2, length(a[1]) - 2)   # #586
+sub(/^0+/, "", x); y = a[1]; gsub(/\[[^]]+\]/, "", y)
       if (length(x) > 19 || (length(x) == 19 && x > "9223372036854775807") || index(y, "[")) { print " " L[i]; continue }
       print a[1] " " a[2] } }' "$c")"
 tch="$(printf '%s\n' "$b" | sed -n 's#^//t ##p')"; repo="$(printf '%s\n' "$b" | sed -n 's#^//r ##p' | head -n 1)"; b="$(printf '%s\n' "$b" | grep -v '^//')"
@@ -52,14 +56,20 @@ $tch
 IN
   [ -n "$(git -C "$top" ls-files -- "${P[@]}" 2>/dev/null | head -n 1)$(git -C "$top" diff --name-only --no-renames "$range" -- "${P[@]}" 2>/dev/null | head -n 1)" ] || wrong="check-bounds: none of the contract's touches ($(printf '%s' "$tch" | tr '\n' ' ' | sed 's/ $//')) is in the repository $top or in $range: run it inside the contract's repository"
 fi
-over="" outl="" nl=$'\n'
+over="" outl="" nl=$'\n' hd="${range#*...}" trk="" tl=0
 while read -r g m; do
-  a=0
+  a=0 hit=0
   while IFS="$(printf '\t')" read -r x _ p; do
-    [ -n "$p" ] && globmatch "$p" "$g" || continue; if [ "$x" = - ]; then outl="${outl}binary: $p counts as 0$nl"; else a=$((a + x)); fi
+    [ -n "$p" ] && globmatch "$p" "$g" || continue; hit=1; if [ "$x" = - ]; then outl="${outl}binary: $p counts as 0$nl"; else a=$((a + x)); fi
   done <<IN
 $nums
 IN
+  # #586: a glob matching no path of the diff nor a file tracked at the head (an empty head: HEAD) is named
+  if [ $hit = 0 ]; then [ $tl = 1 ] || { trk="$(git -c core.quotePath=false ls-tree -r --full-tree --name-only "${hd:-HEAD}" 2>/dev/null)"; tl=1; }
+    while IFS= read -r p; do [ -n "$p" ] && globmatch "$p" "$g" && { hit=1; break; }; done <<IN
+$trk
+IN
+    [ $hit = 1 ] || outl="${outl}check-bounds: WARN $g matches no file$nl"; fi
   outl="$outl$g $a/$m$nl"; [ "$a" -le "$m" ] || over="$over
 check-bounds: OVER $g $a/$m"
 done <<IN

@@ -67,9 +67,9 @@ mk within 'src/* 6';  t "within a bound" within 0 'src/* 5/6' 'check-bounds: OK'
 mk exact 'src/* 5';   t "exactly at the bound" exact 0 'src/* 5/5' 'check-bounds: OK'
 mk over 'src/* 4';    t "one over" over 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
 sed 's/$/\r/' "$tmp/c/over.md" > "$tmp/c/crlf.md"; t "a CRLF contract reads the same" crlf 1 'src/* 5/4' 'check-bounds: OVER src/* 5/4'
-mk nomatch 'nowhere/* 0'; t "files no bound matches are not limited" nomatch 0 'nowhere/* 0/0' 'check-bounds: OK'
-mk anchored 'three.txt 0'; t "a glob holds from the root" anchored 0 'three.txt 0/0' 'check-bounds: OK'
-mk casey 'SRC/* 0';   t "letter case counts" casey 0 'SRC/* 0/0' 'check-bounds: OK'
+mk nomatch 'nowhere/* 0'; t "files no bound matches are not limited" nomatch 0 'check-bounds: WARN nowhere/* matches no file' 'nowhere/* 0/0' 'check-bounds: OK'
+mk anchored 'three.txt 0'; t "a glob holds from the root" anchored 0 'check-bounds: WARN three.txt matches no file' 'three.txt 0/0' 'check-bounds: OK'
+mk casey 'SRC/* 0';   t "letter case counts" casey 0 'check-bounds: WARN SRC/* matches no file' 'SRC/* 0/0' 'check-bounds: OK'
 mk removed 'lib/* 1'; t "removed lines do not count" removed 0 'lib/* 1/1' 'check-bounds: OK'
 mk binary 'bin/* 1';  t "a binary file counts as 0 and is named" binary 0 'binary: bin/blob.bin counts as 0' 'bin/* 1/1' 'check-bounds: OK'
 mk binover 'bin/* 0'; t "a binary file beside an overrun" binover 1 'binary: bin/blob.bin counts as 0' 'bin/* 1/0' 'check-bounds: OVER bin/* 1/0'
@@ -82,7 +82,7 @@ printf -- '---\nid: 1\ntitle: t\n---\n' > "$tmp/c/nob.md"; t "no bounds" nob 0 '
 printf -- '---\nid: 1\ntitle: t\n---\nbounds:\n  - src/* 0\n' > "$tmp/c/body.md"; t "bounds in the body are no bounds" body 0 'check-bounds: no bounds'
 # `**/` (#529): zero or more folders, also at the start and twice; `*/` alone still needs a slash
 mk zero 'src/**/*.txt 5' '**/src/three.txt 3' '**/two.txt 2' '**/src/**/*.txt 5' 'src/**/two.txt 2' 'src/*/three.txt 0'
-t "a **/ matches zero or more folders" zero 0 'src/**/*.txt 5/5' '**/src/three.txt 3/3' '**/two.txt 2/2' '**/src/**/*.txt 5/5' 'src/**/two.txt 2/2' 'src/*/three.txt 0/0' 'check-bounds: OK'
+t "a **/ matches zero or more folders" zero 0 'src/**/*.txt 5/5' '**/src/three.txt 3/3' '**/two.txt 2/2' '**/src/**/*.txt 5/5' 'src/**/two.txt 2/2' 'check-bounds: WARN src/*/three.txt matches no file' 'src/*/three.txt 0/0' 'check-bounds: OK'
 mk zover 'src/**/*.txt 4'; t "a **/ bound over, the file directly in the folder counted" zover 1 'src/**/*.txt 5/4' 'check-bounds: OVER src/**/*.txt 5/4'
 mk renamed 'new/* 10' 'old/* 0'; t "a renamed file counts by its new path" renamed 1 'new/* 11/10' 'old/* 0/0' 'check-bounds: OVER new/* 11/10'
 u "no range" ../c/within.md; u "a range without three dots" ../c/within.md main
@@ -119,6 +119,14 @@ for o in https://github.com/Acme/front.git git@github.com:acme/front https://git
   t "the contract's repository ($o)" rin 0 'src/* 5/6' 'check-bounds: OK'; rf "another repository ($o)" rout 'check-bounds: the origin' "${o%/}" 'acme/back' '/repo'; done
 g remote set-url origin https://github.com/bigacme/front.git; rf "a longer owner's name is another repository" rin 'bigacme/front' 'acme/front'
 g remote remove origin
+# #586: one pair of matching surrounding quotes is dropped from a glob; one quote alone, mismatched or inside, is kept
+mk q1 '"src/*" 4' "'src/*' 6" '"**/two.txt" 1'; t "quoted globs read without their quotes" q1 1 'src/* 5/4' 'src/* 5/6' '**/two.txt 2/1' 'check-bounds: OVER src/* 5/4' 'check-bounds: OVER **/two.txt 2/1'
+mk q2 '"src/* 6' "\"src/*' 6" 'src/"x"/* 0'; t "one quote, mismatched or inner quotes: kept" q2 0 'check-bounds: WARN "src/* matches no file' '"src/* 0/6' "check-bounds: WARN \"src/*' matches no file" "\"src/*' 0/6" 'check-bounds: WARN src/"x"/* matches no file' 'src/"x"/* 0/0' 'check-bounds: OK'
+# #586: a glob matching neither a file tracked at the head nor a diff path (old or new side) warns; the exit stays
+g checkout -q main; mkdir -p "$tmp/repo/keep"; lines keep/same.txt 2; lines keep/naïve.txt 2; g add -A; g commit -q -m keep   # main...work is unchanged
+g checkout -q -b del; g rm -q lib/old.txt; g commit -q -m del; R='main...del'
+mk w1 'lib/* 0' 'keep/same.txt 0' 'keep/naïve.txt 0' 'kep/* 0'; t "a deleted path and untouched files are silent, a typo warns" w1 0 'lib/* 0/0' 'keep/same.txt 0/0' 'keep/naïve.txt 0/0' 'check-bounds: WARN kep/* matches no file' 'kep/* 0/0' 'check-bounds: OK'
+R='main...'; t "an empty head reads HEAD" w1 0 'lib/* 0/0' 'keep/same.txt 0/0' 'keep/naïve.txt 0/0' 'check-bounds: WARN kep/* matches no file' 'kep/* 0/0' 'check-bounds: OK'
 
 echo "check-bounds ($kind): $n cases, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
