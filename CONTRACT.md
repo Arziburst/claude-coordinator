@@ -87,6 +87,7 @@ Free text: context, known traps, parallel work nearby, launch and test limits, t
   *Important components* matches, or a folder holding one (a project adds, never removes a default).
   check-contract refuses such a contract without them. `bounds:` is lines `- <glob> <max added lines>`, each a
   whole number; a file no bound matches is not limited, and a bound's glob need not be the important one.
+  A bound's glob may be quoted (`- "*.toc" 2`, YAML needs it for a leading `*`): check-bounds drops the quotes (#586).
   A glob (bounds, touches, the important list) holds the whole path; `*` crosses folders; `**/` is zero or more folders (#529).
   A report-only contract (it changes no file) writes `touches: [none]`: a word with no `/` or `.` is matched as the literal word, so `none` needs no bounds or wall while an important `Dockerfile` does (#517, #672).
   A folder written with a `/` inside it is matched with or without its trailing slash (`scripts/hooks` as `scripts/hooks/`); a row value starting with `none` adds no glob (#672).

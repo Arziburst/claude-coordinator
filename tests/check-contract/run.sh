@@ -321,6 +321,7 @@ imk i-dsb.md scripts/hooks "$W1"; iname="the folder scripts/hooks, no slash, wit
 imk i-dsw.md .github/workflows "$B1"; iname="the folder .github/workflows, no slash, without wall"; ierr i-dsw.md wall '.github/workflows/*'
 imk i-dsr.md tests/retro "$W1"; iname="the folder tests/retro, no slash, under a wildcard"; ierr i-dsr.md bounds 'tests/*/run.*'
 imk i-dsk.md scripts/hooks "$B1$W1"; iname="the folder scripts/hooks, no slash, with both"; inone i-dsk.md
+imk i-dsq.md scripts/hooks "bounds:\n  - \"scripts/hooks/*\" 10\n  - '*.toc' 2\n$W1"; iname="quoted bound globs (#586)"; inone i-dsq.md
 imk i-dsn.md 'docs, docs/tests, scripts/hooksy, scripts/hook, tests/x.sh, tests/a/*' ''; iname="no-slash items holding no important glob"; inone i-dsn.md
 # a malformed bound: never a whole number, no number, an empty list, a value on the key's line, a good line beside
 i=0; for b in 'bounds:\n  - scripts/hooks/* lots\n' 'bounds:\n  - scripts/hooks/*\n' 'bounds:\n' 'bounds:\n  - some/glob/* 10\n  - scripts/hooks/* x\n'; do
