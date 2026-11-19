@@ -35,7 +35,8 @@ rules and reports to the owner. Works for any project and stack, solo or in a te
   [lead.md](roles/lead.md) runs a large task through its own workers and returns one PR,
   [tester.md](roles/tester.md) writes its failing tests first,
   [verifier.md](roles/verifier.md) reviews it independently, [scout.md](roles/scout.md) condenses long
-  logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take.
+  logs and threads on the light model, [researcher.md](roles/researcher.md) returns a catalog of what to take,
+  [critic.md](roles/critic.md) reviews a contract on Opus before any worker starts.
 - [procedures/](procedures/) — parts of the core read only when needed: the init quiz
   ([INIT.md](procedures/INIT.md)), the move to another machine ([HANDOFF.md](procedures/HANDOFF.md)), the answer to
   "what is your task?" ([WHAT-IS-YOUR-TASK.md](procedures/WHAT-IS-YOUR-TASK.md)), "settings"

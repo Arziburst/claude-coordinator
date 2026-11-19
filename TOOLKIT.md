@@ -34,7 +34,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   runs tester, verifier and scout as its own subagents — a background session can start
   further background sessions (confirmed on Claude Code 2.1.296, Windows); if a version refuses, the
   lead sends its start-worker commands to the coordinator, which runs them; `researcher` — a subagent, or a session (`researcher: <topic>`) for long research;
-  `scout` — a subagent only; `tester` — a subagent for a short run, else a background session
+  `scout` and `critic` — a subagent only; `tester` — a subagent for a short run, else a background session
   (`#<task> tester: …`): start-worker with the worker safety file, in the task's working copy and
   branch, the worker started after its report in the same copy (start-worker reuses it). A session when
   **the coordinator's own settings hold no guard** — a subagent runs under the settings of the session
@@ -137,7 +137,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   search; up to 20 concurrent, nesting depth 3, they cannot ask the owner questions, their usage counts
   toward yours. Background sessions for real tasks: independent, visible in the session list, own
   working copy. [sub-agents](https://code.claude.com/docs/en/sub-agents.md)
-- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`. They are part
+- **Roles:** [roles/](roles/) holds subagent definitions — `worker`, `lead`, `tester`, `verifier`, `scout`, `researcher`, `critic`. They are part
   of the core. **The place for them is a project's link** `.claude/agents` -> `coordinator/core/roles`,
   git-excluded as `.claude/skills` is (one-time step `roles-link`, at init and at a core update, #402): a
   subagent of that project starts from its own core copy, and **a project's role wins** over a user-level
