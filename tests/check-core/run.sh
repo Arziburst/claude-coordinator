@@ -11,7 +11,7 @@
 #   - a start-read text over its recorded size plus a margin in percent or words, or with no record: a WARN, the exit
 #     code unchanged; the expected counts the copy's own (#600);
 #   - a broken link, a section and a hard rule that do not exist: each reported with its file and line; one in a
-#     fenced block, and a file in a nested repository (a folder that holds .git), not read (#658).
+#     fenced block, and a file in a nested repository (a folder that holds .git), not read (#658); a one-time step in no feature, a skill's name past lines 2-6 (#669).
 # The same lines from both versions.
 #   tests/check-core/run.sh sh                  # check-core.sh, with the bash running this file
 #   tests/check-core/run.sh ps pwsh             # check-core.ps1 (or: ps powershell)
@@ -142,11 +142,19 @@ summary "fourteen errors in all: quoted case arguments are no paths" 1 14
 hr="$(printf '%s\n' "$LAST" | sed -n '$s/.*, \([0-9]*\) hard rules,.*/\1/p')"
 mkdir -p "$d/sub/nested/.git" "$d/sub/nested/in"; printf '[a](gone.md) §99\n' > "$d/sub/nested/in/x.md"
 printf 'text\r\n[a](gone.md) [b](../CORE.md#top) §99 §1.99\n```\n[c](gone.md)\n```\n' > "$d/sub/y.md"
+# a one-time step in no feature, and a skill whose name: stands on line 7, past lines 2-6 (#669)
+o="$(grep -n '^| `' "$d/ONE-TIME.md" | tail -n 1 | cut -d: -f1)"
+awk -v o="$o" '{ print } NR == o { print "| `zz-nowhere` | #669 | project | check | run | in no feature |" }' "$d/ONE-TIME.md" > "$tmp/f" &&
+  cat "$tmp/f" > "$d/ONE-TIME.md"
+mkdir -p "$d/skills/coord-late"
+printf -- "---\ndescription: 'Coordinator only: a test'\n\n\n\n\nname: coord-late\n---\n" > "$d/skills/coord-late/SKILL.md"
 run
 expect "a broken link" 1 "sub/y.md:2: broken link gone.md"
 expect "a section that does not exist" 1 "sub/y.md:2: §99 does not exist"
 expect "a hard rule that does not exist" 1 "sub/y.md:2: §1.99 does not exist (CORE §1 has $hr hard rules)"
-summary "seventeen errors in all: a fenced block and a file in a nested repository are not read" 1 17
+expect "a one-time step in no feature" 1 "FEATURES.md: one-time step zz-nowhere is in no feature"
+expect "a skill's name past lines 2-6 is no name" 1 "skills/coord-late/SKILL.md: name '' is not its folder 'coord-late'"
+summary "nineteen errors in all: a fenced block and a file in a nested repository are not read" 1 19
 
 echo "check-core ($kind): $n checks, $( [ $fail = 0 ] && echo all pass || echo FAILURES )"
 exit $fail
