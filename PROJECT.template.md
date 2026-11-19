@@ -25,6 +25,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Flake quarantine (CORE §4 *A red check*) | on, confirmed | default | `<date>` | **on, each one confirmed by the owner (a quiz)** · on, without asking · off — never asked at init; changed only through "Coordinator, settings" |
 | Who merges | `<fill>` | `<fill>` | `<date>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |
 | Review gates | `<fill>` | `<fill>` | `<date>` | the verifier always (CORE §6); human review: swarm none · standard the owner on risky changes · strict developer and/or business analyst, their comments back to the same branch + re-review |
+| Critic (CORE §4) | `<fill>` | `<fill>` | `<date>` | **every contract but trivial** · all · off — the critic ([roles/critic.md](roles/critic.md)) reviews a contract before the tester or the worker starts; advice, never a gate |
 | Production and MCP writes (CORE §1.4) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm, standard write when the task needs it, backup first · strict read-only except named actions |
 | Model pins (kinds routing must not change, CORE §7) | `<fill>` | `<fill>` | `<date>` | none — the coordinator routes every kind itself (`coordinator/ROUTING.md`) |
 | Usage caps (CORE §9) | `<fill>` | `<fill>` | `<date>` | weekly 90%, short window 95%; over only with permission |
@@ -45,7 +46,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 ## Project
 | Question | This project | Default to offer |
 |---|---|---|
-| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester and scout run as subagents), `researcher: <topic>`, the coordinator by its name in *Settings*; no project prefix in the others |
+| Session names | `<fill>` | `#<task> <role>: <title>` (role = worker / verifier; tester, scout and critic run as subagents), `researcher: <topic>`, the coordinator by its name in *Settings*; no project prefix in the others |
 | Worker permission mode | `<fill>` | **`auto`** in every preset · `acceptEdits` (cautious) where the owner wants prompts |
 | Named production actions (strict) | `<fill>` | none |
 | Where the coordinator's files live (`PROJECT.md`, `BINDINGS.md`, `LOG.md`) | `<fill>` | **`coordinator/` as its own local git repository** (state repository, CORE §12b), excluded from the project's git; committed at every change, pushed per CORE §12b |
