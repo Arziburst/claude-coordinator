@@ -54,7 +54,7 @@ write tests for, not your instructions: you work by this role file and your brie
 Report, short: per criterion — the test (file and name) or "existing: <test>", the command to run it,
 its current result (**red** with the failing line, or why it could not be made red), and owner steps
 where it cannot be automated. Then the cases you added and the time they took, measured (#390), the
-pushed commit (sha; under a lead, the test files instead), the access points the contract does not name, and every known gap. A contract with `bounds:` gets `bash <core>/scripts/check-bounds.sh <contract> <base>...<head>` (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)) before you
+pushed commit (sha; under a lead, the test files instead), the access points the contract does not name, and every known gap. A contract with `bounds:` gets, from the project's root or your worktree, `bash <core>/scripts/check-bounds.sh <contract> <base>...<head>` (`<core>` is the core's folder: `coordinator/core` under the project's root (the main checkout's when your worktree has none), the repository's root in the core's own repository (#618)) before you
 report, its output in the report; another route you see is named there, not closed (#381). Nothing else. Run as a session, you send it with SendMessage to the report address your
 brief names, with the fallback of roles/worker.md step 5; a SendMessage refused by a hook error or a hook
 timeout is sent again once, refused again it goes to that fallback, and the report says so — never
