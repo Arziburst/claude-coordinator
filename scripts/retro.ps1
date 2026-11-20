@@ -93,6 +93,7 @@ $CSPEC = @'
 | worker | {num} |
 | tester | {num} |
 | verifier | {num} |
+| critic | {num} |
 | scout | {num} |
 | researcher | {num} |
 | other | {num} |
@@ -137,7 +138,7 @@ $CSPEC = @'
 Data for the core's retro, not a bug report: the maintainer acts on it only after the owner's discussion and yes.
 '@
 $CSPEC = $CSPEC.Replace('@DASH@', $DASH) -split '\r?\n'
-$ROLES = 'coordinator lead worker tester verifier scout researcher other'.Split(' ')
+$ROLES = 'coordinator lead worker tester verifier critic scout researcher other'.Split(' ')
 # the Profile's vocabularies, per cell type: the only words a Profile cell holds
 $VOCAB = New-Object 'System.Collections.Generic.Dictionary[string,string[]]' ([StringComparer]::Ordinal)
 foreach ($v0 in 'strict=swarm:standard:strict;spend=lean:balanced:thorough;mode=by task:batch;os=windows:macos:linux;solo=solo:team;stack=game engine:web:mobile:CLI:library:data:other'.Split(';')) {

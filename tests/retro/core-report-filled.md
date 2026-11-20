@@ -75,6 +75,7 @@
 | worker | 7 |
 | tester | 2 |
 | verifier | 3 |
+| critic | 0 |
 | scout | 1 |
 | researcher | 1 |
 | other | 0 |
