@@ -53,6 +53,6 @@ INIT's full quiz, as for a new project. Nothing is offered back: the tag is the 
    That session sees no `PROJECT.md` and runs INIT's full quiz (INIT 3.6, *After a reset*).
 
 **The way back, only if the owner asks** (a look, or by hand; nothing restores itself):
-`git -C coordinator -c core.autocrlf=false -c core.eol=lf checkout <tag>` gives every file back, byte for
-byte, with the memory under `before-reset-memory/`, the briefs and status files under `before-reset-config/`. Both `-c` are needed on Windows: without them git rewrites
+`git -C coordinator show <tag>:<path>` is a look at one file; `git -C coordinator -c core.autocrlf=false -c core.eol=lf checkout <tag> -- <path>` gives that path back, byte for
+byte (a bare `checkout <tag>` would also detach HEAD and swap the new core for the old). The tag holds every file, with the memory under `before-reset-memory/`, the briefs and status files under `before-reset-config/`. Both `-c` are needed on Windows: without them git rewrites
 line endings on the way out.
