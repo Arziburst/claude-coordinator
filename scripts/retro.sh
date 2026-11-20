@@ -147,6 +147,7 @@ $DASH too little data: under 3 tasks, merged tasks or forecasts, under 100 tool 
 | worker | {num} |
 | tester | {num} |
 | verifier | {num} |
+| critic | {num} |
 | scout | {num} |
 | researcher | {num} |
 | other | {num} |
@@ -189,7 +190,7 @@ $DASH too little data: under 3 tasks, merged tasks or forecasts, under 100 tool 
 {proposals}
 
 Data for the core's retro, not a bug report: the maintainer acts on it only after the owner's discussion and yes."
-ROLES="coordinator lead worker tester verifier scout researcher other"
+ROLES="coordinator lead worker tester verifier critic scout researcher other"
 # the Profile's vocabularies, per cell type: the only words a Profile cell holds
 VOCAB="strict=swarm:standard:strict;spend=lean:balanced:thorough;mode=by task:batch;os=windows:macos:linux;solo=solo:team;stack=game engine:web:mobile:CLI:library:data:other"
 # the shared awk functions: whole words, a path's folder name, a value cell, the vocabulary, days and dates
