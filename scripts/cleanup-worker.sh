@@ -23,7 +23,7 @@
 #   scripts/cleanup-worker.sh --task <id> [--runs <log>] [--state <folder>] [--dry-run]     alone, from the project's root; or with --worktree: after its cleanup
 # --task (#621; after a merge by a human, which merge-queue's removal of them never follows): the finished sessions of task <id> in this
 # project (the folder it runs in; with --worktree that repository's main checkout), found by merge-queue's rule (#493, #521; kept equal to it by
-# hand): the brief kept by the sessionId names a worktree `<id>-...`, else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
+# hand): the brief kept by the sessionId names a worktree `<id>-...` or a sub-task's `<id>.<k>-...` (#629), else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
 # (--runs <log>; else <folder>/RUNS.tsv of --state <folder>, the coordinator's state folder as start-worker and merge-queue take it, refused when it is no
 # folder or holds neither RUNS.tsv nor briefs/, #635; default coordinator/RUNS.tsv under the project) finds a row for is removed (`claude rm`: the listing only), `removed <id> (<name>)`,
 # --dry-run: `[dry-run] claude rm <id> (<name>)`; the others are `MISSING <id> <name>`; then `task <id>: <n> removed, <m> without a run row`. A live
@@ -84,7 +84,7 @@ task_sessions() {
   tre="$(printf '%s' "$task" | sed 's/\./\\./g')"; case "$log" in /*|[A-Za-z]:*) ;; *) log="$root/$log" ;; esac
   ls="$(claude agents --json --all 2>/dev/null </dev/null)" || { echo "LISTING FAILED: claude agents --json --all failed - no session of task $task removed" >&2; return 3; }
   while IFS="$TAB" read -r xid xsid xnm; do [ -n "$xid" ] || continue
-    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -E "/$tre-[^/ ]*[.,] " >/dev/null || continue
+    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -E "/$tre(\.[^-/ ]+)?-[^/ ]*[.,] " >/dev/null || continue
     else case "$xnm" in "#$task "*|"#$task."*) ;; *) continue ;; esac; fi
     [ -n "$got" ] || { got=1; ms="$(bash "$(dirname "$0")/runs.sh" check --log "$log" --root "$root" 2>/dev/null </dev/null)" ||
       { echo "RUNS CHECK FAILED: runs check --log $log --root $root failed - no session of task $task removed" >&2; return 3; }; }

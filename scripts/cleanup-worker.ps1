@@ -22,7 +22,7 @@
 #   powershell -File scripts\cleanup-worker.ps1 -Task <id> [-Runs <log>] [-State <folder>] [-DryRun]     alone, from the project's root; or with -Worktree: after its cleanup
 # -Task (#621; after a merge by a human, which merge-queue's removal of them never follows): the finished sessions of task <id> in this
 # project (the folder it runs in; with -Worktree that repository's main checkout), found by merge-queue's rule (#493, #521; kept equal to it by
-# hand): the brief kept by the sessionId names a worktree `<id>-...`, else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
+# hand): the brief kept by the sessionId names a worktree `<id>-...` or a sub-task's `<id>.<k>-...` (#629), else (no brief kept) the name `#<id> ` or `#<id>.`. Each one `runs check`
 # (-Runs <log>; else <folder>/RUNS.tsv of -State <folder>, the coordinator's state folder as start-worker and merge-queue take it, refused when it is no
 # folder or holds neither RUNS.tsv nor briefs/, #635; default coordinator/RUNS.tsv under the project) finds a row for is removed (`claude rm`: the listing only), `removed <id> (<name>)`,
 # -DryRun: `[dry-run] claude rm <id> (<name>)`; the others are `MISSING <id> <name>`; then `task <id>: <n> removed, <m> without a run row`. A live
@@ -115,7 +115,7 @@ function TaskSessions([string]$root) {
   if ($null -eq $js) { [Console]::Error.WriteLine("LISTING FAILED: claude agents --json --all failed - no session of task $Task removed"); $script:trc = 3; return }
   foreach ($s in $js) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm0 = "$($s.name)"; $kb = "$bd/$($s.sessionId).md"
     if (-not ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and -not ($s.PSObject.Properties.Name -contains 'status') -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase)))) { continue }
-    if (Test-Path -LiteralPath $kb -PathType Leaf) { if ("$(@(Get-Content -LiteralPath $kb -TotalCount 1))" -cnotmatch "/$([regex]::Escape($Task))-[^/ ]*[.,] ") { continue } }
+    if (Test-Path -LiteralPath $kb -PathType Leaf) { if ("$(@(Get-Content -LiteralPath $kb -TotalCount 1))" -cnotmatch "/$([regex]::Escape($Task))(\.[^-/ ]+)?-[^/ ]*[.,] ") { continue } }
     elseif (-not ($nm0.StartsWith("#$Task ") -or $nm0.StartsWith("#$Task."))) { continue }
     if ($null -eq $ms) { $log = [IO.Path]::Combine($root, $Runs)
       $ms = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') check -Log $log -Root $root 2>$null } | ForEach-Object { "$_" })

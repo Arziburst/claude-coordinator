@@ -135,7 +135,7 @@ pr() { echo "OPEN false $2 $3 main" > "$STUB_D/pr-$1"; }
 H11=a111111111111111111111111111111111111111 H13=c131313131313131313131313131313131313131 N13=d131313131313131313131313131313131313131
 # the cases below run from a repository's root whose origin has their open PRs' branches (#387); 1-a is off it: a merged PR's branch is gone
 git init -q --bare "$tmp/r.git"; git init -q -b main "$tmp/r"; cd "$tmp/r" || exit 1; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
-for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d 466-feat ARXVR-12-feat hotfix-x reception-flow; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
+for b in 11-fix 13-x 14-y 15-z 16-a 17-b 18-c 2-b 3-c 4-d 426-1-x 466-feat 621-feat ARXVR-12-feat hotfix-x reception-flow; do git branch "$b"; done; git remote add origin "$tmp/r.git"; git push -q origin --all 2>/dev/null
 
 fresh "up to date, green: merged; an open PR changing the same file is AFFECTED"
 pr 11 $H11 11-fix; printf 'src/x.ts\ndocs/LOG.md\n' > "$STUB_D/files-11"; echo "pass skipping" > "$STUB_D/checks-$H11"
@@ -211,6 +211,20 @@ qb="$(printf '%s' "$qroot" | tr '/' '\\' | sed 's/\\/\\\\/g' | awk '{ c = substr
 for b in 7 8; do printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t2026-11-0%sT10:00:00Z\t1\t1\t\t-\n' "$b" >> "$L5"; done
 pr 82 $H82 ARXVR-12-feat; run land 82 --poll 0 --runs "$L5"; code 0; has "AFTER MERGE #82: removed the finished sessions of this task whose run rows are written: b7 (#ARXVR-12 worker: g); b8 (#ARXVR-12 worker: h)"
 has "claude rm only after the run rows above: claude rm b9 (#ARXVR-12 worker: i)"; has "/q525.tsv "; [ "$(tr '\n' ' ' < "$STUB_D/claude-rm")" = "rm b7 rm b8 " ] && ok || bad "claude rm: $(tr '\n' ';' < "$STUB_D/claude-rm"), want b7 and b8"
+# #629: a lead's sub-task session, its kept brief naming the worktree <n>.<k>-..., is found by the parent id (rt, and tid when they differ); other tasks' never
+s629() { local s="5e550000-0000-4000-8000-0000000000$1" t; t="2026-11-$([ "${1%?}" = d ] && echo 1 || echo 2)${1#?}T10:00:00Z"; sess "$1" "#OTHER sub: $1" done "$qroot"
+  printf '{"sessionId":"%s","type":"assistant","message":{"id":"m%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$s" "$1" "$t" > "$tmp/cfg/projects/q/$s.jsonl"
+  echo "FIRST ACTION, before anything else: use the EnterWorktree tool with path = $qroot/.claude/worktrees/$2. Work only inside it." > "$kb/$s.md"; [ -z "${3:-}" ] || printf '2026-11-05\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> coordinator/RUNS.tsv; }
+H84=8484848484848484848484848484848484848484 H85=8585858585858585858585858585858585858585; rm -f "$STUB_D/claude-rm"
+{ echo '['; s629 d1 621.2-x row; echo ,; s629 d2 621.2-y; echo ,; s629 d3 6210-x row; echo ,; s629 d4 62-x row; echo ,; s629 d5 622.1-x row; echo ,; s629 d6 1621.2-x row; echo; echo ']'; } > "$STUB_D/agents"
+pr 84 $H84 621-feat; echo src/x.ts > "$STUB_D/files-84"; echo pass > "$STUB_D/checks-$H84"; run land 84 --poll 0; code 0
+has "AFTER MERGE #84: removed the finished sessions of this task whose run rows are written: d1 (#OTHER sub: d1)"; has "claude rm only after the run rows above: claude rm d2 (#OTHER sub: d2)"
+for x in d3 d4 d5 d6; do hasnt "$x ("; done; [ "$(tr "\n" " " 2>/dev/null < "$STUB_D/claude-rm")" = "rm d1 " ] && ok || bad "claude rm: $(tr '\n' ';' 2>/dev/null < "$STUB_D/claude-rm"), want d1 only"
+mkdir -p coordinator/briefs; printf -- '---\nid: 426-1\ntitle: t\nwall: w\n---\n' > coordinator/briefs/426-1-x-contract.md; rm -f "$STUB_D/claude-rm"
+{ echo '['; s629 e1 426-1.2-x row; echo ,; s629 e2 426-2.1-x row; echo; echo ']'; } > "$STUB_D/agents"
+pr 85 $H85 426-1-x; echo src/x.ts > "$STUB_D/files-85"; echo pass > "$STUB_D/checks-$H85"; run land 85 --poll 0; code 0; has "AFTER MERGE #85: the run rows of task 426-1 (branch 426-1-x)"
+has "AFTER MERGE #85: removed the finished sessions of this task whose run rows are written: e1 (#OTHER sub: e1)"; hasnt "e2 ("; [ "$(tr "\n" " " 2>/dev/null < "$STUB_D/claude-rm")" = "rm e1 " ] && ok || bad "claude rm: $(tr '\n' ';' 2>/dev/null < "$STUB_D/claude-rm"), want e1 only"
+rm -f coordinator/briefs/426-1-x-contract.md "$STUB_D/claude-rm"; rmdir coordinator/briefs
 rm -f coordinator/RUNS.tsv; rmdir coordinator; unset CLAUDE_CONFIG_DIR
 
 fresh "a PR from this repository (isCrossRepository false): deletes, no fork line"; echo "OPEN false $H11 11-fix main false" > "$STUB_D/pr-11"; echo pass > "$STUB_D/checks-$H11"
