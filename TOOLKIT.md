@@ -474,7 +474,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   `clear`; a linked worktree, or a repository whose top folder lies under `.claude/worktrees/` or a
   declared worktree root, passes (a plain folder there belongs to the project and does not); a folder
   that cannot be known (a variable, not a repository, `--git-dir` / `--work-tree` / `GIT_DIR=` /
-  `GIT_WORK_TREE=` pointing elsewhere) blocks — with or without
+  `GIT_WORK_TREE=` pointing elsewhere) blocks; in a Bash command a folder written with backslashes after
+  `git -C` or `cd` blocks with that reason, to write it with forward slashes (#607) — with or without
   `COORD_PROTECTED_ROOT`, which a subagent under the coordinator's own settings does not have. It parses
   the command like a shell: line continuations are joined, separators inside quotes (a commit
   message, a PR body) do not split, `{ … }` groups and PowerShell script blocks split like `( … )`,
