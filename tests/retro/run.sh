@@ -40,6 +40,13 @@ run() {
 }
 fail=0; n=0
 bad() { echo "FAIL $*"; fail=1; }
+# #687: a line of a body is found by its text, never by a number: lineof <file> <text> prints the number of the one line
+# that is <text> whole or a row whose whole first cell is <text>; none or several is a failure (exit 1) that says so
+lineof() {
+  local c; c="$(T="$2" awk '$0 == ENVIRON["T"] || index($0, "| " ENVIRON["T"] " |") == 1 { print NR }' "$1")"
+  [ -n "$c" ] && [ "$(printf '%s\n' "$c" | wc -l | tr -d ' ')" = 1 ] || { echo "run.sh: '$2' is not exactly one line of $1 (matches: ${c:-none})" >&2; exit 1; }
+  echo "$c"
+}
 # expect <name> <exit code> <stdout file, - (nothing) or any> <stderr text, - (any), or ~text (contains)> -- <arguments...>
 expect() {
   local name="$1" want_rc="$2" want_out="$3" want_err="$4"; shift 5
@@ -104,7 +111,8 @@ head -n 1 "$tmp/out" | grep -q '^retro	week of [0-9-]*	previous week of [0-9-]*$
 # the allowlist self-check on the public body, then on bodies with something injected
 expect "--check-public passes the body" 0 - - -- --check-public "$(winpath "$tmp/public.md")" --project "$P"
 { cat "$tmp/public.md"; echo '| cost | src/cart.ts | 1 | 2 |'; } > "$tmp/inj-path.md"
-expect "--check-public fails on an injected path" 1 - "retro: the summary body fails its check: line 78: a path separator" -- --check-public "$(winpath "$tmp/inj-path.md")"
+l_inj="$(lineof "$tmp/inj-path.md" "| cost | src/cart.ts | 1 | 2 |")" || exit 1
+expect "--check-public fails on an injected path" 1 - "retro: the summary body fails its check: line $l_inj: a path separator" -- --check-public "$(winpath "$tmp/inj-path.md")"
 { cat "$tmp/public.md"; echo 'See C:\work\acme-shop for the details'; } > "$tmp/inj-win.md"
 expect "--check-public fails on an injected Windows path" 1 - "~a path separator" -- --check-public "$(winpath "$tmp/inj-win.md")"
 { cat "$tmp/public.md"; echo '| other | 1 | acme-shop | 0 | 0 |'; } > "$tmp/inj-name.md"
@@ -177,39 +185,47 @@ expect "--core-report: a critic row is counted under critic, not other" 0 any - 
 { grep -qxF '| critic | 1 |' "$tmp/out" && grep -qxF '| other | 0 |' "$tmp/out" && grep -A2 -x '| verifier | 3 |' "$tmp/out" | tr '\n' ' ' | grep -qxF '| verifier | 3 | | critic | 1 | | scout | 1 | '; } ||
   bad "a critic row: its own row between verifier and scout, other stays 0"
 # the checker: the generated body is refused at its first <fill>; a filled body passes; one refusal each
-expect "--check-core-report refuses the generated body: a <fill> left (line 15)" 1 - "~line 15:" -- --check-core-report "$(winpath "$tmp/core.md")" --features "$cf"
+l_fill="$(lineof "$tmp/core.md" "stack class")" || exit 1
+expect "--check-core-report refuses the generated body: a <fill> left (line $l_fill)" 1 - "~line $l_fill:" -- --check-core-report "$(winpath "$tmp/core.md")" --features "$cf"
 filled="$here/core-report-filled.md"
+# #687: every line of the filled body this suite names, found once by its text
+l_wk="$(lineof "$filled" "F-WORKERS-01")" || exit 1; l_wk4="$(lineof "$filled" "F-WORK-04")" || exit 1
+l_prop="$(lineof "$filled" "| let the guard name the protected branch it saw |")" || exit 1
+l_runs="$(lineof "$filled" "## Runs by role")" || exit 1; l_guard="$(lineof "$filled" "## Guard and refusals")" || exit 1
+l_stack="$(lineof "$filled" "stack class")" || exit 1; l_team="$(lineof "$filled" "solo or team")" || exit 1
+l_strict="$(lineof "$filled" "strictness")" || exit 1; l_spend="$(lineof "$filled" "spend level")" || exit 1
+l_mode="$(lineof "$filled" "work mode")" || exit 1; l_os="$(lineof "$filled" "os")" || exit 1
 expect "--check-core-report passes a filled body (start-worker.sh and CORE.md in a cell, a cell of 160 characters)" 0 - - -- --check-core-report "$(winpath "$filled")" --features "$cf"
-# repl <line> <text> <file>: the filled body with that line replaced; row <text>: F-WORKERS-01's row (line 106)
+# repl <line> <text> <file>: the filled body with that line replaced; row <text>: F-WORKERS-01's row
 # with <text> as its "Decision changed" cell
 repl() { R="$2" awk -v n="$1" 'NR == n { $0 = ENVIRON["R"] } { print }' "$filled" > "$tmp/$3"; }
 row() { printf '| F-WORKERS-01 | yes | every task | yes | %s | none |' "$1"; }
-repl 106 "$(row 'kept merge-queue.ps1 and ONE-TIME.md as they are')" cr-core.md
+repl "$l_wk" "$(row 'kept merge-queue.ps1 and ONE-TIME.md as they are')" cr-core.md
 expect "--check-core-report passes core file names (merge-queue.ps1, ONE-TIME.md)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-core.md")" --features "$cf"
-awk 'NR < 70 || NR > 82' "$filled" > "$tmp/cr-missing.md"
+awk -v a="$l_runs" -v b="$l_guard" 'NR < a || NR >= b' "$filled" > "$tmp/cr-missing.md"
 expect "--check-core-report refuses a missing section" 1 - "~Runs by role" -- --check-core-report "$(winpath "$tmp/cr-missing.md")" --features "$cf"
-repl 70 '## Runs per role' cr-renamed.md
-expect "--check-core-report refuses a renamed section" 1 - "~line 70:" -- --check-core-report "$(winpath "$tmp/cr-renamed.md")" --features "$cf"
-repl 106 '| F-WORKERS-99 | yes | every task | yes | none | none |' cr-feature.md
-expect "--check-core-report refuses a feature row not in FEATURES.md" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-feature.md")" --features "$cf"
-repl 106 "$(row '<fill>')" cr-fill.md
-expect "--check-core-report refuses a <fill> left" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-fill.md")" --features "$cf"
-repl 106 "$(row 'see https://example.com/notes for it')" cr-url.md
-expect "--check-core-report refuses a URL" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-url.md")" --features "$cf"
-repl 106 "$(row 'asked dev@example.org first')" cr-mail.md
-expect "--check-core-report refuses an e-mail" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-mail.md")" --features "$cf"
-repl 106 "$(row 'asked @someone first')" cr-handle.md
-expect "--check-core-report refuses an @handle" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-handle.md")" --features "$cf"
-repl 106 "$(row 'kept in D:\dev\app for a week')" cr-win.md
-expect "--check-core-report refuses a Windows path" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-win.md")" --features "$cf"
-repl 106 "$(row 'moved under src\cart first')" cr-back.md
-expect "--check-core-report refuses a path with a backslash" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-back.md")" --features "$cf"
-repl 106 "$(row 'moved under /srv/app/cart first')" cr-posix.md
-expect "--check-core-report refuses a POSIX path" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-posix.md")" --features "$cf"
-repl 106 "$(row 'the cart.ts check broke twice')" cr-file.md
-expect "--check-core-report refuses a file name that is not the core's" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-file.md")" --features "$cf"
-sed '105s/hard tasks |/hard tasks! |/' "$filled" > "$tmp/cr-long.md"
-expect "--check-core-report refuses a free-text cell over 160 characters" 1 - "~line 105:" -- --check-core-report "$(winpath "$tmp/cr-long.md")" --features "$cf"
+repl "$l_runs" '## Runs per role' cr-renamed.md
+expect "--check-core-report refuses a renamed section" 1 - "~line $l_runs:" -- --check-core-report "$(winpath "$tmp/cr-renamed.md")" --features "$cf"
+repl "$l_wk" '| F-WORKERS-99 | yes | every task | yes | none | none |' cr-feature.md
+expect "--check-core-report refuses a feature row not in FEATURES.md" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-feature.md")" --features "$cf"
+repl "$l_wk" "$(row '<fill>')" cr-fill.md
+expect "--check-core-report refuses a <fill> left" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-fill.md")" --features "$cf"
+repl "$l_wk" "$(row 'see https://example.com/notes for it')" cr-url.md
+expect "--check-core-report refuses a URL" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-url.md")" --features "$cf"
+repl "$l_wk" "$(row 'asked dev@example.org first')" cr-mail.md
+expect "--check-core-report refuses an e-mail" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-mail.md")" --features "$cf"
+repl "$l_wk" "$(row 'asked @someone first')" cr-handle.md
+expect "--check-core-report refuses an @handle" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-handle.md")" --features "$cf"
+repl "$l_wk" "$(row 'kept in D:\dev\app for a week')" cr-win.md
+expect "--check-core-report refuses a Windows path" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-win.md")" --features "$cf"
+repl "$l_wk" "$(row 'moved under src\cart first')" cr-back.md
+expect "--check-core-report refuses a path with a backslash" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-back.md")" --features "$cf"
+repl "$l_wk" "$(row 'moved under /srv/app/cart first')" cr-posix.md
+expect "--check-core-report refuses a POSIX path" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-posix.md")" --features "$cf"
+repl "$l_wk" "$(row 'the cart.ts check broke twice')" cr-file.md
+expect "--check-core-report refuses a file name that is not the core's" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-file.md")" --features "$cf"
+sed "${l_wk4}s/hard tasks |/hard tasks! |/" "$filled" > "$tmp/cr-long.md"
+expect "--check-core-report refuses a free-text cell over 160 characters" 1 - "~line $l_wk4:" -- --check-core-report "$(winpath "$tmp/cr-long.md")" --features "$cf"
 # #320: an IPv6 address (:: next to a hex group, or 6 or more colon-separated groups of 1-4 hex digits) and an HTML
 # character reference (&#<digits>;, &#x<hex>;, &<letters>;) refused naming the line; a time, a ratio, a:b, a lone &
 # and R&D pass; a plain number of 7 or more digits is named as a long number
@@ -217,16 +233,16 @@ i=0
 for x in '2001:db8::7334 down' 'bound to ::1 only' \
          'the 2001:0db8:85a3:0000:0000:8a2e:0370:7334 host' 'asked dev&#64;acme&#46;org first' \
          'outage at acme&#x2E;com' 'outage at acme&period;com'; do
-  i=$((i + 1)); repl 106 "$(row "$x")" "cr-ref$i.md"
-  expect "--check-core-report refuses an IPv6 address or an HTML character reference: $x" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-ref$i.md")" --features "$cf"
+  i=$((i + 1)); repl "$l_wk" "$(row "$x")" "cr-ref$i.md"
+  expect "--check-core-report refuses an IPv6 address or an HTML character reference: $x" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-ref$i.md")" --features "$cf"
 done
 i=0
 for x in 'at 12:30:45 it stopped' 'a 1:2:3 split' 'a:b' 'cost & time' 'R&D work'; do
-  i=$((i + 1)); repl 106 "$(row "$x")" "cr-colon$i.md"
+  i=$((i + 1)); repl "$l_wk" "$(row "$x")" "cr-colon$i.md"
   expect "--check-core-report passes a time, a ratio, a lone & or R&D: $x" 0 - - -- --check-core-report "$(winpath "$tmp/cr-colon$i.md")" --features "$cf"
 done
-repl 106 "$(row 'used 2000000 tokens')" cr-num.md
-expect "--check-core-report refuses a long number naming it" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-num.md")" --features "$cf" &&
+repl "$l_wk" "$(row 'used 2000000 tokens')" cr-num.md
+expect "--check-core-report refuses a long number naming it" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-num.md")" --features "$cf" &&
   { grep -qF 'long number' "$tmp/err" || { bad "--check-core-report refuses a long number naming it: stderr lacks long number"; sed 's/^/  got: /' "$tmp/err"; }; }
 # round 2 (#303): the Profile holds only vocabulary words - strictness swarm/standard/strict, spend level
 # lean/balanced/thorough, work mode by task/batch, os windows/macos/linux, solo or team solo/team, stack class
@@ -248,50 +264,50 @@ sed -e 's/^\(| \*\*Strictness\*\* (CORE §3) | \)standard |/\1as Contoso wants |
 expect "--core-report: a Settings Value with no vocabulary word gives <fill>" 0 any - -- "$(winpath "$tmp/names/coordinator/RUNS.tsv")" --core-report --id "$ID" --features "$cf" --no-insights
 { grep -qxF '| strictness | <fill> |' "$tmp/out" && grep -qxF '| spend level | <fill> |' "$tmp/out" && grep -qxF '| work mode | <fill> |' "$tmp/out" && ! grep -qE 'Contoso|Ivan|ACME' "$tmp/out"; } ||
   { bad "the Profile: <fill> for a Value with no vocabulary word"; grep '^| \(strictness\|spend level\|work mode\) |' "$tmp/out" | sed 's/^/  got: /'; }
-# the checker holds the Profile cells (lines 15-20 of the filled body) to the same vocabularies
-repl 19 '| work mode | batch over the ACME board |' cr-mode.md
-expect "--check-core-report refuses a work mode outside its vocabulary" 1 - "~line 19:" -- --check-core-report "$(winpath "$tmp/cr-mode.md")" --features "$cf"
-repl 17 '| strictness | strict for Contoso |' cr-strict.md
-expect "--check-core-report refuses a strictness outside its vocabulary" 1 - "~line 17:" -- --check-core-report "$(winpath "$tmp/cr-strict.md")" --features "$cf"
-repl 18 '| spend level | balanced, ask Ivan |' cr-spend.md
-expect "--check-core-report refuses a spend level outside its vocabulary" 1 - "~line 18:" -- --check-core-report "$(winpath "$tmp/cr-spend.md")" --features "$cf"
-repl 15 '| stack class | the Contoso shop |' cr-stack.md
-expect "--check-core-report refuses a stack class outside its vocabulary" 1 - "~line 15:" -- --check-core-report "$(winpath "$tmp/cr-stack.md")" --features "$cf"
-repl 16 '| solo or team | team of Ivan |' cr-team.md
-expect "--check-core-report refuses a solo or team outside its vocabulary" 1 - "~line 16:" -- --check-core-report "$(winpath "$tmp/cr-team.md")" --features "$cf"
-repl 20 '| os | windows on the Contoso laptop |' cr-os.md
-expect "--check-core-report refuses an os outside its vocabulary" 1 - "~line 20:" -- --check-core-report "$(winpath "$tmp/cr-os.md")" --features "$cf"
-repl 15 '| stack class | game engine |' cr-stack-ok.md
+# the checker holds the Profile cells (the Profile rows of the filled body) to the same vocabularies
+repl "$l_mode" '| work mode | batch over the ACME board |' cr-mode.md
+expect "--check-core-report refuses a work mode outside its vocabulary" 1 - "~line $l_mode:" -- --check-core-report "$(winpath "$tmp/cr-mode.md")" --features "$cf"
+repl "$l_strict" '| strictness | strict for Contoso |' cr-strict.md
+expect "--check-core-report refuses a strictness outside its vocabulary" 1 - "~line $l_strict:" -- --check-core-report "$(winpath "$tmp/cr-strict.md")" --features "$cf"
+repl "$l_spend" '| spend level | balanced, ask Ivan |' cr-spend.md
+expect "--check-core-report refuses a spend level outside its vocabulary" 1 - "~line $l_spend:" -- --check-core-report "$(winpath "$tmp/cr-spend.md")" --features "$cf"
+repl "$l_stack" '| stack class | the Contoso shop |' cr-stack.md
+expect "--check-core-report refuses a stack class outside its vocabulary" 1 - "~line $l_stack:" -- --check-core-report "$(winpath "$tmp/cr-stack.md")" --features "$cf"
+repl "$l_team" '| solo or team | team of Ivan |' cr-team.md
+expect "--check-core-report refuses a solo or team outside its vocabulary" 1 - "~line $l_team:" -- --check-core-report "$(winpath "$tmp/cr-team.md")" --features "$cf"
+repl "$l_os" '| os | windows on the Contoso laptop |' cr-os.md
+expect "--check-core-report refuses an os outside its vocabulary" 1 - "~line $l_os:" -- --check-core-report "$(winpath "$tmp/cr-os.md")" --features "$cf"
+repl "$l_stack" '| stack class | game engine |' cr-stack-ok.md
 expect "--check-core-report passes a stack class from the list (game engine)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-stack-ok.md")" --features "$cf"
 # host names and addresses with ordinary punctuation around them, each refused naming its line
 i=0
 for x in "acme.com's API" 'outage at acme.com—twice' 'see(acme.com) for it' 'acme.com:8080 timed out' 'see [docs](acme.com) first' \
          'server 203.0.113.7 timed out' 'dev[at]example.org asked' 'dev(at)example.org'; do
-  i=$((i + 1)); repl 106 "$(row "$x")" "cr-host$i.md"
-  expect "--check-core-report refuses a host or an address: $x" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-host$i.md")" --features "$cf"
+  i=$((i + 1)); repl "$l_wk" "$(row "$x")" "cr-host$i.md"
+  expect "--check-core-report refuses a host or an address: $x" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-host$i.md")" --features "$cf"
 done
-repl 106 "$(row "the start-worker.sh's output and CORE.md—§4 were clear")" cr-core-punct.md
+repl "$l_wk" "$(row "the start-worker.sh's output and CORE.md—§4 were clear")" cr-core-punct.md
 expect "--check-core-report passes core file names with punctuation (start-worker.sh's, CORE.md—§4)" 0 - - -- --check-core-report "$(winpath "$tmp/cr-core-punct.md")" --features "$cf"
 # --check-core-report <file> [--features <file>] --project <folder> (PS -Project): the folder's name as a whole
 # word, in any case; without --project the name is not checked
-repl 106 "$(row 'the Acme-Shop board was slow')" cr-proj.md
-expect "--check-core-report --project refuses the project folder's name" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-proj.md")" --features "$cf" --project "$P"
+repl "$l_wk" "$(row 'the Acme-Shop board was slow')" cr-proj.md
+expect "--check-core-report --project refuses the project folder's name" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-proj.md")" --features "$cf" --project "$P"
 expect "--check-core-report without --project does not check the name" 0 - - -- --check-core-report "$(winpath "$tmp/cr-proj.md")" --features "$cf"
-repl 106 "$(row 'the acme-shopping board was slow')" cr-proj-part.md
+repl "$l_wk" "$(row 'the acme-shopping board was slow')" cr-proj-part.md
 expect "--check-core-report --project passes the name inside a longer word" 0 - - -- --check-core-report "$(winpath "$tmp/cr-proj-part.md")" --features "$cf" --project "$P"
 expect "--check-core-report --project passes a filled body without the name" 0 - - -- --check-core-report "$(winpath "$filled")" --features "$cf" --project "$P"
 # a commit id (a hex token of 7 or more digits) in free text; an HTML comment after line 1
-repl 106 "$(row 'reverted 1ebe968 and moved on')" cr-hex.md
-expect "--check-core-report refuses a commit id in free text" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-hex.md")" --features "$cf"
-repl 106 "$(row 'a big brief <!-- the cart --> went through a file')" cr-comment.md
-expect "--check-core-report refuses an HTML comment in a cell" 1 - "~line 106:" -- --check-core-report "$(winpath "$tmp/cr-comment.md")" --features "$cf"
-repl 119 '| <!-- let the guard name the branch |' cr-comment2.md
-expect "--check-core-report refuses <!-- in a proposal" 1 - "~line 119:" -- --check-core-report "$(winpath "$tmp/cr-comment2.md")" --features "$cf"
+repl "$l_wk" "$(row 'reverted 1ebe968 and moved on')" cr-hex.md
+expect "--check-core-report refuses a commit id in free text" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-hex.md")" --features "$cf"
+repl "$l_wk" "$(row 'a big brief <!-- the cart --> went through a file')" cr-comment.md
+expect "--check-core-report refuses an HTML comment in a cell" 1 - "~line $l_wk:" -- --check-core-report "$(winpath "$tmp/cr-comment.md")" --features "$cf"
+repl "$l_prop" '| <!-- let the guard name the branch |' cr-comment2.md
+expect "--check-core-report refuses <!-- in a proposal" 1 - "~line $l_prop:" -- --check-core-report "$(winpath "$tmp/cr-comment2.md")" --features "$cf"
 # at most 3 proposals
-awk 'NR == 119 { print; print "| a shorter brief |"; print "| a quieter guard |"; next } { print }' "$filled" > "$tmp/cr-prop3.md"
+awk -v p="$l_prop" 'NR == p { print; print "| a shorter brief |"; print "| a quieter guard |"; next } { print }' "$filled" > "$tmp/cr-prop3.md"
 expect "--check-core-report passes 3 proposals" 0 - - -- --check-core-report "$(winpath "$tmp/cr-prop3.md")" --features "$cf"
-awk 'NR == 119 { print; print "| a shorter brief |"; print "| a quieter guard |"; print "| a fourth idea |"; next } { print }' "$filled" > "$tmp/cr-prop4.md"
-expect "--check-core-report refuses a fourth proposal" 1 - "~line 122:" -- --check-core-report "$(winpath "$tmp/cr-prop4.md")" --features "$cf"
+awk -v p="$l_prop" 'NR == p { print; print "| a shorter brief |"; print "| a quieter guard |"; print "| a fourth idea |"; next } { print }' "$filled" > "$tmp/cr-prop4.md"
+expect "--check-core-report refuses a fourth proposal" 1 - "~line $((l_prop + 3)):" -- --check-core-report "$(winpath "$tmp/cr-prop4.md")" --features "$cf"
 # errors
 expect "--core-report without --id" 2 any - -- "$cr" --core-report --features "$cf"
 expect "--core-report with a --since that is no date" 2 any - -- "$cr" --core-report --id "$ID" --since 2026-13-01 --features "$cf"
