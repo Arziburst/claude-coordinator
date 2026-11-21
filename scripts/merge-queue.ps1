@@ -240,14 +240,14 @@ foreach ($item in $prs) {
   # the merge row of CORE section 4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   $n = $tid
   # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
-  # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
+  # names the task's worktree (any id) or a sub-task's `<n>.<k>-...` (n: the contract's id or the branch's, #629), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
   # their rm; a failing listing or none found: no line
   $fin = @(); $rmd = @(); $ms = $null; $root = ($pwd.ProviderPath -replace '\\+', '/').TrimEnd('/')
   $bd = "$(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' })/coordinator/briefs"
   try { $ls = @(& { $ErrorActionPreference = 'Continue'; & claude agents --json --all 2>$null } | ForEach-Object { "$_" }) -join "`n"
     if ($LASTEXITCODE -eq 0) { $js = $ls | ConvertFrom-Json; foreach ($s in @($js | ForEach-Object { $_ })) { $cw = ("$($s.cwd)" -replace '\\+', '/').TrimEnd('/'); $nm = "$($s.name)"; $kb = "$bd/$($s.sessionId).md"
       if (-not ($s.id -and $s.state -in @('done', 'stopped', 'failed') -and -not ($s.PSObject.Properties.Name -contains 'status') -and ($cw -ieq $root -or $cw.StartsWith("$root/", [StringComparison]::OrdinalIgnoreCase)))) { continue }
-      if (Test-Path -LiteralPath $kb -PathType Leaf) { $f1 = "$(@(Get-Content -LiteralPath $kb -TotalCount 1))"; if (-not ($f1.Contains("/$branch. ") -or $f1.Contains("/$branch, "))) { continue } }
+      if (Test-Path -LiteralPath $kb -PathType Leaf) { $f1 = "$(@(Get-Content -LiteralPath $kb -TotalCount 1))"; if (-not ($f1.Contains("/$branch. ") -or $f1.Contains("/$branch, ") -or $f1 -cmatch "/($([regex]::Escape($rt))|$([regex]::Escape($tid)))\.[^-/ ]+-[^/ ]*[.,] ")) { continue } }
       elseif ($n -eq '<n>' -or -not ($nm.StartsWith("#$n ") -or $nm.StartsWith("#$n."))) { continue }
       if ($null -eq $ms) { $ms = @(& { $ErrorActionPreference = 'Continue'; & (Join-Path $PSScriptRoot 'runs.ps1') check -Log ([IO.Path]::Combine($pwd.ProviderPath, $Runs)) -Root $root 2>$null } | ForEach-Object { "$_" }); if ($LASTEXITCODE -ne 0) { $ms = @('-') } }
       $rc = 1; if ($ms[0] -ne '-' -and -not @($ms | Where-Object { $_.StartsWith("MISSING $($s.id) ") }).Count) { $null = & { $ErrorActionPreference = 'Continue'; & claude rm $s.id 2>&1 }; $rc = $LASTEXITCODE }

@@ -20,7 +20,7 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   **A finished session** (no `status` field; measured on 2.1.318, macOS, #521) is listed with its launch folder as `cwd`, never the
   worktree it entered, and no branch; `claude rm` drops the listing only: its transcript, its kept brief and its worktree stay.
   So start-worker (before a tester's, worker's or lead's launch) and merge-queue (after a merge) find a task's finished sessions by
-  the worktree the brief kept by their `sessionId` names, else by the name `#<id> `, and `claude rm` those `runs check` finds a row for.
+  the worktree the brief kept by their `sessionId` names (merge-queue and `--task`: a sub-task's `<n>.<k>-...` too, #629), else by the name `#<id> `, and `claude rm` those `runs check` finds a row for.
   After a merge by a human neither runs: `scripts/cleanup-worker.sh --task <id> [--runs <log>] [--state <folder>] [--dry-run]` (`.ps1`: `-Task`; `--state`: the run log is `<folder>/RUNS.tsv`, #635), from the project's
   root or with `--worktree`, does the same for task `<id>`: `removed <id> (<name>)`, or `MISSING <id> <name>` for one with no run row (write
   it, run it again); exit 3 a failed listing or `runs check`, 4 a failed `claude rm` (#621).

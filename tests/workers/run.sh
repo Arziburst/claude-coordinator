@@ -2005,6 +2005,18 @@ check 1 "#621: neither --worktree nor --task" -- t621 --dry-run; check 1 "#621: 
 mk 621-z; s621 0 done "#621 tester: z" "$(cd "$tmp/repo" && { pwd -W 2>/dev/null || pwd -P; })" "" row; : > "$STUB_LOG"
 STUB_HEADS="$h" check 0 "#621: --task with --worktree" -- cleanup --worktree "$w" --task 621 --runs "$r5/coordinator/RUNS.tsv"
 expect_in "cleaned: no session"; expect_in "removed c6210000 (#621 tester: z)"; [ "$(tr '\n' ' ' < "$STUB_LOG" | sed 's/agents --json --all //g')" = "rm c6210000 " ] || { echo "FAIL (#621): with --worktree, not only c6210000 removed"; fail=1; }
+# #629: a lead's sub-task session, its kept brief naming the worktree <id>.<k>-..., is found by the parent id; other tasks' never; --task 621.2 as before
+s629() { local i="c629000$1" sid="5e562900-0000-4000-8000-00000000000$1" t="2026-11-07T12:0$1:00Z"; printf '%s %s done #OTHER sub: %s\n' "$i" "$sid" "$1" >> "$STUB_LOG.sessions"; printf '%s\t%s\n' "$i" "$r5c" >> "$STUB_LOG.sessions.cwd"
+  printf '{"cwd":"x","sessionId":"%s","type":"assistant","message":{"id":"k9%s","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}},"timestamp":"%s"}\n' "$sid" "$1" "$t" > "$tmp/cfg/projects/p521/$sid.jsonl"
+  printf 'FIRST ACTION, before anything else: use the EnterWorktree tool with path = %s/.claude/worktrees/%s. Work only inside it.\n' "$r5c" "$2" > "$tmp/cfg/coordinator/briefs/$sid.md"
+  [ -z "${3:-}" ] || printf '2026-11-07\tx\tworker\tordinary\topus\tmedium\t1\t1\t0.1\tdone\t%s\t1\t1\t\t-\n' "$t" >> "$r5/coordinator/RUNS.tsv"; }
+s629 1 621.2-x row; s629 2 621.2-y; s629 3 6210-x row; s629 4 62-x row; s629 5 622.1-x row; s629 6 1621.2-x row; : > "$STUB_LOG"
+check 0 "#629: --task 621 finds a sub-task's session by its kept brief, a dry run" -- t621 --task 621 --dry-run; expect_in "[dry-run] claude rm c6290001 (#OTHER sub: 1)"; expect_in "MISSING c6290002 #OTHER sub: 2"
+[ "$(printf '%s\n' "$LAST" | grep -c 'c629000[3-6]')" = 0 ] || { echo "FAIL (#629): a session of another task named"; fail=1; }
+check 0 "#629: --task 621.2 as before" -- t621 --task 621.2 --dry-run; expect_in "[dry-run] claude rm c6290001 (#OTHER sub: 1)"; expect_in "MISSING c6290002 #OTHER sub: 2"
+[ "$(printf '%s\n' "$LAST" | grep -c 'c629000[3-6]')" = 0 ] || { echo "FAIL (#629): --task 621.2 named a session of another task"; fail=1; }
+check 0 "#629: --task 621 removes the sub-task's session with a run row" -- t621 --task 621; expect_in "removed c6290001 (#OTHER sub: 1)"; expect_in "MISSING c6290002 #OTHER sub: 2"
+grep -qx "rm c6290001" "$STUB_LOG" && ! grep -q "rm c629000[2-6]" "$STUB_LOG" || { echo "FAIL (#629): not c6290001 alone of the #629 sessions removed:"; sed 's/^/    /' "$STUB_LOG"; fail=1; }
 # --- the guard's self-test sees the safety file's env (#613): a root list with an entry that protects nothing is refused before any worktree, the entry named; a sound list starts as before; every key of the env block reaches it ---
 : > "$STUB_LOG"; mkdir -p "$tmp/repo-b" "$tmp/envg"; rl="$proot|$mtmp/repo-b"; RL=(--repo "$tmp/repo" --name "#613 worker: a" --branch 613-a "${W[@]}")
 sed "s#\"COORD_PROTECTED_ROOT\": \"[^\"]*\"#\"COORD_PROTECTED_ROOT\": \"$rl\"#" "$tmp/safety.json" > "$tmp/safety-list.json"

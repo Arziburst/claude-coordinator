@@ -238,11 +238,11 @@ for item in "${prs[@]}"; do
   # the merge row of CORE §4's event table, one thing a line, filled in; printed only, nothing here runs a duty (#242, #466)
   n="$tid"
   # the task's finished sessions of this project (#493, #521): listed with their launch folder only (measured), so the brief kept by the sessionId
-  # names the task's worktree (any id), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
+  # names the task's worktree (any id) or a sub-task's `<n>.<k>-...` (n: the contract's id or the branch's, #629), else (no brief kept) the name `#<n> ` or `#<n>.`; with a run row (runs check) removed, the rest named with
   # their rm; a failing listing or none found: no line
-  bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs" fin="" rmd="" ms=""
+  bd="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/coordinator/briefs" fin="" rmd="" ms="" sre="$(printf '%s|%s' "$rt" "$tid" | sed 's/[].[^$*+?(){}\\]/\\&/g')"
   while IFS="$TAB" read -r xid xsid xnm; do [ -n "$xid" ] || continue
-    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -F -e "/$branch. " -e "/$branch, " >/dev/null || continue
+    if [ -f "$bd/$xsid.md" ]; then head -n 1 "$bd/$xsid.md" | grep -F -e "/$branch. " -e "/$branch, " >/dev/null || head -n 1 "$bd/$xsid.md" | grep -E "/($sre)\.[^-/ ]+-[^/ ]*[.,] " >/dev/null || continue
     else case "$xnm" in "#$n "*|"#$n."*) [ "$n" != '<n>' ] || continue ;; *) continue ;; esac; fi
     [ -n "$ms" ] || ms="$(bash "$(dirname "$0")/runs.sh" check --log "$rlog" --root "$(pwd)" 2>/dev/null </dev/null)" || ms=-
     if [ "$ms" != - ] && ! printf '%s\n' "$ms" | grep -F "MISSING $xid " >/dev/null && claude rm "$xid" >/dev/null 2>&1 </dev/null; then rmd="${rmd:+$rmd; }$xid ($xnm)"
