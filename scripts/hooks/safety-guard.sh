@@ -827,8 +827,8 @@ function seg(toks, nt, depth, qm, pp, bx, qw,    j, t, line, k, m, inner, lt, li
   OUT = OUT (pp ? "\001|\t" : "") line "\n"   # a first word \001| : this command reads the previous one through |
   # a word with a backslash is also checked as the shell reads it unquoted (git push origin ma\in);
   # the command as written is checked too, so this only adds a check
-  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick)
-  if (qm && ENVIRON["SG_TOOL"] != "PowerShell" && line2 != line) OUT = OUT (pp ? "\001|\t" : "") line2 "\n"
+  # (the Bash tool only: in PowerShell a backslash separates folders, its escape is the backtick); a first word \001\ marks it (#607)
+  if (qm && ENVIRON["SG_TOOL"] != "PowerShell" && line2 != line) OUT = OUT "\001\\\t" (pp ? "\001|\t" : "") line2 "\n"
   # find -exec / -execdir / -ok / -okdir (#345): the command up to ; (\;) or {} + is a command of its own
   j = cmdidx(toks, nt)
   if (j <= nt && base(toks[j]) == "find") {
@@ -949,6 +949,10 @@ compose() {
     *) if [ "$1" = "?" ]; then printf '?'; else printf '%s/%s' "$1" "$p"; fi ;;
   esac
 }
+# bsf <flag> <word>: bf=1 when a folder's word after git -C or cd held a backslash (as written, or bsw: before the shell
+# read it), or a relative one goes on from a folder flagged so (<flag>); dir_bs: dir's flag (#607)
+dir_bs=0
+bsf() { bf=0; case "$2" in *\\*) bf=1 ;; ''|/*|[A-Za-z]:*|'~'*) ;; *) bf="$1" ;; esac; case "$nl$bsw$nl" in *"$nl$2$nl"*) [ -n "$bsw" ] && bf=1 ;; esac; }
 # canon_all, physical: above, with the edit-tool check
 branch_in() {
   if [ "$1" = "$ov_dir" ]; then printf '%s' "$ov_branch"; return; fi
@@ -1076,9 +1080,9 @@ checkout_seg() {
   fi
 }
 git_seg() {
-  local eff="$dir" sub deff redir="${git_redir:-0}"
+  local eff="$dir" sub deff redir="${git_redir:-0}" dbs="$dir_bs"   # dbs: eff's flag (bsf), read by discard_seg
   while [ $# -gt 0 ]; do
-    if [ "$1" = "-C" ]; then eff=$(compose "$eff" "${2:-}"); [ $# -ge 2 ] && shift; shift; continue; fi
+    if [ "$1" = "-C" ]; then eff=$(compose "$eff" "${2:-}"); bsf "$dbs" "${2:-}"; dbs=$bf; [ $# -ge 2 ] && shift; shift; continue; fi
     case "$1" in
       --git-dir|--work-tree) redir=1; [ $# -ge 2 ] && shift; shift ;;
       --git-dir=*|--work-tree=*) redir=1; shift ;;
@@ -1155,6 +1159,7 @@ discard_seg() {   # discard_seg <dir> <subcommand> <its arguments>...
   [ -n "$what" ] || return 0
   free_copy "$d" && return 0
   [ "$d" = "?" ] && block "discarding files in a folder the guard cannot know (git $what), read as a main checkout: write its literal path, not a shell variable after git -C or cd, --git-dir, --work-tree or GIT_DIR= (#263, #456)"
+  [ "$tool" != PowerShell ] && [ "${dbs:-0}" = 1 ] && block "discarding files in a folder written with backslashes (git $what), which a Bash command cannot carry reliably: write its path with forward slashes after git -C or cd (#263, #607)"
   block "discarding files in a repository's main checkout (git $what): only a worktree may be wiped (#263)"
 }
 # free_copy <dir>: a linked worktree (its git dir is not the common one), or a main checkout whose top
@@ -1220,7 +1225,7 @@ cd_seg() {
   for t in "$@"; do case "$t" in -*) ;; *) x="$t"; break ;; esac; done
   [ -z "$x" ] && x='~'
   [ "$x" = "-" ] && { dir="?"; return; }
-  dir=$(compose "$dir" "$x")
+  dir=$(compose "$dir" "$x"); bsf "$dir_bs" "$x"; dir_bs=$bf
 }
 # --- irreversible removals: / , a drive, home, or a worktree by hand ---
 strip_all() {   # x/* , x/** , x/. and trailing separators -> x
@@ -1331,11 +1336,13 @@ find_seg() {
   for t in "${tg[@]}"; do rm_target "$t" $all; done
 }
 
-PIPE=$'\001|'; BIG=$'\001!'; cur_tg=()
+PIPE=$'\001|'; BIG=$'\001!'; BSL=$'\001\\'; cur_tg=(); L=(); bsw=""
 while IFS="$tab" read -r -a T; do
   prev_tg=("${cur_tg[@]}"); cur_tg=()
   piped=0
   [ "${T[0]:-}" = "$BIG" ] && block "a brace expansion to more than 64 words in a command the guard reads (#345): write the words out"
+  # #607: the line as the shell reads it unquoted (\001\, after the line as written, L): its words whose written form held a backslash
+  bsw=""; if [ "${T[0]:-}" = "$BSL" ]; then T=("${T[@]:1}"); for bi in "${!T[@]}"; do case "${L[$bi]:-}" in *\\*) bsw="$bsw$nl${T[$bi]}" ;; esac; done; fi; L=("${T[@]}")
   if [ "${T[0]:-}" = "$PIPE" ]; then piped=1; T=("${T[@]:1}"); fi
   # redirections (2>&1, > out.txt) are not arguments
   A=(); skip=0

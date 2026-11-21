@@ -325,6 +325,25 @@ for c in 'git -C \"$d\" clean -ffdx' 'cd \"$d\" && git clean -ffdx' 'git --git-d
   err="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"%s"}' "$c" "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   case "$rc:$err" in 2:*"literal path"*--git-dir*GIT_DIR*) ;; *) echo "FAIL (#456) expected a block naming the literal path (exit $rc): $c: $err"; fail=1 ;; esac
 done
+# #607: a discard whose folder after git -C or cd is written with backslashes, in a Bash command, quoted or not, is refused
+# with that reason, not as a main checkout (unquoted the shell drops them); forward slashes, the PowerShell tool and
+# --git-dir / --work-tree / GIT_DIR= keep their own refusal. bsmsg <tool> <command, JSON-escaped> <the refusal's start>
+bsmsg() {
+  local rc err; n=$((n + 1))
+  err="$(printf '{"tool_name":"%s","tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$2" "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
+  case "$rc:$err" in "2:Blocked by safety-guard: $3"*) ;; *) echo "FAIL (#607) expected a block starting '$3' (exit $rc): $1: $2: $err"; crash "$rc" "$err"; fail=1 ;; esac
+}
+w='C:\\Users\\x\\tmp\\wt'; bs='discarding files in a folder written with backslashes (git '
+mc="discarding files in a repository's main checkout (git clean): only a worktree may be wiped (#263)."
+uk='discarding files in a folder the guard cannot know (git clean), read as a main checkout: write its literal path'
+for c in "git -C $w clean -ffdx" "git -C '$w' clean -ffdx" "git -C \\\"$w\\\" clean -ffdx" "git -C $w reset --hard" \
+  "git -C $w checkout -- a.txt" "cd $w && git clean -ffdx" "cd '$w' && git -C sub clean -fd"; do bsmsg Bash "$c" "$bs"; done
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) bsmsg Bash "git -C $(winpath w "$tmp/linked" | sed 's/\\/\\\\/g') clean -ffdx" "$bs" ;; esac   # a worktree's own path
+for c in "git -C C:/Users/x/tmp/wt clean -ffdx" "cd C:/Users/x/tmp/wt && git clean -ffdx" "cd $w && cd C:/Users/y && git clean -ffdx" \
+  "cd $w && git -C C:/Users/y clean -ffdx"; do bsmsg Bash "$c" "$mc"; done
+for c in "git -C $w clean -ffdx" "cd $w; git clean -ffdx"; do bsmsg PowerShell "$c" "$mc"; done
+for c in "git -C $w --git-dir=.git clean -ffdx" "git --work-tree $w clean -ffdx" "GIT_DIR=$w git clean -ffdx" \
+  "cd $w && git --git-dir .git clean -ffdx"; do bsmsg Bash "$c" "$uk"; done
 # an empty file written by Windows PowerShell 5.1 (its BOM only, no NUL byte), and big-endian UTF-16
 mkdir -p "$tmp/utf16empty/.claude" "$tmp/utf16be/.claude"
 printf '\377\376' > "$tmp/utf16empty/.claude/coordinator-deny.txt"
