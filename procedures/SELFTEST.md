@@ -282,7 +282,12 @@ the report notes the interruption and the resume time.
    cost with `scripts/session-tokens <id>` (the full command, TOOLKIT *Scripts*; a failed read is
    retried once, never left as `n/a`; it now comes from the record the stop wrote — a read still
    showing `out>=` had none, a crash: read as before and noted in the report), delete its status file
-   (TOOLKIT *Usage*), then `claude rm <id>` (each its own command); then `selftest verify --project
+   (TOOLKIT *Usage*), then `claude rm <id>` (each its own command). **A probe session that ran gets its own run
+   row** after its cost is read and before it is removed, one role per probe (they share a start second, and `runs
+   add` refuses a second row of the same start and role): `runs add --log <RUNS.tsv> --session <its id> --task -
+   --role <probe-push | probe-push-own | probe-edit> --kind selftest --model <its model> --effort - --estimate -
+   --estimate-time - --result <pass | failed>`: `probe: push` → `probe-push`, `probe: push (own settings)` →
+   `probe-push-own`, `probe: edit` → `probe-edit`; a PASS verdict is `pass`, a FAIL `failed`; a BLOCKED probe has no row. Then `selftest verify --project
    <root> --state <root>/coordinator --core <c> [--state-repo <owner/name>]` — no session or worktree left (a session
    is any that `claude agents --json --all` lists, `done` too, named with `selftest` or `probe:` or
    starting with `#st`; the FAIL names each with its short id; clean, merged worktrees are
