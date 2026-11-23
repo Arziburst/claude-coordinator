@@ -332,12 +332,14 @@ bsmsg() {
   local rc err; n=$((n + 1))
   err="$(printf '{"tool_name":"%s","tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$2" "$d" | CLAUDE_PROJECT_DIR="$d" "${CMD[@]}" 2>&1 >/dev/null)"; rc=$?
   case "$rc:$err" in "2:Blocked by safety-guard: $3"*) ;; *) echo "FAIL (#607) expected a block starting '$3' (exit $rc): $1: $2: $err"; crash "$rc" "$err"; fail=1 ;; esac
+  # an optional 4th argument: words the message must also contain (#690: the fix the backslash refusal names)
+  case "$err" in *"${4:-}"*) ;; *) echo "FAIL (#690) expected the block to contain '$4': $1: $2: $err"; fail=1 ;; esac
 }
 w='C:\\Users\\x\\tmp\\wt'; bs='discarding files in a folder written with backslashes (git '
 mc="discarding files in a repository's main checkout (git clean): only a worktree may be wiped (#263)."
 uk='discarding files in a folder the guard cannot know (git clean), read as a main checkout: write its literal path'
 for c in "git -C $w clean -ffdx" "git -C '$w' clean -ffdx" "git -C \\\"$w\\\" clean -ffdx" "git -C $w reset --hard" \
-  "git -C $w checkout -- a.txt" "cd $w && git clean -ffdx" "cd '$w' && git -C sub clean -fd"; do bsmsg Bash "$c" "$bs"; done
+  "git -C $w checkout -- a.txt" "cd $w && git clean -ffdx" "cd '$w' && git -C sub clean -fd"; do bsmsg Bash "$c" "$bs" "forward slashes"; done
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) bsmsg Bash "git -C $(winpath w "$tmp/linked" | sed 's/\\/\\\\/g') clean -ffdx" "$bs" ;; esac   # a worktree's own path
 for c in "git -C C:/Users/x/tmp/wt clean -ffdx" "cd C:/Users/x/tmp/wt && git clean -ffdx" "cd $w && cd C:/Users/y && git clean -ffdx" \
   "cd $w && git -C C:/Users/y clean -ffdx"; do bsmsg Bash "$c" "$mc"; done
