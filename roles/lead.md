@@ -50,6 +50,7 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    where the project's own checks read them (inside your worktree, where its test runners and linters
    glob the files), and never in `$CLAUDE_JOB_DIR/tmp`, which is deleted when the session is resumed
    under a new job. Scratch files (never your notes) go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
+   **Reading files:** read and search them with the Read and Grep tools, and git's reads (`git show <base>:<path>`, `git grep <pattern> <base>`, `git diff`, `git log`); never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code can ask to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
 3. **Delegate.** Your own task gets no task-level tester: its contract says `tests_first: no - the lead
    runs the tester per sub-contract`, `yes` belongs only in your sub-contracts, and start-worker refuses
    a lead started with `tests_first: yes` or with `--tester-commit` / `--tester-tests` (#289). Tests first where the sub-contract's `tests_first` is `yes` (the tester subagent): it returns its
@@ -91,6 +92,7 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    `GONE` → the line fixed or dropped; `QUIET` → `ListAgents` once, `waiting` to the coordinator, idle
    → one SendMessage asking for its report or its state; `LONG` (working, its transcript unmoved past the limit) → look at what it runs against
    its brief's limit, a legitimately long command gets ` @<n>` on its line, the line stops nothing; `ERROR` → once more, then the coordinator.
+   `BLOCKED` (a permission prompt, #574) → its last tool call in its transcript: a shell form a background session can never get approved → stop it and resume it with the instruction to do it another way (Read, Grep, its role's git reads); any other prompt → the owner, through the coordinator; never answer or approve the prompt (CORE §1.9).
    A worker's message still wakes you as before; a wait on your branch moving (`git ls-remote origin
    <its branch>`) may run beside it. Gone `done` anyway: the worker's report falls back to the coordinator
    (roles/worker.md step 5), which resumes you by your full id with that report (TOOLKIT *Pause and

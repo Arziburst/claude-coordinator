@@ -346,6 +346,7 @@ The continuous work:
    keep its line, never message it in a loop, wait for its report; `EMPTY` → nothing to watch;
    `LONG <id> <name> <minutes>` (state `working`, its transcript unchanged for 45 minutes, or its line's own limit) → look at
    what it runs, against its brief's limit; a legitimately long command gets `@<n>` in the watch list; the line stops nothing;
+   `BLOCKED <id> <name>` (state `blocked`, at once, once per stretch; #574) → its last tool call in its transcript: a shell form a background session can never get approved (a pattern with braces inside quotes) → stop it and resume it with the instruction to do it another way (Read, Grep, its role's git reads); any other prompt → the owner; never answer or approve the prompt (§1.9);
    `ERROR <line>` (`claude agents` failed twice in a row) → start it once more; failing again → tell
    the owner and check `ListAgents` while a report is due. **Renamed** (by the owner, or
    after a restart) → tell every running session of this project (§1.17) the new name, one SendMessage each; the roles'

@@ -369,7 +369,7 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   coordinator\core\scripts\watch-sessions.ps1 -List coordinator\watch.txt`), with `run_in_background`.
   It polls `claude agents --json --all` every `--interval` seconds (default 120), reads the list again
   on every poll, prints nothing while every listed session is at work and its transcript moves (LONG, below), and ends with one line per
-  finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`, `LONG <id> <name> <minutes>`
+  finding: `STOPPED <id> <name>`, `GONE <id or name as listed>`, `QUIET <id> <name> <minutes>`, `LONG <id> <name> <minutes>`, `BLOCKED <id> <name>` (state `blocked`, any status but `busy`: on the first poll, once per stretch, the stretch kept in `<temp>/watch-sessions-blocked/<sessionId>` until the session is seen at work, then quiet; #574)
   (exit 0); `EMPTY` when the list is missing or holds no session (exit 0 — with nothing to watch it does
   not run); `ERROR <first line>` when `claude agents` failed on two polls in a row (exit 1) — a call
   past `--agents-timeout` (default 60 s) is a failed poll: the watcher kills only the listing process
@@ -382,13 +382,14 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   **States, as measured:** the listing gives `state`, and `status` (`busy` / `idle`) only while the
   session's process lives — a live session between turns is `done` + `idle`, an exited one `done`
   with no status. State `working` or status `busy` = at work; state `stopped` / `failed` (any status),
-  or `done` with no status = STOPPED; `done` + `idle` and any other state (`idle`, `blocked`,
+  or `done` with no status = STOPPED; `done` + `idle` and any other state (`idle`,
   `waiting` — a permission prompt or a limit) = quiet: QUIET after `--quiet-minutes` (default 20),
   counted by the watcher from the first poll that saw it quiet and started again after a poll that saw
-  it at work. A list line is the session's short id (`id` in the listing) or its whole name, with an
+  it at work. `blocked` with any status but `busy` is BLOCKED at once (#574), once per stretch, QUIET
+  only afterwards. A list line is the session's short id (`id` in the listing) or its whole name, with an
   optional limit of its own at its end, ` @<n>` minutes (a lead waiting for its workers: `<id> @120`);
   a UTF-8 BOM, blank lines and comments (`# …`, a `#` followed by a blank or the line's end) are
-  skipped, `#12 worker: Fix` is a name. The only files it writes, all temp: `watch-sessions-long/<sessionId>` (LONG's last time) and the listing's output, in a fresh
+  skipped, `#12 worker: Fix` is a name. The only files it writes, all temp: `watch-sessions-long/<sessionId>` (LONG's last time), `watch-sessions-blocked/<sessionId>` (BLOCKED's stretch) and the listing's output, in a fresh
   temp location per call (read from files, not a pipe, so a leftover child cannot hang it), deleted when read, except a file a leftover child still holds open (Windows: it stays in the temp folder, nothing retries; the `.ps1`'s leftover also inherits the watcher's stdout and stderr, so a caller reading the watcher through a pipe waits for it); it never stops, messages or changes a session; `--once` polls once (a manual check). The list is committed in `coordinator/` with the
   event's journal line; the sync starts the watcher when the list is not empty. Tests: `tests/watch-sessions/run.sh
   sh|ps <powershell>` against a stub `claude`. A subscription stays only for a session no message is

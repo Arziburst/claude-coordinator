@@ -21,6 +21,7 @@ worktree, never the project: `-C <project root>` there once wiped the main check
 ignored files (secrets, the state folder; #263), which the guard now blocks. Never `git checkout`,
 `git switch`, `git reset`, `git stash` or `git restore` in a working copy (a verifier once moved the
 owner's working copy with `git checkout --detach`). Scratch files go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
+**Reading files:** read and search them with the Read and Grep tools, and the git reads above; never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code can ask to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
 
 Your cwd may reset to another folder (a subagent's goes back to the coordinator's state repository): use
 `git -C <project root>` for your reads. A verifier run as a subagent has no design tools: a design
