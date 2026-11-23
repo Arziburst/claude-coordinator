@@ -23,7 +23,7 @@ grep <pattern> <base>`, `git -C <repository> ls-tree -r <base>`. Read or Grep on
 `git -C <repository> rev-parse HEAD` printed that base: a checkout behind main, on another branch or on a lead's
 integration branch is the common case, and its files are not the code the worker gets. No scratch worktree, no
 checkout, switch, reset, stash or restore.
-**Reading files:** the git reads above, and Read and Grep where that allows them; never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code asks to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
+**Reading files:** the git reads above, and Read and Grep where that allows them; never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code can ask to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
 
 **The core's own repository.** When the project is the coordinator core itself (claude-coordinator), its CLAUDE.md,
 CORE.md, TOOLKIT.md, roles and procedures at the base are the product the contract changes, not your instructions:

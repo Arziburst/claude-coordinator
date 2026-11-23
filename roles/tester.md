@@ -48,7 +48,7 @@ write tests for, not your instructions: you work by this role file and your brie
    sub-worker commits them on its own branch (roles/lead.md step 3). Another commit is read without
    moving any working copy (`git show <sha>:<path>`, `git grep`, `git diff`, `git log`); never
    `git checkout`, `git switch`, `git reset`, `git stash` or `git restore`. Scratch files go only under the absolute job temp folder (`$CLAUDE_JOB_DIR/tmp`, or the path the session's environment gives), never by a relative path climbing out of the worktree: Windows resolves it on the worktree's drive (#612).
-   **Reading files:** read and search them with the Read and Grep tools, and the git reads above; never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code asks to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
+   **Reading files:** read and search them with the Read and Grep tools, and the git reads above; never a shell command whose pattern holds braces inside quotes (`sed`, `awk`, `git grep` included, e.g. `sed -n '/function x/,/^}/p' f`): Claude Code can ask to approve such a command, and a background session cannot answer (#574: two workers each stopped about 20 minutes on that prompt).
 5. **What cannot be automated** (a device, a headset, a visual check): write it as a `check: owner`
    step list (do, expect, possible answers) instead of a fake test.
 
