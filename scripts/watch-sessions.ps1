@@ -1,7 +1,7 @@
 # Watch the sessions a report is awaited from, in place of subscribing to their idle notices (#342)
 # (Windows; macOS / Linux: watch-sessions.sh - the same output and exit codes): run as one background
 # command, it polls `claude agents --json --all` and ends - waking its caller once - only when a listed
-# session stopped, vanished, went quiet or ran long (LONG) without its report.
+# session stopped, vanished, went quiet, blocked on a prompt (BLOCKED) or ran long (LONG) without its report.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-sessions.ps1 -List <file> [-Interval <s>]
 #     [-QuietMinutes <m>] [-QuietSeconds <s>] [-LongMinutes <m>] [-LongSeconds <s>] [-EmptyMinutes <m>] [-EmptySeconds <s>] [-AgentsTimeout <s>] [-Once]
 # The list file: one awaited session per line, its short id (`id` in claude agents --json) or its whole
@@ -120,9 +120,9 @@ function Agents {
   elseif ($script:rc -eq 0 -and -not $script:json.Contains('[')) { $script:rc = 1; $script:err = 'claude agents --json --all printed no JSON list' }
   if ($script:err -eq '') { $script:err = "claude agents --json --all exited with $($script:rc)" }
 }
-# Sessions <json>: @(id, class, name) per session object of the list - class work, stop or quiet from
+# Sessions <json>: @(id, class, name, key) per session object of the list - class work, stop, block or quiet from
 # state and status as the header says (string values unescaped as watch-sessions.sh does: a control
-# escape as a blank, \u left as written)
+# escape as a blank, \u left as written; key = <cwd as ->/<sessionId> for state working, else :<sessionId>)
 function Sessions([string]$s) {
   $r = New-Object System.Collections.ArrayList
   $d = 0; $q = $false; $after = $false; $k = ''; $t = New-Object System.Text.StringBuilder; $v = @{}

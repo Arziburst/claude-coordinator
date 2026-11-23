@@ -13,7 +13,7 @@
 #   --quiet-seconds: the quiet limit in seconds, in place of --quiet-minutes (for tests: minutes are too
 #   coarse); the QUIET line's <minutes> are then the whole minutes idle (0 here).
 #   Output lines (stdout, one per finding): `STOPPED <id> <name>`, `GONE <id or name as listed>`,
-#   `QUIET <id> <name> <minutes>`, `EMPTY`, `ERROR <first line of claude's failure>`.
+#   `QUIET <id> <name> <minutes>`, `BLOCKED <id> <name>`, `EMPTY`, `ERROR <first line of claude's failure>`.
 #   Exit codes: 0 for a finding, EMPTY, or --once with nothing found (nothing printed); 1 for ERROR.
 #   --agents-timeout: seconds one `claude agents` call may take; a call past it is a failed poll (the
 #   same retry once on the next poll, then `ERROR <text>`, exit 1): the watcher never waits on a hung
@@ -21,8 +21,9 @@
 #   State and status (claude agents --json gives `state`, and `status` busy / idle only while the
 #   session's process lives): state working or status busy = at work; state stopped / failed = STOPPED;
 #   state done with no status = STOPPED (its process ended); state done + status idle = quiet (a live
-#   session between turns); any other state (idle, blocked ...), with or without a status = quiet,
-#   measured from the first poll that saw it quiet.
+#   session between turns); state blocked (a permission prompt) with any status but busy = BLOCKED on the first
+#   poll that sees it, once per stretch (#574), then quiet; any other state (idle ...), with or without a status =
+#   quiet, measured from the first poll that saw it quiet.
 #   A per-line limit: `<id or name> @<n>` - this session's quiet limit is <n> minutes (`@<n>s`: <n>
 #   seconds, for tests) in place of the global one; lines without it use the global limit. The entry is
 #   the line without its ` @<n>` / ` @<n>s` end (a name may hold blanks); GONE prints that entry.
@@ -40,7 +41,9 @@
 #   Once per stretch, across restarts (the watcher exits on a finding, the coordinator starts it again): one
 #   file per session in <temp>/watch-sessions-long/ holds the transcript time LONG last printed, and the same
 #   time never prints again; a newer one past the limit does. <temp>: .sh ${TMPDIR:-/tmp}, .ps1
-#   [IO.Path]::GetTempPath(), so the test sets TMPDIR, TMP, TEMP to a scratch folder. Nothing else is written.
+#   [IO.Path]::GetTempPath(), so the test sets TMPDIR, TMP, TEMP to a scratch folder.
+#   BLOCKED's stretch: one file per session, watch-sessions-blocked/<sessionId>, made when BLOCKED prints and
+#   removed when the session is seen at work. Nothing else is written.
 set -u
 [ $# -gt 0 ] || { sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 2; }
 kind="$1"; shift

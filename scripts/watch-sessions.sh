@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Watch the sessions a report is awaited from, in place of subscribing to their idle notices (#342): run
 # as one background command, it polls `claude agents --json --all` and ends - waking its caller once -
-# only when a listed session stopped, vanished, went quiet or ran long (LONG) without its report.
+# only when a listed session stopped, vanished, went quiet, blocked on a prompt (BLOCKED) or ran long (LONG) without its report.
 #   scripts/watch-sessions.sh --list <file> [--interval <s>] [--quiet-minutes <m>] [--quiet-seconds <s>]
 #                             [--long-minutes <m>] [--long-seconds <s>] [--empty-minutes <m>] [--empty-seconds <s>]
 #                             [--agents-timeout <s>] [--once]
@@ -117,8 +117,9 @@ agents() {
   fi
   [ -n "$err" ] || err="claude agents --json --all exited with $rc"
 }
-# sessions <json>: `<id> TAB <work|stop|quiet> TAB <name>` per session object of the list (string values
-# unescaped; the class from state and status, as the header says)
+# sessions <json>: `<id> TAB <work|stop|block|quiet> TAB <name> TAB <key>` per session object of the list (string
+# values unescaped; the class from state and status, as the header says; key = <cwd as ->/<sessionId> for state
+# working, else :<sessionId>, the stretch files' name)
 sessions() {
   printf '%s' "$1" | awk 'BEGIN { RS = "\001" } { s = s $0 } END {
     n = length(s); d = 0; q = 0; after = 0

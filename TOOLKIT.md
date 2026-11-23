@@ -383,9 +383,10 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   session's process lives — a live session between turns is `done` + `idle`, an exited one `done`
   with no status. State `working` or status `busy` = at work; state `stopped` / `failed` (any status),
   or `done` with no status = STOPPED; `done` + `idle` and any other state (`idle`,
-  `waiting` — a permission prompt or a limit) = quiet; `blocked` is no quiet state: BLOCKED at once (#574), QUIET only afterwards, once it stays blocked past the limit: QUIET after `--quiet-minutes` (default 20),
+  `waiting` — a permission prompt or a limit) = quiet: QUIET after `--quiet-minutes` (default 20),
   counted by the watcher from the first poll that saw it quiet and started again after a poll that saw
-  it at work. A list line is the session's short id (`id` in the listing) or its whole name, with an
+  it at work. `blocked` with any status but `busy` is BLOCKED at once (#574), once per stretch, QUIET
+  only afterwards. A list line is the session's short id (`id` in the listing) or its whole name, with an
   optional limit of its own at its end, ` @<n>` minutes (a lead waiting for its workers: `<id> @120`);
   a UTF-8 BOM, blank lines and comments (`# …`, a `#` followed by a blank or the line's end) are
   skipped, `#12 worker: Fix` is a name. The only files it writes, all temp: `watch-sessions-long/<sessionId>` (LONG's last time), `watch-sessions-blocked/<sessionId>` (BLOCKED's stretch) and the listing's output, in a fresh
