@@ -15,7 +15,8 @@
 # States, as measured: the listing gives `state`, and `status` (busy / idle) only while the session's
 # process lives - a live session between turns is `done` + `idle`, an exited one `done` with no status.
 # State working or status busy = at work, nothing printed; state stopped / failed (any status), or done
-# with no status = STOPPED; done + idle and any other state (idle, blocked, waiting - a permission
+# with no status = STOPPED; state blocked (a permission prompt; any status but busy) = BLOCKED on the first poll
+# that sees it, once per stretch (#574), then quiet; done + idle and any other state (idle, waiting - a permission
 # prompt or a limit), with or without a status = quiet: QUIET once it stayed quiet for its limit
 # (-QuietMinutes, default 20; -QuietSeconds in its place, for tests; or the line's own), counted by
 # the watcher from the first poll that saw it quiet and started again after a poll that saw it at work.
@@ -23,6 +24,7 @@
 # (-LongMinutes, default 45; -LongSeconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
 #   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
+#   | BLOCKED <id> <name>
 #   EMPTY: the list file is missing or holds no session at the start (nothing to watch: it does not run), or it went
 #   empty and stayed so -EmptyMinutes (default 30; -EmptySeconds); one watcher per list, CLAUDE_PID: as watch-sessions.sh says (#471, #528)
 #   ERROR <first line of claude's stderr, or the timeout>: claude agents failed on two polls in a row
@@ -31,7 +33,8 @@
 # take (default 60); past it the one process the watcher started is killed by its own handle - nothing
 # under it, nothing else - and the poll failed. -Once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or -Once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time) and two per call ([IO.Path]::GetTempFileName) holding claude's
+# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time), watch-sessions-blocked/<sessionId>
+# (BLOCKED printed for this stretch; removed when the session is seen at work) and two per call ([IO.Path]::GetTempFileName) holding claude's
 # stdout and stderr - read from files, not a pipe, so a process left under a killed claude cannot hang
 # the watcher - removed as soon as they are read and on every way out, except a file a process left under the listing still holds open
 # (Windows: it stays in the temp folder, nothing retries; #357). Such a process also inherits the watcher's own stdout and stderr, so a caller
@@ -147,8 +150,9 @@ function Sessions([string]$s) {
         $st = [string]$v['state']; $su = [string]$v['status']
         if ($st -ceq 'working' -or $su -ceq 'busy') { $cl = 'work' }
         elseif ($st -ceq 'stopped' -or $st -ceq 'failed' -or ($st -ceq 'done' -and $su -eq '')) { $cl = 'stop' }
+        elseif ($st -ceq 'blocked') { $cl = 'block' }
         else { $cl = 'quiet' }
-        $w = ''; if ($st -ceq 'working') { $w = ([string]$v['cwd'] -replace '[^A-Za-z0-9]', '-') + '/' + $v['sessionId'] }
+        $w = ':' + $v['sessionId']; if ($st -ceq 'working') { $w = ([string]$v['cwd'] -replace '[^A-Za-z0-9]', '-') + '/' + $v['sessionId'] }
         [void]$r.Add(@([string]$v['id'], $cl, [string]$v['name'], $w))
       }
       if ($d -eq 2) { $v = @{} }
@@ -200,7 +204,12 @@ while ($true) {
     $m = Pick $sess $e
     if ($null -eq $m) { $found += "GONE $e"; continue }
     $id = $m[0]; $cl = $m[1]; $nm = $m[2]
+    $bd = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'watch-sessions-blocked'); $b = $bd + '/' + $m[3].Substring($m[3].LastIndexOfAny([char[]]'/:') + 1)
+    if ($cl -eq 'block') { $cl = 'quiet'; if (-not (Test-Path -LiteralPath $b -PathType Leaf)) { $found += "BLOCKED $id $nm"
+        try { [void][IO.Directory]::CreateDirectory($bd); [IO.File]::WriteAllText($b, '') } catch { } } }
     if ($cl -eq 'work') {
+      if (Test-Path -LiteralPath $b -PathType Leaf) { Remove-Item -LiteralPath $b -Force -ErrorAction SilentlyContinue }
+      if ($m[3].StartsWith(':')) { continue }
       $cf = $env:CLAUDE_CONFIG_DIR; if (-not $cf) { $h = $env:USERPROFILE; if (-not $h) { $h = $env:HOME }; $cf = "$h/.claude" }
       $f = "$cf/projects/$($m[3]).jsonl"; if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
       $ft = [IO.File]::GetLastWriteTimeUtc($f); $a = [int64][Math]::Floor(([DateTime]::UtcNow - $ft).TotalSeconds)

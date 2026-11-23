@@ -16,7 +16,8 @@
 # States, as measured: the listing gives `state`, and `status` (busy / idle) only while the session's
 # process lives - a live session between turns is `done` + `idle`, an exited one `done` with no status.
 # State working or status busy = at work, nothing printed; state stopped / failed (any status), or done
-# with no status = STOPPED; done + idle and any other state (idle, blocked, waiting - a permission
+# with no status = STOPPED; state blocked (a permission prompt; any status but busy) = BLOCKED on the first poll
+# that sees it, once per stretch (#574), then quiet; done + idle and any other state (idle, waiting - a permission
 # prompt or a limit), with or without a status = quiet: QUIET once it stayed quiet for its limit
 # (--quiet-minutes, default 20; --quiet-seconds in its place, for tests; or the line's own), counted by
 # the watcher from the first poll that saw it quiet and started again after a poll that saw it at work.
@@ -24,6 +25,7 @@
 # (--long-minutes, default 45; --long-seconds, for tests; or the line's own) = LONG, once per stretch; no transcript, no LONG.
 # Output (stdout): the findings of one poll, one line each, then the end -
 #   STOPPED <id> <name> | GONE <entry> (claude does not list it) | QUIET <id> <name> <minutes> | LONG <id> <name> <minutes>
+#   | BLOCKED <id> <name>
 #   EMPTY: the list file is missing or holds no session at the start (nothing to watch: it does not run), or it went
 #   empty and stayed so --empty-minutes (default 30; --empty-seconds for tests), read every poll, claude not called (#471)
 # One per list (#528): with entries, a watcher (not --once) writes its token to <temp>/watch-sessions-own/<the list's
@@ -34,7 +36,8 @@
 # take (default 60); past it the one claude process the watcher started is killed - nothing under it,
 # nothing else - and the poll failed. --once: one poll, then the end (tests, a manual check).
 # Exit codes: 0 a finding, EMPTY, or --once with nothing found (nothing printed); 1 ERROR; 2 usage error.
-# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time) and one folder per call (mktemp -d) holding claude's stdout and stderr - read
+# Its files, in the temp folder: watch-sessions-long/<sessionId> (LONG's last time), watch-sessions-blocked/<sessionId>
+# (BLOCKED printed for this stretch; removed when the session is seen at work) and one folder per call (mktemp -d) holding claude's stdout and stderr - read
 # from files, not a pipe, so a process left under a killed claude cannot hang the watcher - removed as
 # soon as it is read and on every way out. It never stops, messages or changes a session (Windows:
 # watch-sessions.ps1, the same output and exit codes).
@@ -57,7 +60,7 @@ while [ $# -gt 0 ]; do
     --empty-seconds) num "$@"; esec="$2"; shift 2 ;;
     --agents-timeout) num "$@"; atimeout="$2"; shift 2 ;;
     --once) once=1; shift ;;
-    -h|--help) sed -n '2,40s/^# \{0,1\}//p' "$0"; exit 2 ;;
+    -h|--help) sed -n '2,43s/^# \{0,1\}//p' "$0"; exit 2 ;;
     *) echo "unknown argument: $1; $usage" >&2; exit 2 ;;
   esac
 done
@@ -138,9 +141,10 @@ sessions() {
           st = v["state"]; su = v["status"]
           if (st == "working" || su == "busy") cl = "work"
           else if (st == "stopped" || st == "failed" || (st == "done" && su == "")) cl = "stop"
+          else if (st == "blocked") cl = "block"
           else cl = "quiet"
           w = v["cwd"]; gsub(/[^A-Za-z0-9]/, "-", w)
-          print v["id"] "\t" cl "\t" v["name"] "\t" (st == "working" ? w "/" v["sessionId"] : "")
+          print v["id"] "\t" cl "\t" v["name"] "\t" (st == "working" ? w "/" : ":") v["sessionId"]
         }
         if (d == 2) delete v
         d--
@@ -191,8 +195,11 @@ while :; do
     m="$(pick "$sess" "$e")"
     if [ -z "$m" ]; then found="${found}GONE $e$nl"; continue; fi
     id="${m%%$tab*}"; r="${m#*$tab}"; cl="${r%%$tab*}"; nm="${r#*$tab}"; w="${nm##*$tab}"; nm="${nm%$tab*}"
+    b="${TMPDIR:-/tmp}/watch-sessions-blocked/${w##*[/:]}"
+    [ "$cl" = block ] && { cl=quiet; [ -f "$b" ] || { found="${found}BLOCKED $id $nm$nl"; { mkdir -p "${b%/*}" && : > "$b"; } 2>/dev/null; }; }
     case "$cl" in
-      work) f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$w.jsonl"; d="${TMPDIR:-/tmp}/watch-sessions-long"; k="$d/${w##*/}"
+      work) rm -f "$b" 2>/dev/null; [ "${w#:}" = "$w" ] || continue
+         f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$w.jsonl"; d="${TMPDIR:-/tmp}/watch-sessions-long"; k="$d/${w##*/}"
          t="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null)"; [ -n "$t" ] || continue
          a=$(($(date +%s) - t)); o="${x%%$tab*}"
          [ "$a" -ge "${o:-$llimit}" ] && [ "$t" != "$(cat "$k" 2>/dev/null)" ] || continue

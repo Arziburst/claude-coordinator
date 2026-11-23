@@ -8,10 +8,10 @@ CORE.md 14239
 CORE.md#section-1 1404
 CORE.md#event-table 1039
 roles/assistant.md 907
-roles/critic.md 689
-roles/lead.md 2834
+roles/critic.md 749
+roles/lead.md 2966
 roles/researcher.md 330
 roles/scout.md 199
-roles/tester.md 1083
-roles/verifier.md 2013
-roles/worker.md 1545
+roles/tester.md 1153
+roles/verifier.md 2089
+roles/worker.md 1612

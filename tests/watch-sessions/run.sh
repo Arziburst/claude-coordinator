@@ -52,7 +52,7 @@ mkdir -p "$tmp/temp"; export TMPDIR="$tmp/temp" TMP="$tmp/temp" TEMP="$tmp/temp"
 
 # The stub's state folder $STUB_D:
 #   list-<n>    the sessions call <n> lists, `<id> <state> <name...>` per line (no status field), or
-#               `<id> <state> <status> <name...>` with <status> busy, idle or `-` (no status field);
+#               `<id> <state> <status> <name...>` with <status> busy, idle, waiting or `-` (no status field);
 #               an empty file: none; past the last list-<n> the last one repeats
 #   sleep-<n>   call <n> waits this many seconds before it answers (a hung listing)
 #   nonl        the JSON ends without a final newline
@@ -76,7 +76,7 @@ if [ ! -f "$f" ]; then f=""; for x in "$D"/list-*; do [ -f "$x" ] || continue
 [ -n "$f" ] || { echo "[]"; exit 0; }
 nonl=""; [ -f "$D/nonl" ] && nonl=1
 CWD="$(cat "$D/cwd" 2>/dev/null)" awk -v nonl="$nonl" '{ n = $0; st = ""; c = ENVIRON["CWD"]
-  if ($3 == "busy" || $3 == "idle" || $3 == "-") { sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); if ($3 != "-") st = $3 }
+  if ($3 == "busy" || $3 == "idle" || $3 == "waiting" || $3 == "-") { sub(/^[^ ]+ [^ ]+ [^ ]+ /, "", n); if ($3 != "-") st = $3 }
   else sub(/^[^ ]+ [^ ]+ /, "", n)
   gsub(/\\/, "\\\\", n); gsub(/"/, "\\\"", n)
   printf "%s{\n    \"id\": \"%s\",%s\n    \"sessionId\": \"5e550000-0000-4000-8000-%012d\",\n    \"name\": \"%s\",\n    \"state\": \"%s\"%s\n  }", (m++ ? ",\n  " : "[\n  "), $1, (c == "" ? "" : "\n    \"cwd\": \"" c "\","), NR, n, $2, (st == "" ? "" : ",\n    \"status\": \"" st "\"") }
@@ -118,6 +118,8 @@ bad() { fail=$((fail + 1)); echo "FAIL [$name] $*"; printf '%s\n' "$out" | sed '
 # fresh <name>: a new state folder and an empty working folder; the list file is $L (not created)
 fresh() { name="$1"; export STUB_D="$tmp/s$((pass + fail))-$RANDOM"; mkdir -p "$STUB_D" "$STUB_D.cwd"
   : > "$STUB_D/log"; L="$STUB_D.cwd/watch.txt"; }
+# bfresh <name>: fresh, with a temp folder of its own (BLOCKED's stretch files, #574)
+bfresh() { fresh "$1"; export TMPDIR="$STUB_D.tmp" TMP="$STUB_D.tmp" TEMP="$STUB_D.tmp"; mkdir -p "$TMPDIR"; }
 # run <args>: the watcher's output and exit code, run from the working folder, killed after 60 s (exit 124)
 run() { ( cd "$STUB_D.cwd" && ws "$@" ) > "$STUB_D.out" 2>&1 & local p=$! t=0
   while kill -0 $p 2>/dev/null && [ $t -lt 600 ]; do sleep 0.1; t=$((t + 1)); done
@@ -277,10 +279,10 @@ printf '%s working idle w-a\n%s done busy w-b\n%s blocked busy w-c\n' $A $B $C >
 run --list "$L" --once --quiet-seconds 0
 code 0; silent
 
-fresh "blocked, with status idle or none: QUIET past the limit"
+bfresh "blocked, with status idle or none: BLOCKED on the first poll, before the quiet limit (#574)"
 printf '%s\n%s\n' $A $B > "$L"; printf '%s blocked idle w-a\n%s blocked - w-b\n' $A $B > "$STUB_D/list-1"
 run --list "$L" --interval 1 --quiet-seconds 2
-code 0; has "^QUIET $A w-a [0-9]+\$"; has "^QUIET $B w-b [0-9]+\$"; hasnt "^STOPPED"
+code 0; has "^BLOCKED $A w-a\$"; has "^BLOCKED $B w-b\$"; hasnt "^(STOPPED|QUIET)"; calls -eq 1
 
 fresh "done with no status (its process ended): STOPPED"
 echo $A > "$L"; echo "$A done - w-a" > "$STUB_D/list-1"
@@ -418,5 +420,23 @@ run --list "$L" --interval 1 --empty-minutes 2; code 0; hasnt "^EMPTY"; has "^ST
 fresh "--empty-minutes 0, the list emptied: EMPTY at the next poll (the flag sets the wait, not the 30 minutes)"
 echo $A > "$L"; echo "$A working w-a" > "$STUB_D/list-1"; printf ': > "%s"\n' "$L" > "$STUB_D/after-1"
 run --list "$L" --interval 1 --empty-minutes 0; code 0; has "^EMPTY\$"; calls -eq 1
+# --- BLOCKED (#574): state blocked with any status but busy, once per stretch across restarts
+bfresh "blocked waiting: BLOCKED; a restarted watcher does not print it again in the same stretch"
+echo $A > "$L"; echo "$A blocked waiting w-a" > "$STUB_D/list-1"; echo "$A done w-a" > "$STUB_D/list-3"
+run --list "$L" --once; code 0; has "^BLOCKED $A w-a\$"
+run --list "$L" --interval 1; code 0; hasnt "^BLOCKED"; has "^STOPPED $A w-a\$"; calls -eq 3
+bfresh "blocked, seen at work (working, then blocked busy), blocked again: BLOCKED again each time"
+echo $A > "$L"; echo "$A blocked idle w-a" > "$STUB_D/list-1"; echo "$A working w-a" > "$STUB_D/list-2"; echo "$A blocked waiting w-a" > "$STUB_D/list-3"
+echo "$A blocked busy w-a" > "$STUB_D/list-4"; echo "$A blocked - w-a" > "$STUB_D/list-5"
+run --list "$L" --once; has "^BLOCKED $A w-a\$"; run --list "$L" --interval 1; code 0; has "^BLOCKED $A w-a\$"; calls -eq 3
+run --list "$L" --interval 1; code 0; has "^BLOCKED $A w-a\$"; calls -eq 5
+bfresh "blocked after its BLOCKED, past the quiet limit: QUIET, not BLOCKED again"
+echo $A > "$L"; echo "$A blocked waiting w-a" > "$STUB_D/list-1"
+run --list "$L" --once; has "^BLOCKED $A w-a\$"; run --list "$L" --interval 1 --quiet-seconds 2; code 0; has "^QUIET $A w-a [0-9]+\$"; hasnt "^BLOCKED"
+bfresh "blocked busy, done + idle, working, stopped and gone beside a blocked one: their lines as before, BLOCKED for it alone"
+printf '%s\n%s\n%s\n%s\nd4e5f6a7\ne5f6a7b8\n' $A $B $C 0a1b2c3d > "$L"
+printf '%s blocked busy w-a\n%s done idle w-b\n%s working w-c\nd4e5f6a7 stopped w-d\n0a1b2c3d blocked waiting w-0\n' $A $B $C > "$STUB_D/list-1"
+run --list "$L" --once --quiet-seconds 600; code 0
+[ "$out" = "$(printf 'BLOCKED 0a1b2c3d w-0\nSTOPPED d4e5f6a7 w-d\nGONE e5f6a7b8')" ] && ok || bad "expected exactly BLOCKED 0a1b2c3d, STOPPED d4e5f6a7, GONE e5f6a7b8"
 echo "watch-sessions ($kind${1:+ $1}): $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
