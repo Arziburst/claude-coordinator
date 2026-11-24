@@ -504,6 +504,11 @@ ship **disabled** behind a switch when `PROJECT.md` says so.
   only the scarce resource by name** (the device, the lock, the paid call), never "building" or "running"
   in general: every oracle that does not need that resource — a build, unit tests, a hash, a script —
   the verifier runs itself.
+  **A read of a remote or production system the verifier's settings do not reach** (a migration history, a
+  deployed config, a remote table's schema) is made by the coordinator, who has that access, before the verifier
+  starts — reading an outside system's state is not running the change. The brief carries the raw output, when
+  and how it was read; the verifier judges the change against it and marks it `oracle (coordinator's read,
+  <when>)`, never plain `oracle`; a missing read is a known gap.
 - Independent of the author (a separate session, or the human the project names); changes nothing.
 - The hand-off opens with: **nothing here is established fact** — verdict per criterion: confirmed /
   failed / not verifiable / needs the owner, each with its evidence class; per finding: Blocker / Major /

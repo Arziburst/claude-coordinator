@@ -109,7 +109,8 @@ pinned core (`coordinator/core`) where CORE is named (#148).
    sub-contract. It works in your worktree and cannot build or test in the worker's, so it reviews
    the sub-branch's change — the diff against its merge base (`git diff <integration
    branch>...<sub-branch>`, named in its brief), the code, the worker's outputs attached on the
-   reviewed commit — and the build and test oracles run in step 5. Findings go back to the same
+   reviewed commit — and the build and test oracles run in step 5. A read of a remote system its settings do not
+   reach (CORE §6) is a known gap here; the coordinator's final verifier gets the read. Findings go back to the same
    worker until there is no Blocker or Major. You may hand a sub-worker's fix round to a fresh worker
    on its pushed sub-branch with a short note when that sub-worker's context has grown long (TOOLKIT
    *Pause and resume*, #292). A failed review a stronger model would fix → restart on the

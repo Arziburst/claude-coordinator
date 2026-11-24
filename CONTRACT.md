@@ -172,5 +172,5 @@ run is an oracle only for the commit it ran on:** its proof names the run and th
 counts for a verdict only when that commit is the head the reviewer reviewed — a run on an older head
 is a `claim`. A check the reviewer may not run (a shared device, a lock) can rest on the worker's raw
 output for the reviewed commit, attached where `how` says: it is shown as `oracle (worker's run,
-<commit>)`, never as plain `oracle` (CORE §6). Reports, the journal and the owner's summary keep the
-class, so "tested", "reviewed" and "said so" never look the same.
+<commit>)`, never as plain `oracle` (CORE §6); the coordinator's read of an outside system the reviewer cannot
+reach is `oracle (coordinator's read, <when>)`. Reports, the journal and the owner's summary keep the class, so "tested", "reviewed" and "said so" never look the same.

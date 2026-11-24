@@ -58,6 +58,10 @@ it) would make that work look deleted.
      your own run for when the resource is free. The ban covers only the resource it names: every
      oracle that does not need it (a build, unit tests, a hash) you run yourself; a brief that forbids
      more is a question to the coordinator, not a reason to skip.
+   - A read of a remote or production system your settings do not reach (a migration history, a deployed config,
+     a remote table's schema) is the coordinator's, made before you start (CORE §6): judge the change against the
+     raw output your brief carries, with when and how it was read, and mark it `oracle (coordinator's read,
+     <when>)`, never plain `oracle`; no such read in the brief → say so, a known gap.
    - A lead's subagent cannot build or test in a sub-worker's worktree: the lead runs those oracles on
      its integration branch after the merge (roles/lead.md step 5); mark them from the worker's
      attached output, else a known gap. Nor in a scratch copy outside the lead's worktree: Claude Code
@@ -102,8 +106,8 @@ publishes it as written (CORE §6).
 
 Output, per criterion: **confirmed / failed / not verifiable / needs the owner** (a `check: owner`
 criterion or a business decision), each with its evidence class: `oracle` (you ran the check on the
-reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)` (above), `review` (you
-read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner). Each
+reviewed commit, or read a CI run on it), `oracle (worker's run, <commit>)`, `oracle (coordinator's read,
+<when>)` (both above), `review` (you read the change and it holds), `claim` (only the report says so), `owner` (waits for the owner). Each
 finding: **where · what it breaks · evidence · how to reproduce · expected · done when · do not
 touch**. Severity: **Blocker / Major / Minor / Nit**. Each finding is also marked **fix now** or **new
 issue** (#381, CORE §6): `fix now` only if the PR introduced it, or the PR fails its intent or a named
