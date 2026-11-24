@@ -20,6 +20,10 @@ case "$rt" in "") ;; *) case "$wd" in "$rt"/.claude/worktrees/*) exit 0 ;; esac 
 case "$sid" in *[!0-9a-fA-F-]*|"") ;; *) [ ! -f "$cfg/coordinator/briefs/$sid.md" ] || exit 0 ;; esac
 if [ -n "$rt" ]; then wd="$rt"; else while [ ! -d "$wd/coordinator" ]; do case "$wd" in */coordinator) wd="${wd%/coordinator}"; break ;; */coordinator/*) wd="${wd%/*}" ;; *) break ;; esac; done; fi
 c="$wd/coordinator"; [ -d "$c" ] || exit 0; fail() { echo "before-compact: $1" >&2; }
+# stdout, only where the file is written: Claude Code takes a PreCompact hook's stdout as instructions for the summary
+# (measured 2026-11-25, 2.1.331: a marker printed here was in the summary). A fixed text under 1500 characters, the .ps1's.
+printf '%s\n' "For this summary (a coordinator's session), keep word for word and with their dates: the owner's decisions and the owner's words typed in this session that are not yet in a file; the open questions and the owner's answers still pending; the running sessions (id and name) and what each waits for; the verdicts given and the merges not yet landed." \
+  "Say in the summary that after the compaction the coordinator, before acting, re-reads CORE section 1 and the event table, PROJECT.md, BINDINGS.md, LOG.md's open questions and coordinator/CHECKPOINT.md." 2>/dev/null
 # the lines under LOG.md's "## Open questions" up to its next heading; no such heading: `heading not found`
 if [ -f "$c/LOG.md" ] && q="$(LC_ALL=C awk '/^## / { on = /^## Open questions/; f = f || on; next } on; END { if (!f) print "heading not found" }' "$c/LOG.md" 2>/dev/null)"; then :
 else q="could not read coordinator/LOG.md"; fail "cannot read $c/LOG.md"; fi

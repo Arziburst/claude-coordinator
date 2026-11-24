@@ -111,7 +111,8 @@ differently. Items marked *(unconfirmed)* were not stated in the docs; verify th
   minutes ago, or none) — a note, never a loss: the checkpoint can be as old as the summary, as a compaction may be prepared long before it applies, and the messages since are kept verbatim: read it, then the files; the content is printed either way, and CORE §4's row
   re-reads §1 before acting on it. On Windows both hooks read stdin and after-compact writes stdout as
   UTF-8 whatever the console's code page (a Cyrillic path or question comes through byte for byte). The
-  wall: the hook writes what the files hold; a thread kept only in the conversation stays lost, and only
+  wall: the files. The hook writes what they hold, and wherever it writes the checkpoint its stdout also asks the summary to keep the threads held only in the conversation: word for word with their dates the owner's decisions and words typed in the session and not yet in a file, the open questions and the owner's pending answers, the running sessions and what each waits for, the verdicts given and the merges not yet landed, and the re-read after the compaction, `coordinator/CHECKPOINT.md` included
+  (#342: Claude Code takes a `PreCompact` hook's stdout as the summary's instructions; measured by a probe, 2026-11-25 on 2.1.331: a `--bg` Haiku session with a window of 100000, the marker phrase the hook printed stood in the summary of two automatic compactions and of one `claude -p "/compact" --resume <id>`, all three live; a precomputed summary not measured). A request, never a wall: a thread the summary drops all the same stays lost, and only
   CORE's rules keep them in the files. **Measured (2026-11-03, Claude Code 2.1.294–2.1.316, 51
   compactions in one machine's transcripts):** 33 summaries were precomputed — the summary record's own
   timestamp lies 2 minutes to 9.4 hours before the swap (a coordinator's three: 4.5, 5.7 and 9.4 hours),
