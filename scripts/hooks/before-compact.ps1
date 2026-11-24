@@ -22,6 +22,10 @@ if ($rt) { $wd = $rt } else { while (-not (Test-Path -LiteralPath "$wd/coordinat
   if ($wd -like '*/coordinator') { $wd = $wd.Substring(0, $wd.Length - 12); break } elseif ($wd -like '*/coordinator/*') { $wd = $wd.Substring(0, $wd.LastIndexOf('/')) } else { break } } }
 $c = "$wd/coordinator"; if (-not (Test-Path -LiteralPath $c -PathType Container)) { exit 0 }
 function Fail([string]$m) { [Console]::Error.WriteLine("before-compact: $m") }; $U = New-Object System.Text.UTF8Encoding $false
+# stdout, only where the file is written: Claude Code takes a PreCompact hook's stdout as instructions for the summary
+# (measured 2026-11-25, 2.1.331: a marker printed here was in the summary). A fixed text under 1500 characters, the .sh's.
+try { [Console]::Out.Write("For this summary (a coordinator's session), keep word for word and with their dates: the owner's decisions and the owner's words typed in this session that are not yet in a file; the open questions and the owner's answers still pending; the running sessions (id and name) and what each waits for; the verdicts given and the merges not yet landed.`n" +
+  "Say in the summary that after the compaction the coordinator, before acting, re-reads CORE section 1 and the event table, PROJECT.md, BINDINGS.md, LOG.md's open questions and coordinator/CHECKPOINT.md.`n") } catch { }
 # the lines under LOG.md's "## Open questions" up to its next heading; no such heading: `heading not found`
 $q = 'could not read coordinator/LOG.md'
 try { $on = $false; $f = $false; $q = (@(foreach ($l in [IO.File]::ReadAllLines("$c/LOG.md", $U)) { if ($l -clike '## *') { $on = $l -clike '## Open questions*'; if ($on) { $f = $true }; continue }; if ($on) { $l } }) -join "`n").TrimEnd("`n")

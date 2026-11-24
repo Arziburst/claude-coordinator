@@ -19,6 +19,8 @@
 # - before-compact says what it could not hold: `could not read coordinator/watch.txt` under `## Watch list` and one stderr line (a file that exists and
 #   cannot be read; an absent one: silent); `heading not found` under `## Open questions` (a journal without that heading); `could not list the sessions`
 #   also when the listing exits 0 and is no JSON array. Both hooks read stdin and after-compact writes stdout as UTF-8 whatever the console's code page. Both hooks: a cwd at or under <root>/coordinator, with no coordinator/ of its own, acts as <root>.
+# - before-compact's stdout (#342): wherever it writes the file, also when the write fails, a fixed instruction for the compaction summary, under 1500 characters, the
+#   same in both shells (the phrases in KEEP below); empty in every silent case. Claude Code takes a PreCompact hook's stdout as the summary's instructions.
 # - The test pins the code page: PIN=866 runs the hook on Windows in a NEW hidden console (Start-Process, whatever CI's console is) through a .cmd with `chcp.com 866` first; the page read inside it must be 866 or the case fails.
 # - Both hooks: a set CLAUDE_PROJECT_DIR is the root, whatever the input's cwd (a subfolder, another project, a worktree elsewhere); unset: the cwd rule above. In the .ps1 a `/c/...` form of it, of COORD_ASSISTANT_DIR and of CLAUDE_CONFIG_DIR reads as cygpath -m reads it.
 # - after-compact coordinator, <root>/coordinator/core/CORE.md absent: exit 0, `<root>/coordinator/core/CORE.md is missing`, and never today's `<root>/coordinator/core/CORE.md (section 1`, which stays when the file is there.
@@ -176,6 +178,22 @@ has "$tmp/ctx" "$(wp "$tmp/cfg")/coordinator/briefs/$B"; rm "$tmp/cfg/coordinato
 c "guard (green before the change too): the project dir unset, a cwd in a subfolder keeps the cwd rule: nothing written, the root's checkpoint not read"
 mk "$P"; mkdir -p "$P/src/deep"; before "$P/src/deep"; [ ! -e "$F" ] || bad "walked up to the root"
 printf 'written: %s\nROOT-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P/src/deep"; no "$tmp/ctx" ROOT-CONTENT
+KEEP="word for word and with their dates|the owner's decisions|the owner's words typed in this session that are not yet in a file|the open questions and the owner's answers still pending|the running sessions (id and name) and what each waits for|the verdicts given|the merges not yet landed|after the compaction the coordinator, before acting, re-reads CORE section 1 and the event table, PROJECT.md, BINDINGS.md, LOG.md's open questions and coordinator/CHECKPOINT.md"
+keeps() { local IFS='|' t; [ "$(wc -c < "$tmp/out")" -lt 1500 ] || bad "stdout is not under 1500 characters: $(wc -c < "$tmp/out")"; for t in $KEEP; do has "$tmp/out" "$t"; done; }
+quiet() { [ ! -s "$tmp/out" ] || bad "$1: stdout is not empty: $(cut -c1-80 "$tmp/out")"; }
+c "before in a coordinator's project: its stdout tells the summary what to keep, under 1 500 characters, nothing on stderr (#342)"
+mk "$P"; before "$P"; keeps; [ ! -s "$tmp/err" ] || bad "stderr: $(cat "$tmp/err")"; [ "$(grep -c . "$tmp/out")" = 2 ] || bad "stdout is not the two lines: $(grep -c . "$tmp/out")"
+c "guard (green before the change too): the checkpoint under its written line is the fixture's, byte for byte"
+printf -- '## Open questions\n- 2026-11-01: OPEN-Q1 which database?\n- 2026-11-02: %s\n- 2026-11-02: %s\n## Watch list\naaaa1111\nWATCHED-WORKER @120\n## Sessions\naaaa1111 working SESSION-HERE\nbbbb2222 idle SESSION-WT\n## Re-read\ncoordinator/core/CORE.md\ncoordinator/PROJECT.md\ncoordinator/BINDINGS.md\ncoordinator/LOG.md\n' "$Q2" "$Q3" > "$tmp/want"
+mk "$P"; before "$P"; sed 1d "$F" > "$tmp/got"; cmp -s "$tmp/got" "$tmp/want" || bad "the checkpoint is not the fixture's: $(diff "$tmp/got" "$tmp/want" | head -4)"; [ "$(sed -n 1p "$F" | cut -c1-9)" = 'written: ' ] || bad "no written line first"
+c "the instruction is printed whatever fails: a checkpoint that cannot be written, a journal that cannot be read with a listing that fails, the project dir set (#342)"
+mk "$P"; mkdir "$F"; before "$P"; keeps; [ "$(grep -c . "$tmp/err")" = 1 ] || bad "stderr: $(cat "$tmp/err")"
+mk "$P"; rm "$P/coordinator/LOG.md"; mkdir "$P/coordinator/LOG.md"; : > "$STUB/fail"; before "$P"; keeps; has "$F" 'could not list the sessions'
+mk "$P"; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$O"; keeps; mk "$P"; before "$P/coordinator"; keeps
+c "guard (green before the change too): every silent case leaves stdout empty: no coordinator folder, no JSON, a worktree, a kept brief, COORD_ASSISTANT_DIR, a worktree inside the set project dir"
+before "$tmp/bare"; quiet 'no coordinator folder'; hook before 'not json'; quiet 'no JSON'; mk "$P"; mkdir -p "$W/coordinator"; before "$W"; quiet 'a worktree'
+: > "$tmp/cfg/coordinator/briefs/$b.md"; before "$P" "$b"; quiet 'a kept brief'; rm "$tmp/cfg/coordinator/briefs/$b.md"
+export COORD_ASSISTANT_DIR="$(wp "$tmp/away")"; before "$P"; unset COORD_ASSISTANT_DIR; quiet 'an assistant'; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$W"; quiet 'a worktree inside the set project dir'; [ ! -e "$F" ] || bad "a silent case wrote the checkpoint"
 c "after with the root's CORE.md missing: exit 0, says so, never as a file to read; with the file, today's text"
 mk "$P"; after "$P"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md is missing"; no "$tmp/ctx" 'CORE.md (section 1'; has "$tmp/ctx" "$TODAY"; no "$tmp/ctx" 'the rest of CORE'
 withcore "$P"; after "$P"; has "$tmp/ctx" 'CORE.md (section 1'; no "$tmp/ctx" 'CORE.md is missing'
