@@ -13,5 +13,5 @@ roles/lead.md 2966
 roles/researcher.md 330
 roles/scout.md 199
 roles/tester.md 1153
-roles/verifier.md 2089
+roles/verifier.md 2167
 roles/worker.md 1612

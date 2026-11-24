@@ -86,7 +86,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-REVIEW-01 | Independent verifier | a separate session or human verifies against the contract | REVIEW |
 | F-REVIEW-02 | Evidence classes | oracle / review / claim travel with every result | REVIEW |
 | F-REVIEW-03 | Verdict on the head commit | CI counts only on the reviewed SHA; merge pins that SHA | REVIEW |
-| F-REVIEW-04 | Oracles a verifier may not run | the worker's run marked as such, or a queued run | REVIEW |
+| F-REVIEW-04 | Oracles a verifier may not run | the worker's run or the coordinator's read marked as such, or a queued run | REVIEW |
 | F-REVIEW-05 | Red checks classified | cancelled / code / infrastructure / flake before acting | REVIEW |
 | F-REVIEW-06 | Never over failing checks | no merge over red or pending checks | REVIEW |
 | F-REVIEW-07 | One escalation per contract | a second failure goes to the owner with options | REVIEW |
@@ -549,7 +549,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-02 Evidence classes
 - defined: CONTRACT.md, CORE.md §6
 - entry: every report and verdict
-- promises: every result is `oracle`, `oracle (worker's run, <commit>)`, `review`, `claim` or `owner`; a check run by the reviewer on the reviewed commit is an oracle; the class survives into reports and the owner's summary
+- promises: every result is `oracle`, `oracle (worker's run, <commit>)`, `oracle (coordinator's read, <when>)`, `review`, `claim` or `owner`; a check run by the reviewer on the reviewed commit is an oracle; the class survives into reports and the owner's summary
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
@@ -563,7 +563,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 ### F-REVIEW-04 Oracles a verifier may not run
 - defined: CORE.md §6, roles/verifier.md, CONTRACT.md
 - entry: a shared device, a lock or a cost the brief forbids
-- promises: the worker's raw output for the reviewed commit is marked `oracle (worker's run, <commit>)`, never plain `oracle`, or the verifier's own run is queued; the brief forbids only the scarce resource by name; the coordinator never runs it itself
+- promises: the worker's raw output for the reviewed commit is marked `oracle (worker's run, <commit>)`, never plain `oracle`, or the verifier's own run is queued; the brief forbids only the scarce resource by name; the coordinator never runs it itself; a read of a remote or production system the verifier's settings do not reach is made by the coordinator before the verifier starts, carried raw in the brief and marked `oracle (coordinator's read, <when>)`, a missing read a known gap (in a lead's sub-review always a gap) (#641)
 - tested by: none
 - not covered: no automated check — it rests on the sessions following the rule
 
