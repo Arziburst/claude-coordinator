@@ -56,8 +56,8 @@ Run only on the owner's command ("update the core", "обнови ядро", any
      guard's assistant mode is retired; Claude Code's permission mode dontAsk with a closed allow list holds an
      assistant now). Named per assistant in this report and asked, never assumed: on the owner's yes each file
      is filled anew from the new `settings.example.assistant(.windows).json` (its own connector rules carried
-     over; every `/ABSOLUTE/PATH` and every `/ABSOLUTE/PROJECT` replaced, the deny rules included:
-     `grep -n ABSOLUTE <the file>` finds no line but `_comment`), committed, and the assistant is started fresh in step 6 (start-worker starts it in dontAsk), as the
+     over; every `/ABSOLUTE/PATH` and every `/ABSOLUTE/PROJECT` replaced in the whole file, the deny rules
+     and `_comment` included: `grep -n ABSOLUTE <the file>` finds none), committed, and the assistant is started fresh in step 6 (start-worker starts it in dontAsk), as the
      `coord-assistant` skill says; on a no it stays paused - start-worker refuses its old file and the guard any call of it in another mode;
    - **Breaking for project wrappers:** every upstream commit since the recorded one whose message has
      a line **starting** with `Breaking for project wrappers:` (`git log <old>..<new> --grep '^Breaking

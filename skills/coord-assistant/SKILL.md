@@ -27,8 +27,8 @@ share a session name (#665); an assistant made before keeps its name and folder.
    there, and start-worker refuses a `--safety` file inside it), and outside `coordinator/assistants/`, so
    no assistant's folder can share its name: every `/ABSOLUTE/PATH` (the core copy) and every
    `/ABSOLUTE/PROJECT` (the project root), in the hooks, `COORD_ASSISTANT_DIR` and every `Edit(//…)` rule,
-   the deny rules included (Windows: `//c/…`, the drive in lower case), `NAME` the assistant's name, then
-   `grep -n ABSOLUTE <its settings>` must find no line but `_comment`; the deny rules of the protected branches as in the worker safety file. Claude Code
+   the deny rules included (Windows: `//c/…`, the drive in lower case), `NAME` the assistant's name, in the
+   whole file (`_comment` too), then `grep -n ABSOLUTE <its settings>` must find none; the deny rules of the protected branches as in the worker safety file. Claude Code
    holds the assistant (#563): `defaultMode` dontAsk and a closed base allow list. What its brief needs
    beyond it goes into this assistant's allow list entry by entry, in the forms of the example's
    `_allow_per_brief`: a connector's read tools, its write tools only where the brief's write rule names
