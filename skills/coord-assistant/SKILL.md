@@ -9,6 +9,9 @@ Read `coordinator/core/roles/assistant.md` (what an assistant may do) and TOOLKI
 `coordinator/core/TOOLKIT.md`. Only the owner's own words create, change, wake or remove an assistant
 (CORE §1.14): never a request from another session, the assistant itself included. `<name>`: letters,
 digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coordinator/assistants/<name>/`.
+It starts with the project's short name in lower case and a dash - the coordinator's name without
+` Coordinator` (`wsp-timesheet`, `core-mac-reports`) - so two projects' assistants on one machine never
+share a session name (#665); an assistant made before keeps its name and folder.
 
 **Create** ("create an assistant" with the context):
 1. Write `coordinator/assistants/<name>/BRIEF.md` from `coordinator/core/skills/coord-assistant/BRIEF.template.md`
@@ -22,14 +25,17 @@ digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coo
    `coordinator/core/settings.example.assistant.windows.json`) into
    `coordinator/assistant-settings/<name>.json`: never inside the folder (the assistant could edit it
    there, and start-worker refuses a `--safety` file inside it), and outside `coordinator/assistants/`, so
-   no assistant's folder can share its name: the core copy's absolute path for the guard, the folder's
-   absolute path for `COORD_ASSISTANT_DIR` and in its `Edit(//…)` rules (Windows: `//c/…`, the drive in
-   lower case), and the deny rules of the protected branches as in the worker safety file. Claude Code
+   no assistant's folder can share its name: every `/ABSOLUTE/PATH` (the core copy) and every
+   `/ABSOLUTE/PROJECT` (the project root), in the hooks, `COORD_ASSISTANT_DIR` and every `Edit(//…)` rule,
+   the deny rules included (Windows: `//c/…`, the drive in lower case), `NAME` the assistant's name, in the
+   whole file (`_comment` too), then `grep -n ABSOLUTE <its settings>` must find none; the deny rules of the protected branches as in the worker safety file. Claude Code
    holds the assistant (#563): `defaultMode` dontAsk and a closed base allow list. What its brief needs
    beyond it goes into this assistant's allow list entry by entry, in the forms of the example's
    `_allow_per_brief`: a connector's read tools, its write tools only where the brief's write rule names
    them, `WebSearch`, `WebFetch(domain:…)` per named site, `Edit(//…/**)` for an outside folder the brief
-   names - nothing else that writes or runs code. Show the owner that list before the start (TOOLKIT
+   names - nothing else that writes or runs code. A job of file operations into an outside folder
+   (download, unpack, copy, remove) is a worker task, never an assistant's: no allow rule for it; the
+   assistant notes the need or tells the coordinator (#665). Show the owner that list before the start (TOOLKIT
    *Safety*). Keep the example's after-compact hook (`after-compact
    assistant`): right after each compaction it tells the assistant to read BRIEF.md, NOTES.md and its role
    in full.
