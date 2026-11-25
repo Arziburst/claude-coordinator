@@ -305,8 +305,8 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
 - **Start:** `start-worker.sh --repo <root> --name "assistant: <name>" --model <model> --brief-file
   <root>/coordinator/assistants/<name>/BRIEF.md --safety <its settings> --report-to "<the coordinator>"`
   (Windows: `start-worker.ps1` with `-Repo`, `-Name`, `-Model`, `-BriefFile`, `-Safety`, `-ReportTo`).
-  `<name>`: letters, digits, `.`, `_`, `-`, not dots only, the project's short name first in lower case and
-  a dash (`assistant: wsp-timesheet`; unique across projects, the skill). No worktree and no branch: the session starts
+  `<name>`: letters, digits, `.`, `_`, `-`, not dots only, the project's short name first in lower case, each
+  space a dash, and a dash (`assistant: wsp-timesheet`; unique across projects, the skill). No worktree and no branch: the session starts
   from the repository root in permission mode dontAsk (#563; another `--mode` is refused), and its launch text's first line names its folder (BRIEF.md read in full,
   NOTES.md kept as its memory, both re-read after a compaction or a restart, writes only inside the folder,
   questions to `--report-to`), then the role, then the brief. Refused before anything is created (exit 1):
