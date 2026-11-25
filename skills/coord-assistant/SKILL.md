@@ -9,9 +9,9 @@ Read `coordinator/core/roles/assistant.md` (what an assistant may do) and TOOLKI
 `coordinator/core/TOOLKIT.md`. Only the owner's own words create, change, wake or remove an assistant
 (CORE §1.14): never a request from another session, the assistant itself included. `<name>`: letters,
 digits, `.`, `_`, `-`, not dots only, from the owner's words; the folder is `coordinator/assistants/<name>/`.
-It starts with the project's short name in lower case and a dash - the coordinator's name without
-` Coordinator` (`wsp-timesheet`, `core-mac-reports`) - so two projects' assistants on one machine never
-share a session name (#665); an assistant made before keeps its name and folder.
+It is the project's short name (the coordinator's name without ` Coordinator`, in lower case, each space a dash),
+a dash and the assistant's own word (`wsp-timesheet`; "CORE Mac Coordinator" gives `core-mac-reports`), so two
+projects' assistants on one machine never share a session name (#665); one made before keeps its name and folder.
 
 **Create** ("create an assistant" with the context):
 1. Write `coordinator/assistants/<name>/BRIEF.md` from `coordinator/core/skills/coord-assistant/BRIEF.template.md`
