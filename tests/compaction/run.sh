@@ -79,6 +79,9 @@ mk() { rm -r "$1" 2>/dev/null; mkdir -p "$1/coordinator"; rm -f "$STUB/fail" "$S
   printf '# Journal\n## Open questions\n- 2026-11-01: OPEN-Q1 which database?\n- 2026-11-02: %s\n- 2026-11-02: %s\n## Events\n- 2026-11-01: EVENT-LINE started\n' "$Q2" "$Q3" > "$1/coordinator/LOG.md"
   printf 'aaaa1111\nWATCHED-WORKER @120\n' > "$1/coordinator/watch.txt"; }
 P="$tmp/proj"; F="$P/coordinator/CHECKPOINT.md"; S="$tmp/settings"
+KEEP="word for word and with their dates|the owner's decisions|the owner's words typed in this session that are not yet in a file|the open questions and the owner's answers still pending|the running sessions (id and name) and what each waits for|the verdicts given|the merges not yet landed|after the compaction the coordinator, before acting, re-reads CORE section 1 and the event table, PROJECT.md, BINDINGS.md, LOG.md's open questions and coordinator/CHECKPOINT.md"
+keeps() { local IFS='|' t; [ "$(wc -c < "$tmp/out")" -lt 1500 ] || bad "stdout is not under 1500 characters: $(wc -c < "$tmp/out")"; for t in $KEEP; do has "$tmp/out" "$t"; done; }
+quiet() { [ ! -s "$tmp/out" ] || bad "$1: stdout is not empty: $(cut -c1-80 "$tmp/out")"; }
 c "the settings: ONE-TIME and TOOLKIT name the entry, no settings example holds it"
 for x in ONE-TIME.md TOOLKIT.md; do has "$core/$x" PreCompact; has "$core/$x" before-compact; done
 for x in "$core"/settings.example*.json; do grep -v '^  "_comment"' "$x" > "$S"; no "$S" PreCompact; no "$S" before-compact; done
@@ -87,18 +90,23 @@ mk "$P"; before "$P"; grep -Eq '^written: [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0
 for t in '## Open questions' OPEN-Q1 '## Watch list' 'WATCHED-WORKER @120' '## Sessions' '## Re-read' coordinator/core/CORE.md coordinator/PROJECT.md coordinator/BINDINGS.md coordinator/LOG.md; do has "$F" "$t"; done
 grep -q 'aaaa1111.*working.*SESSION-HERE\|SESSION-HERE.*working.*aaaa1111' "$F" || bad "no line with the session's id, state and name"; has "$F" SESSION-WT
 no "$F" SESSION-ELSEWHERE; no "$F" EVENT-LINE; [ "$(ls "$P/coordinator" | grep -c '^CHECKPOINT')" = 1 ] || bad "a temp file left: $(ls "$P/coordinator")"
+c "before in a coordinator's project: its stdout tells the summary what to keep, under 1 500 characters, nothing on stderr (#342)"
+keeps; [ ! -s "$tmp/err" ] || bad "stderr: $(cat "$tmp/err")"; [ "$(grep -c . "$tmp/out")" = 2 ] || bad "stdout is not the two lines: $(grep -c . "$tmp/out")"
+c "guard (green before the change too): the checkpoint under its written line is the fixture's, byte for byte"
+printf -- '## Open questions\n- 2026-11-01: OPEN-Q1 which database?\n- 2026-11-02: %s\n- 2026-11-02: %s\n## Watch list\naaaa1111\nWATCHED-WORKER @120\n## Sessions\naaaa1111 working SESSION-HERE\nbbbb2222 idle SESSION-WT\n## Re-read\ncoordinator/core/CORE.md\ncoordinator/PROJECT.md\ncoordinator/BINDINGS.md\ncoordinator/LOG.md\n' "$Q2" "$Q3" > "$tmp/want"
+sed 1d "$F" > "$tmp/got"; cmp -s "$tmp/got" "$tmp/want" || bad "the checkpoint is not the fixture's: $(diff "$tmp/got" "$tmp/want" | head -4)"; [ "$(sed -n 1p "$F" | cut -c1-9)" = 'written: ' ] || bad "no written line first"
 c "before then after: the session is told all of it, beside today's text, and neither word"
 after "$P"; for t in "$TODAY" OPEN-Q1 WATCHED-WORKER SESSION-HERE SESSION-WT coordinator/BINDINGS.md "$(sed -n 1p "$F")"; do has "$tmp/ctx" "$t"; done
 no "$tmp/ctx" 'checkpoint is missing'; no "$tmp/ctx" 'checkpoint is stale'
 c "a quote, a backslash, a tab and Cyrillic in a question come through byte for byte"
 has "$F" "$Q3"; has "$tmp/ctx" "$Q2"; has "$tmp/ctx" "$Q3"
-c "no coordinator folder, or stdin that is no JSON: nothing written"
-mkdir -p "$tmp/bare"; before "$tmp/bare"; [ -z "$(ls -A "$tmp/bare")" ] || bad "wrote: $(ls -A "$tmp/bare")"
-hook before 'not json'; [ "$rc" = 0 ] || bad "not json: exit $rc"; [ -z "$(ls -A "$tmp/away")" ] || bad "wrote in the hook's folder"
-c "a worker's or an assistant's session writes nothing: a worktree, a kept brief, COORD_ASSISTANT_DIR"
-W="$P/.claude/worktrees/7-x"; mk "$P"; mkdir -p "$W/coordinator"; before "$W"; [ ! -e "$W/coordinator/CHECKPOINT.md" ] || bad "wrote in a worktree"
-b=5e550000-0000-4000-8000-000000000001; : > "$tmp/cfg/coordinator/briefs/$b.md"; before "$P" "$b"; [ ! -e "$F" ] || bad "wrote with a kept brief"; rm "$tmp/cfg/coordinator/briefs/$b.md"
-export COORD_ASSISTANT_DIR="$(wp "$tmp/away")"; before "$P"; unset COORD_ASSISTANT_DIR; [ ! -e "$F" ] || bad "wrote in an assistant's session"
+c "no coordinator folder, or stdin that is no JSON: nothing written, stdout empty"
+mkdir -p "$tmp/bare"; before "$tmp/bare"; quiet 'no coordinator folder'; [ -z "$(ls -A "$tmp/bare")" ] || bad "wrote: $(ls -A "$tmp/bare")"
+hook before 'not json'; quiet 'no JSON'; [ "$rc" = 0 ] || bad "not json: exit $rc"; [ -z "$(ls -A "$tmp/away")" ] || bad "wrote in the hook's folder"
+c "a worker's or an assistant's session writes nothing: a worktree, a kept brief, COORD_ASSISTANT_DIR; stdout empty"
+W="$P/.claude/worktrees/7-x"; mk "$P"; mkdir -p "$W/coordinator"; before "$W"; quiet 'a worktree'; [ ! -e "$W/coordinator/CHECKPOINT.md" ] || bad "wrote in a worktree"
+b=5e550000-0000-4000-8000-000000000001; : > "$tmp/cfg/coordinator/briefs/$b.md"; before "$P" "$b"; quiet 'a kept brief'; [ ! -e "$F" ] || bad "wrote with a kept brief"; rm "$tmp/cfg/coordinator/briefs/$b.md"
+export COORD_ASSISTANT_DIR="$(wp "$tmp/away")"; before "$P"; unset COORD_ASSISTANT_DIR; quiet 'an assistant'; [ ! -e "$F" ] || bad "wrote in an assistant's session"
 c "a missing journal: said, the rest kept"
 mk "$P"; rm "$P/coordinator/LOG.md"; before "$P"; has "$F" 'could not read coordinator/LOG.md'; has "$F" WATCHED-WORKER; has "$F" SESSION-HERE
 c "a journal that cannot be read: said, one line on stderr, the rest kept"
@@ -108,7 +116,7 @@ if [ "$kind" = ps ] && command -v cygpath >/dev/null 2>&1; then c "a journal hel
   mk "$P"; "${PS[@]}" -NoProfile -Command "\$f=[IO.File]::Open('$(wp "$P/coordinator/LOG.md")','Open','ReadWrite','None'); [IO.File]::WriteAllText('$(wp "$tmp/held")','x'); Start-Sleep 8; \$f.Close()" & h=$!
   until [ -f "$tmp/held" ]; do sleep 1; done; before "$P"; wait $h; has "$F" 'could not read coordinator/LOG.md'; has "$F" WATCHED-WORKER; fi
 c "a checkpoint that cannot be written: exit 0, one line on stderr; after says missing"
-mk "$P"; mkdir "$F"; before "$P"; [ "$(grep -c . "$tmp/err")" = 1 ] || bad "stderr: $(cat "$tmp/err")"; after "$P"; has "$tmp/ctx" 'checkpoint is missing'; has "$tmp/ctx" "$TODAY"
+mk "$P"; mkdir "$F"; before "$P"; keeps; [ "$(grep -c . "$tmp/err")" = 1 ] || bad "stderr: $(cat "$tmp/err")"; after "$P"; has "$tmp/ctx" 'checkpoint is missing'; has "$tmp/ctx" "$TODAY"
 c "claude fails: said, the rest kept"
 mk "$P"; : > "$STUB/fail"; before "$P"; has "$F" 'could not list the sessions'; has "$F" OPEN-Q1; no "$F" SESSION-HERE
 c "claude hangs: the hook ends within its entry's timeout, said, the rest kept"
@@ -149,7 +157,7 @@ mk "$P"; printf '# Journal\n## Events\n- EVENT-LINE\n' > "$P/coordinator/LOG.md"
 c "claude exits 0 with garbage: could not list the sessions, the rest kept; an empty list is no failure"
 mk "$P"; printf 'this is no listing\n' > "$STUB/list"; before "$P"; sect Sessions; has "$tmp/sec" 'could not list the sessions'; has "$F" OPEN-Q1; mk "$P"; printf '[]\n' > "$STUB/list"; before "$P"; sect Sessions; no "$tmp/sec" 'could not list'
 c "before with a cwd in the project's coordinator folder, or deeper: the same checkpoint as from the root"
-for d in coordinator coordinator/briefs; do mk "$P"; mkdir -p "$P/coordinator/briefs"; before "$P"; sed 1d "$F" > "$tmp/a"; rm "$F"; before "$P/$d"; sed 1d "$F" > "$tmp/b" 2>/dev/null; cmp -s "$tmp/a" "$tmp/b" || bad "from $d: not the root's checkpoint"; done
+for d in coordinator coordinator/briefs; do mk "$P"; mkdir -p "$P/coordinator/briefs"; before "$P"; sed 1d "$F" > "$tmp/a"; rm "$F"; before "$P/$d"; [ "$d" != coordinator ] || keeps; sed 1d "$F" > "$tmp/b" 2>/dev/null; cmp -s "$tmp/a" "$tmp/b" || bad "from $d: not the root's checkpoint"; done
 mk "$P"; mkdir -p "$W/coordinator"; before "$W/coordinator"; [ ! -e "$W/coordinator/CHECKPOINT.md" ] || bad "wrote in a worktree"; R="$tmp/coordinator"; mk "$R"; before "$R"; [ -f "$R/coordinator/CHECKPOINT.md" ] && [ ! -e "$R/CHECKPOINT.md" ] || bad "a root named coordinator: not its own coordinator/"
 c "after with a cwd in the project's coordinator folder, or deeper: finds the checkpoint, the path it prints exists"
 for d in coordinator coordinator/briefs; do mk "$P"; mkdir -p "$P/coordinator/core" "$P/coordinator/briefs"; : > "$P/coordinator/core/CORE.md"; printf 'written: %s\nDEEP-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P/$d"; has "$tmp/ctx" DEEP-CONTENT; no "$tmp/ctx" 'checkpoint is missing'; x="$(grep -o '[^ ]*/core/CORE\.md' "$tmp/ctx" | head -1 | tr '\\' '/')"; [ -f "$x" ] || bad "from $d it prints '$x', no such file"; done
@@ -157,7 +165,7 @@ withcore() { mkdir -p "$1/coordinator/core"; : > "$1/coordinator/core/CORE.md"; 
 nat() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }   # the form Claude Code sets
 c "the project dir set, the cwd at another project's root: before and after use the set root, nothing under the other"
 O="$tmp/otherproj"; mk "$O"; printf '## Open questions\n- OTHER-Q\n' > "$O/coordinator/LOG.md"; mk "$P"; withcore "$P"
-CLAUDE_PROJECT_DIR="$(nat "$P")" before "$O"
+CLAUDE_PROJECT_DIR="$(nat "$P")" before "$O"; keeps
 has "$F" OPEN-Q1; has "$F" SESSION-HERE; no "$F" OTHER-Q
 [ ! -e "$O/coordinator/CHECKPOINT.md" ] || bad "wrote under the other project"
 printf 'written: %s\nOTHER-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$O/coordinator/CHECKPOINT.md"
@@ -170,7 +178,7 @@ for d in "$P/src/deep" "$tmp/elsewhere/.claude/worktrees/7-x"; do
   CLAUDE_PROJECT_DIR="$(nat "$P")" after "$d"; has "$tmp/ctx" OPEN-Q1; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md (section 1"
 done
 c "guard (green before the change too): the project dir set, a cwd in a worktree inside it is a worker's: the root's checkpoint left alone, no coordinator text, its brief with one"
-mk "$P"; mkdir -p "$W"; printf 'ROOT-MARK\n' > "$F"; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$W"
+mk "$P"; mkdir -p "$W"; printf 'ROOT-MARK\n' > "$F"; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$W"; quiet 'a worktree inside the set project dir'
 [ "$(cat "$F")" = ROOT-MARK ] || bad "a worker overwrote the root's checkpoint"; [ ! -e "$W/coordinator" ] || bad "wrote in the worktree"
 CLAUDE_PROJECT_DIR="$(nat "$P")" after "$W"; [ ! -s "$tmp/out" ] || bad "the coordinator's text in a worktree: $(cut -c1-120 "$tmp/out")"
 B=c0c00000-0000-4000-8000-000000000001.md; : > "$tmp/cfg/coordinator/briefs/$B"; CLAUDE_PROJECT_DIR="$(nat "$P")" after "$W" worker
@@ -178,22 +186,8 @@ has "$tmp/ctx" "$(wp "$tmp/cfg")/coordinator/briefs/$B"; rm "$tmp/cfg/coordinato
 c "guard (green before the change too): the project dir unset, a cwd in a subfolder keeps the cwd rule: nothing written, the root's checkpoint not read"
 mk "$P"; mkdir -p "$P/src/deep"; before "$P/src/deep"; [ ! -e "$F" ] || bad "walked up to the root"
 printf 'written: %s\nROOT-CONTENT\n' "$(stamp 0 +%Y-%m-%dT%H:%M:%SZ)" > "$F"; after "$P/src/deep"; no "$tmp/ctx" ROOT-CONTENT
-KEEP="word for word and with their dates|the owner's decisions|the owner's words typed in this session that are not yet in a file|the open questions and the owner's answers still pending|the running sessions (id and name) and what each waits for|the verdicts given|the merges not yet landed|after the compaction the coordinator, before acting, re-reads CORE section 1 and the event table, PROJECT.md, BINDINGS.md, LOG.md's open questions and coordinator/CHECKPOINT.md"
-keeps() { local IFS='|' t; [ "$(wc -c < "$tmp/out")" -lt 1500 ] || bad "stdout is not under 1500 characters: $(wc -c < "$tmp/out")"; for t in $KEEP; do has "$tmp/out" "$t"; done; }
-quiet() { [ ! -s "$tmp/out" ] || bad "$1: stdout is not empty: $(cut -c1-80 "$tmp/out")"; }
-c "before in a coordinator's project: its stdout tells the summary what to keep, under 1 500 characters, nothing on stderr (#342)"
-mk "$P"; before "$P"; keeps; [ ! -s "$tmp/err" ] || bad "stderr: $(cat "$tmp/err")"; [ "$(grep -c . "$tmp/out")" = 2 ] || bad "stdout is not the two lines: $(grep -c . "$tmp/out")"
-c "guard (green before the change too): the checkpoint under its written line is the fixture's, byte for byte"
-printf -- '## Open questions\n- 2026-11-01: OPEN-Q1 which database?\n- 2026-11-02: %s\n- 2026-11-02: %s\n## Watch list\naaaa1111\nWATCHED-WORKER @120\n## Sessions\naaaa1111 working SESSION-HERE\nbbbb2222 idle SESSION-WT\n## Re-read\ncoordinator/core/CORE.md\ncoordinator/PROJECT.md\ncoordinator/BINDINGS.md\ncoordinator/LOG.md\n' "$Q2" "$Q3" > "$tmp/want"
-mk "$P"; before "$P"; sed 1d "$F" > "$tmp/got"; cmp -s "$tmp/got" "$tmp/want" || bad "the checkpoint is not the fixture's: $(diff "$tmp/got" "$tmp/want" | head -4)"; [ "$(sed -n 1p "$F" | cut -c1-9)" = 'written: ' ] || bad "no written line first"
-c "the instruction is printed whatever fails: a checkpoint that cannot be written, a journal that cannot be read with a listing that fails, the project dir set (#342)"
-mk "$P"; mkdir "$F"; before "$P"; keeps; [ "$(grep -c . "$tmp/err")" = 1 ] || bad "stderr: $(cat "$tmp/err")"
+c "the instruction is printed whatever fails: a journal that cannot be read with a listing that fails (#342; a checkpoint that cannot be written and the project dir set: keeps in their cases above)"
 mk "$P"; rm "$P/coordinator/LOG.md"; mkdir "$P/coordinator/LOG.md"; : > "$STUB/fail"; before "$P"; keeps; has "$F" 'could not list the sessions'
-mk "$P"; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$O"; keeps; mk "$P"; before "$P/coordinator"; keeps
-c "guard (green before the change too): every silent case leaves stdout empty: no coordinator folder, no JSON, a worktree, a kept brief, COORD_ASSISTANT_DIR, a worktree inside the set project dir"
-before "$tmp/bare"; quiet 'no coordinator folder'; hook before 'not json'; quiet 'no JSON'; mk "$P"; mkdir -p "$W/coordinator"; before "$W"; quiet 'a worktree'
-: > "$tmp/cfg/coordinator/briefs/$b.md"; before "$P" "$b"; quiet 'a kept brief'; rm "$tmp/cfg/coordinator/briefs/$b.md"
-export COORD_ASSISTANT_DIR="$(wp "$tmp/away")"; before "$P"; unset COORD_ASSISTANT_DIR; quiet 'an assistant'; CLAUDE_PROJECT_DIR="$(nat "$P")" before "$W"; quiet 'a worktree inside the set project dir'; [ ! -e "$F" ] || bad "a silent case wrote the checkpoint"
 c "after with the root's CORE.md missing: exit 0, says so, never as a file to read; with the file, today's text"
 mk "$P"; after "$P"; has "$tmp/ctx" "$(wp "$P")/coordinator/core/CORE.md is missing"; no "$tmp/ctx" 'CORE.md (section 1'; has "$tmp/ctx" "$TODAY"; no "$tmp/ctx" 'the rest of CORE'
 withcore "$P"; after "$P"; has "$tmp/ctx" 'CORE.md (section 1'; no "$tmp/ctx" 'CORE.md is missing'
