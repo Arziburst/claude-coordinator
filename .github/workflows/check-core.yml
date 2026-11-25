@@ -8,8 +8,8 @@ name: check-core
 # lines below as they are (#need <key> <patterns> # <what the step reads>); a pattern it cannot read, a line
 # without patterns or a key a step's if: names that has no line runs every step or fails it, never skips.
 # A line whose one pattern is !pr runs on no pull request, whatever it changes, and on every other run (#561): pwsh on Windows
-# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's, the hooks' and the status line's keep it), reset-coordinator (tests only)
-# and pwsh on macOS (#657).
+# of the non-hook script sets (pwsh on Linux runs them on a PR; the guard's, the hooks' and the status line's keep it), reset-coordinator (tests only),
+# pwsh on macOS (#657) and winsh, Git Bash on Windows of the .sh halves that ran there only as .ps1 (#703).
 #need selftest   ^scripts/selftest\. ^scripts/hooks/ ^tests/selftest/ ^CORE-FINDINGS\.template\.md$ ^scripts/start-worker\. ^scripts/cleanup-worker\. ^settings\.example ^scripts/check-contract\. ^scripts/check-core\. ^scripts/check-scripts\. ^scripts/statusline\.  # selftest's guard settings, transcripts, probes, the throwaway assistant, prepare / verify, sandbox: selftest, the guard, the fixtures, the findings template, the assistant's start, cleanup and settings examples, and the scripts selftest scripts runs (#312)
 #need contract   ^scripts/check-contract\. ^tests/check-contract/ ^tests/selftest/contract\.md$  # check-contract on the fixture contracts (and selftest's fixture contract, read with a BOM)
 #need tokens     ^scripts/session-tokens\. ^tests/session-tokens/  # session-tokens on its fixture transcripts
@@ -29,6 +29,7 @@ name: check-core
 #need reset      !pr  # reset-coordinator on scratch projects in a temp folder, against a stub gh and a stub claude
 #need winpwsh    !pr  # pwsh on Windows in a non-hook script set: the gate line before a Windows step's last command, its ps pwsh
 #need macpwsh    !pr  # pwsh on macOS (#657): runs and selftest's guard settings, /bin/bash first on PATH (#637, #651)
+#need winsh      !pr  # Git Bash on Windows (#703, #567 step 1): the .sh halves of the sets whose Windows steps run only their .ps1 half, a measure on main, nightly and a manual run
 #need variants   ^scripts/ ^tests/ ^CONTRACT\.md$ \.(sh|ps1)$  # both variants print the same (pwsh on Linux), all but check-core and selftest scripts: every script, its fixtures, the example contract, every script file check-scripts counts
 #need citimes    ^scripts/ci-times\. ^tests/ci-times ^tests/safety-guard/run\.sh$ ^tests/workers/ ^tests/report-issue/  # the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr, the split sets' parts (it lists and runs them)
 on:
@@ -57,6 +58,8 @@ jobs:
 # #564: the PowerShell guard's ten parts gone, the Git Bash guard on five Windows shards; run-stats and check-bounds moved by run 43015604202.
 # #657: the throwaway assistant's 5.1 step from windows-4 (median 586 s) to windows-10 (402 s), by main's runs 44069262826,
 # 44016551258 and 44012667570; macOS pwsh on macos-2 (median 406 s, macos-1 428 s), not on a pull request.
+# #703: the Git Bash steps on Windows (winsh, not on a pull request) packed longest first into the shortest Windows shard by
+# tests/ci-times.tsv's seconds, with their local Git Bash seconds as the estimate; the Git Bash workers set in three parts too (WK_PART).
   shard-ubuntu:
     strategy:
       fail-fast: false
@@ -132,6 +135,9 @@ jobs:
         if: matrix.shard == 'windows-1'
         shell: powershell
         run: .\scripts\check-core.ps1
+      - name: Links and section references (Git Bash)
+        if: matrix.shard == 'windows-1' && steps.need.outputs.winsh == 'true'
+        run: bash scripts/check-core.sh | sed 's/^WARN:/::warning::&/'   # #608: a WARN is an annotation
       - name: Every script parses, and a broken one is reported (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
         run: |
@@ -201,6 +207,9 @@ jobs:
         run: |
           bash tests/selftest/hooks.sh ps powershell
           bash tests/selftest/hooks.sh ps pwsh
+      - name: selftest - the guard's settings (Git Bash)
+        if: matrix.shard == 'windows-5' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/hooks.sh sh
       - name: selftest - the guard probes against a stub claude (bash)
         if: (matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh sh
@@ -210,6 +219,9 @@ jobs:
       - name: selftest - the guard probes against a stub claude (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-4' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/probes.sh ps powershell
+      - name: selftest - the guard probes against a stub claude (Git Bash)
+        if: matrix.shard == 'windows-2' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/probes.sh sh
       - name: selftest - the throwaway assistant against a stub claude (bash)
         if: (matrix.shard == 'ubuntu-5' || matrix.shard == 'macos-2') && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh sh
@@ -219,6 +231,9 @@ jobs:
       - name: selftest - the throwaway assistant against a stub claude (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-10' && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/assistant.sh ps powershell
+      - name: selftest - the throwaway assistant against a stub claude (Git Bash)
+        if: matrix.shard == 'windows-4' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/assistant.sh sh
       - name: selftest - the guard's settings and transcripts (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-8' && steps.need.outputs.selftest == 'true'
         shell: powershell
@@ -270,6 +285,9 @@ jobs:
           bash tests/check-contract/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/check-contract/run.sh ps pwsh
+      - name: check-contract on the fixture contracts (Git Bash)
+        if: matrix.shard == 'windows-1' && steps.need.outputs.winsh == 'true'
+        run: bash tests/check-contract/run.sh sh
       - name: check-scripts on temporary folders (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
         run: bash tests/check-scripts/run.sh sh
@@ -309,6 +327,9 @@ jobs:
           bash tests/session-tokens/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/session-tokens/run.sh ps pwsh
+      - name: session-tokens counts the fixture exactly (Git Bash)
+        if: matrix.shard == 'windows-9' && steps.need.outputs.winsh == 'true'
+        run: bash tests/session-tokens/run.sh sh
       - name: session-insights reads the fixture transcripts (bash)
         if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-2') && steps.need.outputs.insights == 'true'
         run: bash tests/session-insights/run.sh sh
@@ -322,6 +343,9 @@ jobs:
           bash tests/session-insights/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/session-insights/run.sh ps pwsh
+      - name: session-insights reads the fixture transcripts (Git Bash)
+        if: matrix.shard == 'windows-9' && steps.need.outputs.winsh == 'true'
+        run: bash tests/session-insights/run.sh sh
       - name: compaction keeps the checkpoint through the two hooks (bash)
         if: (matrix.shard == 'ubuntu-8' || matrix.shard == 'macos-1') && steps.need.outputs.compaction == 'true'
         run: bash tests/compaction/run.sh sh
@@ -347,6 +371,9 @@ jobs:
           bash tests/retro/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/retro/run.sh ps pwsh
+      - name: retro measures the fixture weeks (Git Bash)
+        if: matrix.shard == 'windows-1' && steps.need.outputs.winsh == 'true'
+        run: bash tests/retro/run.sh sh
       - name: The status line saves its files and leaves no temp file (bash)
         if: (matrix.shard == 'ubuntu-6' || matrix.shard == 'macos-2') && steps.need.outputs.statusline == 'true'
         run: bash tests/statusline/run.sh sh
@@ -372,6 +399,9 @@ jobs:
           bash tests/run-stats/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/run-stats/run.sh ps pwsh
+      - name: run-stats computes the forecast numbers of the fixture run logs (Git Bash)
+        if: matrix.shard == 'windows-6' && steps.need.outputs.winsh == 'true'
+        run: bash tests/run-stats/run.sh sh
       - name: safety-guard blocks and allows the shared cases (bash, with jq)
         if: (matrix.shard == 'ubuntu-4' || matrix.shard == 'macos-1') && steps.need.outputs.guard == 'true'
         run: |
@@ -458,6 +488,15 @@ jobs:
       - name: start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 3/3
         if: matrix.shard == 'windows-7' && steps.need.outputs.workers == 'true'
         run: WK_PART=3/3 bash tests/workers/run.sh ps powershell
+      - name: start-worker and cleanup-worker against temporary repositories (Git Bash) - part 1/3
+        if: matrix.shard == 'windows-8' && steps.need.outputs.winsh == 'true'
+        run: WK_PART=1/3 bash tests/workers/run.sh sh
+      - name: start-worker and cleanup-worker against temporary repositories (Git Bash) - part 2/3
+        if: matrix.shard == 'windows-3' && steps.need.outputs.winsh == 'true'
+        run: WK_PART=2/3 bash tests/workers/run.sh sh
+      - name: start-worker and cleanup-worker against temporary repositories (Git Bash) - part 3/3
+        if: matrix.shard == 'windows-7' && steps.need.outputs.winsh == 'true'
+        run: WK_PART=3/3 bash tests/workers/run.sh sh
       - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (bash)
         if: (matrix.shard == 'ubuntu-2' || matrix.shard == 'macos-1') && steps.need.outputs.workers == 'true'
         run: bash tests/workers/assistant.sh sh
@@ -467,6 +506,9 @@ jobs:
       - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-5' && steps.need.outputs.workers == 'true'
         run: bash tests/workers/assistant.sh ps powershell
+      - name: start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Git Bash)
+        if: matrix.shard == 'windows-6' && steps.need.outputs.winsh == 'true'
+        run: bash tests/workers/assistant.sh sh
       - name: merge-queue against a stub gh (bash)
         if: (matrix.shard == 'ubuntu-7' || matrix.shard == 'macos-2') && steps.need.outputs.mergequeue == 'true'
         run: bash tests/merge-queue/run.sh sh
@@ -660,6 +702,9 @@ jobs:
           bash tests/selftest/prepare.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/selftest/prepare.sh ps pwsh
+      - name: selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (Git Bash)
+        if: matrix.shard == 'windows-6' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/prepare.sh sh
       - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (bash)
         if: (matrix.shard == 'ubuntu-8' || matrix.shard == 'macos-1') && steps.need.outputs.selftest == 'true'
         run: bash tests/selftest/sandbox.sh sh
@@ -672,6 +717,9 @@ jobs:
           bash tests/selftest/sandbox.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/selftest/sandbox.sh ps pwsh
+      - name: selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Git Bash)
+        if: matrix.shard == 'windows-2' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/sandbox.sh sh
       - name: The checks on a project's cloned core copy (bash)
         if: matrix.shard == 'ubuntu-1' || matrix.shard == 'macos-1'
         run: bash tests/selftest/core-copy.sh sh
@@ -681,6 +729,9 @@ jobs:
       - name: The checks on a project's cloned core copy (Windows PowerShell 5.1)
         if: matrix.shard == 'windows-1'
         run: bash tests/selftest/core-copy.sh ps powershell
+      - name: The checks on a project's cloned core copy (Git Bash)
+        if: matrix.shard == 'windows-5' && steps.need.outputs.winsh == 'true'
+        run: bash tests/selftest/core-copy.sh sh
       - name: Both variants print the same - check-core and selftest scripts, which read every document (pwsh on Linux)
         if: matrix.shard == 'ubuntu-3'
         run: |
@@ -789,6 +840,9 @@ jobs:
           bash tests/ci-times/run.sh ps powershell
           [ '${{ steps.need.outputs.winpwsh }}' = true ] || exit 0   # pwsh on Windows: not on a pull request (#561)
           bash tests/ci-times/run.sh ps pwsh
+      - name: ci-times - the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr (Git Bash)
+        if: matrix.shard == 'windows-10' && steps.need.outputs.winsh == 'true'
+        run: bash tests/ci-times/run.sh sh
   shard-macos:
     strategy:
       fail-fast: false

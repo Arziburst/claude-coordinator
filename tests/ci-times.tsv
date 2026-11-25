@@ -1,6 +1,7 @@
 # The median seconds per step and OS of three check-core runs on main (#373): the baseline scripts/ci-times
 # reads with --baseline (a step over max(floor(b * 1.3), b + 60) is a warning in the check-<os> jobs). Raised only by a
 # pull request's own diff: scripts/ci-times on three main runs, then the new medians here. #657 (the CI audit of 2026-11-17): runs 44069262826 and 44016551258 (14c7159), 44012667570 (5159649); the macOS pwsh step from the branch's one manual run 44088193900 (3e4e2e5), not yet a median of three.
+# #703: the Windows Git Bash steps (winsh, not on a pull request) at their local Git Bash seconds on a Windows machine, the workers set's 1 761 s in thirds, until the branch's one manual run replaces them.
 ubuntu	5	Set up job
 ubuntu	11	Run actions/checkout@v4
 ubuntu	1	Which heavy steps run (a pull request - by the files it changes; any other run - all)
@@ -154,3 +155,20 @@ windows	125	selftest - the guard's settings (Windows PowerShell 5.1 and pwsh)
 windows	103	run-stats computes the forecast numbers of the fixture run logs (PowerShell)
 windows	281	start-worker and cleanup-worker against temporary repositories (Windows PowerShell 5.1) - part 3/3
 windows	4	selftest - prepare and verify in a project's state repository (Windows PowerShell 5.1, code page 866, a non-ASCII folder)
+windows	2	Links and section references (Git Bash)
+windows	53	selftest - the guard's settings (Git Bash)
+windows	55	selftest - the guard probes against a stub claude (Git Bash)
+windows	352	selftest - the throwaway assistant against a stub claude (Git Bash)
+windows	33	check-contract on the fixture contracts (Git Bash)
+windows	30	session-tokens counts the fixture exactly (Git Bash)
+windows	15	session-insights reads the fixture transcripts (Git Bash)
+windows	65	retro measures the fixture weeks (Git Bash)
+windows	19	run-stats computes the forecast numbers of the fixture run logs (Git Bash)
+windows	587	start-worker and cleanup-worker against temporary repositories (Git Bash) - part 1/3
+windows	587	start-worker and cleanup-worker against temporary repositories (Git Bash) - part 2/3
+windows	587	start-worker and cleanup-worker against temporary repositories (Git Bash) - part 3/3
+windows	73	start-worker and cleanup-worker - an assistant's fail-closed checks and one folder comparison (Git Bash)
+windows	25	selftest prepare and verify - CORE-FINDINGS.md, a base only on the remote, a non-ASCII folder, the sessions left (Git Bash)
+windows	24	selftest sandbox and clean --keep - a used sandbox reset, kept and reused; the refusals (Git Bash)
+windows	21	The checks on a project's cloned core copy (Git Bash)
+windows	173	ci-times - the shards hold every step, ci-times on its fixtures, a failing guard case prints the hook's stderr (Git Bash)
