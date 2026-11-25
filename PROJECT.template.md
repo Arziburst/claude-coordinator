@@ -21,6 +21,7 @@ on the owner's yes. The sections below hold the rest of the project's rules.
 | Autopilot and tick (CORE §9) | `<fill>` | `<fill>` | `<date>` | per the strictness: swarm on, a tick every ~30 min · standard, strict off — work on the owner's task or batch command |
 | **Work mode** (CORE §4) | `<fill>` | `<fill>` | `<date>` | **by task** — the owner names a task, then the next (solo work) · batch — a batch command runs the recipe below over the tracker (a team, a board) |
 | Language: conversation / artifacts | `<fill>` | `<fill>` | `<date>` | owner's language / English |
+| Push notifications (CORE §12, one-time step `push-notifications`) | `<fill>` | `<fill>` | `<date>` | **off** · on — one push when work waits for the owner; needs the two `/config` push keys on (TOOLKIT *Platform notes*) |
 | Voice in commits and PRs | the owner's | core | — | not a setting: always the owner's, no AI lines (CORE §11) |
 | Flake quarantine (CORE §4 *A red check*) | on, confirmed | default | `<date>` | **on, each one confirmed by the owner (a quiz)** · on, without asking · off — never asked at init; changed only through "Coordinator, settings" |
 | Who merges | `<fill>` | `<fill>` | `<date>` | per the strictness (CORE §3): swarm the coordinator on green CI + a confirmed verdict · standard the same, the owner for risky changes · strict humans |

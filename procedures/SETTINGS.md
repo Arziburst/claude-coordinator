@@ -20,7 +20,7 @@ never from memory:
   2. spend level;
   3. work mode (by task / batch) with the batch command (from *The batch recipe* table) and the
      autopilot with its tick;
-  4. language of the conversation and of artifacts;
+  4. language of the conversation and of artifacts; push notifications (off / on — CORE §12);
   5. voice in commits and PRs — always the owner's (CORE §11), shown, not changeable here;
   6. who merges, the review gates (verifier, the owner, humans), the critic (every contract but trivial / all /
      off — CORE §4), production and MCP writes; the flake

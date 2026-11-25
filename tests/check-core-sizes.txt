@@ -4,9 +4,9 @@
 # The margin: a number of words, or a percent of each record with %.
 # Recorded at 25455ca (main, 2026-11-11).
 margin 2%
-CORE.md 14239
+CORE.md 14634
 CORE.md#section-1 1404
-CORE.md#event-table 1080
+CORE.md#event-table 1155
 roles/assistant.md 941
 roles/critic.md 749
 roles/lead.md 2966
