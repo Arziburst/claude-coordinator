@@ -112,6 +112,7 @@ apply*, follow-ups — come only after all of them.
 | 3 | 9 | Status line | Install the status line? It shows model, context and limits; the coordinator reads its limits from it. | *yes* · *no* |
 | 4 | 2, 3, 6, 7 | — | What the research found, one question each: "<found>. Right?" (7 only with a production) | *right* · *correct it* |
 | 4 | 4 | Sources | The sources-of-truth table as found: right? | *right* · *correct it* |
+| 4 | 15 | Push | Send a push to your phone when work waits for you (a question, an acceptance, a red main line, a limit)? | *no* · *yes* |
 
 The numbered list below says what each answer sets, where it is recorded and what to explain.
 
@@ -215,6 +216,9 @@ The numbered list below says what each answer sets, where it is recorded and wha
     Recommended: *the found list*. Recorded in
     `PROJECT.md` *Settings* (*Protected branches*) and written to the worker safety file (*Safety
     check*): `env` `COORD_PROTECTED_BRANCHES` and the push deny rules for each listed branch.
+15. **Push notifications — the last question.** Recommended: *no* unless the owner works through Remote Control from
+    another device. On *yes*, the how-to and the test push of the one-time step `push-notifications` (ONE-TIME.md);
+    recorded in `PROJECT.md` *Settings* and CHECKLIST; the rule: CORE §12.
 
 Asked only when they apply:
 - **Strict preset:** the production actions allowed by name; time estimates and tracking; what the

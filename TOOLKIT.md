@@ -1385,6 +1385,9 @@ The core's own coordinator moves it after the second machine's check passes (the
 ## Platform notes
 - macOS: the background-session host needs the *Files and Folders* and *Local Network* permissions.
 - Notifications: `osascript` (macOS), `notify-send` (Linux), PowerShell toast (Windows).
+- Push to the phone (CORE §12, one-time step `push-notifications`), measured 2026-10-28 on Claude Code 2.1.310 (#304): with
+  `/config` *Push when Claude decides* and *Push when actions required* true, PushNotification reaches the phone; skipped
+  while the terminal is active ("Not sent — this terminal is active"); otherwise "Push not sent - mobile push is disabled in /config".
 - Windows: Claude Code runs Bash tools through Git Bash; PowerShell 7 is a separate tool.
 - "Could not resolve authentication method" on dispatch → `claude daemon stop --any --keep-workers`, then
   check the login.

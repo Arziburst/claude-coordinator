@@ -117,6 +117,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-STATE-07 | The journal and open questions | one dated line per event; open questions asked first on return | STATE |
 | F-STATE-08 | The core's skills | `coord-*` skills point the coordinator to the event table and the procedures | STATE |
 | F-STATE-09 | The reset | on the owner's own words everything the coordinator holds goes behind a tag and is removed, then a new init; never the core's own repository | STATE |
+| F-STATE-10 | Push notifications | where the owner turned it on, one push when work waits for the owner, never for progress | STATE |
 | F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
 | F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
 | F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
@@ -165,7 +166,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - entry: step 6 of the start sequence; a new or adopted project
 - promises: no worker and no change before every applicable question is answered and the summary gets a yes (§1.12); the fixed questions come first, in the same order every init, one setting each (strictness and spend level apart), their text and options as INIT 3.1 writes them, translated, the recommended option marked; clarifying questions only after them; what the project already shows is confirmed in one table, not asked
 - tested by: none
-- not covered: the quiz's wording is not checked against the fourteen questions
+- not covered: the quiz's wording is not checked against the fifteen questions
 
 ### F-START-05 Strictness presets
 - defined: CORE.md §3, PROJECT.template.md
@@ -780,6 +781,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: the core's own repository is refused first, read from files, a linked worktree too; a wrong `--confirm`, an open PR, another running session, anything in `coordinator/assistants/`, an unreachable remote, an unusable `--core-from` or a tag already there is a refusal with nothing changed; `gh` or `claude` failing is a refusal, but for a project with no git remote; all of `coordinator/` (ignored files too, raw bytes), the auto-memory and the project's `briefs/<id>.md` and `sessions/<id>.json` under `<config>/coordinator/` (by its sessions' transcripts at the root's folder and its worktrees', exact names) go behind `before-reset-<date>`, pushed before anything is removed; then `coordinator/` holds only `.git` and a clean core copy, `core=<sha>` in the commit's message; the project's own repository, the `.claude/agents` link, `~/.claude/agents/`, `statusline.json`, `agents/` and other projects' files are untouched; a new session runs INIT's full quiz
 - tested by: tests/reset-coordinator/run.sh (scratch projects under a temp folder, stub `gh` and `claude`, in bash and PowerShell)
 - not covered: the words of the confirmation hold only through CORE §1.14; a file held on Windows and the restore's line endings there are proven by the verifier, not by a test on every run; a project on a host `gh` cannot read cannot be reset
+
+### F-STATE-10 Push notifications
+- defined: CORE.md §4, CORE.md §12, ONE-TIME.md, procedures/INIT.md, PROJECT.template.md, TOOLKIT.md
+- entry: INIT 3.1 question 15; one-time step `push-notifications`; the event table's row *Work waits for the owner*
+- promises: with *Push notifications* on, one PushNotification of one line under 200 characters per item waiting for the owner (a question holding a task, an acceptance or the owner's merge, a red main line, a limit or cap, a BLOCKED session, a failure only the owner can fix), not repeated while it waits; none for progress, the coordinator's own merges or a tool's nudge; the test push's three results recorded in CHECKLIST as ONE-TIME says
+- tested by: none
+- not covered: no script sends or checks a push — it rests on the coordinator following the rule; delivery measured once by hand (2026-10-28, Claude Code 2.1.310)
 
 ## UPDATE
 
