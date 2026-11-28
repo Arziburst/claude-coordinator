@@ -389,7 +389,7 @@ cfield i-tf1.md; [ "$FRC" = 1 ] && case "$FO" in *"i-tf1.md: ERROR $tfm"*) true 
   { echo "FAIL: $fopt tests_first i-tf1.md: expected exit 1 and the ERROR, got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
 # high-risk areas (#713): the backtick globs of the *Risk tiers* row *High-risk areas*, one WARN with *Extra rules there*
 mkdir -p risk/coordinator/core/scripts; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" risk/coordinator/core/scripts/
-hrow='money `src/pay/*.sql`, the guard `scripts/hooks/`, `lib/**/auth.*`'; hex='Opus at `high` effort, negative tests'
+hrow='money `src/pay/*.sql`, the guard `scripts/hooks/`, `lib/**/login.*`'; hex='Opus at `high` effort, negative tests'
 hproj() { { printf '## Risk tiers\n| Question | This project | Default to offer |\n|---|---|---|\n| High-risk areas | %s | `docs/` |\n' "$1"; [ $# -lt 2 ] || printf '| Extra rules there |%s| owner told |\n' "$2"; } > risk/coordinator/PROJECT.md; }
 hfail() { echo "FAIL: high-risk $hname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
 hwarn() {   # hwarn <file> <item> <glob> [<extra rules> <effort>]: exit 0, exactly the WARN line and its summary
@@ -397,15 +397,15 @@ hwarn() {   # hwarn <file> <item> <glob> [<extra rules> <effort>]: exit 0, exact
   [ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' "$w" "$1: OK (0 errors, 1 warnings)")" ] || hfail "want exit 0 and: $w"
 }
 hnone() { crun "$1"; [ "$CRC" = 0 ] && [ "$CO" = "$1: OK (0 errors, 0 warnings)" ] || hfail "want the clean summary alone"; }
-imk h-dir.md scripts/hooks/x.sh "$B1$W1"; imk h-file.md src/pay/a.sql ''; imk h-deep.md '"lib/auth.ts"' ''
+imk h-dir.md scripts/hooks/x.sh "$B1$W1"; imk h-file.md src/pay/a.sql ''; imk h-deep.md '"lib/login.ts"' ''
 awk '{ print } /^  model: opus$/ { print "  effort: high" }' h-file.md > h-effort.md
-imk h-two.md 'lib/a/b/auth.ts, scripts/hooks/x.sh' "$B1$W1"; imk h-folder.md scripts/hooks/ "$B1$W1"
+imk h-two.md 'lib/a/b/login.ts, scripts/hooks/x.sh' "$B1$W1"; imk h-folder.md scripts/hooks/ "$B1$W1"
 imk h-nob.md scripts/hooks/x.sh "$W1"; imk h-no.md 'sort.sh, docs/a.md, src/pay/a.sh, scripts/hooksy/x.sh' ''
 ccore="$(pwd)/risk/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
 hproj "$hrow" "   $hex   "
 hname="a file under a /-ending glob"; hwarn h-dir.md scripts/hooks/x.sh scripts/hooks/
 hname="a file glob, budget.effort"; hwarn h-effort.md src/pay/a.sql 'src/pay/*.sql' "$hex" high
-hname="a ** glob, a quoted item"; hwarn h-deep.md lib/auth.ts 'lib/**/auth.*'
+hname="a ** glob, a quoted item"; hwarn h-deep.md lib/login.ts 'lib/**/login.*'
 hname="two matches: the first by row order"; hwarn h-two.md scripts/hooks/x.sh scripts/hooks/
 hname="a folder item"; hwarn h-folder.md scripts/hooks/ scripts/hooks/
 hname="the exit with an ERROR"; crun h-nob.md
