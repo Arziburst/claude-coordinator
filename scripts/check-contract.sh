@@ -63,7 +63,13 @@
 # A bound on tests (#390): `tests_first: yes` with no well-formed line under `bounds:` is an ERROR naming `tests_first`, in
 # every mode. An important-file contract keeps its own ERROR: a malformed line there is that ERROR alone.
 # `--important`, alone (#419): read-only, the list above (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
-usage() { sed -n '2,65s/^# \{0,1\}//p' "$0"; exit 2; }
+# High-risk areas (#713): every backtick item of the row *High-risk areas* (*Risk tiers*, the same PROJECT.md) is a
+# glob, matched as the important ones, one ending in `/` read as `<glob>*`; free words and `<fill>` add nothing. A
+# contract whose touches hold one gets one WARN, the first glob in row order with its first item: `touches <item> is
+# in a high-risk area (<glob>, PROJECT.md Risk tiers): extra rules there: <the row *Extra rules there*>; budget model
+# <m>, effort <e or none>` (`none written`: that row missing, empty, `<fill>` or `—`). Counted with the warnings,
+# never an ERROR, the exit unchanged; not with --field or --important.
+usage() { sed -n '2,71s/^# \{0,1\}//p' "$0"; exit 2; }
 guard_words='payment|price|billing|invoice|refund|money|role|permission|auth|access|customer|personal data|pii|gdpr'
 important='scripts/hooks/* .github/workflows/* tests/*/run.*'
 [ $# -gt 0 ] || usage
@@ -92,9 +98,17 @@ if [ -d "$here/../roles" ]; then
   [ -z "$core_roles" ] || core_roles="$core_roles|"
 fi
 pf="$here/../../PROJECT.md"
-[ ! -f "$pf" ] || important="$important $(awk -F'|' '{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }
+row='{ n = $2; sub(/\(.*/, "", n); gsub(/[*`]/, "", n); gsub(/^[ \t]+|[ \t\r]+$/, "", n) }'   # a table row's name
+[ ! -f "$pf" ] || important="$important $(awk -F'|' "$row"'
   n == "Important components" { v = $3; gsub(/`/, "", v); if (v !~ /</ && v !~ /^[ \t]*none([ \t]|$)/) print v; exit }' "$pf")"
 [ -z "$listimp" ] || { set -f; printf '%s\n' $important; exit 0; }
+# high-risk areas (#713, the header): the globs one a line, and the extra rules there as written
+risk=""; extra=""
+if [ -f "$pf" ]; then
+  risk="$(awk -F'|' "$row"' n == "High-risk areas" { k = split($3, a, "`"); for (i = 2; i < k; i += 2) print a[i]; exit }' "$pf")"
+  extra="$(awk -F'|' "$row"' n == "Extra rules there" { v = $3; gsub(/^[ \t]+|[ \t\r]+$/, "", v); t = v; gsub(/`/, "", t)
+    if (t != "<fill>" && t != "—") print v; exit }' "$pf")"
+fi
 # the budget against the run log: lines `W<tab><warning>` and `I<tab><line>` (the header: --runs)
 forecast() {   # <kind> <budget.model> <budget.cost> <budget.time>
   local k="$1" bm="$2" tbl m ln n r
@@ -163,10 +177,12 @@ prog='
     # each `**/` from f on: none, or `*/` (one or more folders) (#529)
     function gmz(g, p, f,   i, a, r) { i = index(substr(g, f + 1), "**/"); if (!i) return gmatch1(g, p); i += f; a = substr(g, 1, i - 1); r = substr(g, i + 3)
       return gmz(a r, p, i - 1) || gmz(a "*/" r, p, i + 1) }
-    function imp(t,   n, it, m, G, i, j, s, k, d) { gsub(/(^|[ \t\n])#[^\n]*/, " ", t); n = split(t, it, /[,\n]/); m = split(ENVIRON["IMP"], G, " ")
+    # list: the globs, split by sep; dir: a glob ending in / is read as <glob>* (#713); the item matched is left in `hit`
+    function imp(t, list, sep, dir,   n, it, m, G, i, j, s, k, d, g) { gsub(/(^|[ \t\n])#[^\n]*/, " ", t); n = split(t, it, /[,\n]/); m = split(list, G, sep)
       for (j = 1; j <= m; j++) for (i = 1; i <= n; i++) { s = it[i]; gsub("^[ \t]*(\\[[ \t]*)?(-[ \t]+)?[\"" q "]?|[\"" q "]?[ \t]*\\]?[ \t]*$", "", s)
         d = s; if (d ~ /^\.|\// && d !~ /\/$/ && d ~ /(^|\/)\.?[^.\/*]*$/) d = d "/"   # a folder without its slash (#672)
-        k = index(G[j], "*"); if (s != "" && (gmz(G[j], s, 0) || (d ~ /\/$/ && (index(G[j], d) == 1 || (k && substr(d, 1, k - 1) == substr(G[j], 1, k - 1)))))) return G[j] }
+        g = G[j]; if (dir && g ~ /\/$/) g = g "*"
+        k = index(g, "*"); if (s != "" && g != "" && (gmz(g, s, 0) || (d ~ /\/$/ && (index(g, d) == 1 || (k && substr(d, 1, k - 1) == substr(g, 1, k - 1)))))) { hit = s; return G[j] } }
       return "" }
     # a value without its comment, blanks and surrounding quotes (double or single)
     function val(s,   a) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); a = substr(s, 1, 1)
@@ -281,7 +297,7 @@ prog='
       tc = txt["touches"]; gsub(/#[^\n]*/, "", tc); gsub(/[ \t\n-]/, "", tc); gsub(/\[|\]/, "", tc)
       if (tc == "") warn("touches missing or empty (no conflict foresight, CORE §4a)")
       # important components (#381, the header): bounds and wall
-      ig = imp(txt["touches"]); nb = 0; bad = !("bounds" in has); m = split(txt["bounds"], BL, "\n"); if (BL[1] !~ /^[ \t]*(#.*)?$/) bad = 1
+      ig = imp(txt["touches"], ENVIRON["IMP"], " ", 0); nb = 0; bad = !("bounds" in has); m = split(txt["bounds"], BL, "\n"); if (BL[1] !~ /^[ \t]*(#.*)?$/) bad = 1
       for (i = 2; i <= m; i++) { if (BL[i] ~ /^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$/) nb++; else if (BL[i] !~ /^[ \t]*(#.*)?$/) bad = 1 }
       if (ig != "") {
         if (bad || !nb) err("`bounds` missing or malformed (lines `- <glob> <max added lines>`): touches holds the important " ig " (CONTRACT.md)")
@@ -300,6 +316,10 @@ prog='
         }
         if (gm != "") warn("tests_first is no, but " gm " (money, roles or customer data): tests first are expected for such a change (CORE §4 step 3)")
       }
+      # high-risk areas (#713, the header)
+      hg = imp(txt["touches"], ENVIRON["RISK"], "\n", 1)
+      if (hg != "") { ef = bval(b, "effort"); x = ENVIRON["EXTRA"]
+        warn("touches " hit " is in a high-risk area (" hg ", PROJECT.md Risk tiers): extra rules there: " (x == "" ? "none written" : x) "; budget model " bval(b, "model") ", effort " (ef == "" ? "none" : ef)) }
       # --runs: the budget against the run log, after the checks above
       nr = split(ENVIRON["R"], RL, "\n")
       for (i = 1; i <= nr; i++) { t = RL[i]; if (substr(t, 1, 2) == "W\t") warn(substr(t, 3)); else if (substr(t, 1, 2) == "I\t" && K == "") print F ": " substr(t, 3) }
@@ -321,6 +341,6 @@ EOF
     R="$(forecast "${ck:-$rkind}" "$cm" "$cc" "$ct")"
   fi
   # the name via the environment: awk -v would read C:\Users as escapes (Git Bash)
-  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" IMP="$important" awk "$prog" "$f" || failed=1
+  F="$f" K="$field" R="$R" B="$B" GW="$guard_words" CR="$core_roles" IMP="$important" RISK="$risk" EXTRA="$extra" awk "$prog" "$f" || failed=1
 done
 exit $failed
