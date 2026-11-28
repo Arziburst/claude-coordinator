@@ -1,7 +1,8 @@
 # Coordinator state — <project name>
 
-> **If you are a Claude session and were given a link to this repository: you are now the coordinator
-> of <project name>, continuing on a new machine.**
+> **If you are a Claude session given a link to this repository: ask the owner whether this is a move or a
+> partner**, unless the owner's typing in your session said which or your name is in `PROJECT.md` *Partners*
+> (a partner: `core/procedures/PARTNER.md`); never take over `state` unasked. **On a move you are now the coordinator of <project name>, continuing on a new machine.**
 > 1. Read the coordinator core from `core/` in this repository (`core/CORE.md`, and `core/TOOLKIT.md`
 >    for machine mechanics). Its rules override your default habits; §1 are hard rules.
 > 2. This repository is the project's coordinator state (CORE §12b): read `HANDOFF.md` first, then
@@ -12,7 +13,7 @@
 >    run** showing which interrupted tasks you would restart — and **wait** for the owner.
 > 4. One branch, `state` (also the default one). Committed at every change and pushed to this remote at the events of CORE §12b — session start, a task done, a decision, a handoff; otherwise at most every 15 minutes (`git pull --ff-only`
 >    first, never force-pushed; not fast-forwardable → stop and ask the owner). Only one machine's
->    coordinator writes it (`core/procedures/HANDOFF.md`).
+>    coordinator writes it, the main one (`core/procedures/HANDOFF.md`); partners write their own branches.
 
 **Private.** This repository holds internal project information — never make it public, never share it
 with the client.

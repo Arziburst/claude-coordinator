@@ -417,6 +417,15 @@ words, by the `coord-assistant` skill ([skills/coord-assistant/SKILL.md](skills/
   messages unattended (`hold` / `refuse` otherwise): in the worker safety file (workers hear the
   coordinator) **and** in the coordinator's own settings (it hears its workers). Needs Claude Code v2.1.224+ (macOS / Linux / WSL2), v2.1.234+ (native
   Windows). Native Windows and WSL2 sessions cannot message each other.
+- **Another machine** (a partner coordinator, [procedures/PARTNER.md](procedures/PARTNER.md); checked on
+  code.claude.com, cross-session-messaging and remote-control, 2026-11-28): a session on another machine
+  is reached through Anthropic's servers over that machine's **Remote Control** connection — both sides
+  need it on, or there is no reply address; claude.ai sign-in and **the same account only** (not an API
+  key, Bedrock or another provider; a teammate's session on another account cannot be reached). A
+  message to an offline machine goes through and **arrives when it reconnects**; there is **no read
+  receipt** (the sender sees only `Not sent` or an expired hold). Without `crossSessionInbound`, a
+  message held between permission-mode classes is **dropped after 5 minutes** by default: test both ways
+  in the modes really used. `notify_when_idle` works on this machine only.
 
 ## The periodic tick
 - `CronCreate` / `/loop` are **session-scoped**: fire only while the session is open and idle, expire

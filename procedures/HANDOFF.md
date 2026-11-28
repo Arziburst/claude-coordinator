@@ -43,8 +43,10 @@ holding the coordinator's files —
   4. Report the link. Running sessions do not move — they are restarted on the new machine from their
      branches.
 - **On the new machine** the owner gives the state repository's link, or the session finds it
-  (above). The session reads its
-  `README.md`, becomes the coordinator, loads this core, and runs the start sequence (§2) with the
+  (above). The session reads its `README.md` and asks the owner whether this is a move or a partner,
+  unless the owner's own typing in this session already said which or its name is in `PROJECT.md`
+  *Partners* — a partner follows [PARTNER.md](PARTNER.md) from here; it never takes over `state` unasked.
+  On a move it becomes the coordinator, loads this core, and runs the start sequence (§2) with the
   context already known: clone the project, clone the state repository into its `coordinator/` and add
   `coordinator/` to the project's info/exclude (`git rev-parse --git-path info/exclude`), re-create the
   `.claude/skills` and `.claude/agents` links (one-time steps `coordinator-skills`, `roles-link`: a link is not in git), re-detect the platform and the "re-detect" rows, check the
