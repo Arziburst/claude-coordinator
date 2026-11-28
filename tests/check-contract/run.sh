@@ -387,6 +387,36 @@ tfv=yes imk i-tfm.md scripts/hooks/x.sh "bounds:\n  - x lots\n$W1"; iname="tests
 rname="tests_first: yes and no bound, --runs"; crun i-tf1.md --runs runs.tsv; rexit 1; rhas "i-tf1.md: ERROR $tfm"
 cfield i-tf1.md; [ "$FRC" = 1 ] && case "$FO" in *"i-tf1.md: ERROR $tfm"*) true ;; *) false ;; esac ||
   { echo "FAIL: $fopt tests_first i-tf1.md: expected exit 1 and the ERROR, got exit $FRC:"; printf '%s\n' "$FO" | sed 's/^/    /'; fail=1; }
+# high-risk areas (#713): the backtick globs of the *Risk tiers* row *High-risk areas*, one WARN with *Extra rules there*
+mkdir -p risk/coordinator/core/scripts; cp "$core/scripts/check-contract.sh" "$core/scripts/check-contract.ps1" risk/coordinator/core/scripts/
+hrow='money `src/pay/*.sql`, the guard `scripts/hooks/`, `lib/**/auth.*`'; hex='Opus at `high` effort, negative tests'
+hproj() { { printf '## Risk tiers\n| Question | This project | Default to offer |\n|---|---|---|\n| High-risk areas | %s | `docs/` |\n' "$1"; [ $# -lt 2 ] || printf '| Extra rules there |%s| owner told |\n' "$2"; } > risk/coordinator/PROJECT.md; }
+hfail() { echo "FAIL: high-risk $hname: $1 (exit $CRC):"; printf '%s\n' "$CO" | sed 's/^/    /'; fail=1; }
+hwarn() {   # hwarn <file> <item> <glob> [<extra rules> <effort>]: exit 0, exactly the WARN line and its summary
+  crun "$1"; local w="$1: WARN  touches $2 is in a high-risk area ($3, PROJECT.md Risk tiers): extra rules there: ${4:-$hex}; budget model opus, effort ${5:-none}"
+  [ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' "$w" "$1: OK (0 errors, 1 warnings)")" ] || hfail "want exit 0 and: $w"
+}
+hnone() { crun "$1"; [ "$CRC" = 0 ] && [ "$CO" = "$1: OK (0 errors, 0 warnings)" ] || hfail "want the clean summary alone"; }
+imk h-dir.md scripts/hooks/x.sh "$B1$W1"; imk h-file.md src/pay/a.sql ''; imk h-deep.md '"lib/auth.ts"' ''
+awk '{ print } /^  model: opus$/ { print "  effort: high" }' h-file.md > h-effort.md
+imk h-two.md 'lib/a/b/auth.ts, scripts/hooks/x.sh' "$B1$W1"; imk h-folder.md scripts/hooks/ "$B1$W1"
+imk h-nob.md scripts/hooks/x.sh "$W1"; imk h-no.md 'sort.sh, docs/a.md, src/pay/a.sh, scripts/hooksy/x.sh' ''
+ccore="$(pwd)/risk/coordinator/core"; [ -n "$win" ] && ccore="$(cygpath -m "$ccore")"
+hproj "$hrow" "   $hex   "
+hname="a file under a /-ending glob"; hwarn h-dir.md scripts/hooks/x.sh scripts/hooks/
+hname="a file glob, budget.effort"; hwarn h-effort.md src/pay/a.sql 'src/pay/*.sql' "$hex" high
+hname="a ** glob, a quoted item"; hwarn h-deep.md lib/auth.ts 'lib/**/auth.*'
+hname="two matches: the first by row order"; hwarn h-two.md scripts/hooks/x.sh scripts/hooks/
+hname="a folder item"; hwarn h-folder.md scripts/hooks/ scripts/hooks/
+hname="the exit with an ERROR"; crun h-nob.md
+[ "$CRC" = 1 ] && printf '%s\n' "$CO" | grep -qF 'h-nob.md: WARN  touches scripts/hooks/x.sh is in a high-risk area' && printf '%s\n' "$CO" | grep -qxF 'h-nob.md: FAIL (1 errors, 1 warnings)' || hfail "want exit 1, the WARN, FAIL (1 errors, 1 warnings)"
+hname="touching none"; hnone h-no.md
+hf=--field; [ "$kind" != ps ] || hf="-$fopt"; hname="--field"; crun "$hf" tests_first h-dir.md;[ "$CRC" = 0 ] && [ "$CO" = 'no - tests/sort.sh checks it' ] || hfail "want the value alone"
+hname="--important"; crun --important; [ "$CRC" = 0 ] && [ "$CO" = "$(printf '%s\n' 'scripts/hooks/*' '.github/workflows/*' 'tests/*/run.*')" ] || hfail "want the three defaults alone"
+hproj "$hrow"; hname="no Extra rules row"; hwarn h-dir.md scripts/hooks/x.sh scripts/hooks/ 'none written'
+for v in '  ' ' `<fill>` ' ' — '; do hproj "$hrow" "$v"; hname="Extra rules '$v'"; hwarn h-dir.md scripts/hooks/x.sh scripts/hooks/ 'none written'; done
+for v in 'money, roles, scripts/hooks/ (CORE §1)' '`<fill>`'; do hproj "$v" "$hex"; hname="a row without backtick globs: $v"; hnone h-dir.md; done
+ccore=""
 # the same output and exit codes from both versions, on every contract above at once
 if [ "$kind" = ps ]; then
   set -- i-*.md
