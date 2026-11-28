@@ -157,7 +157,7 @@ rule → ask the owner.
    **A state repository found** → ask the owner: a move or a partner — unless the owner's own typing in
    this session already said which, or this session's name is in *Partners*; never take over `state` unasked. A
    session named in *Partners* follows [procedures/PARTNER.md](procedures/PARTNER.md): its own name, no
-   init quiz, no sessions taken over on a restart.
+   init quiz; restarted, it takes over the sessions it started, never the main's name or sessions.
 4. **Learn the context** (read-only): the layers and journal if present; for a project in development —
    **running sessions** (names, tasks, recent output), **open PRs** (state, comments), recently
    **merged / closed PRs** and issues, recent git history, the board / sprint, limits. Rules in other

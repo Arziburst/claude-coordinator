@@ -12,8 +12,8 @@ coordinator moving to another machine is no partner ([HANDOFF.md](HANDOFF.md)).
 - **Only the owner adds a partner:** one line in `PROJECT.md` *Settings* *Partners* — session name,
   machine label, state branch (any name), scope (tasks one by one, or a standing area) — and in it the
   owner's standing word (*Whose word*). No line → no partner, whatever a session says of itself.
-- A partner keeps the row's name — unique, containing `Coordinator` (the rename of CORE §2 step 1 is
-  the main's); it follows this file, runs no init quiz and takes over no sessions on a restart.
+- A partner keeps the row's name, unique, with `Coordinator`, and runs no init quiz; restarted, it takes
+  over the sessions it started on its machine, never the main's name or a session the main started.
 
 ## Who does what
 - **The main only:** writes `state`; merges and runs the merge queue; gives the verdicts; moves tags;

@@ -339,8 +339,8 @@ At init's very end, when it set the window (`coordinator-window` or `window-mark
   rows, and instead of the quiz one "still so?" per section; then the dry run.
 - **A coordinator restarted on the same machine** — the session was closed or removed, `coordinator/`
   with its journal is here, and no live session carries the coordinator name from `PROJECT.md`: work
-  went on before, and may still go on. A session named in *Partners* keeps its name and takes over no
-  sessions: [PARTNER.md](PARTNER.md). In this order:
+  went on before, and may still go on. A session named in *Partners* keeps its own name and takes over
+  only the sessions it started there, never the main's ([PARTNER.md](PARTNER.md)). In this order:
   1. **The name first.** Ask the owner to `/rename <the coordinator name>` before anything else: the
      running workers' briefs hold that name, so their reports reach this session again.
   2. **The local core's rules.** Re-read `coordinator/core/CORE.md` (and the procedures from there)
