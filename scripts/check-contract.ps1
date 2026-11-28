@@ -35,21 +35,35 @@
 #   missing or malformed: one ERROR per field, naming the glob; a word with no / or . as the literal word, a folder with or without its slash (#517, #672). -Field budget.cost: budget's cost as written.
 #   A bound on tests (#390; the rules: check-contract.sh): `tests_first: yes` with no well-formed line under `bounds:`: an ERROR.
 #   -Important, alone (#419): read-only, the list below (the defaults and the project's row), one glob a line, exit 0; merge-queue asks it.
+#   High-risk areas (#713; the rules: check-contract.sh): touches holding a backtick glob of the row *High-risk areas*
+#   (the same PROJECT.md; a glob ending in / is read as <glob>*): one WARN `touches <item> is in a high-risk area (<glob>,
+#   PROJECT.md Risk tiers): extra rules there: <the row *Extra rules there*, or none written>; budget model <m>, effort
+#   <e or none>`. Counted with the warnings, never an ERROR, the exit code unchanged; not with -Field or -Important.
 $Important = @('scripts/hooks/*', '.github/workflows/*', 'tests/*/run.*')
 $pf = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'PROJECT.md'
+$Risk = @(); $RiskExtra = 'none written'; $seen = @{}   # the first row of each name
 if (Test-Path -LiteralPath $pf -PathType Leaf) {
   foreach ($ln in [IO.File]::ReadAllLines($pf)) { $x = $ln -split '\|'; if ($x.Count -lt 3) { continue }
-    if ((($x[1] -creplace '\(.*', '') -creplace '[*`]', '').Trim() -cne 'Important components') { continue }
-    $v = $x[2] -creplace '`', ''; if ($v -notmatch '<' -and $v -cnotmatch '^[ \t]*none([ \t]|\z)') { $Important += @(-split $v) }; break }
+    $n = (($x[1] -creplace '\(.*', '') -creplace '[*`]', '').Trim()
+    if ($seen[$n]) { continue }; $seen[$n] = $true
+    if ($n -ceq 'Important components') {
+      $v = $x[2] -creplace '`', ''; if ($v -notmatch '<' -and $v -cnotmatch '^[ \t]*none([ \t]|\z)') { $Important += @(-split $v) }
+    } elseif ($n -ceq 'High-risk areas') {
+      $q = $x[2].Split('`'); for ($i = 1; $i -lt $q.Count - 1; $i += 2) { if ($q[$i]) { $Risk += $q[$i] } }
+    } elseif ($n -ceq 'Extra rules there') {
+      $v = $x[2].Trim(' ', "`t"); $q = $v -creplace '`', ''
+      if ($v -and $q -cne '<fill>' -and $q -cne [string][char]0x2014) { $RiskExtra = $v }
+    } }
 }
 # the first glob of the list a touches item holds: a whole path, `*` the one wildcard, `**/` zero or more folders (#529); a folder item starting the glob or under its wildcard;
 # a word with no / or . as the literal word; a folder written without its slash (a / or a leading ., no . or * in its last part) with it (#672)
-function Imp([string]$t) {
+# $dir: a glob ending in / is read as <glob>* (#713); the item matched is left in $script:Hit
+function Imp([string]$t, $globs, [bool]$dir) {
   $its = @(($t -creplace '(^|[ \t\n])#[^\n]*', ' ') -split '[,\n]' | ForEach-Object { $_ -creplace ('^[ \t]*(\[[ \t]*)?(-[ \t]+)?["' + "'" + ']?|["' + "'" + ']?[ \t]*\]?[ \t]*\z'), '' } | Where-Object { $_ })
-  foreach ($g in $Important) { $re = '^' + ([regex]::Escape($g) -creplace '\\\*\\\*/', '(?:.*/)?' -creplace '\\\*', '.*') + '\z'
+  foreach ($w in $globs) { $g = if ($dir -and $w.EndsWith('/')) { "$w*" } else { $w }; $re = '^' + ([regex]::Escape($g) -creplace '\\\*\\\*/', '(?:.*/)?' -creplace '\\\*', '.*') + '\z'
     $lit = $g.Substring(0, [Math]::Max(0, $g.IndexOf('*'))); $hasW = $g.Contains('*')
     foreach ($s in $its) { $d = $s; if ($d -cmatch '^\.|/' -and -not $d.EndsWith('/') -and $d -cmatch '(^|/)\.?[^./*]*\z') { $d += '/' }
-      if ($s -cmatch $re -or ($d.EndsWith('/') -and ($g.StartsWith($d, [StringComparison]::Ordinal) -or ($hasW -and $d.StartsWith($lit, [StringComparison]::Ordinal))))) { return $g } } }
+      if ($s -cmatch $re -or ($d.EndsWith('/') -and ($g.StartsWith($d, [StringComparison]::Ordinal) -or ($hasW -and $d.StartsWith($lit, [StringComparison]::Ordinal))))) { $script:Hit = $s; return $w } } }
   ''
 }
 $CoreRoles = @{}
@@ -81,7 +95,7 @@ if (-not $Files.Count -or ($RKind -and -not $HasRuns) -or ($HasRuns -and $Field)
 # error): the body below runs inside try, the encoding is restored in finally.
 $enc0 = $null; try { $enc0 = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
 try {
-if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 35 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
+if ($usage) { Get-Content -LiteralPath $PSCommandPath -TotalCount 39 | ForEach-Object { $_ -creplace '^# ?', '' }; exit 2 }
 
 $sect = [string][char]0x00A7   # not a literal: Windows PowerShell 5.1 reads a BOM-less script as ANSI
 # a value without its comment, blanks and surrounding quotes (double or single)
@@ -274,7 +288,7 @@ foreach ($f in $Files) {
     $out.Add("WARN  touches missing or empty (no conflict foresight, CORE ${sect}4a)"); $nw++
   }
   # important components (#381, the header): bounds and wall
-  $ig = Imp ($txt['touches'] + ''); $nb = 0; $bad = -not $txt.ContainsKey('bounds'); $BL = @(($txt['bounds'] + '') -split "`n"); if ($BL[0] -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true }
+  $ig = Imp ($txt['touches'] + '') $Important $false; $nb = 0; $bad = -not $txt.ContainsKey('bounds'); $BL = @(($txt['bounds'] + '') -split "`n"); if ($BL[0] -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true }
   foreach ($x in @($BL | Select-Object -Skip 1)) { if ($x -cmatch '^[ \t]*-[ \t]+[^ \t]+[ \t]+[0-9]+([ \t]+#.*)?[ \t]*$') { $nb++ } elseif ($x -cnotmatch '^[ \t]*(#.*)?$') { $bad = $true } }
   if ($ig) {
     if ($bad -or -not $nb) { $out.Add("ERROR ``bounds`` missing or malformed (lines ``- <glob> <max added lines>``): touches holds the important $ig (CONTRACT.md)"); $ne++ }
@@ -301,6 +315,12 @@ foreach ($f in $Files) {
     }
     if ($gm) { $out.Add("WARN  tests_first is no, but $gm (money, roles or customer data): tests first are expected for such a change (CORE ${sect}4 step 3)"); $nw++ }
   }
+  # high-risk areas (#713, the header)
+  $hg = Imp ($txt['touches'] + '') $Risk $true
+  if ($hg) {
+    $hm = if ($b -cmatch '\n[ \t]+model:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { '' }
+    $he = if ($b -cmatch '\n[ \t]+effort:[ \t]*([^ \t\n#]+)') { $Matches[1] } else { 'none' }
+    $out.Add("WARN  touches $($script:Hit) is in a high-risk area ($hg, PROJECT.md Risk tiers): extra rules there: $RiskExtra; budget model $hm, effort $he"); $nw++ }
   # -Runs: the budget against the run log, after the checks above; a `kind:` field wins over -Kind
   if ($HasRuns) {
     $ck = if ($txt.ContainsKey('kind')) { Val (($txt['kind'] -split "`n")[0]) } else { '' }
