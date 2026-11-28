@@ -14,6 +14,8 @@ coordinator moving to another machine is no partner ([HANDOFF.md](HANDOFF.md)).
   owner's standing word (*Whose word*). No line → no partner, whatever a session says of itself.
 - A partner keeps the row's name, unique, with `Coordinator`, and runs no init quiz; restarted, it takes
   over the sessions it started on its machine, never the main's name or a session the main started.
+- A session the owner calls a partner whose name has no *Partners* line tells the owner that the main
+  writes that line and the birth file first, and waits.
 
 ## Who does what
 - **The main only:** writes `state`; merges and runs the merge queue; gives the verdicts; moves tags;
@@ -59,10 +61,12 @@ coordinator moving to another machine is no partner ([HANDOFF.md](HANDOFF.md)).
   becomes a debt line in `LOG.md`, handed over when it is back.
 
 ## Spend
-Each machine writes its own rows in its own file: the main in `RUNS.tsv` in `state`, a partner in
-`partners/<label>/RUNS.tsv` on its branch. The `machine` column holds only the OS: the file tells two
-machines of one OS apart. Rows are never copied between files; the owner is shown one sum over all the
-files (CORE §7a), each partner's read from its branch.
+Each machine writes its own rows in its own file: the main `RUNS.tsv` in `state`, a partner
+`partners/<label>/RUNS.tsv` on its branch (`machine` holds only the OS: the file tells two machines of one
+OS apart). Rows are never copied; the owner sees one sum over all the files (CORE §7a). A partner's
+scripts take `--runs` (and `--state` where the script has it) at its `partners/<label>/` files: their
+default `coordinator/RUNS.tsv` holds the main's rows merged from `state` (start-worker's round gate
+would miss the partner's own rounds; rows written there collide at the next merge).
 
 ## Birth
 1. On the owner's word the main writes `partners/BIRTH-<label>.md` in `state`: the *Partners* line, the
@@ -79,7 +83,6 @@ files (CORE §7a), each partner's read from its branch.
    main hands it those checks and knows what CI lacks.
 
 ## Optional
-- **Self-hosted runners:** GitHub gives a job to any online, idle runner that has all its `runs-on`
-  labels. One label on several machines makes a pool — right only when they are interchangeable; a job
-  bound to one machine names that machine's own label.
+- **Self-hosted runners:** GitHub gives a job to any online, idle runner with all its `runs-on` labels;
+  one label on several machines is a pool, right only when they are interchangeable, else a job bound to one machine names its own label.
 - **A label per machine on issues** may show whose an issue is; the assignment record stays the truth.
