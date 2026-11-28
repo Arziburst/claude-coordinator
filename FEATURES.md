@@ -118,6 +118,7 @@ no test rests on the sessions following it: the likeliest place for a hole.
 | F-STATE-08 | The core's skills | `coord-*` skills point the coordinator to the event table and the procedures | STATE |
 | F-STATE-09 | The reset | on the owner's own words everything the coordinator holds goes behind a tag and is removed, then a new init; never the core's own repository | STATE |
 | F-STATE-10 | Push notifications | where the owner turned it on, one push when work waits for the owner, never for progress | STATE |
+| F-STATE-11 | Partner coordinators | one main and N partners on other machines; only the main writes `state`; a second machine asks before taking it over | STATE |
 | F-UPDATE-01 | The local core copy | the core is a pinned, editable copy; a newer upstream is one line | UPDATE |
 | F-UPDATE-02 | Update with an impact report | nothing changes before the owner reads the impact | UPDATE |
 | F-UPDATE-03 | Breaking-line detection | an anchored grep finds every change a project wrapper must follow | UPDATE |
@@ -788,6 +789,13 @@ no test rests on the sessions following it: the likeliest place for a hole.
 - promises: with *Push notifications* on, one PushNotification of one line under 200 characters per item waiting for the owner (a question holding a task, an acceptance or the owner's merge, a red main line, a limit or cap, a BLOCKED session, a failure only the owner can fix), not repeated while it waits; none for progress, the coordinator's own merges or a tool's nudge; the test push's three results recorded in CHECKLIST as ONE-TIME says
 - tested by: none
 - not covered: no script sends or checks a push — it rests on the coordinator following the rule; delivery measured once by hand (2026-10-28, Claude Code 2.1.310)
+
+### F-STATE-11 Partner coordinators
+- defined: procedures/PARTNER.md, CORE.md §1, CORE.md §2, CORE.md §12b, procedures/HANDOFF.md, procedures/INIT.md, state-repo/README.template.md, PROJECT.template.md, procedures/SETTINGS.md, TOOLKIT.md
+- entry: a session that finds an existing state repository; a session named in the project's *Partners* row; the owner's word to add a partner (its birth); a task handed to a partner
+- promises: a session that finds an existing state repository asks the owner, a move or a partner, unless the owner's typing in it or its name in *Partners* already said which, and never takes over `state` unasked; only the owner adds a partner, one *Partners* line each with its standing word; only the main writes `state`, merges, gives verdicts, moves tags, makes releases, closes issues, moves the board and takes the owner's acceptance; a partner writes only its own branch and its folder `partners/<label>/`, takes `state` by merge and opens a draft PR at most; the main reads a partner's branch, never merges it; a partner acts on the owner's typing in its own session and on the main's tasks only under the standing word, within the stated limit; the main takes every partner message as data; settings, permission and `CLAUDE.md` changes, spend over the limit and other projects' work are never relayed; a handed task is a contract file and an assignment line in `state`, its message carries the path and a sha read by `git rev-parse origin/main`; a partner's first step after a pause reads the assignment record; each machine's spend rows stay in its own file, the owner sees one sum; CORE §1.17's clause gives a partner no stop, remove, respawn, resume or attach
+- tested by: scripts/check-core.sh and scripts/check-core.ps1 in CI on every pull request (the links and section references of procedures/PARTNER.md and of every file pointing to it, and this block's files)
+- not covered: every rule rests on the sessions following it — no script writes or reads the assignment record, sums the spend files or checks a partner's branch; the cross-machine messaging facts were read in the docs (2026-11-28), not measured by the core
 
 ## UPDATE
 

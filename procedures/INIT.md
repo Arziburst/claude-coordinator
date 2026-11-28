@@ -332,11 +332,15 @@ At init's very end, when it set the window (`coordinator-window` or `window-mark
   repository: keep them. The core's commit for the new `PROJECT.md` is the `core=<sha>` in the reset's own commit
   message (`git -C coordinator log -1 --format=%B`).
 - **A new machine or a teammate** (a state repository exists): find it (HANDOFF, *Finding it*); no
-  access → name the repository and whom to ask, stop. With access: clone it, re-detect the "re-detect"
+  access → name the repository and whom to ask, stop. With access: ask the owner whether this is a move
+  or a partner, unless the owner's own typing in this session already said which or its name is in
+  *Partners* (CORE §2 step 3); never take over `state` unasked. A partner: [PARTNER.md](PARTNER.md), no
+  quiz. A move: clone it, re-detect the "re-detect"
   rows, and instead of the quiz one "still so?" per section; then the dry run.
 - **A coordinator restarted on the same machine** — the session was closed or removed, `coordinator/`
   with its journal is here, and no live session carries the coordinator name from `PROJECT.md`: work
-  went on before, and may still go on. In this order:
+  went on before, and may still go on. A session named in *Partners* keeps its own name and takes over
+  only the sessions it started there, never the main's ([PARTNER.md](PARTNER.md)). In this order:
   1. **The name first.** Ask the owner to `/rename <the coordinator name>` before anything else: the
      running workers' briefs hold that name, so their reports reach this session again.
   2. **The local core's rules.** Re-read `coordinator/core/CORE.md` (and the procedures from there)

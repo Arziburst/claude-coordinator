@@ -28,7 +28,7 @@ never from memory:
   7. routing — `coordinator/ROUTING.md` in one line per kind that differs from CORE §7's table,
      the pins, the usage caps;
   8. the state repository — remote (or local only), branch (`state`, CORE §12b), private yes / no
-     (`gh repo view --json visibility`);
+     (`gh repo view --json visibility`); the partners — none, or one line each ([PARTNER.md](PARTNER.md));
   9. the core — the claude-coordinator commit in `coordinator/core/`, and whether upstream is newer
      (one `git ls-remote`, CORE §2); the coordinator name, and whether this session carries it
      (`ListAgents` shows it);
